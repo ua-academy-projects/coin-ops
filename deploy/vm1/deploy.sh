@@ -49,7 +49,7 @@ if [ "${CHANGED:-false}" = "true" ]; then
     rsync -a --delete "$FRONTEND_DIR/build/" "$WEB_ROOT/"
 
     log "Reloading nginx..."
-    rc-service nginx reload
+    sudo rc-service nginx reload
 
     log "Deploy complete. Commit: $(git -C "$REPO_DIR" rev-parse --short HEAD)"
 fi

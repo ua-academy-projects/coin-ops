@@ -13,6 +13,7 @@ packages:
   - bash
   - postgresql
   - postgresql-client
+  - sudo
 
 users:
   - name: deploy
@@ -71,7 +72,7 @@ write_files:
 
       log "Ініціалізація кластера PostgreSQL..."
       if [ ! -f /var/lib/postgresql/data/PG_VERSION ]; then
-        su -s /bin/sh postgres -c "initdb -D /var/lib/postgresql/data"
+        /etc/init.d/postgresql setup
       fi
 
       log "Копіювання конфігурацій..."

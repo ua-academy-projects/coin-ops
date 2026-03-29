@@ -19,7 +19,7 @@ log "Updating system packages..."
 apk update && apk upgrade
 
 log "Installing common tools..."
-apk add --no-cache git curl rsync bash openssl
+apk add --no-cache git curl rsync bash openssl sudo
 
 # ── Create deploy user ───────────────────────────────────────────────────────
 if ! id deploy &>/dev/null; then
@@ -54,7 +54,7 @@ if [[ "$VM_ROLE" == "vm1" ]]; then
 
     # Set up crond for auto-deploy every minute
     log "Setting up cron for auto-deploy..."
-    echo "* * * * * deploy /opt/monero-scripts/deploy.sh >> /var/log/monero-deploy.log 2>&1" >> /etc/crontabs/root
+    echo "* * * * * /opt/monero-scripts/deploy.sh >> /var/log/monero-deploy.log 2>&1" >> /etc/crontabs/deploy
     rc-update add crond default
     rc-service crond start
     ok "Auto-deploy cron enabled (every 60s)"
@@ -93,7 +93,7 @@ if [[ "$VM_ROLE" == "vm2" ]]; then
 
     # Set up crond for auto-deploy every minute
     log "Setting up cron for auto-deploy..."
-    echo "* * * * * root /opt/monero-scripts/deploy.sh >> /var/log/monero-deploy.log 2>&1" >> /etc/crontabs/root
+    echo "* * * * * /opt/monero-scripts/deploy.sh >> /var/log/monero-deploy.log 2>&1" >> /etc/crontabs/root
     rc-update add crond default
     rc-service crond start
     ok "Auto-deploy cron enabled (every 60s)"

@@ -16,6 +16,7 @@ packages:
   - nginx
   - nodejs
   - npm
+  - sudo
 
 users:
   - name: deploy
@@ -134,6 +135,6 @@ runcmd:
   - su -s /bin/bash deploy -c /opt/monero-scripts/deploy.sh || true
 
   # Додати щохвилинний cron для автодеплою
-  - echo "* * * * * deploy /opt/monero-scripts/deploy.sh >> /var/log/monero-deploy.log 2>&1" >> /etc/crontabs/root
+  - echo "* * * * * /opt/monero-scripts/deploy.sh >> /var/log/monero-deploy.log 2>&1" >> /etc/crontabs/deploy
   - rc-update add crond default
   - rc-service crond start

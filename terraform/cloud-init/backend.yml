@@ -14,12 +14,13 @@ packages:
   - rsync
   - bash
   - python3
-  - python3-pip
-  - python3-venv
+  - py3-pip
+  - py3-virtualenv
   - python3-dev
   - build-base
   - postgresql-client
   - libpq-dev
+  - sudo
 
 users:
   - name: deploy
@@ -169,7 +170,7 @@ runcmd:
   - chown root:monero /etc/monero/backend.env
   - rc-update add monero-api default
   - rc-update add monero-worker default
-  - echo "* * * * * root /opt/monero-scripts/deploy.sh >> /var/log/monero-deploy.log 2>&1" >> /etc/crontabs/root
+  - echo "* * * * * /opt/monero-scripts/deploy.sh >> /var/log/monero-deploy.log 2>&1" >> /etc/crontabs/root
   - rc-update add crond default
   - rc-service crond start
   # Перший деплой після паузи (чекаємо на DB)
