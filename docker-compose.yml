@@ -35,7 +35,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://monero:monero@db:5432/monero_privacy
       DATABASE_URL_SYNC: postgresql://monero:monero@db:5432/monero_privacy
-      MONERO_RPC_HOST: monerod
+      MONERO_RPC_HOST: xmr-node.cakewallet.com
       MONERO_RPC_PORT: 18081
       WORKER_INTERVAL_SECONDS: "10"
     depends_on:
@@ -56,7 +56,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://monero:monero@db:5432/monero_privacy
       DATABASE_URL_SYNC: postgresql://monero:monero@db:5432/monero_privacy
-      MONERO_RPC_HOST: monerod
+      MONERO_RPC_HOST: xmr-node.cakewallet.com
       MONERO_RPC_PORT: 18081
       WORKER_INTERVAL_SECONDS: "10"
     depends_on:
@@ -83,19 +83,19 @@ services:
 
   # ── Optional: monerod stagenet for local testing ──────────────────────────
   # Uncomment if you want a local Monero node (uses ~10GB disk)
-  monerod:
-    image: sethsimmons/simple-monerod:latest
-    container_name: monerod
-    command: >
-      --stagenet
-      --rpc-bind-ip=0.0.0.0
-      --rpc-bind-port=18081
-      --confirm-external-bind
-    ports:
-      - "18081:18081"
-    volumes:
-      - monerod_data:/home/monero/.bitmonero
+  # monerod:
+  #   image: sethsimmons/simple-monerod:latest
+  #   container_name: monerod
+  #   command: >
+  #     --stagenet
+  #     --rpc-bind-ip=0.0.0.0
+  #     --rpc-bind-port=18081
+  #     --confirm-external-bind
+  #   ports:
+  #     - "18081:18081"
+  #   volumes:
+  #     - monerod_data:/home/monero/.bitmonero
 
 volumes:
   postgres_data:
-  monerod_data:
+  # monerod_data:
