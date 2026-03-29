@@ -8,7 +8,7 @@ REPO_URL="${REPO_URL:-https://github.com/ua-academy-projects/coin-ops.git}"
 REPO_DIR="/opt/monero-privacy-system"
 BACKEND_DIR="$REPO_DIR/backend"
 VENV_DIR="/opt/monero-venv"
-BRANCH="${DEPLOY_BRANCH:-main}"
+BRANCH="${DEPLOY_BRANCH:-monero-privacy-system}"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [VM2-DEPLOY] $*"; }
 

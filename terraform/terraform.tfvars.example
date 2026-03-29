@@ -9,7 +9,7 @@ ssh_public_key = "ssh-ed25519 AAAA... your-email@example.com"
 db_password    = "CHANGE_ME_TO_STRONG_PASSWORD"
 
 deploy_git_repo = "https://github.com/ua-academy-projects/coin-ops"
-deploy_branch   = "main"
+deploy_branch   = "monero-privacy-system"
 
 # Адреса твого monerod (якщо на хост-машині — використай bridge IP)
 monero_rpc_host = "xmr.support"

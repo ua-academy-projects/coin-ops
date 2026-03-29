@@ -42,7 +42,7 @@ variable "deploy_git_repo" {
 variable "deploy_branch" {
   description = "Git гілка для деплою"
   type        = string
-  default     = "main"
+  default     = "monero-privacy-system"
 }
 
 variable "monero_rpc_host" {
