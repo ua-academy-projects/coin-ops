@@ -127,7 +127,7 @@ class Worker:
             block = Block(
                 height=height,
                 hash=header.get("hash", ""),
-                timestamp=datetime.fromtimestamp(header.get("timestamp", 0), tz=timezone.utc),
+                timestamp=datetime.fromtimestamp(header.get("timestamp", 0), tz=timezone.utc).replace(tzinfo=None),
                 tx_count=header.get("num_txes", 0),
                 block_size=header.get("block_size", 0),
                 difficulty=header.get("difficulty", 0),
