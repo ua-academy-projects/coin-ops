@@ -61,16 +61,11 @@ resource "libvirt_volume" "alpine_base" {
 resource "libvirt_cloudinit_disk" "commoninit" {
   name      = "commoninit.iso"
   pool      = var.storage_pool
-  user_data = data.template_file.user_data_common.rendered
-}
-
-data "template_file" "user_data_common" {
-  template = file("${path.module}/cloud-init/common.yml")
-  vars = {
+  user_data = templatefile("${path.module}/cloud-init/common.yml", {
     ssh_public_key  = var.ssh_public_key
     deploy_git_repo = var.deploy_git_repo
     deploy_branch   = var.deploy_branch
-  }
+  })
 }
 
 # ==========================================
@@ -87,12 +82,7 @@ resource "libvirt_volume" "frontend_disk" {
 resource "libvirt_cloudinit_disk" "frontend_init" {
   name      = "frontend-init.iso"
   pool      = var.storage_pool
-  user_data = data.template_file.user_data_frontend.rendered
-}
-
-data "template_file" "user_data_frontend" {
-  template = file("${path.module}/cloud-init/frontend.yml")
-  vars = {
+  user_data = templatefile("${path.module}/cloud-init/frontend.yml", {
     ssh_public_key  = var.ssh_public_key
     deploy_git_repo = var.deploy_git_repo
     deploy_branch   = var.deploy_branch
@@ -100,7 +90,7 @@ data "template_file" "user_data_frontend" {
     hostname        = "frontend"
     static_ip       = "10.10.10.11"
     gateway         = "10.10.10.1"
-  }
+  })
 }
 
 resource "libvirt_domain" "frontend" {
@@ -152,12 +142,7 @@ resource "libvirt_volume" "backend_disk" {
 resource "libvirt_cloudinit_disk" "backend_init" {
   name      = "backend-init.iso"
   pool      = var.storage_pool
-  user_data = data.template_file.user_data_backend.rendered
-}
-
-data "template_file" "user_data_backend" {
-  template = file("${path.module}/cloud-init/backend.yml")
-  vars = {
+  user_data = templatefile("${path.module}/cloud-init/backend.yml", {
     ssh_public_key  = var.ssh_public_key
     deploy_git_repo = var.deploy_git_repo
     deploy_branch   = var.deploy_branch
@@ -168,7 +153,7 @@ data "template_file" "user_data_backend" {
     gateway         = "10.10.10.1"
     monero_rpc_host = var.monero_rpc_host
     monero_rpc_port = var.monero_rpc_port
-  }
+  })
 }
 
 resource "libvirt_domain" "backend" {
@@ -220,19 +205,14 @@ resource "libvirt_volume" "db_disk" {
 resource "libvirt_cloudinit_disk" "db_init" {
   name      = "db-init.iso"
   pool      = var.storage_pool
-  user_data = data.template_file.user_data_db.rendered
-}
-
-data "template_file" "user_data_db" {
-  template = file("${path.module}/cloud-init/db.yml")
-  vars = {
+  user_data = templatefile("${path.module}/cloud-init/db.yml", {
     ssh_public_key = var.ssh_public_key
     db_password    = var.db_password
     hostname       = "db"
     static_ip      = "10.10.10.13"
     gateway        = "10.10.10.1"
     backend_ip     = "10.10.10.12"
-  }
+  })
 }
 
 resource "libvirt_domain" "database" {
