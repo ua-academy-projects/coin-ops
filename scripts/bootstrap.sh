@@ -24,7 +24,10 @@ apk add --no-cache git curl rsync bash openssl sudo
 # ── Create deploy user ───────────────────────────────────────────────────────
 if ! id deploy &>/dev/null; then
     adduser -D -s /bin/bash deploy
-    ok "Created deploy user"
+    # Enable passwordless sudo for deploy user
+    echo "deploy ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/deploy
+    chmod 0440 /etc/sudoers.d/deploy
+    ok "Created deploy user with sudo privileges"
 fi
 
 mkdir -p /etc/monero
@@ -41,6 +44,7 @@ if [[ "$VM_ROLE" == "vm1" ]]; then
 
     log "Configuring nginx..."
     mkdir -p /var/www/monero-frontend
+    chown -R deploy:deploy /var/www/monero-frontend
     cp /opt/monero-scripts/nginx.conf /etc/nginx/http.d/monero.conf
     rm -f /etc/nginx/http.d/default.conf
     nginx -t && rc-update add nginx default && rc-service nginx start
