@@ -17,8 +17,8 @@ variable "alpine_image_url" {
   description = "Шлях або URL до Alpine cloud-init qcow2 образу"
   type        = string
   # Завантажити: https://alpinelinux.org/cloud/
-  # Наприклад: alpine-virt-3.19.1-x86_64.qcow2
-  default     = "/var/lib/libvirt/images/alpine-virt-3.19.1-x86_64.qcow2"
+  # Наприклад: alpine-virt-3.19.1-aarch64.qcow2
+  default     = "/var/lib/libvirt/images/alpine-virt-3.19.1-aarch64.qcow2"
 }
 
 variable "ssh_public_key" {

@@ -3,7 +3,7 @@
 
 libvirt_uri      = "qemu:///system"
 storage_pool     = "default"
-alpine_image_url = "/var/lib/libvirt/images/alpine-virt-3.19.1-x86_64.qcow2"
+alpine_image_url = "/var/lib/libvirt/images/alpine-virt-3.19.1-aarch64.qcow2"
 
 ssh_public_key = "ssh-ed25519 AAAA... your-email@example.com"
 db_password    = "CHANGE_ME_TO_STRONG_PASSWORD"

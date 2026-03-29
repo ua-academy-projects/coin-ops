@@ -24,8 +24,8 @@ terraform init
 
 Завантажити Alpine cloud image:
 ```bash
-wget https://dl-cdn.alpinelinux.org/alpine/v3.19/releases/cloud/alpine-virt-3.19.1-x86_64.qcow2 \
-  -O /var/lib/libvirt/images/alpine-virt-3.19.1-x86_64.qcow2
+wget https://dl-cdn.alpinelinux.org/alpine/v3.19/releases/cloud/alpine-virt-3.19.1-aarch64.qcow2 \
+  -O /var/lib/libvirt/images/alpine-virt-3.19.1-aarch64.qcow2
 ```
 
 ## Швидкий старт
