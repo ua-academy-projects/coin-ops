@@ -1,0 +1,20 @@
+#!/sbin/openrc-run
+# /etc/init.d/monero-deploy-frontend
+# OpenRC service for frontend auto-deploy (one-shot, runs via crond)
+
+name="monero-deploy-frontend"
+description="Monero Frontend Auto-Deploy"
+
+command="/opt/monero-scripts/deploy.sh"
+command_user="deploy"
+
+depend() {
+    need net
+    after nginx
+}
+
+start() {
+    ebegin "Running frontend deploy"
+    su -s /bin/bash deploy -c "${command}" >> /var/log/monero-deploy.log 2>&1
+    eend $?
+}

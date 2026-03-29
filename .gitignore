@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# Node / React
+node_modules/
+frontend/build/
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Secrets — NEVER commit these
+*.env
+!*.env.template
+/deploy/vm2/backend.env
+/deploy/deploy.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/
+
+# Logs
+*.log
+logs/

@@ -1,0 +1,30 @@
+#!/sbin/openrc-run
+# /etc/init.d/monero-api
+# OpenRC service for Monero Privacy Analytics API (FastAPI/Uvicorn)
+
+name="monero-api"
+description="Monero Privacy Analytics API"
+
+command="/opt/monero-venv/bin/uvicorn"
+command_args="main:app --host 0.0.0.0 --port 8000 --workers 2 --log-level info --access-log"
+command_user="monero"
+directory="/opt/monero-privacy-system/backend"
+pidfile="/run/monero-api.pid"
+command_background=true
+
+output_log="/var/log/monero-api.log"
+error_log="/var/log/monero-api.log"
+
+start_pre() {
+    # Load environment variables from backend.env
+    if [ -f /etc/monero/backend.env ]; then
+        set -a
+        . /etc/monero/backend.env
+        set +a
+    fi
+}
+
+depend() {
+    need net
+    after postgresql
+}

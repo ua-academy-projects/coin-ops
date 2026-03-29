@@ -1,0 +1,139 @@
+#cloud-config
+# VM1 — Frontend (React + Nginx)
+
+hostname: ${hostname}
+fqdn: ${hostname}.monero.local
+manage_etc_hosts: true
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - git
+  - curl
+  - rsync
+  - bash
+  - nginx
+  - nodejs
+  - npm
+
+users:
+  - name: deploy
+    gecos: Deploy User
+    groups: wheel
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+write_files:
+  # Статична IP адреса
+  - path: /etc/network/interfaces
+    content: |
+      auto lo
+      iface lo inet loopback
+      auto eth0
+      iface eth0 inet static
+        address ${static_ip}/24
+        gateway ${gateway}
+        dns-nameservers 1.1.1.1 8.8.8.8
+
+  # Nginx конфіг
+  - path: /etc/nginx/http.d/monero.conf
+    content: |
+      server {
+          listen 80;
+          server_name _;
+          root /var/www/monero-frontend;
+          index index.html;
+          gzip on;
+          gzip_types text/plain text/css application/json application/javascript text/javascript;
+          location / {
+              try_files $uri $uri/ /index.html;
+          }
+          location ~* \.(js|css|png|ico|svg|woff2)$ {
+              expires 1y;
+              add_header Cache-Control "public, immutable";
+          }
+          location /health {
+              return 200 "ok\n";
+              add_header Content-Type text/plain;
+          }
+      }
+
+  # Змінні середовища для деплою
+  - path: /etc/monero/deploy.env
+    permissions: "0640"
+    owner: deploy:deploy
+    content: |
+      REPO_URL=${deploy_git_repo}
+      DEPLOY_BRANCH=${deploy_branch}
+      REACT_APP_API_URL=http://${backend_ip}:8000
+
+  # Скрипт деплою фронтенду
+  - path: /opt/monero-scripts/deploy.sh
+    permissions: "0755"
+    owner: deploy:deploy
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      source /etc/monero/deploy.env
+      REPO_DIR=/opt/monero-privacy-system
+      log() { echo "[$(date '+%H:%M:%S')] [FRONTEND-DEPLOY] $*"; }
+
+      if [ ! -d "$REPO_DIR/.git" ]; then
+        log "Клонування репозиторію..."
+        git clone --branch "$DEPLOY_BRANCH" "$REPO_URL" "$REPO_DIR"
+      else
+        git -C "$REPO_DIR" fetch origin "$DEPLOY_BRANCH" --quiet
+        LOCAL=$(git -C "$REPO_DIR" rev-parse HEAD)
+        REMOTE=$(git -C "$REPO_DIR" rev-parse "origin/$DEPLOY_BRANCH")
+        if [ "$LOCAL" = "$REMOTE" ]; then log "Вже актуально."; exit 0; fi
+        log "Новий коміт: $LOCAL → $REMOTE"
+        git -C "$REPO_DIR" pull origin "$DEPLOY_BRANCH" --quiet
+      fi
+
+      log "Встановлення npm залежностей..."
+      cd "$REPO_DIR/frontend"
+      npm ci --silent
+
+      log "Збірка React..."
+      REACT_APP_API_URL="$REACT_APP_API_URL" npm run build
+
+      log "Деплой у веб-корінь..."
+      mkdir -p /var/www/monero-frontend
+      rsync -a --delete "$REPO_DIR/frontend/build/" /var/www/monero-frontend/
+
+      log "Перезавантаження nginx..."
+      rc-service nginx reload
+      log "Готово! Коміт: $(git -C "$REPO_DIR" rev-parse --short HEAD)"
+
+  # Periodic deploy script (runs via crond)
+  - path: /etc/periodic/minutely/monero-deploy
+    permissions: "0755"
+    content: |
+      #!/bin/sh
+      su -s /bin/bash deploy -c /opt/monero-scripts/deploy.sh >> /var/log/monero-deploy.log 2>&1
+
+runcmd:
+  # Налаштування мережі
+  - ifdown eth0 && ifup eth0 || true
+
+  # Створення директорій
+  - mkdir -p /var/www/monero-frontend /opt/monero-scripts /etc/monero
+  - chown -R deploy:deploy /opt/monero-scripts /etc/monero
+
+  # Видалення дефолтного nginx конфігу
+  - rm -f /etc/nginx/http.d/default.conf
+
+  # Запуск nginx
+  - rc-update add nginx default
+  - rc-service nginx start
+
+  # Перший деплой
+  - su -s /bin/bash deploy -c /opt/monero-scripts/deploy.sh || true
+
+  # Додати щохвилинний cron для автодеплою
+  - echo "* * * * * deploy /opt/monero-scripts/deploy.sh >> /var/log/monero-deploy.log 2>&1" >> /etc/crontabs/root
+  - rc-update add crond default
+  - rc-service crond start

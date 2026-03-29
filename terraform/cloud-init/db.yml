@@ -1,0 +1,96 @@
+#cloud-config
+# VM3 — Database (PostgreSQL)
+
+hostname: ${hostname}
+fqdn: ${hostname}.monero.local
+manage_etc_hosts: true
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - git
+  - bash
+  - postgresql
+  - postgresql-client
+
+users:
+  - name: deploy
+    gecos: Deploy User
+    groups: wheel
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+write_files:
+  - path: /etc/network/interfaces
+    content: |
+      auto lo
+      iface lo inet loopback
+      auto eth0
+      iface eth0 inet static
+        address ${static_ip}/24
+        gateway ${gateway}
+        dns-nameservers 1.1.1.1 8.8.8.8
+
+  # PostgreSQL: дозволяємо підключення з backend VM
+  - path: /etc/postgresql/pg_hba.conf
+    content: |
+      # TYPE  DATABASE        USER            ADDRESS                 METHOD
+      local   all             all                                     trust
+      host    all             all             127.0.0.1/32            scram-sha-256
+      host    monero_privacy  monero          ${backend_ip}/32        scram-sha-256
+      # Дозволяємо всю внутрішню мережу (для розробки)
+      host    monero_privacy  monero          10.10.10.0/24           scram-sha-256
+
+  # PostgreSQL: продуктивність для малих VM
+  - path: /etc/postgresql/postgresql.conf
+    content: |
+      listen_addresses = '*'
+      port = 5432
+      max_connections = 50
+      shared_buffers = 64MB
+      effective_cache_size = 192MB
+      maintenance_work_mem = 32MB
+      work_mem = 2MB
+      wal_buffers = 8MB
+      checkpoint_completion_target = 0.9
+      log_min_duration_statement = 500
+      log_line_prefix = '%t [%p] %u@%d '
+      hba_file = '/etc/postgresql/pg_hba.conf'
+
+  # Скрипт ініціалізації БД
+  - path: /opt/setup-db.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      DB_PASSWORD="${db_password}"
+      log() { echo "[$(date '+%H:%M:%S')] [DB-SETUP] $*"; }
+
+      log "Ініціалізація кластера PostgreSQL..."
+      if [ ! -f /var/lib/postgresql/data/PG_VERSION ]; then
+        su -s /bin/sh postgres -c "initdb -D /var/lib/postgresql/data"
+      fi
+
+      log "Копіювання конфігурацій..."
+      cp /etc/postgresql/postgresql.conf /var/lib/postgresql/data/postgresql.conf
+      cp /etc/postgresql/pg_hba.conf /var/lib/postgresql/data/pg_hba.conf
+
+      log "Запуск PostgreSQL..."
+      rc-service postgresql start
+      sleep 3
+
+      log "Створення користувача і БД..."
+      su -s /bin/sh postgres -c "psql -c \"CREATE USER monero WITH PASSWORD '$DB_PASSWORD';\"" 2>/dev/null || true
+      su -s /bin/sh postgres -c "psql -c \"CREATE DATABASE monero_privacy OWNER monero;\"" 2>/dev/null || true
+      su -s /bin/sh postgres -c "psql -c \"GRANT ALL PRIVILEGES ON DATABASE monero_privacy TO monero;\"" 2>/dev/null || true
+
+      log "БД готова. Підключення: postgresql://monero:***@${static_ip}:5432/monero_privacy"
+
+runcmd:
+  - ifdown eth0 && ifup eth0 || true
+  - apk add --no-cache postgresql postgresql-client
+  - rc-update add postgresql default
+  - bash /opt/setup-db.sh

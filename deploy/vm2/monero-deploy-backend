@@ -1,0 +1,20 @@
+#!/sbin/openrc-run
+# /etc/init.d/monero-deploy-backend
+# OpenRC service for backend auto-deploy (one-shot, runs via crond)
+
+name="monero-deploy-backend"
+description="Monero Backend Auto-Deploy"
+
+command="/opt/monero-scripts/deploy.sh"
+command_user="deploy"
+
+depend() {
+    need net
+    after monero-api monero-worker
+}
+
+start() {
+    ebegin "Running backend deploy"
+    su -s /bin/bash deploy -c "${command}" >> /var/log/monero-deploy.log 2>&1
+    eend $?
+}

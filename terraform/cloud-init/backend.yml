@@ -1,0 +1,176 @@
+#cloud-config
+# VM2 — Backend + Worker (FastAPI + Python)
+
+hostname: ${hostname}
+fqdn: ${hostname}.monero.local
+manage_etc_hosts: true
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - git
+  - curl
+  - rsync
+  - bash
+  - python3
+  - python3-pip
+  - python3-venv
+  - python3-dev
+  - build-base
+  - postgresql-client
+  - libpq-dev
+
+users:
+  - name: deploy
+    gecos: Deploy User
+    groups: wheel
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+  - name: monero
+    gecos: Monero Service User
+    system: true
+    shell: /sbin/nologin
+    home: /opt/monero-privacy-system
+
+write_files:
+  - path: /etc/network/interfaces
+    content: |
+      auto lo
+      iface lo inet loopback
+      auto eth0
+      iface eth0 inet static
+        address ${static_ip}/24
+        gateway ${gateway}
+        dns-nameservers 1.1.1.1 8.8.8.8
+
+  # Backend env файл
+  - path: /etc/monero/backend.env
+    permissions: "0640"
+    owner: monero:monero
+    content: |
+      DATABASE_URL=postgresql+asyncpg://monero:${db_password}@${db_ip}:5432/monero_privacy
+      DATABASE_URL_SYNC=postgresql://monero:${db_password}@${db_ip}:5432/monero_privacy
+      MONERO_RPC_HOST=${monero_rpc_host}
+      MONERO_RPC_PORT=${monero_rpc_port}
+      WORKER_INTERVAL_SECONDS=10
+      BLOCKS_HISTORY_FOR_AVG=50
+      CORS_ORIGINS=*
+
+  - path: /etc/monero/deploy.env
+    permissions: "0640"
+    owner: deploy:deploy
+    content: |
+      REPO_URL=${deploy_git_repo}
+      DEPLOY_BRANCH=${deploy_branch}
+      DB_HOST=${db_ip}
+      DB_USER=monero
+      DB_PASSWORD=${db_password}
+      DB_NAME=monero_privacy
+
+  # OpenRC сервіс для FastAPI
+  - path: /etc/init.d/monero-api
+    permissions: "0755"
+    content: |
+      #!/sbin/openrc-run
+      name="monero-api"
+      description="Monero Privacy Analytics API"
+      command="/opt/monero-venv/bin/uvicorn"
+      command_args="main:app --host 0.0.0.0 --port 8000 --workers 2"
+      command_user="monero"
+      directory="/opt/monero-privacy-system/backend"
+      pidfile="/run/monero-api.pid"
+      command_background=true
+      env_file="/etc/monero/backend.env"
+      output_log="/var/log/monero-api.log"
+      error_log="/var/log/monero-api.log"
+      depend() {
+        need net
+        after monero-db-ready
+      }
+
+  # OpenRC сервіс для Worker
+  - path: /etc/init.d/monero-worker
+    permissions: "0755"
+    content: |
+      #!/sbin/openrc-run
+      name="monero-worker"
+      description="Monero Privacy Analytics Worker"
+      command="/opt/monero-venv/bin/python"
+      command_args="worker/worker.py"
+      command_user="monero"
+      directory="/opt/monero-privacy-system/backend"
+      pidfile="/run/monero-worker.pid"
+      command_background=true
+      env_file="/etc/monero/backend.env"
+      output_log="/var/log/monero-worker.log"
+      error_log="/var/log/monero-worker.log"
+      depend() {
+        need net monero-api
+      }
+
+  # Скрипт деплою бекенду
+  - path: /opt/monero-scripts/deploy.sh
+    permissions: "0755"
+    owner: deploy:deploy
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      source /etc/monero/deploy.env
+      REPO_DIR=/opt/monero-privacy-system
+      VENV=/opt/monero-venv
+      log() { echo "[$(date '+%H:%M:%S')] [BACKEND-DEPLOY] $*"; }
+
+      if [ ! -d "$REPO_DIR/.git" ]; then
+        log "Клонування..."
+        git clone --branch "$DEPLOY_BRANCH" "$REPO_URL" "$REPO_DIR"
+        chown -R monero:monero "$REPO_DIR"
+      else
+        git -C "$REPO_DIR" fetch origin "$DEPLOY_BRANCH" --quiet
+        LOCAL=$(git -C "$REPO_DIR" rev-parse HEAD)
+        REMOTE=$(git -C "$REPO_DIR" rev-parse "origin/$DEPLOY_BRANCH")
+        if [ "$LOCAL" = "$REMOTE" ]; then log "Вже актуально."; exit 0; fi
+        log "Новий коміт: $LOCAL → $REMOTE"
+        git -C "$REPO_DIR" pull origin "$DEPLOY_BRANCH" --quiet
+        chown -R monero:monero "$REPO_DIR"
+      fi
+
+      if [ ! -d "$VENV" ]; then
+        log "Створення venv..."
+        python3 -m venv "$VENV"
+        chown -R monero:monero "$VENV"
+      fi
+
+      log "Встановлення залежностей..."
+      "$VENV/bin/pip" install --quiet --upgrade pip
+      "$VENV/bin/pip" install --quiet -r "$REPO_DIR/backend/requirements.txt"
+
+      log "Застосування схеми БД..."
+      PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" \
+        -f "$REPO_DIR/database/schema.sql" --quiet 2>/dev/null || true
+
+      log "Перезапуск сервісів..."
+      rc-service monero-api restart 2>/dev/null || rc-service monero-api start
+      sleep 2
+      rc-service monero-worker restart 2>/dev/null || rc-service monero-worker start
+
+      log "Перевірка API..."
+      sleep 3
+      curl -sf http://localhost:8000/health && log "API здоровий ✓" || log "УВАГА: API не відповідає"
+      log "Готово! Коміт: $(git -C "$REPO_DIR" rev-parse --short HEAD)"
+
+runcmd:
+  - ifdown eth0 && ifup eth0 || true
+  - mkdir -p /opt/monero-scripts /etc/monero /var/log
+  - chown -R deploy:deploy /opt/monero-scripts
+  - chown root:monero /etc/monero/backend.env
+  - rc-update add monero-api default
+  - rc-update add monero-worker default
+  - echo "* * * * * root /opt/monero-scripts/deploy.sh >> /var/log/monero-deploy.log 2>&1" >> /etc/crontabs/root
+  - rc-update add crond default
+  - rc-service crond start
+  # Перший деплой після паузи (чекаємо на DB)
+  - sleep 30 && su -s /bin/bash deploy -c /opt/monero-scripts/deploy.sh || true

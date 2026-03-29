@@ -1,0 +1,33 @@
+#cloud-config
+# Спільна конфігурація — базові налаштування для всіх VM
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - git
+  - curl
+  - rsync
+  - bash
+  - openssl
+
+users:
+  - name: deploy
+    gecos: Deploy User
+    groups: wheel
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+  - name: root
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+write_files:
+  - path: /etc/monero/deploy.env
+    permissions: "0640"
+    owner: deploy:deploy
+    content: |
+      REPO_URL=${deploy_git_repo}
+      DEPLOY_BRANCH=${deploy_branch}

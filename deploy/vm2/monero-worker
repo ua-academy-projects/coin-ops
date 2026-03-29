@@ -1,0 +1,29 @@
+#!/sbin/openrc-run
+# /etc/init.d/monero-worker
+# OpenRC service for Monero Privacy Analytics Worker
+
+name="monero-worker"
+description="Monero Privacy Analytics Worker"
+
+command="/opt/monero-venv/bin/python"
+command_args="worker/worker.py"
+command_user="monero"
+directory="/opt/monero-privacy-system/backend"
+pidfile="/run/monero-worker.pid"
+command_background=true
+
+output_log="/var/log/monero-worker.log"
+error_log="/var/log/monero-worker.log"
+
+start_pre() {
+    # Load environment variables from backend.env
+    if [ -f /etc/monero/backend.env ]; then
+        set -a
+        . /etc/monero/backend.env
+        set +a
+    fi
+}
+
+depend() {
+    need net monero-api
+}
