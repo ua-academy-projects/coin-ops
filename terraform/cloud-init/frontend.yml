@@ -14,7 +14,7 @@ packages:
   - rsync
   - bash
   - nginx
-  - nodejs
+  - nodejs~20
   - npm
   - sudo
 
@@ -122,7 +122,7 @@ runcmd:
 
   # Створення директорій
   - mkdir -p /var/www/monero-frontend /opt/monero-scripts /etc/monero
-  - chown -R deploy:deploy /opt/monero-scripts /etc/monero
+  - chown -R deploy:deploy /var/www/monero-frontend /opt/monero-scripts /etc/monero
 
   # Видалення дефолтного nginx конфігу
   - rm -f /etc/nginx/http.d/default.conf

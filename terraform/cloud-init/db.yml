@@ -11,8 +11,8 @@ package_upgrade: false
 packages:
   - git
   - bash
-  - postgresql
-  - postgresql-client
+  - postgresql~16
+  - postgresql-client~16
   - sudo
 
 users:
@@ -92,6 +92,6 @@ write_files:
 
 runcmd:
   - ifdown eth0 && ifup eth0 || true
-  - apk add --no-cache postgresql postgresql-client
+  - apk add --no-cache postgresql~16 postgresql-client~16
   - rc-update add postgresql default
   - bash /opt/setup-db.sh
