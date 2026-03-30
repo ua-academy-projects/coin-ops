@@ -1,4 +1,4 @@
 DASHBOARD_PROJECT.md
 
 # Ansible secrets — never commit real passwords
-ansible/group_vars/secrets.yml
+ansible/group_vars/all/secrets.yml
