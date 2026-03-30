@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CoinOps — курси та історія</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+</head>
+<body class="bg-light">
+  <nav class="navbar navbar-dark bg-dark mb-4">
+    <div class="container">
+      <span class="navbar-brand mb-0 h1">CoinOps</span>
+      <span class="navbar-text text-secondary">агрегатор курсів (MVP)</span>
+    </div>
+  </nav>
+
+  <main class="container pb-5">
+    <ul class="nav nav-tabs" id="mainTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="live-tab" data-bs-toggle="tab" data-bs-target="#live-panel"
+                type="button" role="tab" aria-controls="live-panel" aria-selected="true">
+          Поточні курси
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="hist-tab" data-bs-toggle="tab" data-bs-target="#hist-panel"
+                type="button" role="tab" aria-controls="hist-panel" aria-selected="false">
+          Історія (останні 50)
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content border border-top-0 bg-white p-3 rounded-bottom shadow-sm">
+      <div class="tab-pane fade show active" id="live-panel" role="tabpanel" aria-labelledby="live-tab">
+        {% if live_error %}
+          <div class="alert alert-warning" role="alert">
+            Не вдалося отримати дані з проксі: {{ live_error }}
+          </div>
+        {% else %}
+          {% if live_fetched_at %}
+            <p class="text-muted small mb-3">Оновлено (UTC): {{ live_fetched_at }}</p>
+          {% endif %}
+          <div class="table-responsive">
+            <table class="table table-sm table-striped align-middle">
+              <thead class="table-dark">
+                <tr>
+                  <th>Актив</th>
+                  <th>Тип</th>
+                  <th>Ціна UAH</th>
+                  <th>Ціна USD</th>
+                  <th>Джерело</th>
+                  <th>Назва</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for r in live_rates %}
+                  <tr>
+                    <td><code>{{ r.get('asset_symbol', '') }}</code></td>
+                    <td>{{ r.get('asset_type', '') }}</td>
+                    <td>{{ r.get('price_uah', '') if r.get('price_uah') is not none else '—' }}</td>
+                    <td>{{ r.get('price_usd', '') if r.get('price_usd') is not none else '—' }}</td>
+                    <td>{{ r.get('source', '') }}</td>
+                    <td>{{ r.get('name', '') }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="tab-pane fade" id="hist-panel" role="tabpanel" aria-labelledby="hist-tab">
+        {% if history_error %}
+          <div class="alert alert-warning" role="alert">
+            Не вдалося прочитати історію з БД: {{ history_error }}
+          </div>
+        {% else %}
+          <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle">
+              <thead class="table-secondary">
+                <tr>
+                  <th>ID</th>
+                  <th>Актив</th>
+                  <th>Тип</th>
+                  <th>UAH</th>
+                  <th>USD</th>
+                  <th>Джерело</th>
+                  <th>Записано</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in history_rows %}
+                  <tr>
+                    <td>{{ row[0] }}</td>
+                    <td><code>{{ row[1] }}</code></td>
+                    <td>{{ row[2] }}</td>
+                    <td>{{ row[3] if row[3] is not none else '—' }}</td>
+                    <td>{{ row[4] if row[4] is not none else '—' }}</td>
+                    <td>{{ row[5] }}</td>
+                    <td>{{ row[6] }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+          integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+          crossorigin="anonymous"></script>
+</body>
+</html>

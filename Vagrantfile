@@ -18,6 +18,8 @@ Vagrant.configure("2") do |config|
       node.vm.network "forwarded_port", guest: 22, host: "#{2200 + i}", id: "ssh", auto_correct: true
 
       node.vm.provision "shell", name: "base-setup", keep_color: true, preserve_order: true, path: "infra/base_setup.sh"
+      config.vm.synced_folder ".", "/vagrant", disabled: true
+      config.vm.synced_folder "services/", "/home/shared_folder"
 
       case i
       when 1

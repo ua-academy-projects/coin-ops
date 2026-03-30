@@ -1,1 +1,8 @@
 .vagrant/
+
+__pycache__/
+venv/
+env/
+
+*.exe
+/bin/

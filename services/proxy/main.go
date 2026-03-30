@@ -1,0 +1,156 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"log"
+	"net/http"
+	"os"
+	"strconv"
+	"sync"
+	"time"
+
+	"golang.org/x/sync/errgroup"
+)
+
+// defaultListen is the bind address when COINOPS_LISTEN is unset.
+const defaultListen = ":8080"
+
+// defaultCacheTTL is used when COINOPS_CACHE_TTL_SECONDS is unset or invalid.
+const defaultCacheTTL = 60 * time.Second
+
+// cachedEntry holds a successful aggregated snapshot for in-memory TTL caching.
+// We only cache responses where both NBU and CoinGecko succeeded, to avoid serving
+// stale partial data after a transient outage of one provider.
+type cachedEntry struct {
+	resp      *RatesResponse
+	expiresAt time.Time
+}
+
+// rateAggregator holds HTTP client and cache state for GET /api/v1/rates.
+type rateAggregator struct {
+	client  *http.Client
+	mu      sync.RWMutex
+	cache   *cachedEntry
+	cacheTTL  time.Duration
+}
+
+// BuildRatesResponse fetches both sources in parallel, merges rates, and builds the API payload.
+// This function is independent of http.ResponseWriter so the same snapshot can later be
+// published to a message queue (Phase 2) without changing fetchers.
+func BuildRatesResponse(ctx context.Context, client *http.Client) *RatesResponse {
+	if client == nil {
+		client = newHTTPClient()
+	}
+	var fiat, crypto []Rate
+	var nbuErr, coingeckoErr error
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		r, err := FetchNBU(gctx, client)
+		if err != nil {
+			nbuErr = err
+			return nil // partial failure: still return crypto if available
+		}
+		fiat = r
+		return nil
+	})
+	g.Go(func() error {
+		r, err := FetchCoinGecko(gctx, client)
+		if err != nil {
+			coingeckoErr = err
+			return nil
+		}
+		crypto = r
+		return nil
+	})
+	_ = g.Wait()
+	out := &RatesResponse{
+		FetchedAt: time.Now().UTC(),
+		Rates:     append(append([]Rate(nil), fiat...), crypto...),
+	}
+	if nbuErr != nil || coingeckoErr != nil {
+		out.Errors = make(map[string]string)
+		if nbuErr != nil {
+			out.Errors["nbu"] = nbuErr.Error()
+		}
+		if coingeckoErr != nil {
+			out.Errors["coingecko"] = coingeckoErr.Error()
+		}
+	}
+	return out
+}
+
+func (a *rateAggregator) getOrFetch(ctx context.Context) *RatesResponse {
+	now := time.Now()
+	a.mu.RLock()
+	ent := a.cache
+	a.mu.RUnlock()
+	if ent != nil && now.Before(ent.expiresAt) {
+		return ent.resp
+	}
+	resp := BuildRatesResponse(ctx, a.client)
+	// Cache only full success to keep CoinGecko request rate predictable and avoid
+	// caching incomplete snapshots during provider outages.
+	if len(resp.Errors) == 0 && len(resp.Rates) > 0 {
+		snap := *resp
+		snap.Rates = append([]Rate(nil), resp.Rates...)
+		snap.Errors = nil
+		a.mu.Lock()
+		a.cache = &cachedEntry{resp: &snap, expiresAt: now.Add(a.cacheTTL)}
+		a.mu.Unlock()
+		return &snap
+	}
+	return resp
+}
+
+func listenAddr() string {
+	if v := os.Getenv("COINOPS_LISTEN"); v != "" {
+		return v
+	}
+	return defaultListen
+}
+
+func cacheTTL() time.Duration {
+	s := os.Getenv("COINOPS_CACHE_TTL_SECONDS")
+	if s == "" {
+		return defaultCacheTTL
+	}
+	sec, err := strconv.Atoi(s)
+	if err != nil || sec <= 0 {
+		return defaultCacheTTL
+	}
+	return time.Duration(sec) * time.Second
+}
+
+func main() {
+	agg := &rateAggregator{
+		client:   newHTTPClient(),
+		cacheTTL: cacheTTL(),
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/rates", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+		resp := agg.getOrFetch(ctx)
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		enc := json.NewEncoder(w)
+		enc.SetEscapeHTML(true)
+		if err := enc.Encode(resp); err != nil {
+			log.Printf("encode response: %v", err)
+		}
+	})
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+
+	addr := listenAddr()
+	log.Printf("CoinOps proxy listening on %s (cache TTL %v)", addr, agg.cacheTTL)
+	if err := http.ListenAndServe(addr, mux); err != nil {
+		log.Fatal(err)
+	}
+}
