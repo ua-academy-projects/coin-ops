@@ -1,0 +1,21 @@
+# Non-secret variables — safe to commit.
+# Secrets (passwords) live in group_vars/secrets.yml which is gitignored.
+
+# ── SSH ───────────────────────────────────────────────────────
+ansible_user: vagrant
+ansible_password: vagrant
+ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+
+# ── Service accounts ──────────────────────────────────────────
+rabbitmq_user: cognitor
+db_name: cognitor
+db_user: cognitor
+
+# ── Ports ────────────────────────────────────────────────────
+proxy_port: 8080
+history_port: 8000
+
+# ── Derived connection strings ────────────────────────────────
+# rabbitmq_password and db_password come from secrets.yml
+rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@172.31.1.10:5672/"
+database_url: "postgresql://{{ db_user }}:{{ db_password }}@172.31.1.10:5432/{{ db_name }}"

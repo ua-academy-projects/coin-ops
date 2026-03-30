@@ -6,25 +6,3 @@ softserve-node-02 ansible_host=172.31.1.11
 
 [ui]
 softserve-node-03 ansible_host=172.31.1.12
-
-[all:vars]
-ansible_user=vagrant
-ansible_ssh_private_key_file=~/.vagrant.d/insecure_private_key
-ansible_ssh_common_args='-o StrictHostKeyChecking=no'
-
-# ── RabbitMQ credentials ──────────────────────────────────────
-rabbitmq_user=cognitor
-rabbitmq_password=changeme
-
-# ── PostgreSQL credentials ────────────────────────────────────
-db_name=cognitor
-db_user=cognitor
-db_password=changeme
-
-# ── Derived connection strings (used in templates) ────────────
-rabbitmq_url=amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@172.31.1.10:5672/
-database_url=postgresql://{{ db_user }}:{{ db_password }}@172.31.1.10:5432/{{ db_name }}
-
-# ── Service ports ─────────────────────────────────────────────
-proxy_port=8080
-history_port=8000
