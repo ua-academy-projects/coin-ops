@@ -1,0 +1,102 @@
+---
+- name: Create cognitor-history system user
+  user:
+    name: cognitor-history
+    system: yes
+    shell: /usr/sbin/nologin
+    create_home: no
+
+- name: Create secrets directory
+  file:
+    path: /etc/cognitor
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+
+- name: Create history deploy directory
+  file:
+    path: /opt/cognitor/history
+    state: directory
+    owner: cognitor-history
+    group: cognitor-history
+    mode: '0755'
+
+- name: Sync history source files
+  synchronize:
+    src: "{{ playbook_dir }}/../history/"
+    dest: /opt/cognitor/history/
+    delete: no
+
+- name: Set ownership of source files
+  file:
+    path: /opt/cognitor/history
+    state: directory
+    owner: cognitor-history
+    group: cognitor-history
+    recurse: yes
+
+- name: Create Python virtualenv and install dependencies
+  pip:
+    requirements: /opt/cognitor/history/requirements.txt
+    virtualenv: /opt/cognitor/history/venv
+    virtualenv_command: python3 -m venv
+
+- name: Set venv ownership
+  file:
+    path: /opt/cognitor/history/venv
+    state: directory
+    owner: cognitor-history
+    group: cognitor-history
+    recurse: yes
+
+- name: Write history environment file
+  template:
+    src: history.env.j2
+    dest: /etc/cognitor/history.env
+    owner: cognitor-history
+    group: cognitor-history
+    mode: '0640'
+
+- name: Write history-consumer systemd unit
+  template:
+    src: history-consumer.service.j2
+    dest: /etc/systemd/system/cognitor-history-consumer.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload and restart history consumer
+
+- name: Write history-api systemd unit
+  template:
+    src: history-api.service.j2
+    dest: /etc/systemd/system/cognitor-history-api.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload and restart history api
+
+- name: Flush handlers
+  meta: flush_handlers
+
+- name: Ensure history-consumer is enabled and running
+  systemd:
+    name: cognitor-history-consumer
+    enabled: yes
+    state: started
+
+- name: Ensure history-api is enabled and running
+  systemd:
+    name: cognitor-history-api
+    enabled: yes
+    state: started
+
+- name: Wait for history-api health endpoint
+  uri:
+    url: "http://localhost:{{ history_port }}/health"
+    method: GET
+    status_code: 200
+  retries: 12
+  delay: 5
+  register: result
+  until: result.status == 200

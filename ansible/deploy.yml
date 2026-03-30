@@ -1,0 +1,23 @@
+---
+# deploy.yml — deploy all services.
+# Safe to re-run on every code push.
+#
+#   ansible-playbook -i ansible/inventory ansible/deploy.yml
+
+- name: Deploy Proxy Service (node-02)
+  hosts: proxy
+  become: yes
+  roles:
+    - proxy
+
+- name: Deploy History Service (node-01)
+  hosts: history
+  become: yes
+  roles:
+    - history
+
+- name: Deploy Web UI (node-03)
+  hosts: ui
+  become: yes
+  roles:
+    - ui

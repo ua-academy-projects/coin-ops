@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Polymarket Intelligence Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            bg:      '#0d0f14',
+            surface: '#141720',
+            border:  '#1e2433',
+            muted:   '#4a5168',
+            yes:     '#22c55e',
+            no:      '#ef4444',
+            accent:  '#6366f1',
+          },
+          fontFamily: {
+            mono: ['JetBrains Mono', 'Fira Code', 'Consolas', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { background-color: #0d0f14; }
+
+    @keyframes pulse-green {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.6; }
+    }
+    .price-pulse { animation: pulse-green 0.6s ease-in-out; }
+
+    .tab-active {
+      border-bottom: 2px solid #6366f1;
+      color: #e5e7eb;
+    }
+    .tab-inactive {
+      border-bottom: 2px solid transparent;
+      color: #4a5168;
+    }
+    .tab-inactive:hover { color: #9ca3af; }
+
+    ::-webkit-scrollbar       { width: 6px; }
+    ::-webkit-scrollbar-track { background: #141720; }
+    ::-webkit-scrollbar-thumb { background: #1e2433; border-radius: 3px; }
+
+    .bar-fill {
+      height: 4px;
+      border-radius: 2px;
+      background: linear-gradient(90deg, #6366f1, #818cf8);
+    }
+  </style>
+</head>
+
+<body class="text-gray-200 min-h-screen font-mono antialiased">
+
+  <!-- ── Header ───────────────────────────────────────────── -->
+  <header class="border-b border-border px-6 py-4 flex items-center justify-between sticky top-0 z-10"
+          style="background:#0d0f14">
+    <div class="flex items-center gap-3">
+      <span class="text-accent text-xl font-bold tracking-tight">⬡ coin-ops</span>
+      <span class="text-muted text-xs">Polymarket Intelligence</span>
+    </div>
+    <div class="flex items-center gap-4">
+      <span id="last-updated" class="text-muted text-xs">–</span>
+      <span id="status-dot" class="w-2 h-2 rounded-full bg-muted"></span>
+    </div>
+  </header>
+
+  <!-- ── Tabs ─────────────────────────────────────────────── -->
+  <nav class="border-b border-border px-6 flex gap-6">
+    <button id="tab-live-btn"
+            class="py-3 text-sm font-medium tab-active transition-colors"
+            onclick="switchTab('live')">
+      Live Markets
+    </button>
+    <button id="tab-history-btn"
+            class="py-3 text-sm font-medium tab-inactive transition-colors"
+            onclick="switchTab('history')">
+      History
+    </button>
+  </nav>
+
+  <!-- ── Live Tab ──────────────────────────────────────────── -->
+  <div id="tab-live" class="p-6 space-y-8">
+
+    <!-- Markets grid -->
+    <section>
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-widest">
+          Top Markets · 24h Volume
+        </h2>
+        <button onclick="refreshAll()"
+                class="text-xs text-accent hover:text-indigo-300 transition-colors">
+          ↻ Refresh
+        </button>
+      </div>
+      <div id="markets-grid"
+           class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        <div class="text-muted text-sm">Loading markets…</div>
+      </div>
+    </section>
+
+    <!-- Whales -->
+    <section>
+      <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-4">
+        Whale Tracker · Top 20 by Monthly PnL
+      </h2>
+      <div id="whales-container" class="space-y-3">
+        <div class="text-muted text-sm">Loading whales…</div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ── History Tab ───────────────────────────────────────── -->
+  <div id="tab-history" class="p-6 hidden">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-widest">
+        Market Snapshots · Latest 50
+      </h2>
+      <button onclick="loadHistory()"
+              class="text-xs text-accent hover:text-indigo-300 transition-colors">
+        ↻ Refresh
+      </button>
+    </div>
+    <div class="overflow-x-auto rounded-lg border border-border">
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="border-b border-border" style="background:#141720">
+            <th class="text-left px-4 py-3 text-muted font-medium">Time</th>
+            <th class="text-left px-4 py-3 text-muted font-medium">Market</th>
+            <th class="text-right px-4 py-3 text-muted font-medium">YES</th>
+            <th class="text-right px-4 py-3 text-muted font-medium">NO</th>
+            <th class="text-right px-4 py-3 text-muted font-medium">Vol 24h</th>
+            <th class="text-left px-4 py-3 text-muted font-medium">Category</th>
+          </tr>
+        </thead>
+        <tbody id="history-tbody">
+          <tr><td colspan="6" class="px-4 py-6 text-muted text-center">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    // ── Config ────────────────────────────────────────────────
+    const PROXY_URL  = 'http://172.31.1.11:8080';
+    const HISTORY_URL = 'http://172.31.1.10:8000';
+    const REFRESH_MS  = 30_000; // auto-refresh live data every 30s
+
+    let refreshTimer = null;
+
+    // ── Tab switching ─────────────────────────────────────────
+    function switchTab(name) {
+      const isLive = name === 'live';
+      document.getElementById('tab-live').classList.toggle('hidden', !isLive);
+      document.getElementById('tab-history').classList.toggle('hidden', isLive);
+      document.getElementById('tab-live-btn').className =
+        'py-3 text-sm font-medium transition-colors ' + (isLive ? 'tab-active' : 'tab-inactive');
+      document.getElementById('tab-history-btn').className =
+        'py-3 text-sm font-medium transition-colors ' + (!isLive ? 'tab-active' : 'tab-inactive');
+      if (!isLive) loadHistory();
+    }
+
+    // ── Utilities ─────────────────────────────────────────────
+    function pct(v) { return (v * 100).toFixed(1) + '%'; }
+
+    function fmtVol(v) {
+      if (v == null || v === 0) return '–';
+      if (v >= 1_000_000) return '$' + (v / 1_000_000).toFixed(1) + 'M';
+      if (v >= 1_000)     return '$' + (v / 1_000).toFixed(0) + 'K';
+      return '$' + v.toFixed(0);
+    }
+
+    function fmtPnl(v) {
+      const abs = Math.abs(v);
+      const sign = v >= 0 ? '+' : '-';
+      const color = v >= 0 ? 'text-yes' : 'text-no';
+      return `<span class="${color}">${sign}${fmtVol(abs)}</span>`;
+    }
+
+    function fmtTime(iso) {
+      if (!iso) return '–';
+      return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function setStatus(ok) {
+      const dot = document.getElementById('status-dot');
+      dot.className = 'w-2 h-2 rounded-full ' + (ok ? 'bg-yes' : 'bg-no');
+    }
+
+    function setLastUpdated() {
+      document.getElementById('last-updated').textContent =
+        'Updated ' + new Date().toLocaleTimeString();
+    }
+
+    // ── Markets ───────────────────────────────────────────────
+    function renderMarkets(markets) {
+      const grid = document.getElementById('markets-grid');
+      if (!markets || markets.length === 0) {
+        grid.innerHTML = '<div class="text-muted text-sm">No data.</div>';
+        return;
+      }
+      grid.innerHTML = markets.map(m => {
+        const yes = m.yes_price ?? 0;
+        const no  = m.no_price  ?? 0;
+        const yesPct = (yes * 100).toFixed(1);
+        const noPct  = (no  * 100).toFixed(1);
+        const yesColor = yes >= 0.6 ? 'text-yes' : yes <= 0.4 ? 'text-no' : 'text-gray-300';
+        const daysLeft = m.end_date
+          ? Math.ceil((new Date(m.end_date) - Date.now()) / 86_400_000)
+          : null;
+
+        return `
+          <div class="rounded-lg border border-border p-4 hover:border-accent transition-colors"
+               style="background:#141720">
+            <div class="flex items-start justify-between gap-2 mb-3">
+              <p class="text-xs text-gray-300 leading-snug flex-1">${escHtml(m.question)}</p>
+              ${m.category ? `<span class="text-xs text-muted border border-border rounded px-1.5 py-0.5 whitespace-nowrap">${escHtml(m.category)}</span>` : ''}
+            </div>
+
+            <div class="flex gap-2 mb-3">
+              <div class="flex-1 text-center rounded py-2" style="background:#0d1f16">
+                <div class="text-yes font-bold text-lg">${yesPct}%</div>
+                <div class="text-xs text-muted">YES</div>
+              </div>
+              <div class="flex-1 text-center rounded py-2" style="background:#1f0d0d">
+                <div class="text-no font-bold text-lg">${noPct}%</div>
+                <div class="text-xs text-muted">NO</div>
+              </div>
+            </div>
+
+            <div class="h-1 rounded-full mb-3" style="background:#1e2433">
+              <div class="h-1 rounded-full bg-yes" style="width:${yesPct}%"></div>
+            </div>
+
+            <div class="flex justify-between text-xs text-muted">
+              <span>Vol 24h: <span class="text-gray-400">${fmtVol(m.volume_24h)}</span></span>
+              ${daysLeft !== null ? `<span>${daysLeft}d left</span>` : ''}
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    // ── Whales ────────────────────────────────────────────────
+    function renderWhales(whales) {
+      const container = document.getElementById('whales-container');
+      if (!whales || whales.length === 0) {
+        container.innerHTML = '<div class="text-muted text-sm">No data.</div>';
+        return;
+      }
+
+      const maxPnl = Math.max(...whales.map(w => Math.abs(w.pnl || 0)), 1);
+
+      container.innerHTML = whales.map(w => {
+        const barWidth = Math.min(100, (Math.abs(w.pnl || 0) / maxPnl) * 100).toFixed(1);
+        const topPositions = (w.positions || []).slice(0, 3);
+
+        return `
+          <div class="rounded-lg border border-border p-4" style="background:#141720">
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-3">
+                <span class="text-muted text-xs w-5 text-right">#${w.rank}</span>
+                <span class="text-sm font-medium text-gray-200">${escHtml(w.pseudonym || 'Anonymous')}</span>
+                <span class="text-xs text-muted font-mono">${w.address ? w.address.slice(0,6)+'…'+w.address.slice(-4) : ''}</span>
+              </div>
+              <div class="flex items-center gap-4 text-xs">
+                <span class="text-muted">PnL: ${fmtPnl(w.pnl || 0)}</span>
+                <span class="text-muted">Vol: <span class="text-gray-400">${fmtVol(w.volume)}</span></span>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <div class="bar-fill" style="width:${barWidth}%"></div>
+            </div>
+
+            ${topPositions.length > 0 ? `
+            <div class="flex flex-wrap gap-2">
+              ${topPositions.map(p => `
+                <div class="flex items-center gap-1.5 rounded px-2 py-1 border border-border text-xs"
+                     style="background:#0d0f14">
+                  <span class="${p.outcome === 'YES' ? 'text-yes' : 'text-no'} font-bold">${p.outcome}</span>
+                  <span class="text-muted truncate max-w-xs">${escHtml(p.market.length > 40 ? p.market.slice(0,40)+'…' : p.market)}</span>
+                  <span class="text-gray-400">${fmtVol(p.current_value)}</span>
+                </div>`).join('')}
+            </div>` : '<div class="text-xs text-muted">No open positions</div>'}
+          </div>`;
+      }).join('');
+    }
+
+    // ── History ───────────────────────────────────────────────
+    function renderHistory(rows) {
+      const tbody = document.getElementById('history-tbody');
+      if (!rows || rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-6 text-muted text-center">No history yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map((r, i) => {
+        const bg = i % 2 === 0 ? '' : 'style="background:#141720"';
+        return `
+          <tr ${bg} class="border-b border-border hover:bg-surface transition-colors">
+            <td class="px-4 py-2.5 text-muted">${fmtTime(r.fetched_at)}</td>
+            <td class="px-4 py-2.5 text-gray-300 max-w-xs">
+              <div class="truncate" title="${escHtml(r.question)}">${escHtml(r.question)}</div>
+            </td>
+            <td class="px-4 py-2.5 text-right text-yes font-medium">${pct(r.yes_price)}</td>
+            <td class="px-4 py-2.5 text-right text-no font-medium">${r.no_price != null ? pct(r.no_price) : '–'}</td>
+            <td class="px-4 py-2.5 text-right text-gray-400">${fmtVol(r.volume_24h)}</td>
+            <td class="px-4 py-2.5 text-muted">${r.category || '–'}</td>
+          </tr>`;
+      }).join('');
+    }
+
+    // ── XSS guard ─────────────────────────────────────────────
+    function escHtml(s) {
+      return String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // ── Fetch calls ───────────────────────────────────────────
+    async function fetchMarkets() {
+      const res = await fetch(PROXY_URL + '/current');
+      if (!res.ok) throw new Error('markets ' + res.status);
+      return res.json();
+    }
+
+    async function fetchWhales() {
+      const res = await fetch(PROXY_URL + '/whales');
+      if (!res.ok) throw new Error('whales ' + res.status);
+      return res.json();
+    }
+
+    async function fetchHistory() {
+      const res = await fetch(HISTORY_URL + '/history?limit=50');
+      if (!res.ok) throw new Error('history ' + res.status);
+      return res.json();
+    }
+
+    // ── Refresh live tab ──────────────────────────────────────
+    async function refreshAll() {
+      try {
+        const [markets, whales] = await Promise.all([fetchMarkets(), fetchWhales()]);
+        renderMarkets(markets);
+        renderWhales(whales);
+        setStatus(true);
+        setLastUpdated();
+      } catch (err) {
+        console.error('Refresh failed:', err);
+        setStatus(false);
+      }
+    }
+
+    async function loadHistory() {
+      try {
+        const rows = await fetchHistory();
+        renderHistory(rows);
+      } catch (err) {
+        console.error('History load failed:', err);
+        document.getElementById('history-tbody').innerHTML =
+          '<tr><td colspan="6" class="px-4 py-6 text-no text-center">Failed to load history.</td></tr>';
+      }
+    }
+
+    // ── Init ──────────────────────────────────────────────────
+    function startAutoRefresh() {
+      clearInterval(refreshTimer);
+      refreshTimer = setInterval(refreshAll, REFRESH_MS);
+    }
+
+    refreshAll();
+    startAutoRefresh();
+  </script>
+</body>
+</html>

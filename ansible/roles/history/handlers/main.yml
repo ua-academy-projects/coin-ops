@@ -1,0 +1,12 @@
+---
+- name: Reload and restart history consumer
+  systemd:
+    name: cognitor-history-consumer
+    daemon_reload: yes
+    state: restarted
+
+- name: Reload and restart history api
+  systemd:
+    name: cognitor-history-api
+    daemon_reload: yes
+    state: restarted

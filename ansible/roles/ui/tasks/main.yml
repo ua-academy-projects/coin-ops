@@ -1,0 +1,47 @@
+---
+- name: Create web root directory
+  file:
+    path: /var/www/coin-ops
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: '0755'
+
+- name: Deploy index.html
+  copy:
+    src: "{{ playbook_dir }}/../ui/index.html"
+    dest: /var/www/coin-ops/index.html
+    owner: www-data
+    group: www-data
+    mode: '0644'
+  notify: Reload nginx
+
+- name: Deploy nginx site config
+  copy:
+    src: "{{ playbook_dir }}/../ui/nginx.conf"
+    dest: /etc/nginx/sites-available/coin-ops
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload nginx
+
+- name: Enable coin-ops nginx site
+  file:
+    src: /etc/nginx/sites-available/coin-ops
+    dest: /etc/nginx/sites-enabled/coin-ops
+    state: link
+  notify: Reload nginx
+
+- name: Disable default nginx site
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Reload nginx
+
+- name: Flush handlers
+  meta: flush_handlers
+
+- name: Ensure nginx is running
+  systemd:
+    name: nginx
+    state: started

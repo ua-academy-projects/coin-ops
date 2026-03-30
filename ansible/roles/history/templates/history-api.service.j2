@@ -1,0 +1,17 @@
+[Unit]
+Description=Coin-Ops History API (FastAPI/uvicorn)
+After=network.target postgresql.service
+Wants=network.target
+
+[Service]
+Type=simple
+User=cognitor-history
+EnvironmentFile=/etc/cognitor/history.env
+ExecStart=/opt/cognitor/history/venv/bin/python /opt/cognitor/history/main.py
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

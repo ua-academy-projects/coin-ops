@@ -1,0 +1,93 @@
+---
+- name: Create cognitor-proxy system user
+  user:
+    name: cognitor-proxy
+    system: yes
+    shell: /usr/sbin/nologin
+    create_home: no
+
+- name: Create secrets directory
+  file:
+    path: /etc/cognitor
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+
+- name: Create proxy deploy directory
+  file:
+    path: /opt/cognitor/proxy
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Sync proxy source files
+  synchronize:
+    src: "{{ playbook_dir }}/../proxy/"
+    dest: /opt/cognitor/proxy/
+    delete: no
+    rsync_opts:
+      - "--exclude=proxy-linux"
+      - "--exclude=proxy"
+      - "--exclude=*.exe"
+
+- name: Download Go module dependencies
+  command: go mod download
+  args:
+    chdir: /opt/cognitor/proxy
+  environment:
+    HOME: /root
+    GOPATH: /root/go
+  changed_when: false
+
+- name: Build proxy binary
+  command: go build -mod=mod -o /opt/cognitor/proxy/proxy .
+  args:
+    chdir: /opt/cognitor/proxy
+  environment:
+    HOME: /root
+    GOPATH: /root/go
+
+- name: Set binary owner and permissions
+  file:
+    path: /opt/cognitor/proxy/proxy
+    owner: cognitor-proxy
+    group: cognitor-proxy
+    mode: '0750'
+
+- name: Write proxy environment file
+  template:
+    src: proxy.env.j2
+    dest: /etc/cognitor/proxy.env
+    owner: cognitor-proxy
+    group: cognitor-proxy
+    mode: '0640'
+
+- name: Write proxy systemd unit
+  template:
+    src: proxy.service.j2
+    dest: /etc/systemd/system/cognitor-proxy.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload and restart proxy
+
+- name: Flush handlers
+  meta: flush_handlers
+
+- name: Ensure proxy service is enabled and running
+  systemd:
+    name: cognitor-proxy
+    enabled: yes
+    state: started
+
+- name: Wait for proxy health endpoint
+  uri:
+    url: "http://localhost:{{ proxy_port }}/health"
+    method: GET
+    status_code: 200
+  retries: 12
+  delay: 5
+  register: result
+  until: result.status == 200
