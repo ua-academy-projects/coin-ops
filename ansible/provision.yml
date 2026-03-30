@@ -13,6 +13,11 @@
         update_cache: yes
         cache_valid_time: 3600
 
+    - name: Install acl (required for become_user with unprivileged users)
+      apt:
+        name: acl
+        state: present
+
     - name: Install PostgreSQL
       apt:
         name:
