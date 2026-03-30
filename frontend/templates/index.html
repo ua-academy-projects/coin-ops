@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Курси валют НБУ</title>
+</head>
+<body>
+    <h1>Курси валют НБУ</h1>
+    <table border="1">
+        <tr>
+            <th>Валюта</th>
+            <th>Назва</th>
+            <th>Курс (UAH)</th>
+        </tr>
+        {% for r in rates %}
+        <tr>
+            <td>{{ r.cc }}</td>
+            <td>{{ r.txt }}</td>
+            <td>{{ r.rate }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
