@@ -1,0 +1,14 @@
+[Unit]
+Description="Frontend Flask App"
+After=multi-user.target
+
+[Service]
+Type=simple
+EnvironmentFile=/home/working_dir/frontend.env
+ExecStart=/home/working_dir/venv/bin/python /home/working_dir/app.py
+User=vagrant
+WorkingDirectory=/home/working_dir
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

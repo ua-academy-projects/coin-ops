@@ -1,0 +1,14 @@
+[Unit]
+Description="Proxy Service App"
+After=multi-user.target
+
+[Service]
+Type=simple
+EnvironmentFile=/home/working_dir/proxy.env
+ExecStart=/home/working_dir/proxy
+User=vagrant
+WorkingDirectory=/home/working_dir
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+[Unit]
+Description="Worker App"
+After=multi-user.target
+
+[Service]
+Type=simple
+EnvironmentFile=/home/working_dir/worker.env
+ExecStart=/home/working_dir/venv/bin/python /home/working_dir/worker.py
+User=vagrant
+WorkingDirectory=/home/working_dir
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

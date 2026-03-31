@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 """
 CoinOps ingestion worker (VM3).
 
