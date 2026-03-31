@@ -36,21 +36,20 @@ type GammaMarket struct {
 // ---- Data API raw types ----
 
 type LeaderboardEntry struct {
-	Pseudonym   string  `json:"pseudonym"`
-	Address     string  `json:"address"`
+	ProxyWallet string  `json:"proxyWallet"`
+	UserName    string  `json:"userName"`
 	Pnl         float64 `json:"pnl"`
-	Volume      float64 `json:"volume"`
-	TradesCount int     `json:"tradesCount"`
-	MarketCount int     `json:"marketCount"`
+	Vol         float64 `json:"vol"`
+	Rank        string  `json:"rank"` // API returns "1", "2", ... as strings
 }
 
 type PositionEntry struct {
-	Market       string  `json:"market"` // title, not slug
+	Title        string  `json:"title"`
+	Slug         string  `json:"slug"` // already present in response
 	Outcome      string  `json:"outcome"`
 	CurrentValue float64 `json:"currentValue"`
 	Size         float64 `json:"size"`
-	AvgPrice     float64 `json:"avgPrice"`
-	Side         string  `json:"side"`
+	CurPrice     float64 `json:"curPrice"`
 }
 
 // ---- Output / wire types ----
@@ -70,7 +69,6 @@ type WhalePosition struct {
 	Market       string  `json:"market"`
 	Slug         string  `json:"slug,omitempty"`
 	Outcome      string  `json:"outcome"`
-	Side         string  `json:"side"`
 	CurrentValue float64 `json:"current_value"`
 	Size         float64 `json:"size"`
 	AvgPrice     float64 `json:"avg_price"`
@@ -236,7 +234,7 @@ func fetchLeaderboard() ([]LeaderboardEntry, error) {
 	return wrapped.Data, nil
 }
 
-func fetchPositions(address string, titleToSlug map[string]string) ([]WhalePosition, error) {
+func fetchPositions(address string) ([]WhalePosition, error) {
 	url := fmt.Sprintf(
 		"%s/positions?user=%s&limit=50&sizeThreshold=1&sortBy=CURRENT&sortDirection=DESC",
 		dataBaseURL, address,
@@ -248,13 +246,12 @@ func fetchPositions(address string, titleToSlug map[string]string) ([]WhalePosit
 	positions := make([]WhalePosition, 0, len(raw))
 	for _, p := range raw {
 		positions = append(positions, WhalePosition{
-			Market:       p.Market,
-			Slug:         titleToSlug[p.Market], // empty if not found — graceful degradation
+			Market:       p.Title,
+			Slug:         p.Slug,
 			Outcome:      p.Outcome,
-			Side:         p.Side,
 			CurrentValue: p.CurrentValue,
 			Size:         p.Size,
-			AvgPrice:     p.AvgPrice,
+			AvgPrice:     p.CurPrice,
 		})
 	}
 	return positions, nil
@@ -263,17 +260,6 @@ func fetchPositions(address string, titleToSlug map[string]string) ([]WhalePosit
 // ---- Whale cache refresh ----
 
 func (s *Server) fetchAndUpdateCache() {
-	// Fetch current markets to build title→slug map
-	markets, err := fetchMarkets()
-	if err != nil {
-		log.Printf("Cache update: market fetch failed: %v", err)
-		return
-	}
-	titleToSlug := make(map[string]string, len(markets))
-	for _, m := range markets {
-		titleToSlug[m.Question] = m.Slug
-	}
-
 	leaderboard, err := fetchLeaderboard()
 	if err != nil {
 		log.Printf("Cache update: leaderboard fetch failed: %v", err)
@@ -282,16 +268,16 @@ func (s *Server) fetchAndUpdateCache() {
 
 	whales := make([]Whale, 0, len(leaderboard))
 	for i, entry := range leaderboard {
-		positions, err := fetchPositions(entry.Address, titleToSlug)
+		positions, err := fetchPositions(entry.ProxyWallet)
 		if err != nil {
-			log.Printf("Cache update: positions fetch failed for %s: %v", entry.Address, err)
+			log.Printf("Cache update: positions fetch failed for %s: %v", entry.ProxyWallet, err)
 			positions = []WhalePosition{}
 		}
 		whales = append(whales, Whale{
-			Pseudonym: entry.Pseudonym,
-			Address:   entry.Address,
+			Pseudonym: entry.UserName,
+			Address:   entry.ProxyWallet,
 			Pnl:       entry.Pnl,
-			Volume:    entry.Volume,
+			Volume:    entry.Vol,
 			Rank:      i + 1,
 			Positions: positions,
 		})
