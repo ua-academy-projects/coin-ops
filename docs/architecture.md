@@ -8,12 +8,9 @@ Polymarket Intelligence Dashboard — three cooperating services across three VM
 Browser
   │
   ├─ GET /current ──► Proxy Service (Go, node-02)
-  │                       │ fetches Gamma API (20 markets)
+  │  GET /whales  ─►      │ fetches Gamma API (20 markets)
   │                       │ normalizes → publishes 20 msgs to RabbitMQ
   │                       └─ returns JSON to browser
-  │
-  ├─ GET /whales ───► Proxy Service (Go, node-02)
-  │                       └─ returns cached whale data (refreshed every 5 min)
   │
   └─ GET /history ──► History API (Python/FastAPI, node-01)
                           └─ reads market_snapshots from PostgreSQL
@@ -34,13 +31,14 @@ Endpoints:
 - `GET /whales` — returns cached whale positions. Cache is updated by a background goroutine every 5 minutes.
 - `GET /health` — liveness probe (`{"status":"ok"}`).
 
+The AMQP channel is shared across goroutines; a `sync.Mutex` (`chMu`) guards every publish call because `amqp.Channel` is not thread-safe.
+
 Background goroutine (whale cache):
-1. Fetches current top 20 markets → builds `map[title]slug` for slug resolution.
-2. Fetches top 20 traders from the Data API leaderboard.
-3. For each trader, fetches their open positions (up to 50).
-4. Resolves market slugs using the title→slug map (graceful degradation if no match).
-5. Stores result in an in-memory cache guarded by `sync.RWMutex`.
-6. Runs once on startup, then every 5 minutes via `time.Ticker`.
+1. Fetches top 20 traders from the Data API leaderboard.
+2. For each trader, fetches their open positions (up to 50).
+3. Slug is taken directly from the positions API response.
+4. Stores result in an in-memory cache guarded by `sync.RWMutex`.
+5. Runs once on startup, then every 5 minutes via `time.Ticker`.
 
 Why cached: fetching whale positions requires 1 + 20 sequential HTTP calls. Doing this on every user request would be slow and risks rate-limiting. 5-minute staleness is acceptable for whale positions.
 
@@ -49,9 +47,11 @@ Why cached: fetching whale positions requires 1 + 20 sequential HTTP calls. Doin
 **Responsibility:** reliable message consumer. Inserts market snapshots into PostgreSQL.
 
 - Consumes `market_events` queue (durable, persistent).
-- `basic_ack` is called **after** the DB write, not before. If the process crashes between write and ack, RabbitMQ redelivers the message; the `ON CONFLICT (slug, fetched_at) DO NOTHING` constraint prevents duplicate rows.
-- Runs schema migrations on startup (`CREATE TABLE IF NOT EXISTS` + indexes).
-- Retries both PostgreSQL and RabbitMQ connections on startup.
+- `basic_qos(prefetch_count=1)` — consumer holds at most one unacknowledged message at a time. Without this, RabbitMQ pushes all queued messages at once; a crash mid-batch would lose everything.
+- `basic_ack` is called **after** `db.commit()`. If the process crashes between commit and ack, RabbitMQ redelivers; `ON CONFLICT (slug, fetched_at) DO NOTHING` silently discards the duplicate.
+- On exception: `db.rollback()` then `basic_nack(requeue=True)` — message goes back to the queue for retry.
+- Runs schema initialization on startup (`CREATE TABLE IF NOT EXISTS` + indexes).
+- Outer `while True` reconnects RabbitMQ automatically at runtime if the connection drops — not only on startup.
 
 ### History API — Python/FastAPI (node-01:8000)
 
@@ -64,23 +64,24 @@ Endpoints:
 
 Shares the same virtualenv as the consumer (`/opt/cognitor/history/venv/`). Does **not** run schema migrations — the consumer owns the schema.
 
-### Web UI — HTMX + Tailwind + nginx (node-03:80)
+### Web UI — Vanilla JS + Tailwind + nginx (node-03:80)
 
 **Responsibility:** dark, data-dense single-page dashboard.
 
 - Static HTML served by nginx. No build step, no node_modules.
 - Tailwind CSS via CDN for styling.
 - Two tabs: **Live Markets** (auto-refreshes every 30s via `setInterval`) and **History**.
+- On each live refresh, `/current` and `/whales` are fetched in parallel via `Promise.all`.
 - Vanilla JS `fetch()` calls the proxy and history APIs. XSS-safe rendering via DOM escaping.
 
 ## Data Flow
 
 ```
 1. User opens dashboard (node-03:80)
-2. Browser fetches /current from proxy (node-02:8080)
+2. Browser fetches /current and /whales in parallel from proxy (node-02:8080)
 3. Proxy calls Gamma API → normalizes 20 markets
 4. Proxy publishes 20 messages to RabbitMQ (node-01:5672)
-5. Proxy returns JSON to browser → UI renders market cards
+5. Proxy returns JSON to browser → UI renders markets and whale tracker
 6. History consumer (node-01) receives messages → inserts into PostgreSQL
 7. User clicks History tab → browser fetches /history from history-api (node-01:8000)
 8. History API queries PostgreSQL → returns rows → UI renders table
@@ -93,7 +94,7 @@ See [`../history/schema.sql`](../history/schema.sql).
 Key design decisions:
 - `TIMESTAMPTZ` everywhere — VMs in different timezones would corrupt time-series data silently if naive timestamps were used.
 - `UNIQUE (slug, fetched_at)` on `market_snapshots` — enables idempotent consumer writes.
-- Indexes on `(slug, fetched_at DESC)` and `(address, fetched_at DESC)` — prevents full table scans on history queries.
+- Indexes on `(slug, fetched_at DESC)` — prevents full table scans on history queries.
 
 ## Message Contract (`market_events`)
 
