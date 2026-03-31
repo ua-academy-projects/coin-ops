@@ -36,6 +36,7 @@ Ensure you have the following installed on your host machine before starting:
   * [ ] Search by code (UAH / USD / BTC / etc) or name if possible (Долар США / Євро / Etherum / etc) - need to fetch list of coin names / codes
   * [ ] Convert coins to UAH for general list
   * [ ] Convert any-to-any fiat / coin (but that would be more of a currency converter than a list)<br>
+  * [ ] Reworking the logic of the “History” tab
 * Phase 2 - Infrastructure Evolution:
   * [ ] RabbitMQ implementing
   * [ ] Redis implementing (caching and remembering user preferences)
