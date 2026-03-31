@@ -1,0 +1,44 @@
+- name: Setup PostgreSQL
+  hosts: postgres
+  become: true
+
+  tasks:
+    - name: install postgresql
+      apt:
+        name:
+          - postgresql
+          - postgresql-contrib
+          - python3-psycopg2
+        state: present
+     
+    - name: start postgresql
+      service:
+        name: postgresql
+        state: started
+        enabled: true
+
+    - name: create user, database and table
+      shell: |
+        sudo -u postgres psql -c "CREATE USER currency_app_user WITH PASSWORD 'password' CREATEDB;" || true
+        sudo -u postgres psql -c "CREATE DATABASE currency_rates_tracker OWNER currency_app_user;" || true
+        sudo -u postgres psql -d currency_rates_tracker -c "CREATE TABLE IF NOT EXISTS currency_rates (id SERIAL PRIMARY KEY, price NUMERIC(15,2), recorded_at TIMESTAMP DEFAULT NOW());" || true
+      become: true
+
+    - name: allow remote connections
+      lineinfile:
+        path: /etc/postgresql/16/main/pg_hba.conf
+        line: "host all all 192.168.56.0/24 md5"
+      notify: restart postgresql
+    
+    - name: listen on all interfaces
+      lineinfile:
+        path: /etc/postgresql/16/main/postgresql.conf
+        regexp: "^#?listen_addresses"
+        line: "listen_addresses = '*'"
+      notify: restart postgresql
+  
+  handlers:
+    - name: restart postgresql
+      service:
+        name: postgresql
+        state: restarted

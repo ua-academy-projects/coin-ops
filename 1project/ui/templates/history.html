@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Price History</title>
+</head>
+<body>
+    <h1>Currency price history</h1>
+    {% if prices %}
+        <table border = "1">
+            <tr>
+                <th>
+                    Price (USD)
+                </th>
+                <th>
+                    Time
+                </th>
+            </tr>
+            {% for row in prices %}
+            <tr>
+                <td>${{ row.price }}</td>
+                <td>{{ row.recorded_at }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    {% else %}
+        <p>No data recorded</p>
+    {% endif %}
+    <br>
+    <a href="/">To Main Page</a>
+</body>
+</html>
