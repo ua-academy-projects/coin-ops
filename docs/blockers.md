@@ -239,7 +239,32 @@ The `rabbitmq_url` intentionally keeps `172.31.1.10` because the proxy service o
 
 ---
 
-## 10. Go build fails without network access during `go mod download`
+## 10. Polymarket Data API field names differ from documentation
+
+**Symptom:** Whale tracker shows empty positions for all traders. Proxy logs show "Whale cache updated: 20 whales" (leaderboard works) but every whale has `positions: []`.
+
+**Root cause:** The actual Polymarket Data API returns different field names than what the spec described. The Go structs were built from the spec, not from the real API response.
+
+| Spec said | API actually returns |
+|-----------|---------------------|
+| `address` | `proxyWallet` |
+| `pseudonym` | `userName` |
+| `volume` | `vol` |
+| `rank` (int) | `rank` (string `"1"`, `"2"`, ...) |
+| `market` | `title` |
+| `avgPrice` | `curPrice` |
+
+Additionally, the `slug` field is already present in the positions response — the title→slug mapping built from the markets endpoint was unnecessary.
+
+**How it was found:** curling the Data API directly and comparing raw JSON to Go struct tags.
+
+**Fix:** Updated `LeaderboardEntry` and `PositionEntry` structs in `proxy/main.go` to match actual field names. Removed the `fetchMarkets()` call from `fetchAndUpdateCache()` since slug resolution is no longer needed.
+
+**Lesson:** Always validate API responses against actual data before writing structs. Specs and docs lag behind real API behavior.
+
+---
+
+## 11. Go build fails without network access during `go mod download`
 
 **Symptom:** `go build` on node-02 fails with:
 ```
