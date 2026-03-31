@@ -5,7 +5,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def index():
-    response = requests.get('http://localhost:8080/rates')
+    response = requests.get('http://192.168.56.102:8080/rates')
     rates = response.json()
     
     
