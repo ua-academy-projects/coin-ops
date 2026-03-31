@@ -63,6 +63,7 @@
     owner: cognitor-proxy
     group: cognitor-proxy
     mode: '0640'
+  notify: Reload and restart proxy
 
 - name: Write proxy systemd unit
   template:

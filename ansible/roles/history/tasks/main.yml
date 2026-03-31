@@ -57,6 +57,9 @@
     owner: cognitor-history
     group: cognitor-history
     mode: '0640'
+  notify:
+    - Reload and restart history consumer
+    - Reload and restart history api
 
 - name: Write history-consumer systemd unit
   template:
