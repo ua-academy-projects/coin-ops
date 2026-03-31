@@ -117,7 +117,129 @@ ansible-galaxy collection install community.rabbitmq
 
 ---
 
-## 5. Go build fails without network access during `go mod download`
+## 5. Hyper-V Default Switch changes subnet on every Windows reboot
+
+**Symptom:** After rebooting Windows, VMs lose internet access and Ansible can no longer reach them by IP. The VMs themselves still have their static IPs (netplan is untouched), but their default gateway (`172.31.0.1`) no longer exists because the Default Switch moved to a different subnet.
+
+**Root cause:** Hyper-V's Default Switch is designed for Docker/WSL NAT access and deliberately reassigns its subnet on every boot. It is not intended for VMs that need stable networking.
+
+**Workaround — create a dedicated Internal Switch with static NAT (one-time, persists forever):**
+
+```powershell
+# PowerShell as Administrator
+
+# 1. Create internal switch
+New-VMSwitch -Name "CoinOpsSwitch" -SwitchType Internal
+
+# 2. Assign the gateway IP (matches what VMs already expect)
+New-NetIPAddress -IPAddress 172.31.0.1 -PrefixLength 20 `
+    -InterfaceAlias "vEthernet (CoinOpsSwitch)"
+
+# 3. Create NAT for internet access
+New-NetNat -Name "CoinOpsNAT" -InternalIPInterfaceAddressPrefix "172.31.0.0/20"
+
+# 4. Attach all VMs to the new switch
+Connect-VMNetworkAdapter -VMName "softserve-node-01" -SwitchName "CoinOpsSwitch"
+Connect-VMNetworkAdapter -VMName "softserve-node-02" -SwitchName "CoinOpsSwitch"
+Connect-VMNetworkAdapter -VMName "softserve-node-03" -SwitchName "CoinOpsSwitch"
+```
+
+Then reload VMs:
+```powershell
+vagrant reload
+```
+
+**Note:** `vswitch_name` in the Vagrantfile Hyper-V provider block does not exist in current Vagrant versions. The `Connect-VMNetworkAdapter` PowerShell command is the correct way to assign the switch.
+
+---
+
+## 6. WSL cannot reach Hyper-V VM network without routing
+
+**Symptom:** Ansible runs from WSL but cannot ping or SSH to VMs at `172.31.1.x`. WSL's network (`172.31.32.0/20`) and the VM network (`172.31.0.0/20`) are on different subnets with no route between them.
+
+**Root cause:** WSL2 runs on its own virtual NAT switch (`vEthernet (WSL)`). It has no automatic route to other Hyper-V virtual switch networks.
+
+**Workaround:**
+
+In WSL — add route and make it permanent:
+```bash
+sudo ip route add 172.31.0.0/20 via 172.31.32.1
+
+# Persist across WSL restarts
+echo '[boot]
+command = "ip route add 172.31.0.0/20 via 172.31.32.1"' | sudo tee /etc/wsl.conf
+```
+
+In PowerShell (Admin) — enable packet forwarding between interfaces:
+```powershell
+Set-NetIPInterface -InterfaceAlias "vEthernet (WSL)" -Forwarding Enabled
+Set-NetIPInterface -InterfaceAlias "vEthernet (CoinOpsSwitch)" -Forwarding Enabled
+```
+
+The forwarding setting persists across reboots. The WSL route is restored automatically via `/etc/wsl.conf`.
+
+---
+
+## 7. Ansible `become_user: postgres` fails — `acl` package missing
+
+**Symptom:** `provision.yml` fails when creating the PostgreSQL user:
+```
+Failed to set permissions on the temporary files Ansible needs to create
+when becoming an unprivileged user (rc: 1, err: chmod: invalid mode: 'A+user:postgres:rx:allow')
+```
+
+**Root cause:** Ansible uses POSIX ACLs to set permissions on temp files when switching to an unprivileged user (`become_user`). The `acl` package providing `setfacl` is not installed by default on Ubuntu 24.04.
+
+**Workaround:** Install `acl` before any `become_user` tasks:
+```yaml
+- name: Install acl
+  apt:
+    name: acl
+    state: present
+```
+
+Already added to `provision.yml` for the history node.
+
+---
+
+## 8. Ansible `group_vars/secrets.yml` silently ignored
+
+**Symptom:** Ansible fails with `'rabbitmq_password' is undefined` even though `ansible/group_vars/secrets.yml` exists and contains the variable.
+
+**Root cause:** Ansible only auto-loads `group_vars/` files whose **filename matches a group name** in the inventory. A file named `secrets.yml` is silently ignored because there is no group called `secrets`.
+
+**Workaround:** Place files inside a directory named after the group instead:
+```
+ansible/group_vars/
+└── all/           ← directory named after the "all" group
+    ├── main.yml
+    └── secrets.yml   ← now loaded because it's inside all/
+```
+
+Ansible loads every `.yml` file inside `group_vars/<groupname>/`.
+
+---
+
+## 9. PostgreSQL refuses connections via external IP from services on same VM
+
+**Symptom:** History consumer and API crash on startup with:
+```
+connection to server at "172.31.1.10", port 5432 failed: Connection refused
+```
+
+**Root cause:** PostgreSQL binds to `127.0.0.1` (loopback) by default. Connecting via the VM's external IP (`172.31.1.10`) is refused even from the same machine.
+
+**Workaround:** Use `localhost` in `DATABASE_URL` for services running on the same VM as PostgreSQL:
+```yaml
+# ansible/group_vars/all/main.yml
+database_url: "postgresql://{{ db_user }}:{{ db_password }}@localhost:5432/{{ db_name }}"
+```
+
+The `rabbitmq_url` intentionally keeps `172.31.1.10` because the proxy service on node-02 connects to RabbitMQ on node-01 over the network — that connection is external and correct.
+
+---
+
+## 10. Go build fails without network access during `go mod download`
 
 **Symptom:** `go build` on node-02 fails with:
 ```
