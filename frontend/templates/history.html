@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Історія курсів</title>
+</head>
+<body>
+    <h1>Історія курсів валют</h1>
+    <a href="/">← Поточні курси</a>
+    <br><br>
+    <table border="1">
+        <tr>
+            <th>Валюта</th>
+            <th>Назва</th>
+            <th>Курс (UAH)</th>
+            <th>Час</th>
+        </tr>
+        {% for r in records %}
+        <tr>
+            <td>{{ r.currency }}</td>
+            <td>{{ r.name }}</td>
+            <td>{{ r.rate }}</td>
+            <td>{{ r.created_at }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    <br>
+    <a href="/history">Оновити</a>
+</body>
+</html>
