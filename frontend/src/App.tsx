@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { BACKEND_URL } from "./config";
 
 interface CurrentWeather {
   time: string;
@@ -20,7 +21,7 @@ function App() {
   const [weather, setWeather] = useState<WeatherResponse | null>(null);
 
   const fetchWeather = () => {
-    fetch("http://localhost:8080/weather?lat=50.4375&lon=30.5")
+    fetch(`http://${BACKEND_URL}/weather?lat=50.4375&lon=30.5`)
       .then((res) => res.json())
       .then((data) => setWeather(data))
       .catch((err) => console.error(err));
