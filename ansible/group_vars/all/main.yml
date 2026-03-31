@@ -18,4 +18,4 @@ history_port: 8000
 # ── Derived connection strings ────────────────────────────────
 # rabbitmq_password and db_password come from secrets.yml
 rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@172.31.1.10:5672/"
-database_url: "postgresql://{{ db_user }}:{{ db_password }}@172.31.1.10:5432/{{ db_name }}"
+database_url: "postgresql://{{ db_user }}:{{ db_password }}@localhost:5432/{{ db_name }}"
