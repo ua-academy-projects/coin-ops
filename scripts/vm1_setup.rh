@@ -1,0 +1,38 @@
+#!/bin/bash
+# Налаштування VM1 - Flask UI
+
+echo "=== Налаштування VM1 ==="
+
+# Оновлюємо пакети
+sudo apt update -y
+
+# Встановлюємо залежності
+sudo apt install -y python3 python3-pip python3-venv git
+
+# Клонуємо репо якщо не існує
+if [ ! -d "/home/user/coin-ops" ]; then
+    git clone https://github.com/ua-academy-projects/coin-ops.git /home/user/coin-ops
+fi
+
+# Переходимо в папку
+cd /home/user/coin-ops
+git checkout kazachuk
+git pull origin kazachuk
+
+# Створюємо venv і встановлюємо залежності
+cd /home/user/coin-ops/frontend
+python3 -m venv venv
+source venv/bin/activate
+pip install flask requests
+deactivate
+
+# Копіюємо unit файл
+sudo cp /home/user/coin-ops/scripts/flask.service /etc/systemd/system/
+
+# Активуємо і запускаємо сервіс
+sudo systemctl daemon-reload
+sudo systemctl enable flask
+sudo systemctl start flask
+
+echo "=== VM1 налаштована! ==="
+echo "Flask доступний на http://$(hostname -I | awk '{print $2}'):5000"
