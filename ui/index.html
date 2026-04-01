@@ -292,14 +292,27 @@
             </div>
 
             ${topPositions.length > 0 ? `
-            <div class="flex flex-wrap gap-2">
-              ${topPositions.map(p => `
-                <div class="flex items-center gap-1.5 rounded px-2 py-1 border border-border text-xs"
-                     style="background:#0d0f14">
-                  <span class="${p.outcome === 'YES' ? 'text-yes' : 'text-no'} font-bold">${p.outcome}</span>
-                  <span class="text-muted truncate max-w-xs">${escHtml(p.market.length > 40 ? p.market.slice(0,40)+'…' : p.market)}</span>
-                  <span class="text-gray-400">${fmtVol(p.current_value)}</span>
-                </div>`).join('')}
+            <div class="space-y-1 mt-1">
+              ${topPositions.map(p => {
+                const isYes = p.outcome === 'YES';
+                const isNo  = p.outcome === 'NO';
+                const outcomeColor = isYes ? 'text-yes' : isNo ? 'text-no' : 'text-accent';
+                const val = p.current_value > 0 ? fmtVol(p.current_value) : '–';
+                const size = p.size > 0 ? p.size.toFixed(0) + ' shares' : '';
+                const avg  = p.avg_price > 0 ? (p.avg_price * 100).toFixed(1) + '¢' : '';
+                return `
+                <div class="rounded px-3 py-2 border border-border text-xs" style="background:#0d0f14">
+                  <div class="flex items-center justify-between gap-2 mb-1">
+                    <span class="${outcomeColor} font-bold text-xs">${escHtml(p.outcome)}</span>
+                    <span class="text-gray-300 font-medium">${val}</span>
+                  </div>
+                  <div class="text-muted leading-snug mb-1" title="${escHtml(p.market)}">${escHtml(p.market.length > 55 ? p.market.slice(0,55)+'…' : p.market)}</div>
+                  <div class="flex gap-3 text-muted">
+                    ${size ? `<span>${size}</span>` : ''}
+                    ${avg  ? `<span>avg ${avg}</span>` : ''}
+                  </div>
+                </div>`;
+              }).join('')}
             </div>` : '<div class="text-xs text-muted">No open positions</div>'}
           </div>`;
       }).join('');
