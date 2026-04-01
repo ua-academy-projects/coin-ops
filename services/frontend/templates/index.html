@@ -419,26 +419,25 @@
   /** Parse API timestamps consistently: naive ISO datetimes are treated as UTC (same as DB / Go Z). */
   function parseTimestamp(iso) {
     if (iso == null || iso === '') return null;
-    var s = String(iso).trim();
+    let s = String(iso).trim();
     if (s === 'None' || s === 'null') return null;
     if (s.length >= 11 && s.charAt(10) === ' ') {
-      s = s.slice(0, 10) + 'T' + s.slice(11);
+      s = `${s.slice(0, 10)}T${s.slice(11)}`;
     }
-    var hasTz = /Z$/i.test(s) || /[+-]\d{2}:\d{2}$/.test(s) || /[+-]\d{4}$/.test(s);
+    const hasTz = /Z$/i.test(s) || /[+-]\d{2}:\d{2}$/.test(s) || /[+-]\d{4}$/.test(s);
     if (!hasTz && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) {
-      s = s + 'Z';
+      s = `${s}Z`;
     }
-    var d = new Date(s);
+    const d = new Date(s);
     if (!isNaN(d.getTime())) return d;
-    var d2 = new Date(iso);
+    const d2 = new Date(iso);
     return isNaN(d2.getTime()) ? null : d2;
   }
   function formatLocalDateTime(iso) {
     if (!iso) return '—';
-    var d = parseTimestamp(iso);
+    const d = parseTimestamp(iso);
     if (d === null) return String(iso);
-    return pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds()) + ' '
-      + pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1) + '.' + d.getFullYear();
+    return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())} ${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()}`;
   }
   /** Підпис осі X для графіка історії: 24h — лише час; інші періоди — дата без часу. */
   function formatChartAxisLabel(iso, range) {
@@ -446,9 +445,9 @@
     const d = parseTimestamp(iso);
     if (d === null || isNaN(d.getTime())) return String(iso);
     if (range === '24h') {
-      return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+      return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
     }
-    return pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1) + '.' + d.getFullYear();
+    return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()}`;
   }
   function formatPrice(v) {
     if (v === null || v === undefined) return '—';
@@ -459,8 +458,7 @@
   function formatPct(v) {
     if (v === null || v === undefined || Number.isNaN(Number(v))) return '—';
     const n = Number(v);
-    const s = (n > 0 ? '+' : '') + n.toFixed(2) + '%';
-    return s;
+    return `${n > 0 ? '+' : ''}${n.toFixed(2)}%`;
   }
   function trendClass(v) {
     if (v === null || v === undefined || Number.isNaN(Number(v))) return 'trend-na';
@@ -481,8 +479,8 @@
   }
   function isPopularRow(r) {
     const sym = (r.asset_symbol || '').toUpperCase();
-    if (r.asset_type === 'fiat') return POPULAR_FIAT.indexOf(sym) !== -1;
-    if (r.asset_type === 'crypto') return POPULAR_CRYPTO.indexOf(sym) !== -1;
+    if (r.asset_type === 'fiat') return POPULAR_FIAT.includes(sym);
+    if (r.asset_type === 'crypto') return POPULAR_CRYPTO.includes(sym);
     return false;
   }
 
@@ -498,6 +496,7 @@
     try { localStorage.setItem(LS_KEY, JSON.stringify(cur)); } catch (e) {}
   }
 
+  /* --- Початкові дані з сервера (Jinja JSON) --- */
   const initialLive = JSON.parse(document.getElementById('coinops-initial-live').textContent || '[]');
   let liveMeta = JSON.parse(document.getElementById('coinops-live-meta').textContent || '{}');
 
@@ -539,9 +538,17 @@
 
   let histMainChart = null;
 
+  /** Уникаємо дублювання try/catch при знищенні екземплярів Chart.js. */
+  function destroyChartInstance(chart) {
+    if (!chart) return;
+    try {
+      chart.destroy();
+    } catch (e) { /* ignore */ }
+  }
+
   function destroySparkCharts() {
     Object.keys(sparkCharts).forEach(function (k) {
-      try { sparkCharts[k].destroy(); } catch (e) {}
+      destroyChartInstance(sparkCharts[k]);
     });
     sparkCharts = {};
   }
@@ -553,24 +560,32 @@
     });
   }
 
+  /** Перший рядок за символом (без фільтра типу) — як у попередній логіці конвертера / UAH per USD. */
+  function findLiveRowBySymbol(sym) {
+    const s = sym.toUpperCase();
+    return liveRates.find(function (x) {
+      return (x.asset_symbol || '').toUpperCase() === s;
+    });
+  }
+
   function updateKpis() {
     const usd = findRate('USD', 'fiat');
     const eur = findRate('EUR', 'fiat');
     const btc = findRate('BTC', 'crypto');
-    if (el.kpiUsdUah) el.kpiUsdUah.textContent = usd && usd.price_uah != null ? formatPrice(usd.price_uah) + ' UAH' : '—';
-    if (el.kpiEurUah) el.kpiEurUah.textContent = eur && eur.price_uah != null ? formatPrice(eur.price_uah) + ' UAH' : '—';
-    if (el.kpiBtcUsd) el.kpiBtcUsd.textContent = btc && btc.price_usd != null ? formatPrice(btc.price_usd) + ' USD' : '—';
+    if (el.kpiUsdUah) el.kpiUsdUah.textContent = usd && usd.price_uah != null ? `${formatPrice(usd.price_uah)} UAH` : '—';
+    if (el.kpiEurUah) el.kpiEurUah.textContent = eur && eur.price_uah != null ? `${formatPrice(eur.price_uah)} UAH` : '—';
+    if (el.kpiBtcUsd) el.kpiBtcUsd.textContent = btc && btc.price_usd != null ? `${formatPrice(btc.price_usd)} USD` : '—';
 
-    function setTrend(eln, sym, typ) {
-      if (!eln) return;
-      const it = dashboardInsights[sym + ':' + typ];
+    function setKpiTrend(trendEl, sym, typ) {
+      if (!trendEl) return;
+      const it = dashboardInsights[`${sym}:${typ}`];
       const p = it && it.trend_24h_pct;
-      eln.className = 'small mt-auto ' + trendClass(p);
-      eln.textContent = '24 год: ' + formatPct(p);
+      trendEl.className = `small mt-auto ${trendClass(p)}`;
+      trendEl.textContent = `24 год: ${formatPct(p)}`;
     }
-    setTrend(el.kpiUsdTrend, 'USD', 'fiat');
-    setTrend(el.kpiEurTrend, 'EUR', 'fiat');
-    setTrend(el.kpiBtcTrend, 'BTC', 'crypto');
+    setKpiTrend(el.kpiUsdTrend, 'USD', 'fiat');
+    setKpiTrend(el.kpiEurTrend, 'EUR', 'fiat');
+    setKpiTrend(el.kpiBtcTrend, 'BTC', 'crypto');
     if (el.kpiTime) el.kpiTime.textContent = formatLocalDateTime(liveMeta.fetched_at);
   }
 
@@ -587,7 +602,7 @@
       const sym = (r.asset_symbol || '').toLowerCase();
       const name = (r.name || '').toLowerCase();
       const dn = displayName(r).toLowerCase();
-      return sym.indexOf(q) !== -1 || name.indexOf(q) !== -1 || dn.indexOf(q) !== -1;
+      return sym.includes(q) || name.includes(q) || dn.includes(q);
     });
   }
 
@@ -616,9 +631,7 @@
     if (!ctx || !points || !points.length) return;
     const vals = points.map(function (p) { return p.series_value; }).filter(function (v) { return v != null && !Number.isNaN(Number(v)); });
     if (!vals.length) return;
-    if (sparkCharts[canvasId]) {
-      try { sparkCharts[canvasId].destroy(); } catch (e) {}
-    }
+    destroyChartInstance(sparkCharts[canvasId]);
     const lineColor = sparklineColor(trendPct);
     sparkCharts[canvasId] = new Chart(ctx, {
       type: 'line',
@@ -650,28 +663,34 @@
     });
   }
 
+  /* --- Рендер DOM (таблиці, KPI після фільтрації) --- */
   function renderLive() {
     if (!el.liveTbody) return;
     destroySparkCharts();
     let rows = filterLiveRows();
     rows = rows.slice().sort(cmpLive);
-    el.liveTbody.innerHTML = '';
-    rows.forEach(function (r, idx) {
+    // Один запис innerHTML у tbody зменшує кількість проміжних layout/reflow порівняно з appendChild у циклі.
+    const sparkJobs = [];
+    const rowHtmls = rows.map(function (r, idx) {
       const pk = pairKey(r);
       const ins = dashboardInsights[pk];
-      const tr = document.createElement('tr');
       const trend = ins && ins.trend_24h_pct;
-      const canvasId = 'spark-' + pk.replace(/[^a-zA-Z0-9]/g, '_') + '-' + idx;
-      tr.innerHTML =
-        '<td>' + displayIcon(r) + ' <strong class="fw-bold">' + (r.asset_symbol || '') + '</strong><br><span class="small co-label">' + displayName(r) + '</span></td>' +
-        '<td class="text-end">' + formatPrice(r.price_uah) + '</td>' +
-        '<td class="text-end">' + formatPrice(r.price_usd) + '</td>' +
-        '<td class="text-end ' + trendClass(trend) + '">' + formatPct(trend) + '</td>' +
-        '<td><div class="spark-wrap"><canvas id="' + canvasId + '" height="36"></canvas></div></td>';
-      el.liveTbody.appendChild(tr);
+      const safePk = pk.replace(/[^a-zA-Z0-9]/g, '_');
+      const canvasId = `spark-${safePk}-${idx}`;
       if (ins && ins.sparkline_points && ins.sparkline_points.length) {
-        renderSparkline(canvasId, ins.sparkline_points, trend);
+        sparkJobs.push({ canvasId, points: ins.sparkline_points, trendPct: trend });
       }
+      return (
+        `<td>${displayIcon(r)} <strong class="fw-bold">${r.asset_symbol || ''}</strong><br><span class="small co-label">${displayName(r)}</span></td>` +
+        `<td class="text-end">${formatPrice(r.price_uah)}</td>` +
+        `<td class="text-end">${formatPrice(r.price_usd)}</td>` +
+        `<td class="text-end ${trendClass(trend)}">${formatPct(trend)}</td>` +
+        `<td><div class="spark-wrap"><canvas id="${canvasId}" height="36"></canvas></div></td>`
+      );
+    });
+    el.liveTbody.innerHTML = rowHtmls.map(function (cells) { return `<tr>${cells}</tr>`; }).join('');
+    sparkJobs.forEach(function (job) {
+      renderSparkline(job.canvasId, job.points, job.trendPct);
     });
     updateKpis();
   }
@@ -684,7 +703,7 @@
     return null;
   }
   function getUahPerUsd() {
-    const usd = liveRates.find(function (x) { return (x.asset_symbol || '').toUpperCase() === 'USD'; });
+    const usd = findLiveRowBySymbol('USD');
     if (!usd || usd.price_uah == null) return null;
     return Number(usd.price_uah);
   }
@@ -695,7 +714,7 @@
       if (!uahPerUsd || uahPerUsd <= 0) return null;
       return amount / uahPerUsd;
     }
-    const r = liveRates.find(function (x) { return (x.asset_symbol || '').toUpperCase() === sym; });
+    const r = findLiveRowBySymbol(sym);
     const u = getUsdPerUnit(r);
     if (u == null || Number.isNaN(u)) return null;
     return amount * u;
@@ -707,7 +726,7 @@
       if (!uahPerUsd || uahPerUsd <= 0) return null;
       return usdAmt * uahPerUsd;
     }
-    const r = liveRates.find(function (x) { return (x.asset_symbol || '').toUpperCase() === sym; });
+    const r = findLiveRowBySymbol(sym);
     const u = getUsdPerUnit(r);
     if (u == null || u <= 0) return null;
     return usdAmt / u;
@@ -730,8 +749,8 @@
       el.convFrom.appendChild(new Option(s, s));
       el.convTo.appendChild(new Option(s, s));
     });
-    if (syms.indexOf('USD') !== -1) el.convFrom.value = 'USD';
-    if (syms.indexOf('UAH') !== -1) el.convTo.value = 'UAH';
+    if (syms.includes('USD')) el.convFrom.value = 'USD';
+    if (syms.includes('UAH')) el.convTo.value = 'UAH';
     else if (syms.length > 1) el.convTo.value = syms[1];
   }
   function updateConverter() {
@@ -744,7 +763,7 @@
       return;
     }
     if (from === to) {
-      el.convResult.textContent = formatPrice(amt) + ' ' + to;
+      el.convResult.textContent = `${formatPrice(amt)} ${to}`;
       return;
     }
     const usd = usdValueOf(amt, from);
@@ -757,9 +776,10 @@
       el.convResult.textContent = 'Конвертація недоступна для обраної пари.';
       return;
     }
-    el.convResult.textContent = formatPrice(out) + ' ' + to + '  (≈ ' + formatPrice(usd) + ' USD)';
+    el.convResult.textContent = `${formatPrice(out)} ${to}  (≈ ${formatPrice(usd)} USD)`;
   }
 
+  /* --- HTTP: зведення для live-дашборду та оновлення курсів --- */
   function buildPairsParam() {
     const seen = {};
     const parts = [];
@@ -773,44 +793,42 @@
     return parts.join(',');
   }
 
-  function fetchDashboard() {
+  async function fetchDashboard() {
     const pairs = buildPairsParam();
     if (!pairs) {
       dashboardInsights = {};
       renderLive();
       return;
     }
-    fetch('/api/history/dashboard?pairs=' + encodeURIComponent(pairs))
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        dashboardInsights = {};
-        if (data.items && Array.isArray(data.items)) {
-          data.items.forEach(function (it) {
-            const k = (it.asset_symbol || '').toUpperCase() + ':' + (it.asset_type || '');
-            dashboardInsights[k] = it;
-          });
-        }
-        renderLive();
-      })
-      .catch(function () {
-        dashboardInsights = {};
-        renderLive();
-      });
+    try {
+      const res = await fetch(`/api/history/dashboard?pairs=${encodeURIComponent(pairs)}`);
+      const data = await res.json();
+      dashboardInsights = {};
+      if (data.items && Array.isArray(data.items)) {
+        data.items.forEach(function (it) {
+          dashboardInsights[pairKey(it)] = it;
+        });
+      }
+    } catch (e) {
+      dashboardInsights = {};
+    }
+    renderLive();
   }
 
-  function refreshLive() {
-    fetch('/api/live')
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (data.error) return;
-        liveRates = Array.isArray(data.rates) ? data.rates.slice() : [];
-        liveMeta = { fetched_at: data.fetched_at };
-        fillConverterSelects();
-        updateConverter();
-        fillHistAssetSelect();
-        fetchDashboard();
-      })
-      .catch(function () {});
+  async function refreshLive() {
+    try {
+      const res = await fetch('/api/live');
+      const data = await res.json();
+      if (data.error) return;
+      liveRates = Array.isArray(data.rates) ? data.rates.slice() : [];
+      liveMeta = { fetched_at: data.fetched_at };
+      fillConverterSelects();
+      updateConverter();
+      fillHistAssetSelect();
+      await fetchDashboard();
+    } catch (e) {
+      /* мережа / JSON — залишаємо поточний стан без змін */
+    }
   }
 
   function fillHistAssetSelect() {
@@ -818,9 +836,9 @@
     const cur = el.histAsset.value;
     el.histAsset.innerHTML = '';
     liveRates.forEach(function (r) {
-      const v = (r.asset_symbol || '').toUpperCase() + ':' + r.asset_type;
-      const label = displayIcon(r) + ' ' + (r.asset_symbol || '') + ' — ' + displayName(r);
-      el.histAsset.appendChild(new Option(label, v));
+      const value = `${(r.asset_symbol || '').toUpperCase()}:${r.asset_type}`;
+      const label = `${displayIcon(r)} ${r.asset_symbol || ''} — ${displayName(r)}`;
+      el.histAsset.appendChild(new Option(label, value));
     });
     if (cur && Array.prototype.some.call(el.histAsset.options, function (o) { return o.value === cur; })) {
       el.histAsset.value = cur;
@@ -829,128 +847,136 @@
     }
   }
 
-  function loadHistorySeries() {
+  async function loadHistorySeries() {
     if (!el.histAsset || !el.histRange) return;
     const v = el.histAsset.value;
-    if (!v || v.indexOf(':') < 0) return;
-    const parts = v.split(':');
-    const sym = parts[0];
-    const typ = parts[1];
+    if (!v || !v.includes(':')) return;
+    const [sym, typ] = v.split(':');
     const range = el.histRange.value;
     saveState({ histRange: range });
     if (el.histChartErr) {
       el.histChartErr.classList.add('d-none');
       el.histChartErr.textContent = '';
     }
-    const q = 'asset_symbol=' + encodeURIComponent(sym) + '&asset_type=' + encodeURIComponent(typ) + '&range=' + encodeURIComponent(range);
-    fetch('/api/history/series?' + q)
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (data.error) {
-          if (el.histChartErr) {
-            el.histChartErr.textContent = data.detail || data.error || 'Помилка';
-            el.histChartErr.classList.remove('d-none');
-          }
-          return;
-        }
-        const items = data.items || [];
-        if (el.histEmpty) el.histEmpty.classList.toggle('d-none', items.length > 0);
-        if (!items.length) {
-          if (el.histTbody) el.histTbody.innerHTML = '';
-          if (histMainChart) { try { histMainChart.destroy(); } catch (e) {} histMainChart = null; }
-          return;
-        }
-        const metric = data.series_metric || 'uah';
-        const labels = items.map(function (it) { return formatChartAxisLabel(it.created_at, range); });
-        const seriesData = items.map(function (it) {
-          return metric === 'uah' ? it.price_uah : it.price_usd;
-        });
-        const ctx = document.getElementById('hist-chart');
-        if (histMainChart) { try { histMainChart.destroy(); } catch (e) {} }
-        histMainChart = new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: labels,
-            datasets: [{
-              label: metric === 'uah' ? 'UAH' : 'USD',
-              data: seriesData,
-              borderColor: '#6ea8fe',
-              tension: 0.32,
-              fill: false
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false },
-            plugins: {
-              legend: {
-                display: true,
-                labels: { color: 'rgba(232,234,239,0.85)' }
-              },
-              tooltip: {
-                titleColor: '#e8eaef',
-                bodyColor: '#e8eaef',
-                backgroundColor: 'rgba(15, 20, 35, 0.92)',
-                borderColor: 'rgba(255,255,255,0.12)',
-                borderWidth: 1
-              }
-            },
-            scales: {
-              x: {
-                grid: { color: 'rgba(255,255,255,0.08)' },
-                ticks: {
-                  color: 'rgba(232,234,239,0.65)',
-                  autoSkip: true,
-                  maxTicksLimit: 12,
-                  maxRotation: 0,
-                  minRotation: 0
-                }
-              },
-              y: {
-                grid: { color: 'rgba(255,255,255,0.08)' },
-                ticks: { color: 'rgba(232,234,239,0.65)' }
-              }
-            }
-          }
-        });
-        if (el.histTbody) {
-          el.histTbody.innerHTML = '';
-          items.forEach(function (it) {
-            const tr = document.createElement('tr');
-            const pct = it.pct_change_from_prev;
-            tr.innerHTML =
-              '<td>' + formatLocalDateTime(it.created_at) + '</td>' +
-              '<td class="text-end">' + formatPrice(it.price_uah) + '</td>' +
-              '<td class="text-end">' + formatPrice(it.price_usd) + '</td>' +
-              '<td class="text-end ' + trendClass(pct) + '">' + (pct == null ? '—' : formatPct(pct)) + '</td>';
-            el.histTbody.appendChild(tr);
-          });
-        }
-      })
-      .catch(function (err) {
+    const q = `asset_symbol=${encodeURIComponent(sym)}&asset_type=${encodeURIComponent(typ)}&range=${encodeURIComponent(range)}`;
+    try {
+      const res = await fetch(`/api/history/series?${q}`);
+      const data = await res.json();
+      if (data.error) {
         if (el.histChartErr) {
-          el.histChartErr.textContent = 'Не вдалося завантажити історію.';
+          el.histChartErr.textContent = data.detail || data.error || 'Помилка';
           el.histChartErr.classList.remove('d-none');
         }
+        return;
+      }
+      const items = data.items || [];
+      if (el.histEmpty) el.histEmpty.classList.toggle('d-none', items.length > 0);
+      if (!items.length) {
+        if (el.histTbody) el.histTbody.innerHTML = '';
+        destroyChartInstance(histMainChart);
+        histMainChart = null;
+        return;
+      }
+      const metric = data.series_metric || 'uah';
+      const labels = items.map(function (it) { return formatChartAxisLabel(it.created_at, range); });
+      const seriesData = items.map(function (it) {
+        return metric === 'uah' ? it.price_uah : it.price_usd;
       });
+      const ctx = document.getElementById('hist-chart');
+      destroyChartInstance(histMainChart);
+      histMainChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: metric === 'uah' ? 'UAH' : 'USD',
+            data: seriesData,
+            borderColor: '#6ea8fe',
+            tension: 0.32,
+            fill: false
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: {
+              display: true,
+              labels: { color: 'rgba(232,234,239,0.85)' }
+            },
+            tooltip: {
+              titleColor: '#e8eaef',
+              bodyColor: '#e8eaef',
+              backgroundColor: 'rgba(15, 20, 35, 0.92)',
+              borderColor: 'rgba(255,255,255,0.12)',
+              borderWidth: 1
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: 'rgba(255,255,255,0.08)' },
+              ticks: {
+                color: 'rgba(232,234,239,0.65)',
+                autoSkip: true,
+                maxTicksLimit: 12,
+                maxRotation: 0,
+                minRotation: 0
+              }
+            },
+            y: {
+              grid: { color: 'rgba(255,255,255,0.08)' },
+              ticks: { color: 'rgba(232,234,239,0.65)' }
+            }
+          }
+        }
+      });
+      // Одна заміна innerHTML для рядків таблиці історії — менше reflow, ніж appendChild у циклі.
+      if (el.histTbody) {
+        el.histTbody.innerHTML = items.map(function (it) {
+          const pct = it.pct_change_from_prev;
+          const pctCell = pct == null ? '—' : formatPct(pct);
+          return (
+            `<tr><td>${formatLocalDateTime(it.created_at)}</td>` +
+            `<td class="text-end">${formatPrice(it.price_uah)}</td>` +
+            `<td class="text-end">${formatPrice(it.price_usd)}</td>` +
+            `<td class="text-end ${trendClass(pct)}">${pctCell}</td></tr>`
+          );
+        }).join('');
+      }
+    } catch (err) {
+      if (el.histChartErr) {
+        el.histChartErr.textContent = 'Не вдалося завантажити історію.';
+        el.histChartErr.classList.remove('d-none');
+      }
+    }
   }
 
   function bindLive() {
-    ['input', 'change'].forEach(function (ev) {
-      if (el.liveSearch) el.liveSearch.addEventListener(ev, function () {
+    if (el.liveSearch) {
+      const onSearch = function () {
         saveState({ liveSearch: el.liveSearch.value });
         renderLive();
-      });
-      if (el.liveType) el.liveType.addEventListener(ev, function () {
+      };
+      el.liveSearch.addEventListener('input', onSearch);
+      el.liveSearch.addEventListener('change', onSearch);
+    }
+    if (el.liveType) {
+      const onType = function () {
         saveState({ liveType: el.liveType.value });
         renderLive();
-      });
-      if (el.liveShowAll) el.liveShowAll.addEventListener(ev, function () {
+      };
+      el.liveType.addEventListener('input', onType);
+      el.liveType.addEventListener('change', onType);
+    }
+    if (el.liveShowAll) {
+      const onShowAll = function () {
         saveState({ liveShowAll: el.liveShowAll.checked });
         renderLive();
-      });
-    });
+      };
+      el.liveShowAll.addEventListener('input', onShowAll);
+      el.liveShowAll.addEventListener('change', onShowAll);
+    }
     document.querySelectorAll('#live-table .sortable').forEach(function (th) {
       th.addEventListener('click', function () {
         const k = th.getAttribute('data-sort');
@@ -962,12 +988,12 @@
     if (el.convAmount) el.convAmount.addEventListener('input', updateConverter);
     if (el.convFrom) el.convFrom.addEventListener('change', updateConverter);
     if (el.convTo) el.convTo.addEventListener('change', updateConverter);
-    var convSwap = document.getElementById('conv-swap');
+    const convSwap = document.getElementById('conv-swap');
     if (convSwap && el.convFrom && el.convTo) {
       convSwap.addEventListener('click', function () {
-        var a = el.convFrom.value;
+        const fromVal = el.convFrom.value;
         el.convFrom.value = el.convTo.value;
-        el.convTo.value = a;
+        el.convTo.value = fromVal;
         updateConverter();
       });
     }
