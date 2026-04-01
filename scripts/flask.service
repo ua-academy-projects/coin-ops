@@ -1,0 +1,13 @@
+[Unit]
+Description=Flask UI Service
+After=network.target
+
+[Service]
+User=user
+WorkingDirectory=/home/user/coin-ops/frontend
+ExecStart=/home/user/coin-ops/frontend/venv/bin/python3 app.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
