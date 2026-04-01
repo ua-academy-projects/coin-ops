@@ -1,0 +1,49 @@
+---
+- name: Setup VM1 - Flask UI
+  hosts: vm1
+  become: yes
+
+  tasks:
+    - name: Update apt packages
+      apt:
+        update_cache: yes
+
+    - name: Install dependencies
+      apt:
+        name:
+          - python3
+          - python3-pip
+          - python3-venv
+          - git
+        state: present
+
+    - name: Clone repository
+      git:
+        repo: https://github.com/ua-academy-projects/coin-ops.git
+        dest: /home/user/coin-ops
+        version: kazachuk
+        force: yes
+      become_user: user
+
+    - name: Create venv
+      command: python3 -m venv /home/user/coin-ops/frontend/venv
+      become_user: user
+
+    - name: Install Python packages
+      pip:
+        requirements: /home/user/coin-ops/frontend/requirements.txt
+        virtualenv: /home/user/coin-ops/frontend/venv
+      become_user: user
+
+    - name: Copy unit file
+      copy:
+        src: /home/user/coin-ops/scripts/flask.service
+        dest: /etc/systemd/system/flask.service
+        remote_src: yes
+
+    - name: Enable and start Flask
+      systemd:
+        name: flask
+        enabled: yes
+        state: started
+        daemon_reload: yes
