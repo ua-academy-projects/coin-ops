@@ -81,6 +81,10 @@ func BuildRatesResponse(ctx context.Context, client *http.Client) *RatesResponse
 			out.Errors["coingecko"] = coingeckoErr.Error()
 		}
 	}
+	// encoding/json marshals a nil []Rate as "rates":null; Python worker expects a JSON array.
+	if out.Rates == nil {
+		out.Rates = []Rate{}
+	}
 	return out
 }
 
@@ -115,7 +119,12 @@ func (a *rateAggregator) refreshFromUpstream(ctx context.Context) *RatesResponse
 
 func (a *rateAggregator) publishSnapshotAsync(resp RatesResponse) {
 	go func(snapshot RatesResponse) {
-		pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer func() {
+			if rec := recover(); rec != nil {
+				log.Printf("publish goroutine panic: %v", rec)
+			}
+		}()
+		pubCtx, pubCancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer pubCancel()
 		if err := a.publisher.Publish(pubCtx, snapshot); err != nil {
 			log.Printf("publish snapshot failed: %v", err)
@@ -189,7 +198,7 @@ func main() {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
 		defer cancel()
 		resp := agg.getOrFetch(ctx)
 		// Best-effort async publish: live API response must not fail if MQ is down.
@@ -206,19 +215,33 @@ func main() {
 		_, _ = w.Write([]byte("ok"))
 	})
 
+	handler := withRecover(withCORS(corsAllowOrigin(), withSecurityHeaders(mux)))
+
 	if pollEnabled() {
 		iv := pollInterval()
 		log.Printf("background rate poll: every %v (COINOPS_POLL_INTERVAL_SECONDS)", iv)
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer func() {
+				if rec := recover(); rec != nil {
+					log.Printf("poll loop panic: %v", rec)
+				}
+			}()
+			ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 			agg.pollAndPublish(ctx)
 			cancel()
 			t := time.NewTicker(iv)
 			defer t.Stop()
 			for range t.C {
-				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-				agg.pollAndPublish(ctx)
-				cancel()
+				func() {
+					defer func() {
+						if rec := recover(); rec != nil {
+							log.Printf("poll tick panic: %v", rec)
+						}
+					}()
+					ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+					defer cancel()
+					agg.pollAndPublish(ctx)
+				}()
 			}
 		}()
 	} else {
@@ -227,7 +250,15 @@ func main() {
 
 	addr := listenAddr()
 	log.Printf("CoinOps proxy listening on %s (cache TTL %v)", addr, agg.cacheTTL)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 8 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	if err := srv.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }

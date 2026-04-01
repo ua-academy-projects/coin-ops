@@ -108,7 +108,7 @@ psql -h 10.10.1.6 -U coinops -d coinops_db -c "select count(*) from exchange_rat
 - **Time**: `fetched_at` and `created_at` are formatted in the **browser's local timezone** as `HH:mm:ss dd.MM.yyyy` (JavaScript).
 - **Prices**: displayed with **two decimal places** (presentation only; API/DB unchanged).
 - **Popular assets** (default view): fiat `USD, EUR, GBP, PLN, CHF, CAD`; crypto `BTC, ETH, USDT, BNB, SOL, XRP`. Toggle **«Показати всі валюти та монети»** shows the full proxy list.
-- **Live tab**: search, type filter, clickable column sort, KPI cards, persisted filters in `localStorage` (`coinops_ui_v1`).
+- **Live tab**: search, type filter, clickable column sort, KPI cards, persisted filters in `localStorage` (`coinops_ui_v2`).
 - **History tab**: no **source** column in the UI; filters (type, popular-only, symbol search), limits `50/100/200`, empty state, **«Оновити з сервера»** refetches via Flask same-origin proxy.
 - **Converter**: converts between symbols present in live rates plus **UAH** (via USD row `price_uah`); uses `price_usd` as USD value per unit.
 

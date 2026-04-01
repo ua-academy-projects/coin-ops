@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
+	"net"
 	"net/http"
 	"sort"
 	"strings"
@@ -31,25 +31,9 @@ var coingeckoSymbol = map[string]string{
 // Business rule: NBU "rate" is UAH per 1 unit of currency (cc). We derive price_usd
 // using the USD row: for any currency C, price_usd(C) = rate(C) / rate(USD); for USD, price_usd = 1.
 func FetchNBU(ctx context.Context, client *http.Client) ([]Rate, error) {
-	if client == nil {
-		client = http.DefaultClient
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, nbuURL, nil)
+	body, err := fetchURL(ctx, client, nbuURL)
 	if err != nil {
-		return nil, err
-	}
-	res, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(res.Body, 2048))
-		return nil, fmt.Errorf("nbu: status %d: %s", res.StatusCode, strings.TrimSpace(string(body)))
-	}
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("nbu: %w", err)
 	}
 	var rows []nbuRow
 	if err := json.Unmarshal(body, &rows); err != nil {
@@ -90,26 +74,10 @@ func FetchNBU(ctx context.Context, client *http.Client) ([]Rate, error) {
 
 // FetchCoinGecko downloads simple USD prices for configured crypto ids.
 func FetchCoinGecko(ctx context.Context, client *http.Client) ([]Rate, error) {
-	if client == nil {
-		client = http.DefaultClient
-	}
 	url := fmt.Sprintf(coinGeckoURL, coinGeckoIDs)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	body, err := fetchURL(ctx, client, url)
 	if err != nil {
-		return nil, err
-	}
-	res, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(res.Body, 2048))
-		return nil, fmt.Errorf("coingecko: status %d: %s", res.StatusCode, strings.TrimSpace(string(body)))
-	}
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("coingecko: %w", err)
 	}
 	// Dynamic keys: {"bitcoin":{"usd":123.45}, ...}
 	var raw map[string]map[string]float64
@@ -140,7 +108,22 @@ func FetchCoinGecko(ctx context.Context, client *http.Client) ([]Rate, error) {
 	return out, nil
 }
 
-// newHTTPClient returns an HTTP client with bounded timeouts suitable for upstream APIs.
+// newHTTPClient returns an HTTP client with bounded dial/TLS/header/body timeouts for long-lived upstream calls.
 func newHTTPClient() *http.Client {
-	return &http.Client{Timeout: 25 * time.Second}
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   8 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		MaxIdleConns:          32,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 18 * time.Second,
+		ForceAttemptHTTP2:     true,
+	}
+	return &http.Client{
+		Transport: transport,
+		Timeout:   45 * time.Second,
+	}
 }

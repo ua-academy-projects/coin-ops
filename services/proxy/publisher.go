@@ -120,7 +120,12 @@ func (r *RabbitPublisher) reconnect() error {
 	return r.connect()
 }
 
+const maxPublishAttempts = 5
+
 func (r *RabbitPublisher) Publish(ctx context.Context, payload RatesResponse) error {
+	if payload.Rates == nil {
+		payload.Rates = []Rate{}
+	}
 	event := RatesEvent{
 		EventID:   uuid.NewString(),
 		EventType: "rates.snapshot.v1",
@@ -133,13 +138,6 @@ func (r *RabbitPublisher) Publish(ctx context.Context, payload RatesResponse) er
 		return err
 	}
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.ch == nil {
-		if err := r.connect(); err != nil {
-			return err
-		}
-	}
 	msg := amqp.Publishing{
 		ContentType:  "application/json",
 		DeliveryMode: amqp.Persistent,
@@ -147,13 +145,45 @@ func (r *RabbitPublisher) Publish(ctx context.Context, payload RatesResponse) er
 		Timestamp:    time.Now().UTC(),
 		Type:         event.EventType,
 	}
-	if err := r.ch.PublishWithContext(ctx, r.exchange, r.routingKey, false, false, msg); err == nil {
-		return nil
+
+	backoff := 200 * time.Millisecond
+	var lastErr error
+	for attempt := 1; attempt <= maxPublishAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		pubErr := func() error {
+			r.mu.Lock()
+			defer r.mu.Unlock()
+			if r.ch == nil {
+				if err := r.connect(); err != nil {
+					return err
+				}
+			}
+			return r.ch.PublishWithContext(ctx, r.exchange, r.routingKey, false, false, msg)
+		}()
+
+		if pubErr == nil {
+			return nil
+		}
+		lastErr = pubErr
+
+		r.mu.Lock()
+		_ = r.reconnect()
+		r.mu.Unlock()
+
+		if attempt >= maxPublishAttempts {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(backoff):
+		}
+		backoff = min(backoff*2, 2*time.Second)
 	}
-	if err := r.reconnect(); err != nil {
-		return err
-	}
-	return r.ch.PublishWithContext(ctx, r.exchange, r.routingKey, false, false, msg)
+	return lastErr
 }
 
 func (r *RabbitPublisher) Close() error {
