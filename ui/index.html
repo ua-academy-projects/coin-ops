@@ -120,12 +120,15 @@
   <!-- ── History Tab ───────────────────────────────────────── -->
   <div id="tab-history" class="p-6 hidden">
     <div class="flex items-center justify-between mb-4">
-      <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-widest">
-        Market Snapshots · Latest 50
-      </h2>
-      <button onclick="loadHistory()"
+      <div>
+        <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-widest">
+          Price History
+        </h2>
+        <p id="history-market-label" class="text-xs text-muted mt-0.5">Click a market card to view its history</p>
+      </div>
+      <button onclick="switchTab('live')"
               class="text-xs text-accent hover:text-indigo-300 transition-colors">
-        ↻ Refresh
+        ← Back to Markets
       </button>
     </div>
     <div class="overflow-x-auto rounded-lg border border-border">
@@ -164,7 +167,6 @@
         'py-3 text-sm font-medium transition-colors ' + (isLive ? 'tab-active' : 'tab-inactive');
       document.getElementById('tab-history-btn').className =
         'py-3 text-sm font-medium transition-colors ' + (!isLive ? 'tab-active' : 'tab-inactive');
-      if (!isLive) loadHistory();
     }
 
     // ── Utilities ─────────────────────────────────────────────
@@ -187,6 +189,13 @@
     function fmtTime(iso) {
       if (!iso) return '–';
       return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function fmtDateTime(iso) {
+      if (!iso) return '–';
+      const d = new Date(iso);
+      return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+        + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
     function setStatus(ok) {
@@ -217,8 +226,11 @@
           : null;
 
         return `
-          <div class="rounded-lg border border-border p-4 hover:border-accent transition-colors"
-               style="background:#141720">
+          <div class="rounded-lg border border-border p-4 hover:border-accent transition-colors cursor-pointer"
+               style="background:#141720"
+               onclick="showMarketHistory(this.dataset.slug, this.dataset.q)"
+               data-slug="${escHtml(m.slug)}"
+               data-q="${escHtml(m.question)}">
             <div class="flex items-start justify-between gap-2 mb-3">
               <p class="text-xs text-gray-300 leading-snug flex-1">${escHtml(m.question)}</p>
               ${m.category ? `<span class="text-xs text-muted border border-border rounded px-1.5 py-0.5 whitespace-nowrap">${escHtml(m.category)}</span>` : ''}
@@ -304,7 +316,7 @@
         const bg = i % 2 === 0 ? '' : 'style="background:#141720"';
         return `
           <tr ${bg} class="border-b border-border hover:bg-surface transition-colors">
-            <td class="px-4 py-2.5 text-muted">${fmtTime(r.fetched_at)}</td>
+            <td class="px-4 py-2.5 text-muted">${fmtDateTime(r.fetched_at)}</td>
             <td class="px-4 py-2.5 text-gray-300 max-w-xs">
               <div class="truncate" title="${escHtml(r.question)}">${escHtml(r.question)}</div>
             </td>
@@ -338,8 +350,11 @@
       return res.json();
     }
 
-    async function fetchHistory() {
-      const res = await fetch(HISTORY_URL + '/history?limit=50');
+    async function fetchHistory(slug) {
+      const url = slug
+        ? HISTORY_URL + '/history/' + encodeURIComponent(slug) + '?limit=500'
+        : HISTORY_URL + '/history?limit=50';
+      const res = await fetch(url);
       if (!res.ok) throw new Error('history ' + res.status);
       return res.json();
     }
@@ -358,15 +373,23 @@
       }
     }
 
-    async function loadHistory() {
+    async function loadHistory(slug) {
       try {
-        const rows = await fetchHistory();
+        const rows = await fetchHistory(slug);
         renderHistory(rows);
       } catch (err) {
         console.error('History load failed:', err);
         document.getElementById('history-tbody').innerHTML =
           '<tr><td colspan="6" class="px-4 py-6 text-no text-center">Failed to load history.</td></tr>';
       }
+    }
+
+    function showMarketHistory(slug, question) {
+      document.getElementById('history-market-label').textContent = question;
+      switchTab('history');
+      document.getElementById('history-tbody').innerHTML =
+        '<tr><td colspan="6" class="px-4 py-6 text-muted text-center">Loading…</td></tr>';
+      loadHistory(slug);
     }
 
     // ── Init ──────────────────────────────────────────────────
