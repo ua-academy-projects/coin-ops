@@ -8,6 +8,7 @@ import (
 	"os"
 	"encoding/json"
 	"time"
+	"strings"	// every lib should be used in the code, otherwise it will be error
 	"github.com/streadway/amqp"	// to work with rabbitmq
 
 	_ "github.com/lib/pq"
@@ -18,8 +19,10 @@ import (
 var db *sql.DB
 
 type Price struct {
+	Coin      string  `json:"coin"`
 	Price float64 `json:"price"`
     RecordedAt  string  `json:"recorded_at"`	//`
+
 }
 
 
@@ -38,19 +41,35 @@ func connectDB() *sql.DB{
 	if err != nil {		// if error is present
 		log.Fatalf("DB connection error: %v", err)
 	}	
+
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS currency_rates (
+			id SERIAL PRIMARY KEY,
+			coin	VARCHAR(10) NOT NULL,
+			price NUMERIC(15, 2) NOT NULL,
+			recorded_at TIMESTAMP DEFAULT NOW()
+		)
+	`)
+
+	if err != nil {
+        log.Fatalf("Failed to create table: %v", err)
+    }
+
+    log.Println("DB connected, table ready")
+
 	return db
 }
 
-func saveToDB(price float64) {
+func saveToDB(coin string, price float64) {
 	_, err := db.Exec(
-		"INSERT INTO currency_rates (price) VALUES ($1)", price,
+		"INSERT INTO currency_rates (coin, price) VALUES ($1, $2)", coin, price,
 	)	// we only need err, _ - omits the result of exec
-	// $1 placeholder for price value
+	// $1 placeholder for coin value, $2 for price value
 	if err != nil {
 		log.Printf("DB insert error: %v", err)
 		return
 	}
-	log.Printf("Saved to DB: %f", price)
+	log.Printf("Saved to DB: %s = %f", coin, price)
 }
 
 func startWorker() {
@@ -92,7 +111,7 @@ func startWorker() {
 		log.Println("Worker started")
 
 		for msg := range msgs {
-			var data map[string]float64 // {"key": 54.45}
+			var data map[string]interface{} // {"key": 54.45}
 			// unmarshal json -> map(dict) (json.loads())
 			// 1) asign value to err 2) check err != nil
 			if err := json.Unmarshal(msg.Body, &data); err != nil {
@@ -102,9 +121,13 @@ func startWorker() {
 				msg.Nack(false, false)
 				continue // skip the lower code and move to the next msg
 			}
-			price := data["price"]
-			log.Printf("Received: %f", price)
-			saveToDB(price)
+			price := data["price"].(float64)
+			coin, ok := data["coin"].(string)	// if not coin - then data=ok
+			if !ok || coin == "" {	// if not ok or coin is empty
+				coin = "BTC"
+			}
+			log.Printf("Received: %s = %f", coin, price)
+			saveToDB(coin, price)
 				// save to db and remove from queue
 			msg.Ack(false)
 		}
@@ -116,7 +139,7 @@ func startWorker() {
 
 func historyHandler(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.Query(
-		"SELECT price, recorded_at FROM currency_rates ORDER BY recorded_at DESC",
+		"SELECT coin, price, recorded_at FROM currency_rates ORDER BY recorded_at DESC",
 	)	
 	if err != nil {
 		http.Error(w, "DB error", http.StatusInternalServerError)
@@ -129,7 +152,7 @@ func historyHandler(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {	// iterate through sql data request rows
 		var p Price
 		var t time.Time // type of time
-		if err := rows.Scan(&p.Price, &t); err != nil {
+		if err := rows.Scan(&p.Coin, &p.Price, &t); err != nil {
 			continue
 		}
 		p.RecordedAt = t.Format("2006-01-02 15:04:05")
@@ -143,10 +166,37 @@ func historyHandler(w http.ResponseWriter, r *http.Request) {
 	// map - {} string key type interface any type {'key': value}
 	// convert data from json to map and send to client
 	json.NewEncoder(w).Encode(map[string]interface{}{	
-		"prices": prices,
+		"data": prices,
 	})
 }
 
+// stats (highest, lowest) value
+type Stats struct {
+	Highest_Price float64 `json:"highest_price"`
+	Lowest_Price  float64 `json:"lowest_price"`
+}
+
+func statsHandler(w http.ResponseWriter, r *http.Request) {
+	// get coin from query params default - BTC
+	coin := strings.ToUpper(r.URL.Query().Get("coin"))
+	if coin == "" {
+		coin = "BTC"
+	}
+
+	var stats Stats
+	err := db.QueryRow(
+		"SELECT MAX(price), MIN(price) FROM currency_rates WHERE coin = $1", coin,
+	).Scan(&stats.Highest_Price, &stats.Lowest_Price)
+
+	if err != nil {
+		http.Error(w, "DB error", http.StatusInternalServerError)
+		return
+	}
+
+	// return data to client in json format
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(stats)
+}
 
 func getEnv(key, fallback string) string {
 	if value := os.Getenv(key); value != "" {
@@ -163,6 +213,10 @@ func main() {
 
 	http.HandleFunc("/history", historyHandler)
 	log.Println("History service is running on port 5002")
+	// activate stats handler for /stats endpoint
+	http.HandleFunc("/stats", statsHandler)
+	// after listenandserver no rows will be executed
 	log.Fatal(http.ListenAndServe("0.0.0.0:5002", nil))
-}
+	
+}	
 
