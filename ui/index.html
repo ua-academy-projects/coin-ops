@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Polymarket Intelligence Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -131,22 +132,9 @@
         ← Back to Markets
       </button>
     </div>
-    <div class="overflow-x-auto rounded-lg border border-border">
-      <table class="w-full text-xs">
-        <thead>
-          <tr class="border-b border-border" style="background:#141720">
-            <th class="text-left px-4 py-3 text-muted font-medium">Time</th>
-            <th class="text-left px-4 py-3 text-muted font-medium">Market</th>
-            <th class="text-right px-4 py-3 text-muted font-medium">YES</th>
-            <th class="text-right px-4 py-3 text-muted font-medium">NO</th>
-            <th class="text-right px-4 py-3 text-muted font-medium">Vol 24h</th>
-            <th class="text-left px-4 py-3 text-muted font-medium">Category</th>
-          </tr>
-        </thead>
-        <tbody id="history-tbody">
-          <tr><td colspan="6" class="px-4 py-6 text-muted text-center">Loading…</td></tr>
-        </tbody>
-      </table>
+    <div id="history-empty" class="text-muted text-sm text-center py-16 hidden">No history yet.</div>
+    <div id="history-chart-wrap" class="rounded-lg border border-border p-4 hidden" style="background:#141720">
+      <canvas id="history-chart" height="120"></canvas>
     </div>
   </div>
 
@@ -318,27 +306,104 @@
       }).join('');
     }
 
-    // ── History ───────────────────────────────────────────────
+    // ── History chart ─────────────────────────────────────────
+    let historyChart = null;
+
     function renderHistory(rows) {
-      const tbody = document.getElementById('history-tbody');
+      const empty = document.getElementById('history-empty');
+      const wrap  = document.getElementById('history-chart-wrap');
+
       if (!rows || rows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-6 text-muted text-center">No history yet.</td></tr>';
+        empty.classList.remove('hidden');
+        wrap.classList.add('hidden');
         return;
       }
-      tbody.innerHTML = rows.map((r, i) => {
-        const bg = i % 2 === 0 ? '' : 'style="background:#141720"';
-        return `
-          <tr ${bg} class="border-b border-border hover:bg-surface transition-colors">
-            <td class="px-4 py-2.5 text-muted">${fmtDateTime(r.fetched_at)}</td>
-            <td class="px-4 py-2.5 text-gray-300 max-w-xs">
-              <div class="truncate" title="${escHtml(r.question)}">${escHtml(r.question)}</div>
-            </td>
-            <td class="px-4 py-2.5 text-right text-yes font-medium">${pct(r.yes_price)}</td>
-            <td class="px-4 py-2.5 text-right text-no font-medium">${r.no_price != null ? pct(r.no_price) : '–'}</td>
-            <td class="px-4 py-2.5 text-right text-gray-400">${fmtVol(r.volume_24h)}</td>
-            <td class="px-4 py-2.5 text-muted">${r.category || '–'}</td>
-          </tr>`;
-      }).join('');
+
+      empty.classList.add('hidden');
+      wrap.classList.remove('hidden');
+
+      // API returns newest-first — reverse for chronological display
+      const sorted = [...rows].reverse();
+      const labels   = sorted.map(r => fmtDateTime(r.fetched_at));
+      const yesData  = sorted.map(r => +(r.yes_price * 100).toFixed(2));
+      const noData   = sorted.map(r => r.no_price != null ? +(r.no_price * 100).toFixed(2) : null);
+
+      if (historyChart) {
+        historyChart.destroy();
+        historyChart = null;
+      }
+
+      const ctx = document.getElementById('history-chart').getContext('2d');
+      historyChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'YES %',
+              data: yesData,
+              borderColor: '#22c55e',
+              backgroundColor: 'rgba(34,197,94,0.08)',
+              borderWidth: 2,
+              pointRadius: rows.length > 100 ? 0 : 3,
+              pointHoverRadius: 5,
+              tension: 0.3,
+              fill: true,
+            },
+            {
+              label: 'NO %',
+              data: noData,
+              borderColor: '#ef4444',
+              backgroundColor: 'rgba(239,68,68,0.05)',
+              borderWidth: 2,
+              pointRadius: rows.length > 100 ? 0 : 3,
+              pointHoverRadius: 5,
+              tension: 0.3,
+              fill: true,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: {
+              labels: { color: '#9ca3af', font: { family: 'monospace', size: 11 } }
+            },
+            tooltip: {
+              backgroundColor: '#141720',
+              borderColor: '#1e2433',
+              borderWidth: 1,
+              titleColor: '#9ca3af',
+              bodyColor: '#e5e7eb',
+              callbacks: {
+                label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%`
+              }
+            },
+          },
+          scales: {
+            x: {
+              ticks: {
+                color: '#4a5168',
+                font: { family: 'monospace', size: 10 },
+                maxTicksLimit: 8,
+                maxRotation: 0,
+              },
+              grid: { color: '#1e2433' },
+            },
+            y: {
+              min: 0,
+              max: 100,
+              ticks: {
+                color: '#4a5168',
+                font: { family: 'monospace', size: 10 },
+                callback: v => v + '%',
+              },
+              grid: { color: '#1e2433' },
+            },
+          },
+        },
+      });
     }
 
     // ── XSS guard ─────────────────────────────────────────────
@@ -392,16 +457,17 @@
         renderHistory(rows);
       } catch (err) {
         console.error('History load failed:', err);
-        document.getElementById('history-tbody').innerHTML =
-          '<tr><td colspan="6" class="px-4 py-6 text-no text-center">Failed to load history.</td></tr>';
+        const empty = document.getElementById('history-empty');
+        empty.textContent = 'Failed to load history.';
+        empty.classList.remove('hidden');
       }
     }
 
     function showMarketHistory(slug, question) {
       document.getElementById('history-market-label').textContent = question;
       switchTab('history');
-      document.getElementById('history-tbody').innerHTML =
-        '<tr><td colspan="6" class="px-4 py-6 text-muted text-center">Loading…</td></tr>';
+      document.getElementById('history-chart-wrap').classList.add('hidden');
+      document.getElementById('history-empty').classList.add('hidden');
       loadHistory(slug);
     }
 
