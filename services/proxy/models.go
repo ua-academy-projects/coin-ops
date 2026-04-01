@@ -29,6 +29,15 @@ type RatesResponse struct {
 	Errors    map[string]string `json:"errors,omitempty"`
 }
 
+// RatesEvent is the message envelope published by the proxy to RabbitMQ.
+type RatesEvent struct {
+	EventID   string        `json:"event_id"`
+	EventType string        `json:"event_type"`
+	CreatedAt time.Time     `json:"created_at"`
+	Source    string        `json:"source"`
+	Data      RatesResponse `json:"data"`
+}
+
 // nbuRow is one element from the NBU statdirectory JSON array.
 type nbuRow struct {
 	R030         int     `json:"r030"`

@@ -7,7 +7,7 @@ sudo apt install -y golang
 cp -r "/home/shared_folder/proxy" "$WORKING_DIR"
 sudo cp "$WORKING_DIR/proxy.service" "/lib/systemd/system/"
 cd "$WORKING_DIR" || exit
-go build
+go build -o proxy .
 
 sudo systemctl daemon-reload
 sudo systemctl start proxy

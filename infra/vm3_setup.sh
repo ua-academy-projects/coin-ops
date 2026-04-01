@@ -2,7 +2,7 @@
 
 WORKING_DIR="/home/working_dir"
 
-# vm 3 - db / message queue handler
+# vm 3 - history service (MQ consumer + history API)
 sudo apt install -y python3 python3-pip python3-venv
 cp -r "/home/shared_folder/worker" "$WORKING_DIR"
 sudo cp "$WORKING_DIR/worker.service" "/lib/systemd/system/"
@@ -16,4 +16,4 @@ sudo systemctl enable worker
 
 # nohup python3 "$WORKING_DIR/worker.py" > "$WORKING_DIR/worker.log" 2>&1 &
 
-echo -e "\033[0;32mVM 3 success setup. Worker is running..."
+echo -e "\033[0;32mVM 3 success setup. History service is running..."

@@ -1,4 +1,4 @@
-NUM_VMS = 4
+NUM_VMS = 5
 IP_NTW = "10.10.1."
 IP_START = 1
 
@@ -30,6 +30,8 @@ Vagrant.configure("2") do |config|
         node.vm.provision "shell", name: "vm3-setup", keep_color: true, preserve_order: true, path: "infra/vm3_setup.sh"
       when 4
         node.vm.provision "shell", name: "vm4-setup", keep_color: true, preserve_order: true, path: "infra/vm4_setup.sh"
+      when 5
+        node.vm.provision "shell", name: "vm5-setup", keep_color: true, preserve_order: true, path: "infra/vm5_setup.sh"
       end
     end
   end

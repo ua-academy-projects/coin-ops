@@ -29,10 +29,11 @@ type cachedEntry struct {
 
 // rateAggregator holds HTTP client and cache state for GET /api/v1/rates.
 type rateAggregator struct {
-	client  *http.Client
-	mu      sync.RWMutex
-	cache   *cachedEntry
+	client    *http.Client
+	mu        sync.RWMutex
+	cache     *cachedEntry
 	cacheTTL  time.Duration
+	publisher RatePublisher
 }
 
 // BuildRatesResponse fetches both sources in parallel, merges rates, and builds the API payload.
@@ -123,9 +124,20 @@ func cacheTTL() time.Duration {
 }
 
 func main() {
+	publisher, err := NewPublisherFromEnv()
+	if err != nil {
+		log.Fatalf("publisher init failed: %v", err)
+	}
+	defer func() {
+		if err := publisher.Close(); err != nil {
+			log.Printf("publisher close: %v", err)
+		}
+	}()
+
 	agg := &rateAggregator{
-		client:   newHTTPClient(),
-		cacheTTL: cacheTTL(),
+		client:    newHTTPClient(),
+		cacheTTL:  cacheTTL(),
+		publisher: publisher,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/rates", func(w http.ResponseWriter, r *http.Request) {
@@ -136,6 +148,14 @@ func main() {
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		defer cancel()
 		resp := agg.getOrFetch(ctx)
+		// Best-effort async publish: live API response must not fail if MQ is down.
+		go func(snapshot RatesResponse) {
+			pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer pubCancel()
+			if err := agg.publisher.Publish(pubCtx, snapshot); err != nil {
+				log.Printf("publish snapshot failed: %v", err)
+			}
+		}(*resp)
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		enc := json.NewEncoder(w)
 		enc.SetEscapeHTML(true)

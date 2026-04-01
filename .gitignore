@@ -7,3 +7,5 @@ env/
 
 *.exe
 /bin/
+
+docs/

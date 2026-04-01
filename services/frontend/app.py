@@ -3,8 +3,9 @@
 """
 CoinOps Flask UI (VM1).
 
-Serves a single page with two tabs: live rates from the Go proxy and the last 50
-rows from PostgreSQL. Keeps HTTP and DB access in small functions so templates stay thin.
+Serves a single page with two tabs:
+- live rates from the Go proxy
+- historical rates from the History Service API
 """
 
 from __future__ import annotations
@@ -12,20 +13,15 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from typing import Any, Optional, Sequence, Tuple
-from urllib.parse import unquote, urlparse
+from typing import Optional, Tuple
 
-import psycopg2
 import requests
 from flask import Flask, render_template
 
 LOG = logging.getLogger("coinops.frontend")
 
 _DEFAULT_PROXY = "http://10.10.1.3:8080"
-_DEFAULT_PG_HOST = "10.10.1.5"
-_DEFAULT_PG_PORT = "5432"
-_DEFAULT_PG_USER = "coinops"
-_DEFAULT_PG_DB = "coinops_db"
+_DEFAULT_HISTORY_API = "http://10.10.1.4:8090/api/v1/history"
 
 
 @dataclass(frozen=True)
@@ -34,11 +30,7 @@ class AppConfig:
 
     proxy_base_url: str
     rates_path: str
-    pg_host: str
-    pg_port: int
-    pg_user: str
-    pg_password: str
-    pg_database: str
+    history_api_url: str
     http_timeout: float
 
     @classmethod
@@ -47,44 +39,14 @@ class AppConfig:
         path = os.environ.get("COINOPS_RATES_PATH", "/api/v1/rates")
         if not path.startswith("/"):
             path = "/" + path
-        db_url = os.environ.get("DATABASE_URL", "").strip()
-        if db_url:
-            host, port, user, password, database = _parse_database_url(db_url)
-        else:
-            host = os.environ.get("PGHOST", _DEFAULT_PG_HOST)
-            port = int(os.environ.get("PGPORT", _DEFAULT_PG_PORT))
-            user = os.environ.get("PGUSER", _DEFAULT_PG_USER)
-            password = os.environ.get("PGPASSWORD", "")
-            database = os.environ.get("PGDATABASE", _DEFAULT_PG_DB)
+        history_api_url = os.environ.get("HISTORY_API_URL", _DEFAULT_HISTORY_API)
         timeout = float(os.environ.get("COINOPS_HTTP_TIMEOUT", "15"))
         return cls(
             proxy_base_url=proxy,
             rates_path=path,
-            pg_host=host,
-            pg_port=port,
-            pg_user=user,
-            pg_password=password,
-            pg_database=database,
+            history_api_url=history_api_url,
             http_timeout=timeout,
         )
-
-
-def _parse_database_url(url: str) -> Tuple[str, int, str, str, str]:
-    """Parse ``postgresql://`` / ``postgres://`` URLs (same rules as the worker)."""
-    parsed = urlparse(url)
-    if parsed.scheme not in ("postgresql", "postgres"):
-        raise ValueError("DATABASE_URL scheme must be postgresql:// or postgres://")
-    if not parsed.hostname:
-        raise ValueError("DATABASE_URL must include a host")
-    user = unquote(parsed.username or "")
-    password = unquote(parsed.password or "")
-    host = parsed.hostname
-    port = int(parsed.port or 5432)
-    database = (parsed.path or "").lstrip("/").split("?")[0]
-    if not database:
-        raise ValueError("DATABASE_URL must include a database name in the path")
-    return host, port, user, password, database
-
 
 def fetch_live_rates(cfg: AppConfig) -> Tuple[Optional[list], Optional[str], Optional[str]]:
     """
@@ -108,41 +70,20 @@ def fetch_live_rates(cfg: AppConfig) -> Tuple[Optional[list], Optional[str], Opt
     return rates, fetched_s, None
 
 
-def fetch_history_rows(cfg: AppConfig, limit: int = 50) -> Tuple[Optional[Sequence[Tuple[Any, ...]]], Optional[str]]:
-    """
-    Load the last ``limit`` rows from ``exchange_rates`` (newest first).
-
-    Returns (rows, error). Each row is
-    (id, asset_symbol, asset_type, price_uah, price_usd, source, created_at).
-    """
-    if not cfg.pg_password:
-        return None, "PGPASSWORD or DATABASE_URL with password is required"
-    sql = """
-        SELECT id, asset_symbol, asset_type, price_uah, price_usd, source, created_at
-        FROM exchange_rates
-        ORDER BY created_at DESC
-        LIMIT %s
-    """
+def fetch_history_rows(cfg: AppConfig, limit: int = 50) -> Tuple[Optional[list], Optional[str]]:
+    """Load latest history rows from the History Service API."""
+    url = cfg.history_api_url
     try:
-        conn = psycopg2.connect(
-            host=cfg.pg_host,
-            port=cfg.pg_port,
-            user=cfg.pg_user,
-            password=cfg.pg_password,
-            dbname=cfg.pg_database,
-        )
-    except psycopg2.Error as exc:
-        LOG.warning("history DB connect failed: %s", exc)
+        resp = requests.get(url, params={"limit": limit}, timeout=cfg.http_timeout)
+        resp.raise_for_status()
+        payload = resp.json()
+        items = payload.get("items")
+        if not isinstance(items, list):
+            return None, "Invalid history payload: items is not a list"
+        return items, None
+    except (requests.RequestException, ValueError) as exc:
+        LOG.warning("history API request failed: %s", exc)
         return None, str(exc)
-    try:
-        with conn.cursor() as cur:
-            cur.execute(sql, (limit,))
-            rows = cur.fetchall()
-        return rows, None
-    except psycopg2.Error as exc:
-        return None, str(exc)
-    finally:
-        conn.close()
 
 
 def create_app() -> Flask:

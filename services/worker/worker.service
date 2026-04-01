@@ -1,5 +1,5 @@
 [Unit]
-Description="Worker App"
+Description="CoinOps History Service (MQ consumer + HTTP API)"
 After=multi-user.target
 
 [Service]

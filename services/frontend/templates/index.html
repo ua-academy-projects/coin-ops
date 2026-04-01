@@ -73,7 +73,7 @@
       <div class="tab-pane fade" id="hist-panel" role="tabpanel" aria-labelledby="hist-tab">
         {% if history_error %}
           <div class="alert alert-warning" role="alert">
-            Не вдалося прочитати історію з БД: {{ history_error }}
+            Не вдалося прочитати історію з History API: {{ history_error }}
           </div>
         {% else %}
           <div class="table-responsive">
@@ -92,13 +92,13 @@
               <tbody>
                 {% for row in history_rows %}
                   <tr>
-                    <td>{{ row[0] }}</td>
-                    <td><code>{{ row[1] }}</code></td>
-                    <td>{{ row[2] }}</td>
-                    <td>{{ row[3] if row[3] is not none else '—' }}</td>
-                    <td>{{ row[4] if row[4] is not none else '—' }}</td>
-                    <td>{{ row[5] }}</td>
-                    <td>{{ row[6] }}</td>
+                    <td>{{ row.get('id', '') }}</td>
+                    <td><code>{{ row.get('asset_symbol', '') }}</code></td>
+                    <td>{{ row.get('asset_type', '') }}</td>
+                    <td>{{ row.get('price_uah', '') if row.get('price_uah') is not none else '—' }}</td>
+                    <td>{{ row.get('price_usd', '') if row.get('price_usd') is not none else '—' }}</td>
+                    <td>{{ row.get('source', '') }}</td>
+                    <td>{{ row.get('created_at', '') }}</td>
                   </tr>
                 {% endfor %}
               </tbody>
