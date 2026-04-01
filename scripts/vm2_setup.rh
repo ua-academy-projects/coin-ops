@@ -1,0 +1,35 @@
+#!/bin/bash
+# Налаштування VM2 - Go Proxy
+
+echo "=== Налаштування VM2 ==="
+
+# Оновлюємо пакети
+sudo apt update -y
+
+# Встановлюємо залежності
+sudo apt install -y golang git
+
+# Клонуємо репо якщо не існує
+if [ ! -d "/home/user/coin-ops" ]; then
+    git clone https://github.com/ua-academy-projects/coin-ops.git /home/user/coin-ops
+fi
+
+# Переходимо в папку і оновлюємо
+cd /home/user/coin-ops
+git checkout kazachuk
+git pull origin kazachuk
+
+# Завантажуємо Go залежності
+cd /home/user/coin-ops/proxy
+go mod tidy
+
+# Копіюємо unit файл
+sudo cp /home/user/coin-ops/scripts/proxy.service /etc/systemd/system/
+
+# Активуємо і запускаємо сервіс
+sudo systemctl daemon-reload
+sudo systemctl enable proxy
+sudo systemctl start proxy
+
+echo "=== VM2 налаштована! ==="
+echo "Proxy доступний на http://$(hostname -I | awk '{print $2}'):8080"

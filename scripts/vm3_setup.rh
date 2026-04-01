@@ -1,0 +1,43 @@
+#!/bin/bash
+# Налаштування VM3 - History Service + PostgreSQL
+
+echo "=== Налаштування VM3 ==="
+
+sudo apt update -y
+sudo apt install -y python3 python3-pip python3-venv git postgresql
+
+# Запускаємо PostgreSQL
+sudo systemctl enable postgresql
+sudo systemctl start postgresql
+
+# Налаштовуємо БД
+sudo -u postgres psql -c "CREATE USER coinops WITH PASSWORD 'coinops123';" 2>/dev/null || true
+sudo -u postgres psql -c "CREATE DATABASE coinops OWNER coinops;" 2>/dev/null || true
+sudo -u postgres psql -d coinops -c "CREATE TABLE IF NOT EXISTS rates (id SERIAL PRIMARY KEY, currency VARCHAR(10), name VARCHAR(100), rate NUMERIC(10,4), created_at TIMESTAMP DEFAULT NOW());" 2>/dev/null || true
+sudo -u postgres psql -d coinops -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO coinops;" 2>/dev/null || true
+sudo -u postgres psql -d coinops -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO coinops;" 2>/dev/null || true
+
+# Клонуємо репо
+if [ ! -d "/home/user/coin-ops" ]; then
+    git clone https://github.com/ua-academy-projects/coin-ops.git /home/user/coin-ops
+fi
+
+cd /home/user/coin-ops
+git checkout kazachuk
+git pull origin kazachuk
+
+# Створюємо venv
+cd /home/user/coin-ops/consumer
+python3 -m venv venv
+source venv/bin/activate
+pip install flask psycopg2-binary pika
+deactivate
+
+# Unit файл
+sudo cp /home/user/coin-ops/scripts/consumer.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable consumer
+sudo systemctl start consumer
+
+echo "=== VM3 налаштована! ==="
+echo "Consumer доступний на http://$(hostname -I | awk '{print $2}'):5001"

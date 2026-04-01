@@ -1,0 +1,23 @@
+#!/bin/bash
+# Налаштування VM4 - RabbitMQ
+
+echo "=== Налаштування VM4 ==="
+
+sudo apt update -y
+sudo apt install -y rabbitmq-server
+
+# Запускаємо
+sudo systemctl enable rabbitmq-server
+sudo systemctl start rabbitmq-server
+
+# Веб-інтерфейс
+sudo rabbitmq-plugins enable rabbitmq_management
+
+# Створюємо користувача
+sudo rabbitmqctl add_user coinops coinops123 2>/dev/null || true
+sudo rabbitmqctl set_user_tags coinops administrator
+sudo rabbitmqctl set_permissions -p / coinops ".*" ".*" ".*"
+
+echo "=== VM4 налаштована! ==="
+echo "RabbitMQ веб-інтерфейс: http://$(hostname -I | awk '{print $2}'):15672"
+echo "Логін: coinops / coinops123"
