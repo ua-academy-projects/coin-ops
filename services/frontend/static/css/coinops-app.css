@@ -1,0 +1,202 @@
+/* CoinOps dashboard — темна тема поверх Bootstrap 5 */
+:root {
+  --co-bg: #0a0e1a;
+  --co-text: #e8eaef;
+  --co-muted: rgba(232, 234, 239, 0.55);
+}
+html { scroll-behavior: smooth; }
+body.coinops-app {
+  position: relative;
+  min-height: 100vh;
+  background: var(--co-bg);
+  color: var(--co-text);
+  overflow-x: hidden;
+}
+.bg-orbs {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.bg-orbs .orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: 0.38;
+}
+.bg-orbs .orb-a {
+  width: 42vw;
+  height: 42vw;
+  background: radial-gradient(circle, rgba(79, 124, 255, 0.55) 0%, transparent 72%);
+  top: -12%;
+  left: -12%;
+}
+.bg-orbs .orb-b {
+  width: 40vw;
+  height: 40vw;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.45) 0%, transparent 72%);
+  bottom: -18%;
+  right: -12%;
+}
+.bg-orbs .orb-c {
+  width: 30vw;
+  height: 30vw;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.28) 0%, transparent 72%);
+  top: 38%;
+  right: 18%;
+}
+.coinops-app > .container { position: relative; z-index: 1; }
+.glass {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+}
+.navbar-glass {
+  background: rgba(255, 255, 255, 0.06) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.coinops-app .navbar-brand { color: var(--co-text) !important; }
+.coinops-app .navbar-text { color: var(--co-muted) !important; }
+.nav-tabs-glass {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  margin-bottom: 0;
+}
+.nav-tabs-glass .nav-link {
+  color: var(--co-muted);
+  border: none;
+  border-radius: 12px 12px 0 0;
+  margin-right: 0.25rem;
+}
+.nav-tabs-glass .nav-link:hover { color: var(--co-text); }
+.nav-tabs-glass .nav-link.active {
+  color: var(--co-text);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom-color: transparent;
+}
+.tab-shell {
+  border-radius: 0 16px 16px 16px;
+  padding: 1.25rem;
+  margin-top: -1px;
+}
+.sortable { cursor: pointer; user-select: none; }
+.sortable:hover { background: rgba(255, 255, 255, 0.06); }
+.kpi-card {
+  min-height: 96px;
+  position: relative;
+  overflow: hidden;
+}
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: 16px 16px 0 0;
+  z-index: 0;
+}
+.kpi-card > * { position: relative; z-index: 1; }
+.kpi-accent-usd::before { background: linear-gradient(90deg, #4f7cff, #6366f1, #8b5cf6); }
+.kpi-accent-eur::before { background: linear-gradient(90deg, #22c55e, #10b981, #14b8a6); }
+.kpi-accent-btc::before { background: linear-gradient(90deg, #fbbf24, #f59e0b, #f97316); }
+.kpi-accent-status::before { background: linear-gradient(90deg, #94a3b8, #64748b, #475569); }
+.kpi-card .co-label { color: var(--co-muted); font-size: 0.8rem; }
+#converter-result { font-variant-numeric: tabular-nums; }
+.spark-wrap {
+  width: 100px;
+  height: 36px;
+  border: none;
+  outline: none;
+  overflow: hidden;
+  background: transparent;
+}
+.spark-wrap canvas { display: block; border: none !important; outline: none; }
+.trend-up { color: #4ade80; font-weight: 600; }
+.trend-down { color: #f87171; font-weight: 600; }
+.trend-na { color: rgba(232, 234, 239, 0.45); }
+#hist-chart-wrap { position: relative; height: 320px; }
+.table-glass {
+  --bs-table-bg: transparent;
+  --bs-table-striped-bg: rgba(255, 255, 255, 0.035);
+  --bs-table-hover-bg: rgba(255, 255, 255, 0.06);
+  color: var(--co-text);
+  margin-bottom: 0;
+}
+.table-glass thead th {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--co-text);
+  font-weight: 600;
+  border-bottom-color: rgba(255, 255, 255, 0.12);
+}
+.table-glass tbody td {
+  border-color: rgba(255, 255, 255, 0.06);
+  vertical-align: middle;
+  color: var(--co-text);
+}
+.table-glass.table-striped > tbody > tr > * {
+  color: var(--co-text);
+}
+.coinops-app .form-control,
+.coinops-app .form-select {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: var(--co-text);
+}
+.coinops-app select.form-select option {
+  background-color: #161c2c;
+  color: #e8eaef;
+}
+.coinops-app .form-control::placeholder { color: rgba(232, 234, 239, 0.35); }
+.coinops-app .form-control:focus,
+.coinops-app .form-select:focus {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(79, 124, 255, 0.5);
+  color: var(--co-text);
+  box-shadow: 0 0 0 0.2rem rgba(79, 124, 255, 0.2);
+}
+.coinops-app .input-group-text {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: var(--co-muted);
+}
+.coinops-app .form-check-input {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+.coinops-app .form-check-label { color: var(--co-muted); }
+.btn-glass-outline {
+  color: var(--co-text);
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+}
+.btn-glass-outline:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--co-text);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+.converter-row { gap: 0.5rem; }
+@media (min-width: 992px) {
+  .converter-row { flex-wrap: nowrap; align-items: flex-end; }
+  .converter-row .conv-result-col { flex: 1 1 auto; min-width: 200px; }
+}
+.hist-info-icon { cursor: help; }
+.glass-table-wrap { overflow: hidden; border-radius: 16px; }
+.co-footnote { font-size: 0.8rem; color: var(--co-muted); }
+.conv-result-col { min-width: 0; }
+.coinops-app .alert-warning {
+  background: rgba(234, 179, 8, 0.14);
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  color: #fde68a;
+}
+.coinops-app .alert-danger {
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  color: #fecaca;
+}
