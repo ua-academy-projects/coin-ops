@@ -1,0 +1,44 @@
+---
+- name: Setup VM2 - Go Proxy
+  hosts: vm2
+  become: yes
+
+  tasks:
+    - name: Update apt packages
+      apt:
+        update_cache: yes
+      ignore_errors: yes
+
+    - name: Install dependencies
+      apt:
+        name:
+          - golang
+          - git
+        state: present
+
+    - name: Clone repository
+      git:
+        repo: https://github.com/ua-academy-projects/coin-ops.git
+        dest: /home/user/coin-ops
+        version: kazachuk
+        force: yes
+      become_user: user
+
+    - name: Download Go dependencies
+      command: go mod tidy
+      args:
+        chdir: /home/user/coin-ops/proxy
+      become_user: user
+
+    - name: Copy unit file
+      copy:
+        src: /home/user/coin-ops/scripts/proxy.service
+        dest: /etc/systemd/system/proxy.service
+        remote_src: yes
+
+    - name: Enable and start proxy
+      systemd:
+        name: proxy
+        enabled: yes
+        state: started
+        daemon_reload: yes

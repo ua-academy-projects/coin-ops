@@ -1,0 +1,74 @@
+---
+- name: Setup VM3 - History Service + PostgreSQL
+  hosts: vm3
+  become: yes
+
+  tasks:
+    - name: Update apt packages
+      apt:
+        update_cache: yes
+      ignore_errors: yes
+
+    - name: Install dependencies
+      apt:
+        name:
+          - python3
+          - python3-pip
+          - python3-venv
+          - git
+          - postgresql
+        state: present
+
+    - name: Start PostgreSQL
+      systemd:
+        name: postgresql
+        enabled: yes
+        state: started
+
+    - name: Create DB user
+      become_user: postgres
+      postgresql_user:
+        name: coinops
+        password: coinops123
+      ignore_errors: yes
+
+    - name: Create database
+      become_user: postgres
+      postgresql_db:
+        name: coinops
+        owner: coinops
+      ignore_errors: yes
+
+    - name: Clone repository
+      git:
+        repo: https://github.com/ua-academy-projects/coin-ops.git
+        dest: /home/user/coin-ops
+        version: kazachuk
+        force: yes
+      become_user: user
+
+    - name: Create venv
+      command: python3 -m venv /home/user/coin-ops/consumer/venv
+      become_user: user
+
+    - name: Install Python packages
+      pip:
+        name:
+          - flask
+          - psycopg2-binary
+          - pika
+        virtualenv: /home/user/coin-ops/consumer/venv
+      become_user: user
+
+    - name: Copy unit file
+      copy:
+        src: /home/user/coin-ops/scripts/consumer.service
+        dest: /etc/systemd/system/consumer.service
+        remote_src: yes
+
+    - name: Enable and start consumer
+      systemd:
+        name: consumer
+        enabled: yes
+        state: started
+        daemon_reload: yes

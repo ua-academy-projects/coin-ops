@@ -1,0 +1,35 @@
+---
+- name: Setup VM4 - RabbitMQ
+  hosts: vm4
+  become: yes
+
+  tasks:
+    - name: Update apt packages
+      apt:
+        update_cache: yes
+      ignore_errors: yes
+
+    - name: Install RabbitMQ
+      apt:
+        name: rabbitmq-server
+        state: present
+
+    - name: Enable and start RabbitMQ
+      systemd:
+        name: rabbitmq-server
+        enabled: yes
+        state: started
+
+    - name: Enable management plugin
+      command: rabbitmq-plugins enable rabbitmq_management
+      ignore_errors: yes
+
+    - name: Create RabbitMQ user
+      command: rabbitmqctl add_user coinops coinops123
+      ignore_errors: yes
+
+    - name: Set user tags
+      command: rabbitmqctl set_user_tags coinops administrator
+
+    - name: Set permissions
+      command: rabbitmqctl set_permissions -p / coinops ".*" ".*" ".*"
