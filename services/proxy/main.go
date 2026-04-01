@@ -19,6 +19,9 @@ const defaultListen = ":8080"
 // defaultCacheTTL is used when COINOPS_CACHE_TTL_SECONDS is unset or invalid.
 const defaultCacheTTL = 60 * time.Second
 
+// defaultPollInterval is the background fetch interval when COINOPS_POLL_INTERVAL_SECONDS is unset or invalid.
+const defaultPollInterval = 10 * time.Minute
+
 // cachedEntry holds a successful aggregated snapshot for in-memory TTL caching.
 // We only cache responses where both NBU and CoinGecko succeeded, to avoid serving
 // stale partial data after a transient outage of one provider.
@@ -89,7 +92,13 @@ func (a *rateAggregator) getOrFetch(ctx context.Context) *RatesResponse {
 	if ent != nil && now.Before(ent.expiresAt) {
 		return ent.resp
 	}
+	return a.refreshFromUpstream(ctx)
+}
+
+// refreshFromUpstream always calls NBU + CoinGecko and refreshes the in-memory cache on full success.
+func (a *rateAggregator) refreshFromUpstream(ctx context.Context) *RatesResponse {
 	resp := BuildRatesResponse(ctx, a.client)
+	now := time.Now()
 	// Cache only full success to keep CoinGecko request rate predictable and avoid
 	// caching incomplete snapshots during provider outages.
 	if len(resp.Errors) == 0 && len(resp.Rates) > 0 {
@@ -102,6 +111,21 @@ func (a *rateAggregator) getOrFetch(ctx context.Context) *RatesResponse {
 		return &snap
 	}
 	return resp
+}
+
+func (a *rateAggregator) publishSnapshotAsync(resp RatesResponse) {
+	go func(snapshot RatesResponse) {
+		pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer pubCancel()
+		if err := a.publisher.Publish(pubCtx, snapshot); err != nil {
+			log.Printf("publish snapshot failed: %v", err)
+		}
+	}(resp)
+}
+
+func (a *rateAggregator) pollAndPublish(ctx context.Context) {
+	resp := a.refreshFromUpstream(ctx)
+	a.publishSnapshotAsync(*resp)
 }
 
 func listenAddr() string {
@@ -119,6 +143,26 @@ func cacheTTL() time.Duration {
 	sec, err := strconv.Atoi(s)
 	if err != nil || sec <= 0 {
 		return defaultCacheTTL
+	}
+	return time.Duration(sec) * time.Second
+}
+
+func pollEnabled() bool {
+	v := os.Getenv("COINOPS_POLL_ENABLED")
+	if v == "" {
+		return true
+	}
+	return v == "1" || v == "true" || v == "TRUE" || v == "yes" || v == "YES"
+}
+
+func pollInterval() time.Duration {
+	s := os.Getenv("COINOPS_POLL_INTERVAL_SECONDS")
+	if s == "" {
+		return defaultPollInterval
+	}
+	sec, err := strconv.Atoi(s)
+	if err != nil || sec <= 0 {
+		return defaultPollInterval
 	}
 	return time.Duration(sec) * time.Second
 }
@@ -149,13 +193,7 @@ func main() {
 		defer cancel()
 		resp := agg.getOrFetch(ctx)
 		// Best-effort async publish: live API response must not fail if MQ is down.
-		go func(snapshot RatesResponse) {
-			pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer pubCancel()
-			if err := agg.publisher.Publish(pubCtx, snapshot); err != nil {
-				log.Printf("publish snapshot failed: %v", err)
-			}
-		}(*resp)
+		agg.publishSnapshotAsync(*resp)
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		enc := json.NewEncoder(w)
 		enc.SetEscapeHTML(true)
@@ -167,6 +205,25 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
+
+	if pollEnabled() {
+		iv := pollInterval()
+		log.Printf("background rate poll: every %v (COINOPS_POLL_INTERVAL_SECONDS)", iv)
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			agg.pollAndPublish(ctx)
+			cancel()
+			t := time.NewTicker(iv)
+			defer t.Stop()
+			for range t.C {
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				agg.pollAndPublish(ctx)
+				cancel()
+			}
+		}()
+	} else {
+		log.Printf("background rate poll disabled (COINOPS_POLL_ENABLED)")
+	}
 
 	addr := listenAddr()
 	log.Printf("CoinOps proxy listening on %s (cache TTL %v)", addr, agg.cacheTTL)

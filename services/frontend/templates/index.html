@@ -6,23 +6,221 @@
   <title>CoinOps — курси та історія</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
         integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <style>
+    :root {
+      --co-bg: #0a0e1a;
+      --co-text: #e8eaef;
+      --co-muted: rgba(232, 234, 239, 0.55);
+    }
+    html { scroll-behavior: smooth; }
+    body.coinops-app {
+      position: relative;
+      min-height: 100vh;
+      background: var(--co-bg);
+      color: var(--co-text);
+      overflow-x: hidden;
+    }
+    .bg-orbs {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .bg-orbs .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(100px);
+      opacity: 0.38;
+    }
+    .bg-orbs .orb-a {
+      width: 42vw;
+      height: 42vw;
+      background: radial-gradient(circle, rgba(79, 124, 255, 0.55) 0%, transparent 72%);
+      top: -12%;
+      left: -12%;
+    }
+    .bg-orbs .orb-b {
+      width: 40vw;
+      height: 40vw;
+      background: radial-gradient(circle, rgba(139, 92, 246, 0.45) 0%, transparent 72%);
+      bottom: -18%;
+      right: -12%;
+    }
+    .bg-orbs .orb-c {
+      width: 30vw;
+      height: 30vw;
+      background: radial-gradient(circle, rgba(56, 189, 248, 0.28) 0%, transparent 72%);
+      top: 38%;
+      right: 18%;
+    }
+    .coinops-app > .container { position: relative; z-index: 1; }
+    .glass {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    }
+    .navbar-glass {
+      background: rgba(255, 255, 255, 0.06) !important;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .coinops-app .navbar-brand { color: var(--co-text) !important; }
+    .coinops-app .navbar-text { color: var(--co-muted) !important; }
+    .nav-tabs-glass {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      margin-bottom: 0;
+    }
+    .nav-tabs-glass .nav-link {
+      color: var(--co-muted);
+      border: none;
+      border-radius: 12px 12px 0 0;
+      margin-right: 0.25rem;
+    }
+    .nav-tabs-glass .nav-link:hover { color: var(--co-text); }
+    .nav-tabs-glass .nav-link.active {
+      color: var(--co-text);
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-bottom-color: transparent;
+    }
+    .tab-shell {
+      border-radius: 0 16px 16px 16px;
+      padding: 1.25rem;
+      margin-top: -1px;
+    }
     .sortable { cursor: pointer; user-select: none; }
-    .sortable:hover { background: rgba(255,255,255,.08); }
-    .kpi-card { min-height: 88px; }
+    .sortable:hover { background: rgba(255, 255, 255, 0.06); }
+    .kpi-card {
+      min-height: 96px;
+      position: relative;
+      overflow: hidden;
+    }
+    .kpi-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      border-radius: 16px 16px 0 0;
+      z-index: 0;
+    }
+    .kpi-card > * { position: relative; z-index: 1; }
+    .kpi-accent-usd::before { background: linear-gradient(90deg, #4f7cff, #6366f1, #8b5cf6); }
+    .kpi-accent-eur::before { background: linear-gradient(90deg, #22c55e, #10b981, #14b8a6); }
+    .kpi-accent-btc::before { background: linear-gradient(90deg, #fbbf24, #f59e0b, #f97316); }
+    .kpi-accent-status::before { background: linear-gradient(90deg, #94a3b8, #64748b, #475569); }
+    .kpi-card .co-label { color: var(--co-muted); font-size: 0.8rem; }
     #converter-result { font-variant-numeric: tabular-nums; }
+    .spark-wrap {
+      width: 100px;
+      height: 36px;
+      border: none;
+      outline: none;
+      overflow: hidden;
+      background: transparent;
+    }
+    .spark-wrap canvas { display: block; border: none !important; outline: none; }
+    .trend-up { color: #4ade80; font-weight: 600; }
+    .trend-down { color: #f87171; font-weight: 600; }
+    .trend-na { color: rgba(232, 234, 239, 0.45); }
+    #hist-chart-wrap { position: relative; height: 320px; }
+    .table-glass {
+      --bs-table-bg: transparent;
+      --bs-table-striped-bg: rgba(255, 255, 255, 0.035);
+      --bs-table-hover-bg: rgba(255, 255, 255, 0.06);
+      color: var(--co-text);
+      margin-bottom: 0;
+    }
+    .table-glass thead th {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--co-text);
+      font-weight: 600;
+      border-bottom-color: rgba(255, 255, 255, 0.12);
+    }
+    .table-glass tbody td {
+      border-color: rgba(255, 255, 255, 0.06);
+      vertical-align: middle;
+      color: var(--co-text);
+    }
+    .table-glass.table-striped > tbody > tr > * {
+      color: var(--co-text);
+    }
+    .coinops-app .form-control,
+    .coinops-app .form-select {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.15);
+      color: var(--co-text);
+    }
+    .coinops-app select.form-select option {
+      background-color: #161c2c;
+      color: #e8eaef;
+    }
+    .coinops-app .form-control::placeholder { color: rgba(232, 234, 239, 0.35); }
+    .coinops-app .form-control:focus,
+    .coinops-app .form-select:focus {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(79, 124, 255, 0.5);
+      color: var(--co-text);
+      box-shadow: 0 0 0 0.2rem rgba(79, 124, 255, 0.2);
+    }
+    .coinops-app .input-group-text {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.15);
+      color: var(--co-muted);
+    }
+    .coinops-app .form-check-input {
+      background-color: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+    .coinops-app .form-check-label { color: var(--co-muted); }
+    .btn-glass-outline {
+      color: var(--co-text);
+      border-color: rgba(255, 255, 255, 0.25);
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .btn-glass-outline:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: var(--co-text);
+      border-color: rgba(255, 255, 255, 0.35);
+    }
+    .converter-row { gap: 0.5rem; }
+    @media (min-width: 992px) {
+      .converter-row { flex-wrap: nowrap; align-items: flex-end; }
+      .converter-row .conv-result-col { flex: 1 1 auto; min-width: 200px; }
+    }
+    .hist-info-icon { cursor: help; }
+    .glass-table-wrap { overflow: hidden; border-radius: 16px; }
+    .co-footnote { font-size: 0.8rem; color: var(--co-muted); }
+    .conv-result-col { min-width: 0; }
+    .coinops-app .alert-warning {
+      background: rgba(234, 179, 8, 0.14);
+      border: 1px solid rgba(234, 179, 8, 0.35);
+      color: #fde68a;
+    }
   </style>
 </head>
-<body class="bg-light">
-  <nav class="navbar navbar-dark bg-dark mb-3">
+<body class="coinops-app">
+  <div class="bg-orbs" aria-hidden="true">
+    <div class="orb orb-a"></div>
+    <div class="orb orb-b"></div>
+    <div class="orb orb-c"></div>
+  </div>
+  <nav class="navbar navbar-expand navbar-glass mb-3">
     <div class="container">
       <span class="navbar-brand mb-0 h1">CoinOps</span>
-      <span class="navbar-text text-secondary">курси та історія</span>
+      <span class="navbar-text">курси та історія</span>
     </div>
   </nav>
 
   <main class="container pb-5">
-    <ul class="nav nav-tabs" id="mainTabs" role="tablist">
+    <ul class="nav nav-tabs nav-tabs-glass" id="mainTabs" role="tablist">
       <li class="nav-item" role="presentation">
         <button class="nav-link active" id="live-tab" data-bs-toggle="tab" data-bs-target="#live-panel"
                 type="button" role="tab">Поточні курси</button>
@@ -33,34 +231,42 @@
       </li>
     </ul>
 
-    <div class="tab-content border border-top-0 bg-white p-3 rounded-bottom shadow-sm">
+    <div class="tab-content glass tab-shell">
       <!-- LIVE -->
       <div class="tab-pane fade show active" id="live-panel" role="tabpanel">
         {% if live_error %}
-          <div class="alert alert-warning mb-0" role="alert">Не вдалося отримати дані з проксі: {{ live_error }}</div>
+          <div class="alert alert-warning glass mb-0" role="alert">Не вдалося отримати дані з проксі: {{ live_error }}</div>
         {% else %}
           <div class="row g-2 mb-3">
-            <div class="col-md-4">
-              <div class="card kpi-card border-0 bg-primary text-white">
-                <div class="card-body py-2">
-                  <div class="small opacity-75">Активів у списку</div>
-                  <div class="fs-4 fw-semibold" id="kpi-live-count">—</div>
-                </div>
+            <div class="col-md-3 col-6">
+              <div class="glass kpi-card kpi-accent-usd p-3 h-100 d-flex flex-column">
+                <div class="co-label">Офіційний USD / UAH</div>
+                <div class="fs-5 fw-semibold" id="kpi-usd-uah">—</div>
+                <div class="small mt-auto" id="kpi-usd-trend">—</div>
               </div>
             </div>
-            <div class="col-md-4">
-              <div class="card kpi-card border-0 bg-secondary text-white">
-                <div class="card-body py-2">
-                  <div class="small opacity-75">Оновлено</div>
-                  <div class="fs-6 fw-semibold" id="kpi-live-time">—</div>
-                </div>
+            <div class="col-md-3 col-6">
+              <div class="glass kpi-card kpi-accent-eur p-3 h-100 d-flex flex-column">
+                <div class="co-label">EUR / UAH</div>
+                <div class="fs-5 fw-semibold" id="kpi-eur-uah">—</div>
+                <div class="small mt-auto" id="kpi-eur-trend">—</div>
               </div>
             </div>
-            <div class="col-md-4">
-              <div class="card kpi-card border-0 bg-dark text-white">
-                <div class="card-body py-2">
-                  <div class="small opacity-75">Стан</div>
-                  <div class="fs-6" id="kpi-live-status">OK</div>
+            <div class="col-md-3 col-6">
+              <div class="glass kpi-card kpi-accent-btc p-3 h-100 d-flex flex-column">
+                <div class="co-label">BTC / USD</div>
+                <div class="fs-5 fw-semibold" id="kpi-btc-usd">—</div>
+                <div class="small mt-auto" id="kpi-btc-trend">—</div>
+              </div>
+            </div>
+            <div class="col-md-3 col-6">
+              <div class="glass kpi-card kpi-accent-status p-3 h-100 d-flex flex-column justify-content-between">
+                <div class="co-label">Стан</div>
+                <div class="fs-6" id="kpi-status-line">Оновлено: <span id="kpi-live-time">—</span></div>
+                <div>
+                  <button type="button" class="btn btn-sm btn-glass-outline" id="btn-refresh-live" title="Оновити курси">
+                    <i class="bi bi-arrow-clockwise"></i> Оновити
+                  </button>
                 </div>
               </div>
             </div>
@@ -68,11 +274,14 @@
 
           <div class="row g-2 align-items-end mb-3">
             <div class="col-md-4">
-              <label class="form-label small mb-0">Пошук (код / назва)</label>
-              <input type="search" class="form-control form-control-sm" id="live-search" placeholder="напр. USD, EUR, Bitcoin…" autocomplete="off">
+              <label class="form-label small mb-0 co-label">Пошук (код / назва)</label>
+              <div class="input-group input-group-sm">
+                <span class="input-group-text"><i class="bi bi-search" aria-hidden="true"></i></span>
+                <input type="search" class="form-control" id="live-search" placeholder="напр. USD, EUR, Bitcoin…" autocomplete="off">
+              </div>
             </div>
             <div class="col-md-3">
-              <label class="form-label small mb-0">Тип</label>
+              <label class="form-label small mb-0 co-label">Тип</label>
               <select class="form-select form-select-sm" id="live-type-filter">
                 <option value="all" selected>Усі</option>
                 <option value="fiat">Фіат</option>
@@ -87,39 +296,46 @@
             </div>
           </div>
 
-          <div class="card mb-3 border-info">
-            <div class="card-header py-2 bg-info bg-opacity-10">Конвертер (через USD)</div>
-            <div class="card-body py-2">
-              <div class="row g-2 align-items-end">
-                <div class="col-6 col-md-2">
-                  <label class="form-label small mb-0">Сума</label>
-                  <input type="number" class="form-control form-control-sm" id="conv-amount" value="1" min="0" step="any">
-                </div>
-                <div class="col-6 col-md-2">
-                  <label class="form-label small mb-0">З</label>
-                  <select class="form-select form-select-sm" id="conv-from"></select>
-                </div>
-                <div class="col-6 col-md-2">
-                  <label class="form-label small mb-0">У</label>
-                  <select class="form-select form-select-sm" id="conv-to"></select>
-                </div>
-                <div class="col-12 col-md-6">
-                  <div class="small text-muted mb-0">Результат</div>
-                  <div id="converter-result" class="fw-semibold">—</div>
-                </div>
+          <div class="glass p-3 mb-3">
+            <div class="co-label mb-2">Конвертер валют (через USD)</div>
+            <div class="d-flex flex-wrap align-items-end converter-row">
+              <div class="flex-shrink-0" style="min-width: 5rem;">
+                <label class="form-label small mb-0 co-label">Сума</label>
+                <input type="number" class="form-control form-control-sm" id="conv-amount" value="1" min="0" step="any">
+              </div>
+              <div class="flex-shrink-0" style="min-width: 6rem;">
+                <label class="form-label small mb-0 co-label d-none d-lg-block">&nbsp;</label>
+                <select class="form-select form-select-sm" id="conv-from"></select>
+              </div>
+              <div class="flex-shrink-0 pb-1">
+                <button type="button" class="btn btn-sm btn-glass-outline px-2" id="conv-swap" title="Поміняти валюти місцями" aria-label="Поміняти валюти">
+                  <i class="bi bi-arrow-left-right"></i>
+                </button>
+              </div>
+              <div class="flex-shrink-0" style="min-width: 6rem;">
+                <label class="form-label small mb-0 co-label d-none d-lg-block">&nbsp;</label>
+                <select class="form-select form-select-sm" id="conv-to"></select>
+              </div>
+              <div class="conv-result-col flex-grow-1 min-w-0">
+                <div class="co-label mb-0">Результат</div>
+                <div id="converter-result" class="fw-semibold text-break">—</div>
               </div>
             </div>
           </div>
 
-          <div class="table-responsive">
-            <table class="table table-sm table-striped align-middle" id="live-table">
-              <thead class="table-dark">
+          <div class="table-responsive glass glass-table-wrap">
+            <table class="table table-sm table-striped table-glass align-middle mb-0" id="live-table">
+              <thead>
                 <tr>
-                  <th class="sortable" data-sort="symbol">Актив <span class="text-secondary">⇅</span></th>
-                  <th class="sortable" data-sort="type">Тип <span class="text-secondary">⇅</span></th>
-                  <th class="sortable text-end" data-sort="uah">UAH <span class="text-secondary">⇅</span></th>
-                  <th class="sortable text-end" data-sort="usd">USD <span class="text-secondary">⇅</span></th>
-                  <th>Назва</th>
+                  <th class="sortable" data-sort="symbol">Актив <span class="text-white-50">⇅</span></th>
+                  <th class="sortable text-end" data-sort="uah">Ціна UAH <span class="text-white-50">⇅</span></th>
+                  <th class="sortable text-end" data-sort="usd">Ціна USD <span class="text-white-50">⇅</span></th>
+                  <th class="text-end">
+                    Тренд ~24 год
+                    <i class="bi bi-info-circle co-label hist-info-icon ms-1" data-bs-toggle="tooltip" data-bs-placement="top"
+                       data-bs-title="Тренд: порівняння з останнім записом у БД на час або до «зараз мінус 24 год». Спарклайн: останні 24 рядки в історії. Відсотки: фіат — UAH, крипта — USD."></i>
+                  </th>
+                  <th>Спарклайн</th>
                 </tr>
               </thead>
               <tbody id="live-tbody"></tbody>
@@ -130,73 +346,74 @@
 
       <!-- HISTORY -->
       <div class="tab-pane fade" id="hist-panel" role="tabpanel">
-        {% if history_error %}
-          <div class="alert alert-warning" role="alert">Не вдалося прочитати історію: {{ history_error }}</div>
-        {% else %}
-          <div class="row g-2 mb-3">
-            <div class="col-md-3">
-              <label class="form-label small mb-0">Записів</label>
-              <select class="form-select form-select-sm" id="hist-limit">
-                <option value="50" selected>50</option>
-                <option value="100">100</option>
-                <option value="200">200</option>
-              </select>
-            </div>
-            <div class="col-md-3">
-              <label class="form-label small mb-0">Тип</label>
-              <select class="form-select form-select-sm" id="hist-type">
-                <option value="all" selected>Усі</option>
-                <option value="fiat">Фіат</option>
-                <option value="crypto">Крипто</option>
-              </select>
-            </div>
-            <div class="col-md-3">
-              <div class="form-check form-switch mt-4">
-                <input class="form-check-input" type="checkbox" id="hist-popular-only" checked>
-                <label class="form-check-label small" for="hist-popular-only">Лише популярні активи</label>
-              </div>
-            </div>
-            <div class="col-md-3">
-              <label class="form-label small mb-0">Пошук коду</label>
-              <input type="search" class="form-control form-control-sm" id="hist-search" placeholder="BTC, USD…" autocomplete="off">
-            </div>
+        <p class="co-footnote mb-2 d-flex align-items-center flex-wrap gap-2">
+          <span>База для % між знімками: фіат — UAH, крипта — USD.</span>
+          <i class="bi bi-info-circle hist-info-icon" data-bs-toggle="tooltip" data-bs-placement="top"
+             data-bs-title="Порівняння відсотків у таблиці — між сусідами у вибраному діапазоні; база залежить від типу активу."></i>
+        </p>
+        <div class="row g-2 mb-3 align-items-end">
+          <div class="col-md-4">
+            <label class="form-label small mb-0 co-label">Актив</label>
+            <select class="form-select form-select-sm" id="hist-asset"></select>
           </div>
-          <div class="row g-2 mb-2">
-            <div class="col-auto">
-              <button type="button" class="btn btn-sm btn-outline-primary" id="hist-refresh">Оновити з сервера</button>
-            </div>
-            <div class="col text-muted small align-self-center" id="hist-meta"></div>
+          <div class="col-md-3">
+            <label class="form-label small mb-0 co-label">Період</label>
+            <select class="form-select form-select-sm" id="hist-range">
+              <option value="24h">24 години</option>
+              <option value="7d" selected>7 днів</option>
+              <option value="30d">1 місяць</option>
+              <option value="all">Увесь час</option>
+            </select>
           </div>
-          <div id="hist-empty" class="alert alert-light border d-none" role="status">Немає записів за поточними фільтрами.</div>
-          <div class="table-responsive">
-            <table class="table table-sm table-hover align-middle">
-              <thead class="table-secondary">
-                <tr>
-                  <th>ID</th>
-                  <th>Актив</th>
-                  <th>Тип</th>
-                  <th class="text-end">UAH</th>
-                  <th class="text-end">USD</th>
-                  <th>Записано</th>
-                </tr>
-              </thead>
-              <tbody id="hist-tbody"></tbody>
-            </table>
+          <div class="col-md-3">
+            <button type="button" class="btn btn-sm btn-primary" id="hist-load">Завантажити</button>
           </div>
-        {% endif %}
+        </div>
+        <div id="hist-chart-error" class="alert alert-warning d-none mb-3" role="alert"></div>
+        <div id="hist-chart-wrap" class="glass p-3 mb-3">
+          <canvas id="hist-chart"></canvas>
+        </div>
+        <div class="table-responsive glass glass-table-wrap">
+          <table class="table table-sm table-hover table-glass align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Дата / час</th>
+                <th class="text-end">Ціна UAH</th>
+                <th class="text-end">Ціна USD</th>
+                <th class="text-end">Зміна від попереднього</th>
+              </tr>
+            </thead>
+            <tbody id="hist-tbody"></tbody>
+          </table>
+        </div>
+        <div id="hist-empty" class="glass co-footnote p-3 d-none" role="status">Немає даних за обраними умовами.</div>
       </div>
     </div>
   </main>
 
   <script type="application/json" id="coinops-initial-live">{{ (live_rates or [])|tojson }}</script>
-  <script type="application/json" id="coinops-initial-hist">{{ (history_rows or [])|tojson }}</script>
   <script type="application/json" id="coinops-live-meta">{{ {'fetched_at': live_fetched_at}|tojson }}</script>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" crossorigin="anonymous"></script>
   <script>
 (function () {
+  if (!document.getElementById('live-tbody')) {
+    return;
+  }
   const POPULAR_FIAT = ['USD','EUR','GBP','PLN','CHF','CAD'];
   const POPULAR_CRYPTO = ['BTC','ETH','USDT','BNB','SOL','XRP'];
-  const LS_KEY = 'coinops_ui_v1';
+  const LS_KEY = 'coinops_ui_v2';
+
+  const FIAT_NAMES = {
+    USD: 'Долар США', EUR: 'Євро', GBP: 'Фунт стерлінгів', PLN: 'Злотий', CHF: 'Франк', CAD: 'Канадський долар',
+    JPY: 'Єна', CZK: 'Крона', SEK: 'Крона', NOK: 'Крона', DKK: 'Крона', HUF: 'Форинт', RON: 'Лей',
+    BGN: 'Лев', MDL: 'Лей', UAH: 'Гривня'
+  };
+  const CRYPTO_NAMES = {
+    BTC: 'Bitcoin', ETH: 'Ethereum', USDT: 'Tether', BNB: 'BNB', SOL: 'Solana', XRP: 'XRP'
+  };
+  const FIAT_FLAG = { USD: '🇺🇸', EUR: '🇪🇺', GBP: '🇬🇧', PLN: '🇵🇱', CHF: '🇨🇭', CAD: '🇨🇦', UAH: '🇺🇦' };
+  const CRYPTO_ICON = { BTC: '₿', ETH: 'Ξ', USDT: '₮', BNB: '◆', SOL: '◎', XRP: '✕' };
 
   function pad2(n) { return String(n).padStart(2, '0'); }
   function formatLocalDateTime(iso) {
@@ -206,11 +423,44 @@
     return pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds()) + ' '
       + pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1) + '.' + d.getFullYear();
   }
+  /** Підпис осі X для графіка історії: 24h — лише час; інші періоди — дата без часу. */
+  function formatChartAxisLabel(iso, range) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso);
+    if (range === '24h') {
+      return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+    }
+    return pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1) + '.' + d.getFullYear();
+  }
   function formatPrice(v) {
     if (v === null || v === undefined) return '—';
     const n = Number(v);
     if (Number.isNaN(n)) return '—';
     return n.toFixed(2);
+  }
+  function formatPct(v) {
+    if (v === null || v === undefined || Number.isNaN(Number(v))) return '—';
+    const n = Number(v);
+    const s = (n > 0 ? '+' : '') + n.toFixed(2) + '%';
+    return s;
+  }
+  function trendClass(v) {
+    if (v === null || v === undefined || Number.isNaN(Number(v))) return 'trend-na';
+    return Number(v) >= 0 ? 'trend-up' : 'trend-down';
+  }
+  function pairKey(r) {
+    return (r.asset_symbol || '').toUpperCase() + ':' + (r.asset_type || '');
+  }
+  function displayName(r) {
+    const sym = (r.asset_symbol || '').toUpperCase();
+    if (r.asset_type === 'fiat') return FIAT_NAMES[sym] || (r.name || sym);
+    return CRYPTO_NAMES[sym] || sym;
+  }
+  function displayIcon(r) {
+    const sym = (r.asset_symbol || '').toUpperCase();
+    if (r.asset_type === 'fiat') return FIAT_FLAG[sym] || '💱';
+    return CRYPTO_ICON[sym] || '◆';
   }
   function isPopularRow(r) {
     const sym = (r.asset_symbol || '').toUpperCase();
@@ -232,12 +482,12 @@
   }
 
   const initialLive = JSON.parse(document.getElementById('coinops-initial-live').textContent || '[]');
-  const initialHist = JSON.parse(document.getElementById('coinops-initial-hist').textContent || '[]');
-  const liveMeta = JSON.parse(document.getElementById('coinops-live-meta').textContent || '{}');
+  let liveMeta = JSON.parse(document.getElementById('coinops-live-meta').textContent || '{}');
 
   let liveRates = Array.isArray(initialLive) ? initialLive.slice() : [];
-  let historyItems = Array.isArray(initialHist) ? initialHist.slice() : [];
+  let dashboardInsights = {};
   let liveSort = { key: 'symbol', dir: 1 };
+  let sparkCharts = {};
 
   const st = loadState();
   const el = {
@@ -245,41 +495,82 @@
     liveType: document.getElementById('live-type-filter'),
     liveShowAll: document.getElementById('live-show-all'),
     liveTbody: document.getElementById('live-tbody'),
-    kpiCount: document.getElementById('kpi-live-count'),
+    kpiUsdUah: document.getElementById('kpi-usd-uah'),
+    kpiEurUah: document.getElementById('kpi-eur-uah'),
+    kpiBtcUsd: document.getElementById('kpi-btc-usd'),
+    kpiUsdTrend: document.getElementById('kpi-usd-trend'),
+    kpiEurTrend: document.getElementById('kpi-eur-trend'),
+    kpiBtcTrend: document.getElementById('kpi-btc-trend'),
     kpiTime: document.getElementById('kpi-live-time'),
-    histLimit: document.getElementById('hist-limit'),
-    histType: document.getElementById('hist-type'),
-    histPopular: document.getElementById('hist-popular-only'),
-    histSearch: document.getElementById('hist-search'),
-    histTbody: document.getElementById('hist-tbody'),
-    histEmpty: document.getElementById('hist-empty'),
-    histMeta: document.getElementById('hist-meta'),
-    histRefresh: document.getElementById('hist-refresh'),
+    btnRefresh: document.getElementById('btn-refresh-live'),
     convAmount: document.getElementById('conv-amount'),
     convFrom: document.getElementById('conv-from'),
     convTo: document.getElementById('conv-to'),
     convResult: document.getElementById('converter-result'),
+    histAsset: document.getElementById('hist-asset'),
+    histRange: document.getElementById('hist-range'),
+    histLoad: document.getElementById('hist-load'),
+    histTbody: document.getElementById('hist-tbody'),
+    histEmpty: document.getElementById('hist-empty'),
+    histChartErr: document.getElementById('hist-chart-error'),
   };
 
   if (el.liveSearch) { el.liveSearch.value = st.liveSearch || ''; }
   if (el.liveType) { el.liveType.value = st.liveType || 'all'; }
   if (el.liveShowAll) { el.liveShowAll.checked = !!st.liveShowAll; }
-  if (el.histLimit) { el.histLimit.value = String(st.histLimit || '50'); }
-  if (el.histType) { el.histType.value = st.histType || 'all'; }
-  if (el.histPopular) { el.histPopular.checked = st.histPopular !== false; }
-  if (el.histSearch) { el.histSearch.value = st.histSearch || ''; }
+  if (el.histRange) { el.histRange.value = st.histRange || '7d'; }
+
+  let histMainChart = null;
+
+  function destroySparkCharts() {
+    Object.keys(sparkCharts).forEach(function (k) {
+      try { sparkCharts[k].destroy(); } catch (e) {}
+    });
+    sparkCharts = {};
+  }
+
+  function findRate(sym, type) {
+    const s = sym.toUpperCase();
+    return liveRates.find(function (x) {
+      return (x.asset_symbol || '').toUpperCase() === s && x.asset_type === type;
+    });
+  }
+
+  function updateKpis() {
+    const usd = findRate('USD', 'fiat');
+    const eur = findRate('EUR', 'fiat');
+    const btc = findRate('BTC', 'crypto');
+    if (el.kpiUsdUah) el.kpiUsdUah.textContent = usd && usd.price_uah != null ? formatPrice(usd.price_uah) + ' UAH' : '—';
+    if (el.kpiEurUah) el.kpiEurUah.textContent = eur && eur.price_uah != null ? formatPrice(eur.price_uah) + ' UAH' : '—';
+    if (el.kpiBtcUsd) el.kpiBtcUsd.textContent = btc && btc.price_usd != null ? formatPrice(btc.price_usd) + ' USD' : '—';
+
+    function setTrend(eln, sym, typ) {
+      if (!eln) return;
+      const it = dashboardInsights[sym + ':' + typ];
+      const p = it && it.trend_24h_pct;
+      eln.className = 'small mt-auto ' + trendClass(p);
+      eln.textContent = '24 год: ' + formatPct(p);
+    }
+    setTrend(el.kpiUsdTrend, 'USD', 'fiat');
+    setTrend(el.kpiEurTrend, 'EUR', 'fiat');
+    setTrend(el.kpiBtcTrend, 'BTC', 'crypto');
+    if (el.kpiTime) el.kpiTime.textContent = formatLocalDateTime(liveMeta.fetched_at);
+  }
 
   function filterLiveRows() {
     const q = (el.liveSearch && el.liveSearch.value || '').trim().toLowerCase();
     const t = el.liveType ? el.liveType.value : 'all';
     const showAll = el.liveShowAll && el.liveShowAll.checked;
     return liveRates.filter(function (r) {
-      if (!showAll && !isPopularRow(r)) return false;
+      if (!q) {
+        if (!showAll && !isPopularRow(r)) return false;
+      }
       if (t !== 'all' && r.asset_type !== t) return false;
       if (!q) return true;
       const sym = (r.asset_symbol || '').toLowerCase();
       const name = (r.name || '').toLowerCase();
-      return sym.indexOf(q) !== -1 || name.indexOf(q) !== -1;
+      const dn = displayName(r).toLowerCase();
+      return sym.indexOf(q) !== -1 || name.indexOf(q) !== -1 || dn.indexOf(q) !== -1;
     });
   }
 
@@ -287,7 +578,6 @@
     const k = liveSort.key;
     let va, vb;
     if (k === 'symbol') { va = (a.asset_symbol || '').toUpperCase(); vb = (b.asset_symbol || '').toUpperCase(); }
-    else if (k === 'type') { va = a.asset_type || ''; vb = b.asset_type || ''; }
     else if (k === 'uah') { va = a.price_uah != null ? Number(a.price_uah) : -Infinity; vb = b.price_uah != null ? Number(b.price_uah) : -Infinity; }
     else if (k === 'usd') { va = a.price_usd != null ? Number(a.price_usd) : -Infinity; vb = b.price_usd != null ? Number(b.price_usd) : -Infinity; }
     else { va = 0; vb = 0; }
@@ -296,23 +586,77 @@
     return 0;
   }
 
+  function sparklineColor(trendPct) {
+    if (trendPct === null || trendPct === undefined || Number.isNaN(Number(trendPct))) return '#94a3b8';
+    const n = Number(trendPct);
+    if (n > 0) return '#4ade80';
+    if (n < 0) return '#f87171';
+    return '#94a3b8';
+  }
+
+  function renderSparkline(canvasId, points, trendPct) {
+    const ctx = document.getElementById(canvasId);
+    if (!ctx || !points || !points.length) return;
+    const vals = points.map(function (p) { return p.series_value; }).filter(function (v) { return v != null && !Number.isNaN(Number(v)); });
+    if (!vals.length) return;
+    if (sparkCharts[canvasId]) {
+      try { sparkCharts[canvasId].destroy(); } catch (e) {}
+    }
+    const lineColor = sparklineColor(trendPct);
+    sparkCharts[canvasId] = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: points.map(function () { return ''; }),
+        datasets: [{
+          data: vals,
+          borderColor: lineColor,
+          backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          tension: 0.42,
+          fill: false
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        layout: { padding: 0 },
+        events: [],
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: {
+          x: { display: false, grid: { display: false }, border: { display: false } },
+          y: { display: false, grid: { display: false }, border: { display: false } }
+        }
+      }
+    });
+  }
+
   function renderLive() {
     if (!el.liveTbody) return;
+    destroySparkCharts();
     let rows = filterLiveRows();
     rows = rows.slice().sort(cmpLive);
     el.liveTbody.innerHTML = '';
-    rows.forEach(function (r) {
+    rows.forEach(function (r, idx) {
+      const pk = pairKey(r);
+      const ins = dashboardInsights[pk];
       const tr = document.createElement('tr');
+      const trend = ins && ins.trend_24h_pct;
+      const canvasId = 'spark-' + pk.replace(/[^a-zA-Z0-9]/g, '_') + '-' + idx;
       tr.innerHTML =
-        '<td><code>' + (r.asset_symbol || '') + '</code></td>' +
-        '<td>' + (r.asset_type || '') + '</td>' +
+        '<td>' + displayIcon(r) + ' <strong class="fw-bold">' + (r.asset_symbol || '') + '</strong><br><span class="small co-label">' + displayName(r) + '</span></td>' +
         '<td class="text-end">' + formatPrice(r.price_uah) + '</td>' +
         '<td class="text-end">' + formatPrice(r.price_usd) + '</td>' +
-        '<td>' + (r.name || '') + '</td>';
+        '<td class="text-end ' + trendClass(trend) + '">' + formatPct(trend) + '</td>' +
+        '<td><div class="spark-wrap"><canvas id="' + canvasId + '" height="36"></canvas></div></td>';
       el.liveTbody.appendChild(tr);
+      if (ins && ins.sparkline_points && ins.sparkline_points.length) {
+        renderSparkline(canvasId, ins.sparkline_points, trend);
+      }
     });
-    if (el.kpiCount) el.kpiCount.textContent = String(rows.length);
-    if (el.kpiTime) el.kpiTime.textContent = formatLocalDateTime(liveMeta.fetched_at);
+    updateKpis();
   }
 
   function getUsdPerUnit(r) {
@@ -399,40 +743,180 @@
     el.convResult.textContent = formatPrice(out) + ' ' + to + '  (≈ ' + formatPrice(usd) + ' USD)';
   }
 
-  function filterHistRows() {
-    const q = (el.histSearch && el.histSearch.value || '').trim().toUpperCase();
-    const t = el.histType ? el.histType.value : 'all';
-    const popOnly = el.histPopular && el.histPopular.checked;
-    return historyItems.filter(function (r) {
-      if (popOnly && !isPopularRow(r)) return false;
-      if (t !== 'all' && r.asset_type !== t) return false;
-      if (!q) return true;
-      const sym = (r.asset_symbol || '').toUpperCase();
-      return sym.indexOf(q) !== -1;
+  function buildPairsParam() {
+    const seen = {};
+    const parts = [];
+    liveRates.forEach(function (r) {
+      const k = pairKey(r);
+      if (!seen[k]) {
+        seen[k] = true;
+        parts.push(k);
+      }
     });
+    return parts.join(',');
   }
 
-  function renderHist() {
-    if (!el.histTbody) return;
-    const rows = filterHistRows();
-    el.histTbody.innerHTML = '';
-    rows.forEach(function (r) {
-      const tr = document.createElement('tr');
-      tr.innerHTML =
-        '<td>' + (r.id != null ? r.id : '') + '</td>' +
-        '<td><code>' + (r.asset_symbol || '') + '</code></td>' +
-        '<td>' + (r.asset_type || '') + '</td>' +
-        '<td class="text-end">' + formatPrice(r.price_uah) + '</td>' +
-        '<td class="text-end">' + formatPrice(r.price_usd) + '</td>' +
-        '<td>' + formatLocalDateTime(r.created_at) + '</td>';
-      el.histTbody.appendChild(tr);
+  function fetchDashboard() {
+    const pairs = buildPairsParam();
+    if (!pairs) {
+      dashboardInsights = {};
+      renderLive();
+      return;
+    }
+    fetch('/api/history/dashboard?pairs=' + encodeURIComponent(pairs))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        dashboardInsights = {};
+        if (data.items && Array.isArray(data.items)) {
+          data.items.forEach(function (it) {
+            const k = (it.asset_symbol || '').toUpperCase() + ':' + (it.asset_type || '');
+            dashboardInsights[k] = it;
+          });
+        }
+        renderLive();
+      })
+      .catch(function () {
+        dashboardInsights = {};
+        renderLive();
+      });
+  }
+
+  function refreshLive() {
+    fetch('/api/live')
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) return;
+        liveRates = Array.isArray(data.rates) ? data.rates.slice() : [];
+        liveMeta = { fetched_at: data.fetched_at };
+        fillConverterSelects();
+        updateConverter();
+        fillHistAssetSelect();
+        fetchDashboard();
+      })
+      .catch(function () {});
+  }
+
+  function fillHistAssetSelect() {
+    if (!el.histAsset) return;
+    const cur = el.histAsset.value;
+    el.histAsset.innerHTML = '';
+    liveRates.forEach(function (r) {
+      const v = (r.asset_symbol || '').toUpperCase() + ':' + r.asset_type;
+      const label = displayIcon(r) + ' ' + (r.asset_symbol || '') + ' — ' + displayName(r);
+      el.histAsset.appendChild(new Option(label, v));
     });
-    if (el.histEmpty) {
-      el.histEmpty.classList.toggle('d-none', rows.length > 0);
+    if (cur && Array.prototype.some.call(el.histAsset.options, function (o) { return o.value === cur; })) {
+      el.histAsset.value = cur;
+    } else if (el.histAsset.options.length) {
+      el.histAsset.selectedIndex = 0;
     }
-    if (el.histMeta) {
-      el.histMeta.textContent = 'Показано ' + rows.length + ' з ' + historyItems.length + ' завантажених записів.';
+  }
+
+  function loadHistorySeries() {
+    if (!el.histAsset || !el.histRange) return;
+    const v = el.histAsset.value;
+    if (!v || v.indexOf(':') < 0) return;
+    const parts = v.split(':');
+    const sym = parts[0];
+    const typ = parts[1];
+    const range = el.histRange.value;
+    saveState({ histRange: range });
+    if (el.histChartErr) {
+      el.histChartErr.classList.add('d-none');
+      el.histChartErr.textContent = '';
     }
+    const q = 'asset_symbol=' + encodeURIComponent(sym) + '&asset_type=' + encodeURIComponent(typ) + '&range=' + encodeURIComponent(range);
+    fetch('/api/history/series?' + q)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) {
+          if (el.histChartErr) {
+            el.histChartErr.textContent = data.detail || data.error || 'Помилка';
+            el.histChartErr.classList.remove('d-none');
+          }
+          return;
+        }
+        const items = data.items || [];
+        if (el.histEmpty) el.histEmpty.classList.toggle('d-none', items.length > 0);
+        if (!items.length) {
+          if (el.histTbody) el.histTbody.innerHTML = '';
+          if (histMainChart) { try { histMainChart.destroy(); } catch (e) {} histMainChart = null; }
+          return;
+        }
+        const metric = data.series_metric || 'uah';
+        const labels = items.map(function (it) { return formatChartAxisLabel(it.created_at, range); });
+        const seriesData = items.map(function (it) {
+          return metric === 'uah' ? it.price_uah : it.price_usd;
+        });
+        const ctx = document.getElementById('hist-chart');
+        if (histMainChart) { try { histMainChart.destroy(); } catch (e) {} }
+        histMainChart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: metric === 'uah' ? 'UAH' : 'USD',
+              data: seriesData,
+              borderColor: '#6ea8fe',
+              tension: 0.32,
+              fill: false
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+              legend: {
+                display: true,
+                labels: { color: 'rgba(232,234,239,0.85)' }
+              },
+              tooltip: {
+                titleColor: '#e8eaef',
+                bodyColor: '#e8eaef',
+                backgroundColor: 'rgba(15, 20, 35, 0.92)',
+                borderColor: 'rgba(255,255,255,0.12)',
+                borderWidth: 1
+              }
+            },
+            scales: {
+              x: {
+                grid: { color: 'rgba(255,255,255,0.08)' },
+                ticks: {
+                  color: 'rgba(232,234,239,0.65)',
+                  autoSkip: true,
+                  maxTicksLimit: 12,
+                  maxRotation: 0,
+                  minRotation: 0
+                }
+              },
+              y: {
+                grid: { color: 'rgba(255,255,255,0.08)' },
+                ticks: { color: 'rgba(232,234,239,0.65)' }
+              }
+            }
+          }
+        });
+        if (el.histTbody) {
+          el.histTbody.innerHTML = '';
+          items.forEach(function (it) {
+            const tr = document.createElement('tr');
+            const pct = it.pct_change_from_prev;
+            tr.innerHTML =
+              '<td>' + formatLocalDateTime(it.created_at) + '</td>' +
+              '<td class="text-end">' + formatPrice(it.price_uah) + '</td>' +
+              '<td class="text-end">' + formatPrice(it.price_usd) + '</td>' +
+              '<td class="text-end ' + trendClass(pct) + '">' + (pct == null ? '—' : formatPct(pct)) + '</td>';
+            el.histTbody.appendChild(tr);
+          });
+        }
+      })
+      .catch(function (err) {
+        if (el.histChartErr) {
+          el.histChartErr.textContent = 'Не вдалося завантажити історію.';
+          el.histChartErr.classList.remove('d-none');
+        }
+      });
   }
 
   function bindLive() {
@@ -461,54 +945,48 @@
     if (el.convAmount) el.convAmount.addEventListener('input', updateConverter);
     if (el.convFrom) el.convFrom.addEventListener('change', updateConverter);
     if (el.convTo) el.convTo.addEventListener('change', updateConverter);
+    var convSwap = document.getElementById('conv-swap');
+    if (convSwap && el.convFrom && el.convTo) {
+      convSwap.addEventListener('click', function () {
+        var a = el.convFrom.value;
+        el.convFrom.value = el.convTo.value;
+        el.convTo.value = a;
+        updateConverter();
+      });
+    }
+    if (el.btnRefresh) el.btnRefresh.addEventListener('click', refreshLive);
   }
 
   function bindHist() {
-    if (el.histLimit) el.histLimit.addEventListener('change', function () {
-      saveState({ histLimit: el.histLimit.value });
-      fetchHistoryRemote();
+    if (el.histLoad) el.histLoad.addEventListener('click', loadHistorySeries);
+    if (el.histRange) el.histRange.addEventListener('change', function () { saveState({ histRange: el.histRange.value }); });
+    document.getElementById('hist-tab').addEventListener('shown.bs.tab', function () {
+      fillHistAssetSelect();
+      if (el.histAsset && el.histAsset.value) loadHistorySeries();
     });
-    if (el.histType) el.histType.addEventListener('change', function () {
-      saveState({ histType: el.histType.value });
-      renderHist();
-    });
-    if (el.histPopular) el.histPopular.addEventListener('change', function () {
-      saveState({ histPopular: el.histPopular.checked });
-      renderHist();
-    });
-    if (el.histSearch) el.histSearch.addEventListener('input', function () {
-      saveState({ histSearch: el.histSearch.value });
-      renderHist();
-    });
-    if (el.histRefresh) el.histRefresh.addEventListener('click', fetchHistoryRemote);
-  }
-
-  function fetchHistoryRemote() {
-    const lim = el.histLimit ? parseInt(el.histLimit.value, 10) : 50;
-    const params = new URLSearchParams();
-    params.set('limit', String(lim));
-    fetch('/api/history?' + params.toString())
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        historyItems = Array.isArray(data.items) ? data.items : [];
-        renderHist();
-      })
-      .catch(function () {
-        if (el.histMeta) el.histMeta.textContent = 'Помилка оновлення історії.';
-      });
   }
 
   bindLive();
   bindHist();
-  renderLive();
   fillConverterSelects();
   updateConverter();
-  renderHist();
+  fillHistAssetSelect();
+  updateKpis();
+  renderLive();
+  fetchDashboard();
 })();
   </script>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
           integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
           crossorigin="anonymous"></script>
+  <script>
+    (function () {
+      if (typeof bootstrap === 'undefined' || !bootstrap.Tooltip) return;
+      document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (el) {
+        new bootstrap.Tooltip(el);
+      });
+    })();
+  </script>
 </body>
 </html>

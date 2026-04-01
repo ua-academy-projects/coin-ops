@@ -23,6 +23,9 @@ CREATE TABLE exchange_rates (
 CREATE INDEX idx_exchange_rates_created_at_desc
   ON exchange_rates (created_at DESC);
 
+CREATE INDEX idx_exchange_rates_symbol_created
+  ON exchange_rates (asset_symbol, created_at DESC);
+
 GRANT USAGE ON SCHEMA public TO :user_name;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO :user_name;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO :user_name;

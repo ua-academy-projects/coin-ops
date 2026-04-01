@@ -5,7 +5,8 @@ CoinOps history service (VM3).
 
 Responsibilities in Phase A:
 1) Consume normalized snapshot events from RabbitMQ and persist rates to PostgreSQL.
-2) Expose historical records over HTTP for the UI (`GET /api/v1/history`).
+2) Expose historical records over HTTP: ``GET /api/v1/history``, ``GET /api/v1/history/series``,
+   ``GET /api/v1/history/dashboard`` (тренди та спарклайни; % для фіату в UAH, для крипти в USD).
 """
 
 from __future__ import annotations
@@ -17,8 +18,8 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Iterable, Mapping, MutableMapping, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any, Iterable, Mapping, MutableMapping, Optional, Sequence, Tuple
 from urllib.parse import unquote, urlparse
 
 import pika
@@ -27,6 +28,9 @@ from flask import Flask, jsonify, request
 from psycopg2.extras import execute_values
 
 LOG = logging.getLogger("coinops.history")
+
+# Max points returned for history series (chart + table); larger series are uniformly sampled.
+MAX_SERIES_POINTS = 200
 
 _DEFAULT_PG_HOST = "10.10.1.6"
 _DEFAULT_PG_PORT = "5432"
@@ -280,6 +284,304 @@ def fetch_history_rows(
         conn.close()
 
 
+def _metric_for_asset_type(asset_type: str) -> str:
+    """Fiat: compare in UAH (official NBU-style); crypto: compare in USD."""
+    return "uah" if asset_type == "fiat" else "usd"
+
+
+def _value_for_metric(price_uah: Any, price_usd: Any, asset_type: str) -> Optional[float]:
+    if asset_type == "fiat":
+        if price_uah is None:
+            return None
+        return float(price_uah)
+    if price_usd is None:
+        return None
+    return float(price_usd)
+
+
+def _pct_change(old_v: Optional[float], new_v: Optional[float]) -> Optional[float]:
+    if old_v is None or new_v is None or old_v == 0:
+        return None
+    return (new_v - old_v) / old_v * 100.0
+
+
+def _fetch_single_row(
+    cfg: HistoryConfig,
+    sql: str,
+    params: tuple[Any, ...],
+) -> Optional[tuple[Any, ...]]:
+    conn = connect_pg(cfg)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            return cur.fetchone()
+    finally:
+        conn.close()
+
+
+def fetch_latest_snapshot(
+    cfg: HistoryConfig,
+    asset_symbol: str,
+    asset_type: str,
+) -> Optional[tuple[Optional[float], Optional[float], datetime]]:
+    """Return (price_uah, price_usd, created_at) for latest row or None."""
+    row = _fetch_single_row(
+        cfg,
+        """
+        SELECT price_uah, price_usd, created_at
+        FROM exchange_rates
+        WHERE asset_symbol = %s AND asset_type = %s
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (asset_symbol.upper(), asset_type),
+    )
+    if not row:
+        return None
+    pu, pusd, ts = row[0], row[1], row[2]
+    if not isinstance(ts, datetime):
+        return None
+    return (
+        float(pu) if pu is not None else None,
+        float(pusd) if pusd is not None else None,
+        ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc),
+    )
+
+
+def fetch_snapshot_on_or_before(
+    cfg: HistoryConfig,
+    asset_symbol: str,
+    asset_type: str,
+    cutoff: datetime,
+) -> Optional[tuple[Optional[float], Optional[float], datetime]]:
+    row = _fetch_single_row(
+        cfg,
+        """
+        SELECT price_uah, price_usd, created_at
+        FROM exchange_rates
+        WHERE asset_symbol = %s AND asset_type = %s AND created_at <= %s
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (asset_symbol.upper(), asset_type, cutoff),
+    )
+    if not row:
+        return None
+    pu, pusd, ts = row[0], row[1], row[2]
+    if not isinstance(ts, datetime):
+        return None
+    return (
+        float(pu) if pu is not None else None,
+        float(pusd) if pusd is not None else None,
+        ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc),
+    )
+
+
+def compute_trend_24h_pct(cfg: HistoryConfig, asset_symbol: str, asset_type: str) -> Optional[float]:
+    """% change vs last snapshot on or before now-24h; same metric as series (UAH fiat, USD crypto)."""
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=24)
+    latest = fetch_latest_snapshot(cfg, asset_symbol, asset_type)
+    old = fetch_snapshot_on_or_before(cfg, asset_symbol, asset_type, cutoff)
+    if not latest or not old:
+        return None
+    new_v = _value_for_metric(latest[0], latest[1], asset_type)
+    old_v = _value_for_metric(old[0], old[1], asset_type)
+    return _pct_change(old_v, new_v)
+
+
+def fetch_sparkline_points(
+    cfg: HistoryConfig,
+    asset_symbol: str,
+    asset_type: str,
+    limit: int = 24,
+) -> list[dict[str, Any]]:
+    """Last ``limit`` rows, chronological order; includes series_value for chart Y."""
+    conn = connect_pg(cfg)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT price_uah, price_usd, created_at
+                FROM exchange_rates
+                WHERE asset_symbol = %s AND asset_type = %s
+                ORDER BY created_at DESC
+                LIMIT %s
+                """,
+                (asset_symbol.upper(), asset_type, limit),
+            )
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+    rows.reverse()
+    out: list[dict[str, Any]] = []
+    for pu, pusd, ts in rows:
+        if not isinstance(ts, datetime):
+            continue
+        ts_iso = ts.isoformat() if ts.tzinfo else ts.replace(tzinfo=timezone.utc).isoformat()
+        sv = _value_for_metric(pu, pusd, asset_type)
+        out.append(
+            {
+                "created_at": ts_iso,
+                "price_uah": float(pu) if pu is not None else None,
+                "price_usd": float(pusd) if pusd is not None else None,
+                "series_value": sv,
+                "series_metric": _metric_for_asset_type(asset_type),
+            }
+        )
+    return out
+
+
+def _uniform_sample_row_indices(n: int, k: int) -> list[int]:
+    """Return sorted unique indices in [0, n-1], up to k points spread across the range."""
+    if n <= 0 or k <= 0:
+        return []
+    if k >= n:
+        return list(range(n))
+    if k == 1:
+        return [0]
+    raw = [int(round(i * (n - 1) / (k - 1))) for i in range(k)]
+    out: list[int] = []
+    seen: set[int] = set()
+    for idx in raw:
+        idx = max(0, min(n - 1, idx))
+        if idx not in seen:
+            seen.add(idx)
+            out.append(idx)
+    return sorted(out)
+
+
+def _recompute_pct_series(rows: list[dict[str, Any]], asset_type: str) -> list[dict[str, Any]]:
+    """Recompute pct_change_from_prev for a list of rows (same metric as series)."""
+    prev_v: Optional[float] = None
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        pu = row.get("price_uah")
+        pusd = row.get("price_usd")
+        v = _value_for_metric(pu, pusd, asset_type)
+        pct_prev = _pct_change(prev_v, v) if prev_v is not None else None
+        prev_v = v
+        new_row = dict(row)
+        new_row["pct_change_from_prev"] = pct_prev
+        out.append(new_row)
+    return out
+
+
+def _thin_series_to_max_points(
+    rows: list[dict[str, Any]], asset_type: str, max_points: int
+) -> list[dict[str, Any]]:
+    if len(rows) <= max_points:
+        return rows
+    idxs = _uniform_sample_row_indices(len(rows), max_points)
+    picked = [rows[i] for i in idxs]
+    return _recompute_pct_series(picked, asset_type)
+
+
+def fetch_series_for_range(
+    cfg: HistoryConfig,
+    asset_symbol: str,
+    asset_type: str,
+    range_key: str,
+) -> list[dict[str, Any]]:
+    """Chronological snapshots with pct_change_from_prev on one metric (UAH or USD)."""
+    rk = (range_key or "7d").lower().strip()
+    if rk not in {"7d", "30d", "all", "24h"}:
+        rk = "7d"
+    clauses = ["asset_symbol = %s", "asset_type = %s"]
+    params: list[Any] = [asset_symbol.upper(), asset_type]
+    if rk == "7d":
+        clauses.append("created_at >= %s")
+        params.append(datetime.now(timezone.utc) - timedelta(days=7))
+    elif rk == "30d":
+        clauses.append("created_at >= %s")
+        params.append(datetime.now(timezone.utc) - timedelta(days=30))
+    elif rk == "24h":
+        clauses.append("created_at >= %s")
+        params.append(datetime.now(timezone.utc) - timedelta(hours=24))
+    where_sql = " AND ".join(clauses)
+    sql = f"""
+        SELECT price_uah, price_usd, created_at
+        FROM exchange_rates
+        WHERE {where_sql}
+        ORDER BY created_at ASC
+        LIMIT 10000
+    """
+    conn = connect_pg(cfg)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, tuple(params))
+            raw_rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    metric = _metric_for_asset_type(asset_type)
+    out: list[dict[str, Any]] = []
+    prev_v: Optional[float] = None
+    for pu, pusd, ts in raw_rows:
+        if not isinstance(ts, datetime):
+            continue
+        ts_iso = ts.isoformat() if ts.tzinfo else ts.replace(tzinfo=timezone.utc).isoformat()
+        v = _value_for_metric(pu, pusd, asset_type)
+        pct_prev = _pct_change(prev_v, v) if prev_v is not None else None
+        prev_v = v
+        out.append(
+            {
+                "created_at": ts_iso,
+                "price_uah": float(pu) if pu is not None else None,
+                "price_usd": float(pusd) if pusd is not None else None,
+                "series_metric": metric,
+                "pct_change_from_prev": pct_prev,
+            }
+        )
+    return _thin_series_to_max_points(out, asset_type, MAX_SERIES_POINTS)
+
+
+def parse_asset_pairs(pairs_param: str) -> list[Tuple[str, str]]:
+    """Parse ``USD:fiat,EUR:fiat`` into [(USD, fiat), ...]."""
+    out: list[Tuple[str, str]] = []
+    for part in pairs_param.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if ":" not in part:
+            continue
+        sym, typ = part.split(":", 1)
+        sym = sym.strip().upper()
+        typ = typ.strip().lower()
+        if typ not in ("fiat", "crypto") or not sym:
+            continue
+        out.append((sym, typ))
+    return out
+
+
+def build_dashboard_items(
+    cfg: HistoryConfig,
+    pairs: Sequence[Tuple[str, str]],
+) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for sym, typ in pairs:
+        trend = compute_trend_24h_pct(cfg, sym, typ)
+        spark = fetch_sparkline_points(cfg, sym, typ, limit=24)
+        metric = _metric_for_asset_type(typ)
+        items.append(
+            {
+                "asset_symbol": sym,
+                "asset_type": typ,
+                "series_metric": metric,
+                "trend_24h_pct": trend,
+                "trend_24h_note": (
+                    "Порівняння з останнім знімком у БД на момент або до «зараз мінус 24 год»; "
+                    "якщо знімків не було — значення недоступне."
+                ),
+                "sparkline_points": spark,
+                "sparkline_note": (
+                    "Останні 24 записи в історії (не обовʼязково рівно 24 години реального часу)."
+                ),
+            }
+        )
+    return items
+
+
 def create_app(cfg: HistoryConfig) -> Flask:
     """Create HTTP API for historical data."""
     app = Flask(__name__)
@@ -303,6 +605,51 @@ def create_app(cfg: HistoryConfig) -> Flask:
         except Exception as exc:  # pylint: disable=broad-except
             LOG.exception("history query failed: %s", exc)
             return jsonify({"error": "history_query_failed", "detail": str(exc)}), 500
+
+    @app.get("/api/v1/history/series")
+    def history_series() -> Any:
+        symbol = (request.args.get("asset_symbol") or "").strip().upper()
+        asset_type = (request.args.get("asset_type") or "").strip().lower()
+        range_key = (request.args.get("range") or "7d").strip()
+        if not symbol or asset_type not in ("fiat", "crypto"):
+            return jsonify({"error": "invalid_params", "detail": "asset_symbol and asset_type (fiat|crypto) required"}), 400
+        try:
+            rows = fetch_series_for_range(cfg, symbol, asset_type, range_key)
+            return jsonify(
+                {
+                    "asset_symbol": symbol,
+                    "asset_type": asset_type,
+                    "range": range_key,
+                    "series_metric": _metric_for_asset_type(asset_type),
+                    "items": rows,
+                    "count": len(rows),
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+        except Exception as exc:  # pylint: disable=broad-except
+            LOG.exception("history series failed: %s", exc)
+            return jsonify({"error": "history_series_failed", "detail": str(exc)}), 500
+
+    @app.get("/api/v1/history/dashboard")
+    def history_dashboard() -> Any:
+        pairs_raw = request.args.get("pairs") or ""
+        pairs = parse_asset_pairs(pairs_raw)
+        if not pairs:
+            return jsonify({"error": "invalid_params", "detail": "pairs=USD:fiat,EUR:fiat,... required"}), 400
+        if len(pairs) > 80:
+            return jsonify({"error": "invalid_params", "detail": "too many pairs (max 80)"}), 400
+        try:
+            items = build_dashboard_items(cfg, pairs)
+            return jsonify(
+                {
+                    "items": items,
+                    "count": len(items),
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+        except Exception as exc:  # pylint: disable=broad-except
+            LOG.exception("history dashboard failed: %s", exc)
+            return jsonify({"error": "history_dashboard_failed", "detail": str(exc)}), 500
 
     return app
 

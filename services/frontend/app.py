@@ -5,7 +5,7 @@ CoinOps Flask UI (VM1).
 
 Serves a single page with two tabs:
 - live rates from the Go proxy
-- historical rates from the History Service API
+- historical analytics via the History Service API (no direct DB access)
 """
 
 from __future__ import annotations
@@ -24,14 +24,44 @@ _DEFAULT_PROXY = "http://10.10.1.3:8080"
 _DEFAULT_HISTORY_API = "http://10.10.1.4:8090/api/v1/history"
 
 
+def history_base_url_from_environ() -> str:
+    """
+    Base URL of the History Service (scheme + host[:port]), without path.
+
+    Supports either:
+    - HISTORY_BASE_URL=http://10.10.1.4:8090
+    - HISTORY_API_URL=http://10.10.1.4:8090/api/v1/history (legacy full path — suffix stripped)
+    """
+    explicit = os.environ.get("HISTORY_BASE_URL", "").strip()
+    if explicit:
+        return explicit.rstrip("/")
+    raw = os.environ.get("HISTORY_API_URL", _DEFAULT_HISTORY_API).strip().rstrip("/")
+    for suffix in ("/api/v1/history", "/v1/history"):
+        if raw.endswith(suffix):
+            return raw[: -len(suffix)].rstrip("/")
+    return raw
+
+
 @dataclass(frozen=True)
 class AppConfig:
     """Flask app configuration from the environment."""
 
     proxy_base_url: str
     rates_path: str
-    history_api_url: str
+    history_base_url: str
     http_timeout: float
+
+    @property
+    def history_list_url(self) -> str:
+        return f"{self.history_base_url}/api/v1/history"
+
+    @property
+    def history_series_url(self) -> str:
+        return f"{self.history_base_url}/api/v1/history/series"
+
+    @property
+    def history_dashboard_url(self) -> str:
+        return f"{self.history_base_url}/api/v1/history/dashboard"
 
     @classmethod
     def from_environ(cls) -> "AppConfig":
@@ -39,14 +69,54 @@ class AppConfig:
         path = os.environ.get("COINOPS_RATES_PATH", "/api/v1/rates")
         if not path.startswith("/"):
             path = "/" + path
-        history_api_url = os.environ.get("HISTORY_API_URL", _DEFAULT_HISTORY_API)
+        base = history_base_url_from_environ()
         timeout = float(os.environ.get("COINOPS_HTTP_TIMEOUT", "15"))
         return cls(
             proxy_base_url=proxy,
             rates_path=path,
-            history_api_url=history_api_url,
+            history_base_url=base,
             http_timeout=timeout,
         )
+
+
+def enrich_rates_with_crypto_uah(rates: list) -> None:
+    """
+    For crypto rows, set ``price_uah`` = ``price_usd * uah_per_usd`` where
+    ``uah_per_usd`` is the official UAH price of USD (NBU) from the USD fiat row.
+
+    Mutates rate dicts in place. Round to 2 decimals.
+    """
+    uah_per_usd: Optional[float] = None
+    for item in rates:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("asset_type", "")).lower() != "fiat":
+            continue
+        if str(item.get("asset_symbol", "")).upper() != "USD":
+            continue
+        pu = item.get("price_uah")
+        if pu is None:
+            continue
+        try:
+            uah_per_usd = float(pu)
+        except (TypeError, ValueError):
+            pass
+        break
+    if uah_per_usd is None or uah_per_usd <= 0:
+        return
+    for item in rates:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("asset_type", "")).lower() != "crypto":
+            continue
+        pusd = item.get("price_usd")
+        if pusd is None:
+            continue
+        try:
+            item["price_uah"] = round(float(pusd) * uah_per_usd, 2)
+        except (TypeError, ValueError):
+            pass
+
 
 def fetch_live_rates(cfg: AppConfig) -> Tuple[Optional[list], Optional[str], Optional[str]]:
     """
@@ -65,25 +135,10 @@ def fetch_live_rates(cfg: AppConfig) -> Tuple[Optional[list], Optional[str], Opt
     rates = data.get("rates")
     if not isinstance(rates, list):
         return None, None, "Invalid proxy payload: rates is not a list"
+    enrich_rates_with_crypto_uah(rates)
     fetched = data.get("fetched_at")
     fetched_s = str(fetched) if fetched is not None else None
     return rates, fetched_s, None
-
-
-def fetch_history_rows(cfg: AppConfig, limit: int = 50) -> Tuple[Optional[list], Optional[str]]:
-    """Load latest history rows from the History Service API."""
-    url = cfg.history_api_url
-    try:
-        resp = requests.get(url, params={"limit": limit}, timeout=cfg.http_timeout)
-        resp.raise_for_status()
-        payload = resp.json()
-        items = payload.get("items")
-        if not isinstance(items, list):
-            return None, "Invalid history payload: items is not a list"
-        return items, None
-    except (requests.RequestException, ValueError) as exc:
-        LOG.warning("history API request failed: %s", exc)
-        return None, str(exc)
 
 
 def create_app() -> Flask:
@@ -95,19 +150,24 @@ def create_app() -> Flask:
 
     @app.route("/")
     def index() -> str:
-        """Render the dashboard with current rates and recent history."""
+        """Render the dashboard with current rates."""
         c: AppConfig = app.config["COINOPS_CFG"]
         live_rates, fetched_at, live_error = fetch_live_rates(c)
-        # Larger initial batch so client-side popular filter has enough rows.
-        history_rows, history_error = fetch_history_rows(c, limit=200)
         return render_template(
             "index.html",
             live_rates=live_rates,
             live_fetched_at=fetched_at,
             live_error=live_error,
-            history_rows=history_rows or [],
-            history_error=history_error,
         )
+
+    @app.route("/api/live")
+    def api_live():
+        """Same-origin JSON for current rates (refresh without full page reload)."""
+        c: AppConfig = app.config["COINOPS_CFG"]
+        rates, fetched_at, err = fetch_live_rates(c)
+        if err:
+            return jsonify({"error": err, "rates": [], "fetched_at": None}), 502
+        return jsonify({"rates": rates or [], "fetched_at": fetched_at})
 
     @app.route("/api/history")
     def api_history_proxy():
@@ -125,11 +185,35 @@ def create_app() -> Flask:
         if typ in ("fiat", "crypto"):
             params["asset_type"] = typ
         try:
-            resp = requests.get(c.history_api_url, params=params, timeout=c.http_timeout)
+            resp = requests.get(c.history_list_url, params=params, timeout=c.http_timeout)
             resp.raise_for_status()
             return jsonify(resp.json())
         except (requests.RequestException, ValueError) as exc:
             LOG.warning("history proxy failed: %s", exc)
+            return jsonify({"error": str(exc), "items": [], "count": 0}), 502
+
+    @app.route("/api/history/series")
+    def api_history_series_proxy():
+        c: AppConfig = app.config["COINOPS_CFG"]
+        params = dict(request.args)
+        try:
+            resp = requests.get(c.history_series_url, params=params, timeout=c.http_timeout)
+            resp.raise_for_status()
+            return jsonify(resp.json())
+        except (requests.RequestException, ValueError) as exc:
+            LOG.warning("history series proxy failed: %s", exc)
+            return jsonify({"error": str(exc), "items": [], "count": 0}), 502
+
+    @app.route("/api/history/dashboard")
+    def api_history_dashboard_proxy():
+        c: AppConfig = app.config["COINOPS_CFG"]
+        params = dict(request.args)
+        try:
+            resp = requests.get(c.history_dashboard_url, params=params, timeout=c.http_timeout)
+            resp.raise_for_status()
+            return jsonify(resp.json())
+        except (requests.RequestException, ValueError) as exc:
+            LOG.warning("history dashboard proxy failed: %s", exc)
             return jsonify({"error": str(exc), "items": [], "count": 0}), 502
 
     return app
