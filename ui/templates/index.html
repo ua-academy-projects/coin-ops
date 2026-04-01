@@ -1,14 +1,122 @@
 <!DOCTYPE html>
-<html>
-    <head>
-        <title>Bitcoin Price Tracker</title>
-    </head>
-    <body>
-        <h1>Current Bitcoin Price</h1>
-        <p>BTC: {{current_price}}</p>
-       <button onclick = "location.reload()">Update Price</button>
-       <br>
-       <br>
-       <a href="/history">View Price History</a>
-    </body>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Crypto Tracker</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+
+<body>
+<div class="wrapper">
+
+    <div class="topbar">
+        <h1>Crypto Tracker</h1>
+
+        <div class="topbar-actions">
+            <a href="/history" class="btn">History</a>
+            <a href="#" onclick="location.reload()" class="btn">Refresh</a>
+        </div>
+    </div>
+
+    <div class="card coin-card">
+    <div class="coin-switcher">
+        {% for coin in coins %}
+            <button class="coin-btn {% if coin == selected_coin %}active{% endif %}"
+                    onclick="location.href='/?coin={{ coin }}'">
+                {{ coin }}
+            </button>
+        {% endfor %}
+    </div>
+</div>
+
+    <section class="hero">
+        <div class="card main-card">
+            <div class="label">Current price</div>
+            <div class="price" id="currentPrice">
+                {% if current_price %}
+                    <h5>{{ selected_coin}}/USDT</h5>
+                    <p>${{ current_price }} USD</p>
+                {% else %}
+                    <p>Loading...</p>
+                {% endif %}
+            </div>
+
+            <div class="subline">
+                <span class="badge" id="coinBadge">{{ selected_coin }}</span>
+            </div>
+        </div>
+
+        <div class="mini-cards">
+            <div class="card mini-card">
+                <div class="label">Highest Price</div>
+                <div class="stat-value" id="highValue">${{ highest_price }} USD</div>
+            </div>
+
+            <div class="card mini-card">
+                <div class="label">Lowest Price</div>
+                <div class="stat-value" id="lowValue">${{ lowest_price}} USD</div>
+            </div>
+        </div>
+    </section>
+
+    <div class="card chart-card">
+        <div class="ranges">
+            <button class="range-btn" data-range="1H">1H</button>
+            <button class="range-btn" data-range="24H">24H</button>
+            <button class="range-btn active" data-range="7D">7D</button>
+            <button class="range-btn" data-range="1M">1M</button>
+        </div>
+
+        <canvas id="chart"></canvas>
+    </div>
+
+</div>
+
+<script>
+let selectedCoin = localStorage.getItem("coin") || "BTC";
+let selectedRange = localStorage.getItem("range") || "7D";
+
+const coinButtons = document.querySelectorAll(".coin-btn");
+const rangeButtons = document.querySelectorAll(".range-btn");
+
+const priceEl = document.getElementById("currentPrice");
+const changeEl = document.getElementById("changeBadge");
+const coinBadge = document.getElementById("coinBadge");
+const rangeBadge = document.getElementById("rangeBadge");
+const highEl = document.getElementById("highValue");
+const lowEl = document.getElementById("lowValue");
+
+const ctx = document.getElementById("chart").getContext("2d");
+
+let chart = new Chart(ctx, {
+    type: "line",
+    data: {
+        labels: [],
+        datasets: [{
+            data: [],
+            borderColor: "white",
+            backgroundColor: "rgba(255,255,255,0.05)",
+            fill: true,
+            tension: 0.3,
+            pointRadius: 0
+        }]
+    },
+    options: {
+        plugins: {
+            legend: {
+                display: false
+            }
+        }
+    }
+});
+
+
+
+
+</script>
+
+</body>
 </html>

@@ -1,0 +1,207 @@
+:root {
+    --bg: #0b0d10;
+    --panel: #12161b;
+    --border: rgba(255,255,255,0.06);
+    --text: #f5f7fa;
+    --muted: #98a2b3;
+    --soft: rgba(255,255,255,0.04);
+    --green: #22c55e;
+    --red: #ef4444;
+    --radius: 22px;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Inter, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+}
+
+.wrapper {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 30px 20px;
+}
+
+.topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    gap: 12px;
+}
+
+.topbar-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+h1 {
+    margin: 0;
+    font-size: 26px;
+}
+
+.btn {
+    padding: 10px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    line-height: 1;
+}
+
+.btn:hover {
+    background: #171c22;
+}
+
+.card {
+    background: var(--panel);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+}
+
+.coin-card {
+    padding: 16px;
+    margin-bottom: 18px;
+}
+
+.coin-switcher {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.coin-btn {
+    padding: 10px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.coin-btn:hover {
+    background: var(--soft);
+    color: var(--text);
+}
+
+.coin-btn.active {
+    background: white;
+    color: black;
+    font-weight: 600;
+}
+
+.hero {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr;
+    gap: 18px;
+    margin-bottom: 18px;
+}
+
+.main-card {
+    padding: 26px;
+}
+
+.mini-cards {
+    display: grid;
+    gap: 18px;
+}
+
+.mini-card {
+    padding: 20px;
+}
+
+.label {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.price {
+    font-size: 52px;
+    font-weight: bold;
+    margin: 10px 0;
+}
+
+.subline {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.badge {
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--soft);
+    font-size: 13px;
+}
+
+.positive {
+    color: var(--green);
+}
+
+.negative {
+    color: var(--red);
+}
+
+.stat-value {
+    font-size: 26px;
+    font-weight: bold;
+    margin-top: 6px;
+}
+
+.chart-card {
+    padding: 20px;
+}
+
+.ranges {
+    margin-bottom: 14px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.range-btn {
+    padding: 6px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.range-btn:hover {
+    background: var(--soft);
+    color: var(--text);
+}
+
+.range-btn.active {
+    background: white;
+    color: black;
+}
+
+canvas {
+    width: 100% !important;
+    height: 300px !important;
+}
+
+@media (max-width: 800px) {
+    .hero {
+        grid-template-columns: 1fr;
+    }
+
+    .topbar {
+        flex-wrap: wrap;
+    }
+}

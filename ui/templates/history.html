@@ -1,32 +1,51 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Price History</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Crypto Tracker — History</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
+
 <body>
-    <h1>Currency price history</h1>
-    {% if prices %}
-        <table border = "1">
-            <tr>
-                <th>
-                    Price (USD)
-                </th>
-                <th>
-                    Time
-                </th>
-            </tr>
-            {% for row in prices %}
-            <tr>
-                <td>${{ row.price }}</td>
-                <td>{{ row.recorded_at }}</td>
-            </tr>
-            {% endfor %}
-        </table>
-    {% else %}
-        <p>No data recorded</p>
-    {% endif %}
-    <br>
-    <a href="/">To Main Page</a>
+<div class="wrapper">
+
+    <div class="topbar">
+        <h1>Crypto Tracker</h1>
+        <div class="topbar-actions">
+            <a href="/" class="btn">← Back</a>
+        </div>
+    </div>
+
+    <div class="card" style="padding: 24px;">
+        <div class="label" style="margin-bottom: 16px;">Price History</div>
+
+        {% if data %}
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr>
+                        <th style="text-align: left; padding: 10px 16px; color: var(--muted); font-weight: 400; font-size: 13px; border-bottom: 1px solid var(--border);">Coin</th>
+                        <th style="text-align: left; padding: 10px 16px; color: var(--muted); font-weight: 400; font-size: 13px; border-bottom: 1px solid var(--border);">Price (USD)</th>
+                        <th style="text-align: left; padding: 10px 16px; color: var(--muted); font-weight: 400; font-size: 13px; border-bottom: 1px solid var(--border);">Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in data %}
+                    <tr style="border-bottom: 1px solid var(--border);">
+                        <td style="padding: 12px 16px;">
+                            <span class="badge">{{ row.coin }}</span>
+                        </td>
+                        <td style="padding: 12px 16px; font-weight: 600;">${{ row.price }}</td>
+                        <td style="padding: 12px 16px; color: var(--muted); font-size: 13px;">{{ row.recorded_at }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p style="color: var(--muted);">No data recorded</p>
+        {% endif %}
+    </div>
+
+</div>
 </body>
 </html>
