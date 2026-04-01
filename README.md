@@ -5,11 +5,11 @@ Coin-Ops is designed with an infrastructure-first approach to demonstrate a robu
 
 ## Architecture
 System runs on 5 virtual machines configured via Vagrant and Bash scripts.
-* **VM1 (10.10.1.2) - Frontend**: Python / Flask web interface.
-* **VM2 (10.10.1.3) - Proxy service**: Go API gateway, fetches and normalizes data from 3rd-party APIs.
-* **VM3 (10.10.1.4) - History service**: Python service that consumes MQ events and exposes History API.
-* **VM4 (10.10.1.5) - Message queue**: RabbitMQ broker.
-* **VM5 (10.10.1.6) - Database**: PostgreSQL instance storing historical exchange rates.
+* **VM1 - Frontend**: Python / Flask web interface.
+* **VM2 - Proxy service**: Go API gateway, fetches and normalizes data from 3rd-party APIs.
+* **VM3 - History service**: Python service that consumes MQ events and exposes History API.
+* **VM4 - Message queue**: RabbitMQ broker.
+* **VM5 - Database**: PostgreSQL instance storing historical exchange rates.
 
 ## How to use?
 ### Prerequisites
@@ -29,17 +29,16 @@ Ensure you have the following installed on your host machine before starting:
     # or run the batch script for parallel deployment of each VM:
     ./launch.sh
 ## To-Do List
-* Phase 1 - Usability:
-  * [ ] Better UI
-    * [ ] Convert currency to a human-readable format
-    * [ ] Convert time to a human-readable format
-  * [ ] Show only the most popular fiats / coins
-  * [ ] Search by code (UAH / USD / BTC / etc) or name if possible (Долар США / Євро / Etherum / etc) - need to fetch list of coin names / codes
-  * [ ] Convert coins to UAH for general list
-  * [ ] Convert any-to-any fiat / coin (but that would be more of a currency converter than a list)<br>
-  * [ ] Reworking the logic of the “History” tab
+* Phase 1 - Usability (Phase B implemented in UI):
+  * [x] Better UI (dashboard KPI, фільтри, сортування)
+  * [x] Human-readable time (локальний час браузера, `hh:mm:ss dd.mm.yyyy`)
+  * [x] Prices rounded to 2 decimals
+  * [x] Popular fiats / coins за замовчуванням + «Показати всі»
+  * [x] Search by code / name (live tab)
+  * [x] Optional currency converter (через USD + UAH cross)
+  * [x] History tab rework (без колонки «Джерело», фільтри, ліміт, empty state)
 * Phase 2 - Infrastructure Evolution:
-  * [ ] RabbitMQ implementing
+  * [x] RabbitMQ implementing
   * [ ] Redis implementing (caching and remembering user preferences)
   * [ ] Migrate provisioning to Terraform / Ansible
   * [ ] Security work (minimum permissions, firewall, secrets for credentials, etc)
@@ -102,3 +101,20 @@ curl -sS "http://10.10.1.4:8090/api/v1/history?limit=5" | jq '.count'
 ```bash
 psql -h 10.10.1.6 -U coinops -d coinops_db -c "select count(*) from exchange_rates;"
 ```
+
+## Phase B (Implemented): Frontend UX
+
+### Behaviour
+- **Time**: `fetched_at` and `created_at` are formatted in the **browser's local timezone** as `HH:mm:ss dd.MM.yyyy` (JavaScript).
+- **Prices**: displayed with **two decimal places** (presentation only; API/DB unchanged).
+- **Popular assets** (default view): fiat `USD, EUR, GBP, PLN, CHF, CAD`; crypto `BTC, ETH, USDT, BNB, SOL, XRP`. Toggle **«Показати всі валюти та монети»** shows the full proxy list.
+- **Live tab**: search, type filter, clickable column sort, KPI cards, persisted filters in `localStorage` (`coinops_ui_v1`).
+- **History tab**: no **source** column in the UI; filters (type, popular-only, symbol search), limits `50/100/200`, empty state, **«Оновити з сервера»** refetches via Flask same-origin proxy.
+- **Converter**: converts between symbols present in live rates plus **UAH** (via USD row `price_uah`); uses `price_usd` as USD value per unit.
+
+### Same-origin History API
+The browser calls **`GET /api/history`** on the Flask app (VM1), which proxies to the History Service (`HISTORY_API_URL`). This avoids CORS when refetching history with a new limit.
+
+### Files
+- [services/frontend/app.py](services/frontend/app.py) — initial load with `limit=200` for history; `/api/history` proxy
+- [services/frontend/templates/index.html](services/frontend/templates/index.html) — interactive UI + embedded JSON for client-side logic

@@ -13,10 +13,10 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 import requests
-from flask import Flask, render_template
+from flask import Flask, jsonify, render_template, request
 
 LOG = logging.getLogger("coinops.frontend")
 
@@ -98,7 +98,8 @@ def create_app() -> Flask:
         """Render the dashboard with current rates and recent history."""
         c: AppConfig = app.config["COINOPS_CFG"]
         live_rates, fetched_at, live_error = fetch_live_rates(c)
-        history_rows, history_error = fetch_history_rows(c, limit=50)
+        # Larger initial batch so client-side popular filter has enough rows.
+        history_rows, history_error = fetch_history_rows(c, limit=200)
         return render_template(
             "index.html",
             live_rates=live_rates,
@@ -107,6 +108,29 @@ def create_app() -> Flask:
             history_rows=history_rows or [],
             history_error=history_error,
         )
+
+    @app.route("/api/history")
+    def api_history_proxy():
+        """Same-origin proxy to History Service (avoids CORS for client-side refetch)."""
+        c: AppConfig = app.config["COINOPS_CFG"]
+        limit = request.args.get("limit", default=50, type=int)
+        if limit is None or limit < 1:
+            limit = 50
+        limit = min(limit, 500)
+        params: dict[str, Any] = {"limit": limit}
+        sym = request.args.get("asset_symbol")
+        typ = request.args.get("asset_type")
+        if sym:
+            params["asset_symbol"] = sym
+        if typ in ("fiat", "crypto"):
+            params["asset_type"] = typ
+        try:
+            resp = requests.get(c.history_api_url, params=params, timeout=c.http_timeout)
+            resp.raise_for_status()
+            return jsonify(resp.json())
+        except (requests.RequestException, ValueError) as exc:
+            LOG.warning("history proxy failed: %s", exc)
+            return jsonify({"error": str(exc), "items": [], "count": 0}), 502
 
     return app
 
