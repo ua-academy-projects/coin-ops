@@ -48,6 +48,7 @@
   environment:
     HOME: /root
     GOPATH: /root/go
+  notify: Reload and restart proxy
 
 - name: Set binary owner and permissions
   file:
