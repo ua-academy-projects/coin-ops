@@ -416,18 +416,35 @@
   const CRYPTO_ICON = { BTC: '₿', ETH: 'Ξ', USDT: '₮', BNB: '◆', SOL: '◎', XRP: '✕' };
 
   function pad2(n) { return String(n).padStart(2, '0'); }
+  /** Parse API timestamps consistently: naive ISO datetimes are treated as UTC (same as DB / Go Z). */
+  function parseTimestamp(iso) {
+    if (iso == null || iso === '') return null;
+    var s = String(iso).trim();
+    if (s === 'None' || s === 'null') return null;
+    if (s.length >= 11 && s.charAt(10) === ' ') {
+      s = s.slice(0, 10) + 'T' + s.slice(11);
+    }
+    var hasTz = /Z$/i.test(s) || /[+-]\d{2}:\d{2}$/.test(s) || /[+-]\d{4}$/.test(s);
+    if (!hasTz && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) {
+      s = s + 'Z';
+    }
+    var d = new Date(s);
+    if (!isNaN(d.getTime())) return d;
+    var d2 = new Date(iso);
+    return isNaN(d2.getTime()) ? null : d2;
+  }
   function formatLocalDateTime(iso) {
     if (!iso) return '—';
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return String(iso);
+    var d = parseTimestamp(iso);
+    if (d === null) return String(iso);
     return pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds()) + ' '
       + pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1) + '.' + d.getFullYear();
   }
   /** Підпис осі X для графіка історії: 24h — лише час; інші періоди — дата без часу. */
   function formatChartAxisLabel(iso, range) {
     if (!iso) return '—';
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return String(iso);
+    const d = parseTimestamp(iso);
+    if (d === null || isNaN(d.getTime())) return String(iso);
     if (range === '24h') {
       return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
     }

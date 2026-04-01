@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Optional, Tuple
 
 import requests
@@ -118,6 +119,40 @@ def enrich_rates_with_crypto_uah(rates: list) -> None:
             pass
 
 
+def normalize_utc_iso_string(value: Any) -> Optional[str]:
+    """
+    Parse an ISO-like timestamp from the proxy or APIs and return UTC ISO-8601 with Z.
+
+    Ensures the browser always receives an unambiguous instant (avoids mixing naive local
+    vs Z/+00:00 parsing between tabs).
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        dt = value
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = dt.astimezone(timezone.utc)
+        return dt.strftime("%Y-%m-%dT%H:%M:%S") + "Z"
+    s = str(value).strip()
+    if not s or s.lower() in ("none", "null"):
+        return None
+    try:
+        if len(s) >= 11 and s[10] == " ":
+            s = s[:10] + "T" + s[11:]
+        if s.endswith("Z") or s.endswith("z"):
+            s = s[:-1] + "+00:00"
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = dt.astimezone(timezone.utc)
+        return dt.strftime("%Y-%m-%dT%H:%M:%S") + "Z"
+    except (ValueError, TypeError, OSError):
+        return s
+
+
 def fetch_live_rates(cfg: AppConfig) -> Tuple[Optional[list], Optional[str], Optional[str]]:
     """
     Return (rates_list, fetched_at_iso, error_message).
@@ -137,7 +172,7 @@ def fetch_live_rates(cfg: AppConfig) -> Tuple[Optional[list], Optional[str], Opt
         return None, None, "Invalid proxy payload: rates is not a list"
     enrich_rates_with_crypto_uah(rates)
     fetched = data.get("fetched_at")
-    fetched_s = str(fetched) if fetched is not None else None
+    fetched_s = normalize_utc_iso_string(fetched) if fetched is not None else None
     return rates, fetched_s, None
 
 
