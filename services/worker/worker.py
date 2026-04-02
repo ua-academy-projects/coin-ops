@@ -35,6 +35,8 @@ LOG = logging.getLogger("coinops.history")
 
 # Max points returned for history series (chart + table); larger series are uniformly sampled.
 MAX_SERIES_POINTS = 200
+# Згортання «напливу» знімків: не більше однієї точки на інтервал (узгоджено з типовим кроком ~10 хв).
+SERIES_BUCKET_MINUTES = 10
 
 _pg_pool_lock = threading.Lock()
 _pg_pool: Optional[ThreadedConnectionPool] = None
@@ -205,6 +207,10 @@ def get_pg_pool(cfg: HistoryConfig) -> ThreadedConnectionPool:
                 user=cfg.pg_user,
                 password=cfg.pg_password,
                 dbname=cfg.pg_database,
+                # Ensure TIMESTAMPTZ is fetched as an unambiguous instant.
+                # psycopg2 may return naive datetimes depending on session settings;
+                # keeping the DB session timezone UTC prevents +3h shifts on serialization.
+                options="-c TimeZone=UTC",
             )
         return _pg_pool
 
@@ -620,7 +626,7 @@ def _rows_to_sparkline(
     for pu, pusd, ts in rows:
         if not isinstance(ts, datetime):
             continue
-        ts_iso = ts.isoformat() if ts.tzinfo else ts.replace(tzinfo=timezone.utc).isoformat()
+        ts_iso = _utc_iso_z(ts)
         sv = _value_for_metric(pu, pusd, asset_type)
         out.append(
             {
@@ -632,6 +638,19 @@ def _rows_to_sparkline(
             }
         )
     return out
+
+
+def _utc_iso_z(ts: datetime) -> str:
+    """Serialize DB datetimes as UTC ISO-8601 with `Z` suffix.
+
+    Important: avoid "naive datetime treated as UTC" ambiguity when psycopg2 returns
+    timezone-less datetimes based on the DB session settings.
+    """
+    # With `SET TimeZone=UTC` above, naive datetimes are in UTC already.
+    ts_utc = ts.astimezone(timezone.utc) if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
+    ts_utc = ts_utc.replace(microsecond=0)
+    s = ts_utc.isoformat()
+    return s[:-6] + "Z" if s.endswith("+00:00") else s
 
 
 def _fetch_sparkline_points_conn(
@@ -701,6 +720,34 @@ def _recompute_pct_series(rows: list[dict[str, Any]], asset_type: str) -> list[d
     return out
 
 
+def _bucket_series_by_minutes(
+    rows: list[dict[str, Any]], asset_type: str, minutes: int
+) -> list[dict[str, Any]]:
+    """Щонайбільше одна точка на ``minutes``-хвилинне UTC-вікно; лишається останній знімок у вікні."""
+    if minutes <= 0:
+        return _recompute_pct_series(rows, asset_type)
+    if len(rows) <= 1:
+        return _recompute_pct_series(rows, asset_type)
+    window_sec = float(minutes * 60)
+    buckets: dict[int, dict[str, Any]] = {}
+    for row in rows:
+        ts = row.get("created_at")
+        if not ts or not isinstance(ts, str):
+            continue
+        try:
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        key = int(dt.timestamp() // window_sec)
+        buckets[key] = row
+    if not buckets:
+        return _recompute_pct_series(rows, asset_type)
+    ordered = [buckets[k] for k in sorted(buckets.keys())]
+    return _recompute_pct_series(ordered, asset_type)
+
+
 def _thin_series_to_max_points(
     rows: list[dict[str, Any]], asset_type: str, max_points: int
 ) -> list[dict[str, Any]]:
@@ -747,24 +794,20 @@ def fetch_series_for_range(
 
     metric = _metric_for_asset_type(asset_type)
     out: list[dict[str, Any]] = []
-    prev_v: Optional[float] = None
     for pu, pusd, ts in raw_rows:
         if not isinstance(ts, datetime):
             continue
-        ts_iso = ts.isoformat() if ts.tzinfo else ts.replace(tzinfo=timezone.utc).isoformat()
-        v = _value_for_metric(pu, pusd, asset_type)
-        pct_prev = _pct_change(prev_v, v) if prev_v is not None else None
-        prev_v = v
+        ts_iso = _utc_iso_z(ts)
         out.append(
             {
                 "created_at": ts_iso,
                 "price_uah": float(pu) if pu is not None else None,
                 "price_usd": float(pusd) if pusd is not None else None,
                 "series_metric": metric,
-                "pct_change_from_prev": pct_prev,
             }
         )
-    return _thin_series_to_max_points(out, asset_type, MAX_SERIES_POINTS)
+    bucketed = _bucket_series_by_minutes(out, asset_type, SERIES_BUCKET_MINUTES)
+    return _thin_series_to_max_points(bucketed, asset_type, MAX_SERIES_POINTS)
 
 
 def parse_asset_pairs(pairs_param: str) -> list[Tuple[str, str]]:

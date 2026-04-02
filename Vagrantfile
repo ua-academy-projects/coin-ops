@@ -19,19 +19,19 @@ Vagrant.configure("2") do |config|
 
       node.vm.provision "shell", name: "base-setup", keep_color: true, preserve_order: true, path: "infra/base_setup.sh"
       config.vm.synced_folder ".", "/vagrant", disabled: true
-      config.vm.synced_folder "services/", "/home/shared_folder"
+      config.vm.synced_folder "services/", "/home/vagrant/shared_folder"
 
       case i
       when 1
-        node.vm.provision "shell", name: "vm1-setup", keep_color: true, preserve_order: true, path: "infra/vm1_setup.sh"
+        node.vm.provision "shell", name: "vm1-setup", run: "always", keep_color: true, preserve_order: true, path: "infra/vm1_setup.sh"
       when 2
-        node.vm.provision "shell", name: "vm2-setup", keep_color: true, preserve_order: true, path: "infra/vm2_setup.sh"
+        node.vm.provision "shell", name: "vm2-setup", run: "always", keep_color: true, preserve_order: true, path: "infra/vm2_setup.sh"
       when 3
-        node.vm.provision "shell", name: "vm3-setup", keep_color: true, preserve_order: true, path: "infra/vm3_setup.sh"
+        node.vm.provision "shell", name: "vm3-setup", run: "always", keep_color: true, preserve_order: true, path: "infra/vm3_setup.sh"
       when 4
-        node.vm.provision "shell", name: "vm4-setup", keep_color: true, preserve_order: true, path: "infra/vm4_setup.sh"
+        node.vm.provision "shell", name: "vm4-setup", run: "always", keep_color: true, preserve_order: true, path: "infra/vm4_setup.sh"
       when 5
-        node.vm.provision "shell", name: "vm5-setup", keep_color: true, preserve_order: true, path: "infra/vm5_setup.sh"
+        node.vm.provision "shell", name: "vm5-setup", run: "always", keep_color: true, preserve_order: true, path: "infra/vm5_setup.sh"
       end
     end
   end

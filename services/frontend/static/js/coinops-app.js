@@ -1,11 +1,26 @@
 /**
  * CoinOps dashboard: live rates, converter, history chart (Chart.js, Bootstrap markup).
- * Завантажується після chart.umd.min.js; очікує JSON у #coinops-initial-live та #coinops-live-meta.
+ * Завантажується після chart.umd.min.js та bootstrap.bundle; очікує JSON у #coinops-initial-live та #coinops-live-meta.
+ *
+ * Структура: утиліти форматування → завантаження вбудованого JSON → посилання на DOM → віджети dropdown
+ * → стан/фільтри → рендер live → конвертер → HTTP → історія → прив’язка подій → ініт.
  */
 (function () {
+  function initTooltips() {
+    if (typeof bootstrap === 'undefined' || !bootstrap.Tooltip) return;
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (node) {
+      new bootstrap.Tooltip(node);
+    });
+  }
+
   if (!document.getElementById('live-tbody')) {
+    initTooltips();
     return;
   }
+
+  /* -------------------------------------------------------------------------- */
+  /* Константи та форматування (без побічних ефектів)                            */
+  /* -------------------------------------------------------------------------- */
   const POPULAR_FIAT = ['USD', 'EUR', 'GBP', 'PLN', 'CHF', 'CAD'];
   const POPULAR_CRYPTO = ['BTC', 'ETH', 'USDT', 'BNB', 'SOL', 'XRP'];
   const LS_KEY = 'coinops_ui_v2';
@@ -83,7 +98,7 @@
     return Number(v) >= 0 ? 'trend-up' : 'trend-down';
   }
   function pairKey(r) {
-    return (r.asset_symbol || '').toUpperCase() + ':' + (r.asset_type || '');
+    return `${(r.asset_symbol || '').toUpperCase()}:${r.asset_type || ''}`;
   }
   function displayName(r) {
     const sym = (r.asset_symbol || '').toUpperCase();
@@ -114,7 +129,9 @@
     try { localStorage.setItem(LS_KEY, JSON.stringify(cur)); } catch (e) {}
   }
 
-  /* --- Початкові дані з сервера (JSON у <script type="application/json">) --- */
+  /* -------------------------------------------------------------------------- */
+  /* Вбудований JSON з Jinja (<script type="application/json">)                  */
+  /* -------------------------------------------------------------------------- */
   const liveJsonEl = document.getElementById('coinops-initial-live');
   const metaJsonEl = document.getElementById('coinops-live-meta');
   const clientErrEl = document.getElementById('coinops-client-error');
@@ -149,7 +166,7 @@
   }
   if (parseProblems.length) {
     showClientConfigError(
-      'Не вдалося розібрати вбудований JSON на сторінці (' + parseProblems.join(', ') + '). Спробуйте оновити сторінку.'
+      `Не вдалося розібрати вбудований JSON на сторінці (${parseProblems.join(', ')}). Спробуйте оновити сторінку.`
     );
   }
 
@@ -158,10 +175,16 @@
   let liveSort = { key: 'symbol', dir: 1 };
   let sparkCharts = {};
 
+  /* -------------------------------------------------------------------------- */
+  /* Посилання на DOM (id з шаблону не змінювати — на них зав’язаний JS/CSS)    */
+  /* -------------------------------------------------------------------------- */
   const st = loadState();
   const el = {
     liveSearch: document.getElementById('live-search'),
     liveType: document.getElementById('live-type-filter'),
+    liveTypeMenu: document.getElementById('live-type-menu'),
+    liveTypeToggle: document.getElementById('live-type-toggle'),
+    liveTypeLabel: document.getElementById('live-type-label'),
     liveShowAll: document.getElementById('live-show-all'),
     liveTbody: document.getElementById('live-tbody'),
     liveTable: document.getElementById('live-table'),
@@ -176,9 +199,21 @@
     convAmount: document.getElementById('conv-amount'),
     convFrom: document.getElementById('conv-from'),
     convTo: document.getElementById('conv-to'),
+    convFromMenu: document.getElementById('conv-from-menu'),
+    convToMenu: document.getElementById('conv-to-menu'),
+    convFromToggle: document.getElementById('conv-from-toggle'),
+    convToToggle: document.getElementById('conv-to-toggle'),
+    convFromLabel: document.getElementById('conv-from-label'),
+    convToLabel: document.getElementById('conv-to-label'),
     convResult: document.getElementById('converter-result'),
     histAsset: document.getElementById('hist-asset'),
+    histAssetMenu: document.getElementById('hist-asset-menu'),
+    histAssetToggle: document.getElementById('hist-asset-toggle'),
+    histAssetLabel: document.getElementById('hist-asset-label'),
     histRange: document.getElementById('hist-range'),
+    histRangeMenu: document.getElementById('hist-range-menu'),
+    histRangeToggle: document.getElementById('hist-range-toggle'),
+    histRangeLabel: document.getElementById('hist-range-label'),
     histLoad: document.getElementById('hist-load'),
     histTbody: document.getElementById('hist-tbody'),
     histEmpty: document.getElementById('hist-empty'),
@@ -186,11 +221,35 @@
   };
 
   if (el.liveSearch) { el.liveSearch.value = st.liveSearch || ''; }
-  if (el.liveType) { el.liveType.value = st.liveType || 'all'; }
   if (el.liveShowAll) { el.liveShowAll.checked = !!st.liveShowAll; }
-  if (el.histRange) { el.histRange.value = st.histRange || '7d'; }
 
   let histMainChart = null;
+
+  /* -------------------------------------------------------------------------- */
+  /* Dropdown + прихований <select> (Bootstrap 5)                                 */
+  /* -------------------------------------------------------------------------- */
+
+  /** Один пункт меню з data-value — спільна розмітка для всіх co-select. */
+  function createDropdownMenuItem(value, labelText, buttonClassName) {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = buttonClassName || 'dropdown-item';
+    btn.setAttribute('data-value', value);
+    btn.textContent = labelText;
+    li.appendChild(btn);
+    return li;
+  }
+
+  /** Синхронне заповнення прихованого select і ul меню з однаковим набором опцій. */
+  function fillHiddenSelectAndMenu(selectEl, menuEl, pairs) {
+    selectEl.innerHTML = '';
+    menuEl.innerHTML = '';
+    pairs.forEach(function (p) {
+      selectEl.appendChild(new Option(p.label, p.value));
+      menuEl.appendChild(createDropdownMenuItem(p.value, p.label));
+    });
+  }
 
   /** Уникаємо дублювання try/catch при знищенні екземплярів Chart.js. */
   function destroyChartInstance(chart) {
@@ -205,6 +264,86 @@
       destroyChartInstance(sparkCharts[k]);
     });
     sparkCharts = {};
+  }
+
+  function syncDropdownLabel(selectEl, labelEl) {
+    if (!selectEl || !labelEl) return;
+    const opt = selectEl.options[selectEl.selectedIndex];
+    labelEl.textContent = opt ? opt.text : '—';
+  }
+
+  /** Кастомний випадаючий список (Bootstrap Dropdown) замість нативного <select> — без білої ОС-окантовки. */
+  function wireCoSelectDropdown(toggleBtn, menuEl, selectEl, onPick) {
+    if (!toggleBtn || !menuEl || !selectEl) return;
+    const labelSpan = toggleBtn.querySelector('[data-co-select-label]');
+    menuEl.addEventListener('click', function (ev) {
+      const item = ev.target.closest('button[data-value]');
+      if (!item || !menuEl.contains(item)) return;
+      ev.preventDefault();
+      selectEl.value = item.getAttribute('data-value');
+      syncDropdownLabel(selectEl, labelSpan);
+      if (onPick) onPick();
+      if (typeof bootstrap !== 'undefined' && bootstrap.Dropdown) {
+        const inst = bootstrap.Dropdown.getInstance(toggleBtn);
+        if (inst) inst.hide();
+      }
+    });
+  }
+
+  /** Під час відкритого меню: перша літера тексту пункту — фокус і прокрутка (аналог type-ahead у select). */
+  function wireCoSelectTypeahead(toggleBtn, menuEl) {
+    if (!toggleBtn || !menuEl) return;
+    let handler = null;
+    toggleBtn.addEventListener('shown.bs.dropdown', function () {
+      handler = function (e) {
+        if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) return;
+        const ch = e.key.toLowerCase();
+        const items = menuEl.querySelectorAll('button[data-value]');
+        for (const node of items) {
+          const t = (node.textContent || '').trim().toLowerCase();
+          if (t.startsWith(ch)) {
+            node.focus();
+            node.scrollIntoView({ block: 'nearest' });
+            e.preventDefault();
+            break;
+          }
+        }
+      };
+      document.addEventListener('keydown', handler, true);
+    });
+    toggleBtn.addEventListener('hidden.bs.dropdown', function () {
+      if (handler) {
+        document.removeEventListener('keydown', handler, true);
+        handler = null;
+      }
+    });
+  }
+
+  function initLiveTypeFilter() {
+    if (!el.liveType || !el.liveTypeMenu || !el.liveTypeLabel) return;
+    const defs = [
+      { value: 'all', label: 'Усі' },
+      { value: 'fiat', label: 'Фіат' },
+      { value: 'crypto', label: 'Крипто' }
+    ];
+    fillHiddenSelectAndMenu(el.liveType, el.liveTypeMenu, defs);
+    el.liveType.value = st.liveType || 'all';
+    syncDropdownLabel(el.liveType, el.liveTypeLabel);
+  }
+
+  function initHistRangeFilter() {
+    if (!el.histRange || !el.histRangeMenu || !el.histRangeLabel) return;
+    const defs = [
+      { value: '24h', label: '24 години' },
+      { value: '7d', label: '7 днів' },
+      { value: '30d', label: '1 місяць' },
+      { value: 'all', label: 'Увесь час' }
+    ];
+    fillHiddenSelectAndMenu(el.histRange, el.histRangeMenu, defs);
+    const saved = st.histRange || '7d';
+    const allowed = new Set(defs.map(function (d) { return d.value; }));
+    el.histRange.value = allowed.has(saved) ? saved : '7d';
+    syncDropdownLabel(el.histRange, el.histRangeLabel);
   }
 
   function findRate(sym, type) {
@@ -260,13 +399,17 @@
     });
   }
 
+  function liveRowSortComparable(row, key) {
+    if (key === 'symbol') return (row.asset_symbol || '').toUpperCase();
+    if (key === 'uah') return row.price_uah != null ? Number(row.price_uah) : -Infinity;
+    if (key === 'usd') return row.price_usd != null ? Number(row.price_usd) : -Infinity;
+    return 0;
+  }
+
   function cmpLive(a, b) {
     const k = liveSort.key;
-    let va, vb;
-    if (k === 'symbol') { va = (a.asset_symbol || '').toUpperCase(); vb = (b.asset_symbol || '').toUpperCase(); }
-    else if (k === 'uah') { va = a.price_uah != null ? Number(a.price_uah) : -Infinity; vb = b.price_uah != null ? Number(b.price_uah) : -Infinity; }
-    else if (k === 'usd') { va = a.price_usd != null ? Number(a.price_usd) : -Infinity; vb = b.price_usd != null ? Number(b.price_usd) : -Infinity; }
-    else { va = 0; vb = 0; }
+    const va = liveRowSortComparable(a, k);
+    const vb = liveRowSortComparable(b, k);
     if (va < vb) return -liveSort.dir;
     if (va > vb) return liveSort.dir;
     return 0;
@@ -317,7 +460,9 @@
     });
   }
 
-  /* --- Рендер DOM (таблиці, KPI після фільтрації) --- */
+  /* -------------------------------------------------------------------------- */
+  /* Рендер live-таблиці та спарклайнів (дані вже в liveRates / dashboardInsights) */
+  /* -------------------------------------------------------------------------- */
   function renderLive() {
     if (!el.liveTbody) return;
     destroySparkCharts();
@@ -356,6 +501,9 @@
     updateKpis();
   }
 
+  /* -------------------------------------------------------------------------- */
+  /* Конвертер (через USD; read-only обчислення поверх liveRates)               */
+  /* -------------------------------------------------------------------------- */
   function getUsdPerUnit(r) {
     if (!r) return null;
     const sym = (r.asset_symbol || '').toUpperCase();
@@ -402,17 +550,25 @@
     return Object.keys(set).sort();
   }
   function fillConverterSelects() {
-    if (!el.convFrom || !el.convTo) return;
+    if (!el.convFrom || !el.convTo || !el.convFromMenu || !el.convToMenu) return;
     const syms = buildConverterSymbols();
     el.convFrom.innerHTML = '';
     el.convTo.innerHTML = '';
+    el.convFromMenu.innerHTML = '';
+    el.convToMenu.innerHTML = '';
     syms.forEach(function (s) {
       el.convFrom.appendChild(new Option(s, s));
       el.convTo.appendChild(new Option(s, s));
+      const itemFrom = createDropdownMenuItem(s, s);
+      const itemTo = createDropdownMenuItem(s, s);
+      el.convFromMenu.appendChild(itemFrom);
+      el.convToMenu.appendChild(itemTo);
     });
     if (syms.includes('USD')) el.convFrom.value = 'USD';
     if (syms.includes('UAH')) el.convTo.value = 'UAH';
     else if (syms.length > 1) el.convTo.value = syms[1];
+    syncDropdownLabel(el.convFrom, el.convFromLabel);
+    syncDropdownLabel(el.convTo, el.convToLabel);
   }
   function updateConverter() {
     if (!el.convResult) return;
@@ -440,7 +596,9 @@
     el.convResult.textContent = `${formatPrice(out)} ${to}  (≈ ${formatPrice(usd)} USD)`;
   }
 
-  /* --- HTTP: зведення для live-дашборду та оновлення курсів --- */
+  /* -------------------------------------------------------------------------- */
+  /* HTTP: live refresh та зведення dashboard/history (окремо від рендеру таблиць) */
+  /* -------------------------------------------------------------------------- */
   function buildPairsParam() {
     const seen = {};
     const parts = [];
@@ -493,19 +651,42 @@
   }
 
   function fillHistAssetSelect() {
-    if (!el.histAsset) return;
+    if (!el.histAsset || !el.histAssetMenu) return;
     const cur = el.histAsset.value;
     el.histAsset.innerHTML = '';
+    el.histAssetMenu.innerHTML = '';
     liveRates.forEach(function (r) {
       const value = `${(r.asset_symbol || '').toUpperCase()}:${r.asset_type}`;
-      const label = `${displayIcon(r)} ${r.asset_symbol || ''} — ${displayName(r)}`;
+      const symU = (r.asset_symbol || '').toUpperCase();
+      const label = `${symU} — ${displayName(r)}  ${displayIcon(r)}`;
       el.histAsset.appendChild(new Option(label, value));
+      el.histAssetMenu.appendChild(createDropdownMenuItem(value, label, 'dropdown-item text-start py-2'));
     });
     if (cur && Array.prototype.some.call(el.histAsset.options, function (o) { return o.value === cur; })) {
       el.histAsset.value = cur;
     } else if (el.histAsset.options.length) {
       el.histAsset.selectedIndex = 0;
     }
+    syncDropdownLabel(el.histAsset, el.histAssetLabel);
+  }
+
+  /** HTML рядків таблиці історії (лише розмітка; дані з API екрануються). */
+  function buildHistoryTableRowsHtml(items) {
+    return items.map(function (it) {
+      const pct = it.pct_change_from_prev;
+      const pctCell = pct == null ? '—' : formatPct(pct);
+      const dtEsc = escapeHtml(formatLocalDateTime(it.created_at));
+      const uahEsc = escapeHtml(formatPrice(it.price_uah));
+      const usdEsc = escapeHtml(formatPrice(it.price_usd));
+      const pctEsc = escapeHtml(pctCell);
+      const tc = trendClass(pct);
+      return (
+        `<tr><td>${dtEsc}</td>` +
+        `<td class="text-end">${uahEsc}</td>` +
+        `<td class="text-end">${usdEsc}</td>` +
+        `<td class="text-end ${tc}">${pctEsc}</td></tr>`
+      );
+    }).join('');
   }
 
   async function loadHistorySeries() {
@@ -592,23 +773,8 @@
           }
         }
       });
-      // Одна заміна innerHTML; підписи дат з API проходять через escapeHtml.
       if (el.histTbody) {
-        el.histTbody.innerHTML = items.map(function (it) {
-          const pct = it.pct_change_from_prev;
-          const pctCell = pct == null ? '—' : formatPct(pct);
-          const dtEsc = escapeHtml(formatLocalDateTime(it.created_at));
-          const uahEsc = escapeHtml(formatPrice(it.price_uah));
-          const usdEsc = escapeHtml(formatPrice(it.price_usd));
-          const pctEsc = escapeHtml(pctCell);
-          const tc = trendClass(pct);
-          return (
-            `<tr><td>${dtEsc}</td>` +
-            `<td class="text-end">${uahEsc}</td>` +
-            `<td class="text-end">${usdEsc}</td>` +
-            `<td class="text-end ${tc}">${pctEsc}</td></tr>`
-          );
-        }).join('');
+        el.histTbody.innerHTML = buildHistoryTableRowsHtml(items);
       }
     } catch (err) {
       if (el.histChartErr) {
@@ -618,6 +784,9 @@
     }
   }
 
+  /* -------------------------------------------------------------------------- */
+  /* Події UI                                                                   */
+  /* -------------------------------------------------------------------------- */
   function bindLive() {
     if (el.liveSearch) {
       const onSearch = function () {
@@ -627,13 +796,13 @@
       el.liveSearch.addEventListener('input', onSearch);
       el.liveSearch.addEventListener('change', onSearch);
     }
-    if (el.liveType) {
+    if (el.liveType && el.liveTypeToggle && el.liveTypeMenu) {
       const onType = function () {
         saveState({ liveType: el.liveType.value });
         renderLive();
       };
-      el.liveType.addEventListener('input', onType);
-      el.liveType.addEventListener('change', onType);
+      wireCoSelectDropdown(el.liveTypeToggle, el.liveTypeMenu, el.liveType, onType);
+      wireCoSelectTypeahead(el.liveTypeToggle, el.liveTypeMenu);
     }
     if (el.liveShowAll) {
       const onShowAll = function () {
@@ -656,14 +825,20 @@
       });
     }
     if (el.convAmount) el.convAmount.addEventListener('input', updateConverter);
-    if (el.convFrom) el.convFrom.addEventListener('change', updateConverter);
-    if (el.convTo) el.convTo.addEventListener('change', updateConverter);
+    wireCoSelectDropdown(el.convFromToggle, el.convFromMenu, el.convFrom, updateConverter);
+    wireCoSelectDropdown(el.convToToggle, el.convToMenu, el.convTo, updateConverter);
+    wireCoSelectDropdown(el.histAssetToggle, el.histAssetMenu, el.histAsset, null);
+    wireCoSelectTypeahead(el.convFromToggle, el.convFromMenu);
+    wireCoSelectTypeahead(el.convToToggle, el.convToMenu);
+    wireCoSelectTypeahead(el.histAssetToggle, el.histAssetMenu);
     const convSwap = document.getElementById('conv-swap');
     if (convSwap && el.convFrom && el.convTo) {
       convSwap.addEventListener('click', function () {
         const fromVal = el.convFrom.value;
         el.convFrom.value = el.convTo.value;
         el.convTo.value = fromVal;
+        syncDropdownLabel(el.convFrom, el.convFromLabel);
+        syncDropdownLabel(el.convTo, el.convToLabel);
         updateConverter();
       });
     }
@@ -672,7 +847,13 @@
 
   function bindHist() {
     if (el.histLoad) el.histLoad.addEventListener('click', loadHistorySeries);
-    if (el.histRange) el.histRange.addEventListener('change', function () { saveState({ histRange: el.histRange.value }); });
+    if (el.histRange && el.histRangeToggle && el.histRangeMenu) {
+      const onRange = function () {
+        saveState({ histRange: el.histRange.value });
+      };
+      wireCoSelectDropdown(el.histRangeToggle, el.histRangeMenu, el.histRange, onRange);
+      wireCoSelectTypeahead(el.histRangeToggle, el.histRangeMenu);
+    }
     const histTab = document.getElementById('hist-tab');
     if (histTab) {
       histTab.addEventListener('shown.bs.tab', function () {
@@ -682,12 +863,32 @@
     }
   }
 
+  /** Заокруглення панелі вкладок: «Історія» — повний radius; «Поточні курси» — без верхнього лівого (стик з першою вкладкою). */
+  function syncTabShellRadius() {
+    const shell = document.querySelector('.tab-content.tab-shell');
+    const histBtn = document.getElementById('hist-tab');
+    if (!shell || !histBtn) return;
+    shell.classList.toggle('tab-shell--hist', histBtn.classList.contains('active'));
+  }
+
+  function bindMainTabs() {
+    ['live-tab', 'hist-tab'].forEach(function (id) {
+      const btn = document.getElementById(id);
+      if (btn) btn.addEventListener('shown.bs.tab', syncTabShellRadius);
+    });
+    syncTabShellRadius();
+  }
+
+  initLiveTypeFilter();
+  initHistRangeFilter();
   bindLive();
   bindHist();
+  bindMainTabs();
   fillConverterSelects();
   updateConverter();
   fillHistAssetSelect();
   updateKpis();
   renderLive();
   fetchDashboard();
+  initTooltips();
 })();

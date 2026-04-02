@@ -1,18 +1,18 @@
 #!/bin/bash
 
-WORKING_DIR="/home/working_dir"
+set -e
+WORKING_DIR="/home/vagrant/shared_folder/proxy"
 
 # vm 2 - proxy
 sudo apt install -y golang
-cp -r "/home/shared_folder/proxy" "$WORKING_DIR"
 sudo cp "$WORKING_DIR/proxy.service" "/lib/systemd/system/"
-cd "$WORKING_DIR" || exit
-go build -o proxy .
-
 sudo systemctl daemon-reload
-sudo systemctl start proxy
-sudo systemctl enable proxy
+sudo systemctl stop proxy 2>/dev/null || true
 
-# nohup ./proxy > "$WORKING_DIR/proxy.log" 2>&1 &
+cd "$WORKING_DIR" || { echo "Cannot cd to $WORKING_DIR" >&2; exit 1; }
+go build -o proxy.bin .
+
+sudo systemctl enable proxy
+sudo systemctl start proxy
 
 echo -e "\033[0;32mVM 2 success setup. Proxy service is running..."

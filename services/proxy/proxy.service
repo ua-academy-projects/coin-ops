@@ -1,13 +1,14 @@
 [Unit]
 Description="Proxy Service App"
 After=multi-user.target
+RequiresMountsFor=/home/vagrant/shared_folder/
 
 [Service]
 Type=simple
-EnvironmentFile=/home/working_dir/proxy.env
-ExecStart=/home/working_dir/proxy
+EnvironmentFile=/home/vagrant/shared_folder/proxy/proxy.env
+ExecStart=/home/vagrant/shared_folder/proxy/proxy.bin
 User=vagrant
-WorkingDirectory=/home/working_dir
+WorkingDirectory=/home/vagrant/shared_folder/proxy
 Restart=on-failure
 
 [Install]

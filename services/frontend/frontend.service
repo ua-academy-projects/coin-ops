@@ -1,13 +1,14 @@
 [Unit]
 Description="Frontend Flask App"
 After=multi-user.target
+RequiresMountsFor=/home/vagrant/shared_folder/
 
 [Service]
 Type=simple
-EnvironmentFile=/home/working_dir/frontend.env
-ExecStart=/home/working_dir/venv/bin/python /home/working_dir/app.py
+EnvironmentFile=/home/vagrant/shared_folder/frontend/frontend.env
+ExecStart=/home/vagrant/venv/bin/python /home/vagrant/shared_folder/frontend/app.py
 User=vagrant
-WorkingDirectory=/home/working_dir
+WorkingDirectory=/home/vagrant/shared_folder/frontend
 Restart=on-failure
 
 [Install]

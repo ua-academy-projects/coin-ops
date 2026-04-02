@@ -11,6 +11,8 @@ body.coinops-app {
   background: var(--co-bg);
   color: var(--co-text);
   overflow-x: hidden;
+  /* Темна схема для нативних <select> / списків ОС — менш «біла» окантовка у випадаючому меню */
+  color-scheme: dark;
 }
 .bg-orbs {
   position: fixed;
@@ -84,6 +86,11 @@ body.coinops-app {
   border-radius: 0 16px 16px 16px;
   padding: 1.25rem;
   margin-top: -1px;
+  overflow: hidden;
+}
+/* Коли активна друга вкладка — повне заокруглення панелі (ліва верхня кутова стикувалась би з першою вкладкою) */
+.tab-shell.tab-shell--hist {
+  border-radius: 16px;
 }
 .sortable { cursor: pointer; user-select: none; }
 .sortable:hover { background: rgba(255, 255, 255, 0.06); }
@@ -149,9 +156,14 @@ body.coinops-app {
   border-color: rgba(255, 255, 255, 0.15);
   color: var(--co-text);
 }
+.coinops-app .form-select {
+  padding-left: 0.75rem;
+  padding-right: 2rem;
+}
 .coinops-app select.form-select option {
   background-color: #161c2c;
   color: #e8eaef;
+  padding: 0.35rem 0.75rem;
 }
 .coinops-app .form-control::placeholder { color: rgba(232, 234, 239, 0.35); }
 .coinops-app .form-control:focus,
@@ -181,13 +193,83 @@ body.coinops-app {
   color: var(--co-text);
   border-color: rgba(255, 255, 255, 0.35);
 }
+/* Кастомні випадаючі списки (конвертер, актив у історії) — темне меню без нативної білої рамки ОС */
+.co-select-dd-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: var(--co-text) !important;
+  font-size: 0.875rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 0.25rem;
+}
+.co-select-dd-toggle:hover,
+.co-select-dd-toggle:focus,
+.co-select-dd-toggle.show {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(79, 124, 255, 0.45) !important;
+  color: var(--co-text) !important;
+}
+.co-select-dd-toggle [data-co-select-label] {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: start;
+}
+.coinops-app .co-select-dd-menu {
+  max-height: min(50vh, 280px);
+  overflow-y: auto;
+  margin-top: 0.2rem !important;
+  padding: 0.35rem 0;
+  background: rgba(18, 22, 36, 0.98) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+.coinops-app .co-select-dd-menu .dropdown-item {
+  color: var(--co-text);
+  font-size: 0.875rem;
+}
+.coinops-app .co-select-dd-menu .dropdown-item:hover,
+.coinops-app .co-select-dd-menu .dropdown-item:focus {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--co-text);
+}
+
 .converter-row { gap: 0.5rem; }
 @media (min-width: 992px) {
   .converter-row { flex-wrap: nowrap; align-items: flex-end; }
   .converter-row .conv-result-col { flex: 1 1 auto; min-width: 200px; }
 }
 .hist-info-icon { cursor: help; }
-.glass-table-wrap { overflow: hidden; border-radius: 16px; }
+/* Конвертер вище таблиці активів — випадаючі списки не ховаються під напівпрозорими рядками */
+.coinops-app .converter-stack {
+  position: relative;
+  z-index: 10;
+}
+/* Відкрите меню поверх сусідніх блоків (на випадок складного вкладення) */
+.coinops-app .co-select-dd.dropdown:has(.dropdown-menu.show) {
+  position: relative;
+  z-index: 1080;
+}
+
+.coinops-app .glass-table-wrap {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  border-radius: 16px;
+}
+/* Горизонтальні відступи в таблицях (історія та live) */
+.coinops-app .glass-table-wrap table.table thead th,
+.coinops-app .glass-table-wrap table.table tbody td {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
 .co-footnote { font-size: 0.8rem; color: var(--co-muted); }
 .conv-result-col { min-width: 0; }
 .coinops-app .alert-warning {

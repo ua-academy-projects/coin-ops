@@ -11,7 +11,7 @@ GRANT ALL PRIVILEGES ON DATABASE coinops_db TO :user_name;
 
 -- Historical snapshots written by the worker from the proxy JSON.
 -- snapshot_event_id matches envelope event_id (proxy publisher); UNIQUE enables idempotent replays.
-CREATE TABLE exchange_rates (
+CREATE TABLE IF NOT EXISTS exchange_rates (
   id                  BIGSERIAL PRIMARY KEY,
   asset_symbol        VARCHAR(16)  NOT NULL,
   asset_type          VARCHAR(8)   NOT NULL CHECK (asset_type IN ('fiat', 'crypto')),
@@ -24,13 +24,13 @@ CREATE TABLE exchange_rates (
     UNIQUE (snapshot_event_id, asset_symbol, asset_type, source)
 );
 
-CREATE INDEX idx_exchange_rates_created_at_desc
+CREATE INDEX IF NOT EXISTS idx_exchange_rates_created_at_desc
   ON exchange_rates (created_at DESC);
 
-CREATE INDEX idx_exchange_rates_symbol_created
+CREATE INDEX IF NOT EXISTS idx_exchange_rates_symbol_created
   ON exchange_rates (asset_symbol, created_at DESC);
 
-CREATE INDEX idx_exchange_rates_symbol_type_created_desc
+CREATE INDEX IF NOT EXISTS idx_exchange_rates_symbol_type_created_desc
   ON exchange_rates (asset_symbol, asset_type, created_at DESC);
 
 GRANT USAGE ON SCHEMA public TO :user_name;

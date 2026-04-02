@@ -8,4 +8,4 @@ env/
 *.exe
 /bin/
 
-docs/
+docs/*
