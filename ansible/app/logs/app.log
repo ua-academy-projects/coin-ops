@@ -1,0 +1,335 @@
+[nbu-collector] 2026/04/01 18:59:06.111631 service starting
+[nbu-collector] 2026/04/01 18:59:06.114506 config: publish_mode=rabbit dry_run=false http_addr=:8080 poll_interval=1m0s
+[nbu-collector] 2026/04/01 18:59:06.146774 RabbitMQ connection established
+[nbu-collector] 2026/04/01 18:59:06.147345 RabbitMQ enabled, queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 18:59:06.148295 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 18:59:06.148730 HTTP server listening on :8080
+[nbu-collector] 2026/04/01 18:59:06.357412 fetched 45 exchange records, collected_at=2026-04-01T18:59:06Z
+[nbu-collector] 2026/04/01 18:59:06.359256 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:00:06.360436 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:00:06.421937 fetched 45 exchange records, collected_at=2026-04-01T19:00:06Z
+[nbu-collector] 2026/04/01 19:00:06.422245 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:01:06.359723 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:01:06.419662 fetched 45 exchange records, collected_at=2026-04-01T19:01:06Z
+[nbu-collector] 2026/04/01 19:01:06.420270 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:02:06.360099 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:02:06.431367 fetched 45 exchange records, collected_at=2026-04-01T19:02:06Z
+[nbu-collector] 2026/04/01 19:02:06.431666 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:03:06.360557 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:03:06.427285 fetched 45 exchange records, collected_at=2026-04-01T19:03:06Z
+[nbu-collector] 2026/04/01 19:03:06.428265 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:04:06.359705 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:04:06.420025 fetched 45 exchange records, collected_at=2026-04-01T19:04:06Z
+[nbu-collector] 2026/04/01 19:04:06.420655 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:05:06.360364 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:05:06.417075 fetched 45 exchange records, collected_at=2026-04-01T19:05:06Z
+[nbu-collector] 2026/04/01 19:05:06.418035 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:06:06.360403 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:06:06.421472 fetched 45 exchange records, collected_at=2026-04-01T19:06:06Z
+[nbu-collector] 2026/04/01 19:06:06.421793 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:20:13.991727 service starting
+[nbu-collector] 2026/04/01 19:20:13.994756 config: publish_mode=rabbit dry_run=false http_addr=:8080 poll_interval=1m0s
+[nbu-collector] 2026/04/01 19:20:14.024433 RabbitMQ connection established
+[nbu-collector] 2026/04/01 19:20:14.026872 RabbitMQ enabled, queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:20:14.028712 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:20:14.035337 HTTP server listening on :8080
+[nbu-collector] 2026/04/01 19:20:14.258573 fetched 45 exchange records, collected_at=2026-04-01T19:20:14Z
+[nbu-collector] 2026/04/01 19:20:14.259852 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:21:14.262570 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:21:14.375849 fetched 45 exchange records, collected_at=2026-04-01T19:21:14Z
+[nbu-collector] 2026/04/01 19:21:14.379760 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:22:14.260776 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:22:14.323693 fetched 45 exchange records, collected_at=2026-04-01T19:22:14Z
+[nbu-collector] 2026/04/01 19:22:14.324547 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:23:14.260445 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:23:14.324561 fetched 45 exchange records, collected_at=2026-04-01T19:23:14Z
+[nbu-collector] 2026/04/01 19:23:14.325293 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:23:22.498244 service starting
+[nbu-collector] 2026/04/01 19:23:22.499162 config: publish_mode=rabbit dry_run=false http_addr=:8080 poll_interval=1m0s
+[nbu-collector] 2026/04/01 19:23:22.522607 RabbitMQ connection established
+[nbu-collector] 2026/04/01 19:23:22.524837 RabbitMQ enabled, queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:23:22.529422 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:23:22.533977 HTTP server listening on :8080
+[nbu-collector] 2026/04/01 19:23:22.735649 fetched 45 exchange records, collected_at=2026-04-01T19:23:22Z
+[nbu-collector] 2026/04/01 19:23:22.737484 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:24:14.261336 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:24:14.322684 fetched 45 exchange records, collected_at=2026-04-01T19:24:14Z
+[nbu-collector] 2026/04/01 19:24:14.323016 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:24:22.741144 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:24:22.812402 fetched 45 exchange records, collected_at=2026-04-01T19:24:22Z
+[nbu-collector] 2026/04/01 19:24:22.814603 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:25:14.260795 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:25:14.324005 fetched 45 exchange records, collected_at=2026-04-01T19:25:14Z
+[nbu-collector] 2026/04/01 19:25:14.324674 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:25:22.738157 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:25:22.796179 fetched 45 exchange records, collected_at=2026-04-01T19:25:22Z
+[nbu-collector] 2026/04/01 19:25:22.798812 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:26:08.492129 service starting
+[nbu-collector] 2026/04/01 19:26:08.493156 config: publish_mode=rabbit dry_run=false http_addr=:8080 poll_interval=1m0s
+[nbu-collector] 2026/04/01 19:26:08.550048 RabbitMQ connection established
+[nbu-collector] 2026/04/01 19:26:08.550508 RabbitMQ enabled, queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:26:08.551699 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:26:08.554550 HTTP server listening on :8080
+[nbu-collector] 2026/04/01 19:26:08.751013 fetched 45 exchange records, collected_at=2026-04-01T19:26:08Z
+[nbu-collector] 2026/04/01 19:26:08.752944 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:26:14.261299 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:26:14.324386 fetched 45 exchange records, collected_at=2026-04-01T19:26:14Z
+[nbu-collector] 2026/04/01 19:26:14.326492 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:26:22.738314 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:26:22.798892 fetched 45 exchange records, collected_at=2026-04-01T19:26:22Z
+[nbu-collector] 2026/04/01 19:26:22.799202 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:27:08.753333 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:27:08.814908 fetched 45 exchange records, collected_at=2026-04-01T19:27:08Z
+[nbu-collector] 2026/04/01 19:27:08.815217 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:27:14.261042 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:27:14.322807 fetched 45 exchange records, collected_at=2026-04-01T19:27:14Z
+[nbu-collector] 2026/04/01 19:27:14.323404 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:27:22.737885 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:27:22.800483 fetched 45 exchange records, collected_at=2026-04-01T19:27:22Z
+[nbu-collector] 2026/04/01 19:27:22.801122 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:28:08.753300 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:28:08.812840 fetched 45 exchange records, collected_at=2026-04-01T19:28:08Z
+[nbu-collector] 2026/04/01 19:28:08.813639 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:28:14.260770 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:28:14.318813 fetched 45 exchange records, collected_at=2026-04-01T19:28:14Z
+[nbu-collector] 2026/04/01 19:28:14.319234 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:28:22.738781 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:28:22.800731 fetched 45 exchange records, collected_at=2026-04-01T19:28:22Z
+[nbu-collector] 2026/04/01 19:28:22.801843 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:29:08.754336 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:29:08.817183 fetched 45 exchange records, collected_at=2026-04-01T19:29:08Z
+[nbu-collector] 2026/04/01 19:29:08.817979 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:29:14.262078 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:29:14.320038 fetched 45 exchange records, collected_at=2026-04-01T19:29:14Z
+[nbu-collector] 2026/04/01 19:29:14.320525 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:29:22.738017 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:29:22.794160 fetched 45 exchange records, collected_at=2026-04-01T19:29:22Z
+[nbu-collector] 2026/04/01 19:29:22.794513 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:30:08.753792 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:30:08.817201 fetched 45 exchange records, collected_at=2026-04-01T19:30:08Z
+[nbu-collector] 2026/04/01 19:30:08.817617 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:30:14.261135 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:30:14.322682 fetched 45 exchange records, collected_at=2026-04-01T19:30:14Z
+[nbu-collector] 2026/04/01 19:30:14.323090 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:30:22.738397 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:30:22.800353 fetched 45 exchange records, collected_at=2026-04-01T19:30:22Z
+[nbu-collector] 2026/04/01 19:30:22.801033 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:31:08.753871 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:31:08.814812 fetched 45 exchange records, collected_at=2026-04-01T19:31:08Z
+[nbu-collector] 2026/04/01 19:31:08.815289 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:31:14.260488 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:31:14.317175 fetched 45 exchange records, collected_at=2026-04-01T19:31:14Z
+[nbu-collector] 2026/04/01 19:31:14.317628 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:31:22.738667 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:31:22.803269 fetched 45 exchange records, collected_at=2026-04-01T19:31:22Z
+[nbu-collector] 2026/04/01 19:31:22.803616 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:32:08.753267 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:32:08.810870 fetched 45 exchange records, collected_at=2026-04-01T19:32:08Z
+[nbu-collector] 2026/04/01 19:32:08.811352 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:32:14.260576 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:32:14.329236 fetched 45 exchange records, collected_at=2026-04-01T19:32:14Z
+[nbu-collector] 2026/04/01 19:32:14.330240 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/01 19:32:22.738677 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/01 19:32:22.908938 fetched 45 exchange records, collected_at=2026-04-01T19:32:22Z
+[nbu-collector] 2026/04/01 19:32:22.911239 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:43:28.033583 service starting
+[nbu-collector] 2026/04/02 06:43:28.034542 config: publish_mode=rabbit dry_run=false http_addr=:8080 poll_interval=1m0s
+[nbu-collector] 2026/04/02 06:43:28.059041 RabbitMQ connection established
+[nbu-collector] 2026/04/02 06:43:28.059331 RabbitMQ enabled, queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:43:28.060638 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:43:28.063969 HTTP server listening on :8080
+[nbu-collector] 2026/04/02 06:43:28.400021 fetched 45 exchange records, collected_at=2026-04-02T06:43:28Z
+[nbu-collector] 2026/04/02 06:43:28.401920 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:44:28.403139 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:44:28.875804 fetched 45 exchange records, collected_at=2026-04-02T06:44:28Z
+[nbu-collector] 2026/04/02 06:44:28.876758 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:45:28.403016 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:45:28.496065 fetched 45 exchange records, collected_at=2026-04-02T06:45:28Z
+[nbu-collector] 2026/04/02 06:45:28.497810 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:46:28.403173 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:46:28.551653 fetched 45 exchange records, collected_at=2026-04-02T06:46:28Z
+[nbu-collector] 2026/04/02 06:46:28.552281 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:46:42.711539 service starting
+[nbu-collector] 2026/04/02 06:46:42.712406 config: publish_mode=rabbit dry_run=false http_addr=:8080 poll_interval=1m0s
+[nbu-collector] 2026/04/02 06:46:42.728428 RabbitMQ connection established
+[nbu-collector] 2026/04/02 06:46:42.728742 RabbitMQ enabled, queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:46:42.729244 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:46:42.730642 HTTP server listening on :8080
+[nbu-collector] 2026/04/02 06:46:52.473016 fetched 45 exchange records, collected_at=2026-04-02T06:46:52Z
+[nbu-collector] 2026/04/02 06:46:52.475265 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:47:28.403309 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:47:28.670415 fetched 45 exchange records, collected_at=2026-04-02T06:47:28Z
+[nbu-collector] 2026/04/02 06:47:28.672542 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:47:52.475960 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:47:52.958113 fetched 45 exchange records, collected_at=2026-04-02T06:47:52Z
+[nbu-collector] 2026/04/02 06:47:52.959504 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:48:28.402673 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:48:28.710937 fetched 45 exchange records, collected_at=2026-04-02T06:48:28Z
+[nbu-collector] 2026/04/02 06:48:28.712078 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:48:52.475608 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:48:52.949127 fetched 45 exchange records, collected_at=2026-04-02T06:48:52Z
+[nbu-collector] 2026/04/02 06:48:52.949874 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:49:28.403073 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:49:28.732839 fetched 45 exchange records, collected_at=2026-04-02T06:49:28Z
+[nbu-collector] 2026/04/02 06:49:28.733305 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:49:52.476618 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:49:52.842195 fetched 45 exchange records, collected_at=2026-04-02T06:49:52Z
+[nbu-collector] 2026/04/02 06:49:52.843071 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:50:28.403236 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:50:28.547277 fetched 45 exchange records, collected_at=2026-04-02T06:50:28Z
+[nbu-collector] 2026/04/02 06:50:28.547596 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:50:37.074225 service starting
+[nbu-collector] 2026/04/02 06:50:37.075475 config: publish_mode=rabbit dry_run=false http_addr=:8080 poll_interval=1m0s
+[nbu-collector] 2026/04/02 06:50:37.095806 RabbitMQ connection established
+[nbu-collector] 2026/04/02 06:50:37.096050 RabbitMQ enabled, queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:50:37.097966 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:50:37.101327 HTTP server listening on :8080
+[nbu-collector] 2026/04/02 06:50:37.598144 fetched 45 exchange records, collected_at=2026-04-02T06:50:37Z
+[nbu-collector] 2026/04/02 06:50:37.600365 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:50:52.475690 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:50:52.651965 fetched 45 exchange records, collected_at=2026-04-02T06:50:52Z
+[nbu-collector] 2026/04/02 06:50:52.652627 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:51:28.403486 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:51:28.502417 fetched 45 exchange records, collected_at=2026-04-02T06:51:28Z
+[nbu-collector] 2026/04/02 06:51:28.505278 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:51:37.601458 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:51:37.663161 fetched 45 exchange records, collected_at=2026-04-02T06:51:37Z
+[nbu-collector] 2026/04/02 06:51:37.664166 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:51:52.475496 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:51:52.689292 fetched 45 exchange records, collected_at=2026-04-02T06:51:52Z
+[nbu-collector] 2026/04/02 06:51:52.690662 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:52:28.403132 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:52:28.947784 fetched 45 exchange records, collected_at=2026-04-02T06:52:28Z
+[nbu-collector] 2026/04/02 06:52:28.948791 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:52:37.601635 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:52:38.815601 fetched 45 exchange records, collected_at=2026-04-02T06:52:38Z
+[nbu-collector] 2026/04/02 06:52:38.816342 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:52:52.475798 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:52:52.535348 fetched 45 exchange records, collected_at=2026-04-02T06:52:52Z
+[nbu-collector] 2026/04/02 06:52:52.535977 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:53:28.402694 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:53:28.463531 fetched 45 exchange records, collected_at=2026-04-02T06:53:28Z
+[nbu-collector] 2026/04/02 06:53:28.463963 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:53:37.601826 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:53:37.663885 fetched 45 exchange records, collected_at=2026-04-02T06:53:37Z
+[nbu-collector] 2026/04/02 06:53:37.664301 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:53:52.475740 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:53:52.537393 fetched 45 exchange records, collected_at=2026-04-02T06:53:52Z
+[nbu-collector] 2026/04/02 06:53:52.538084 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:54:28.402725 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:54:28.464950 fetched 45 exchange records, collected_at=2026-04-02T06:54:28Z
+[nbu-collector] 2026/04/02 06:54:28.465601 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:54:37.601228 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:54:37.690600 fetched 45 exchange records, collected_at=2026-04-02T06:54:37Z
+[nbu-collector] 2026/04/02 06:54:37.693614 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:54:52.475565 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:54:52.542981 fetched 45 exchange records, collected_at=2026-04-02T06:54:52Z
+[nbu-collector] 2026/04/02 06:54:52.544848 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:55:28.402822 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:55:28.467168 fetched 45 exchange records, collected_at=2026-04-02T06:55:28Z
+[nbu-collector] 2026/04/02 06:55:28.468269 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:55:37.601309 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:55:37.660769 fetched 45 exchange records, collected_at=2026-04-02T06:55:37Z
+[nbu-collector] 2026/04/02 06:55:37.661857 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:55:52.476007 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:55:52.537829 fetched 45 exchange records, collected_at=2026-04-02T06:55:52Z
+[nbu-collector] 2026/04/02 06:55:52.539615 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:56:28.403326 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:56:28.466613 fetched 45 exchange records, collected_at=2026-04-02T06:56:28Z
+[nbu-collector] 2026/04/02 06:56:28.468057 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:56:37.600976 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:56:37.662301 fetched 45 exchange records, collected_at=2026-04-02T06:56:37Z
+[nbu-collector] 2026/04/02 06:56:37.663385 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:56:52.476188 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:56:52.542539 fetched 45 exchange records, collected_at=2026-04-02T06:56:52Z
+[nbu-collector] 2026/04/02 06:56:52.543703 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:57:28.402684 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:57:28.465542 fetched 45 exchange records, collected_at=2026-04-02T06:57:28Z
+[nbu-collector] 2026/04/02 06:57:28.466561 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:57:37.601684 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:57:37.667254 fetched 45 exchange records, collected_at=2026-04-02T06:57:37Z
+[nbu-collector] 2026/04/02 06:57:37.668287 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:57:52.476795 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:57:52.552525 fetched 45 exchange records, collected_at=2026-04-02T06:57:52Z
+[nbu-collector] 2026/04/02 06:57:52.553824 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:58:28.402967 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:58:28.549402 fetched 45 exchange records, collected_at=2026-04-02T06:58:28Z
+[nbu-collector] 2026/04/02 06:58:28.550294 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:58:37.601096 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:58:37.924267 fetched 45 exchange records, collected_at=2026-04-02T06:58:37Z
+[nbu-collector] 2026/04/02 06:58:37.925534 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:58:52.475511 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:58:52.610309 fetched 45 exchange records, collected_at=2026-04-02T06:58:52Z
+[nbu-collector] 2026/04/02 06:58:52.611577 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:59:28.402911 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:59:28.466880 fetched 45 exchange records, collected_at=2026-04-02T06:59:28Z
+[nbu-collector] 2026/04/02 06:59:28.468299 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:59:37.601678 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:59:37.677175 fetched 45 exchange records, collected_at=2026-04-02T06:59:37Z
+[nbu-collector] 2026/04/02 06:59:37.678233 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 06:59:52.476158 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 06:59:52.686366 fetched 45 exchange records, collected_at=2026-04-02T06:59:52Z
+[nbu-collector] 2026/04/02 06:59:52.686972 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 07:00:28.403270 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 07:00:28.703863 fetched 45 exchange records, collected_at=2026-04-02T07:00:28Z
+[nbu-collector] 2026/04/02 07:00:28.706059 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 07:00:37.601444 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 07:00:37.700968 fetched 45 exchange records, collected_at=2026-04-02T07:00:37Z
+[nbu-collector] 2026/04/02 07:00:37.702018 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 07:00:52.475759 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 07:00:52.550962 fetched 45 exchange records, collected_at=2026-04-02T07:00:52Z
+[nbu-collector] 2026/04/02 07:00:52.551857 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 07:01:28.403288 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 07:01:28.467254 fetched 45 exchange records, collected_at=2026-04-02T07:01:28Z
+[nbu-collector] 2026/04/02 07:01:28.469184 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 07:01:37.601293 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 07:01:37.663174 fetched 45 exchange records, collected_at=2026-04-02T07:01:37Z
+[nbu-collector] 2026/04/02 07:01:37.664373 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 07:01:52.475970 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 07:01:52.666472 fetched 45 exchange records, collected_at=2026-04-02T07:01:52Z
+[nbu-collector] 2026/04/02 07:01:52.667637 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 07:02:28.402917 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 07:02:28.621495 fetched 45 exchange records, collected_at=2026-04-02T07:02:28Z
+[nbu-collector] 2026/04/02 07:02:28.622933 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 07:02:37.600779 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 07:02:37.664929 fetched 45 exchange records, collected_at=2026-04-02T07:02:37Z
+[nbu-collector] 2026/04/02 07:02:37.666269 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 07:02:52.476006 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 07:02:53.316321 fetched 45 exchange records, collected_at=2026-04-02T07:02:53Z
+[nbu-collector] 2026/04/02 07:02:53.318088 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 07:03:28.402703 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 07:03:28.505669 fetched 45 exchange records, collected_at=2026-04-02T07:03:28Z
+[nbu-collector] 2026/04/02 07:03:28.507015 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 07:03:37.602080 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 07:03:37.662833 fetched 45 exchange records, collected_at=2026-04-02T07:03:37Z
+[nbu-collector] 2026/04/02 07:03:37.663916 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 07:03:52.475818 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 07:03:52.576598 fetched 45 exchange records, collected_at=2026-04-02T07:03:52Z
+[nbu-collector] 2026/04/02 07:03:52.577896 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 07:04:28.402618 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 07:04:28.595224 fetched 45 exchange records, collected_at=2026-04-02T07:04:28Z
+[nbu-collector] 2026/04/02 07:04:28.596018 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 07:04:37.601560 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 07:04:37.664505 fetched 45 exchange records, collected_at=2026-04-02T07:04:37Z
+[nbu-collector] 2026/04/02 07:04:37.665572 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 07:04:52.476107 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 07:04:52.737862 fetched 45 exchange records, collected_at=2026-04-02T07:04:52Z
+[nbu-collector] 2026/04/02 07:04:52.739203 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 07:05:28.402644 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 07:05:28.468501 fetched 45 exchange records, collected_at=2026-04-02T07:05:28Z
+[nbu-collector] 2026/04/02 07:05:28.468875 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 07:05:37.601468 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 07:05:37.665171 fetched 45 exchange records, collected_at=2026-04-02T07:05:37Z
+[nbu-collector] 2026/04/02 07:05:37.666257 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 07:05:52.475828 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 07:05:52.550153 fetched 45 exchange records, collected_at=2026-04-02T07:05:52Z
+[nbu-collector] 2026/04/02 07:05:52.550772 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 07:06:28.402442 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 07:06:28.466889 fetched 45 exchange records, collected_at=2026-04-02T07:06:28Z
+[nbu-collector] 2026/04/02 07:06:28.467336 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 07:06:37.601049 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 07:06:37.662499 fetched 45 exchange records, collected_at=2026-04-02T07:06:37Z
+[nbu-collector] 2026/04/02 07:06:37.663324 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates
+[nbu-collector] 2026/04/02 07:06:52.476139 fetching data from NBU API: https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+[nbu-collector] 2026/04/02 07:06:52.538655 fetched 45 exchange records, collected_at=2026-04-02T07:06:52Z
+[nbu-collector] 2026/04/02 07:06:52.539918 published 1 batch message with 45 records to RabbitMQ queue=nbu.exchange.rates

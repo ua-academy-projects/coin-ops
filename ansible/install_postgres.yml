@@ -1,0 +1,103 @@
+---
+- name: Install and configure PostgreSQL
+  hosts: db
+  become: true
+  vars:
+    ansible_remote_tmp: /tmp/.ansible
+    postgres_port: 5432
+
+    postgres_databases:
+      - app_db
+
+    postgres_users:
+      - name: app_user
+        password: "StrongPassword123!"
+        db: app_db
+
+  tasks:
+    - name: Ensure Ansible temp directory exists
+      file:
+        path: /tmp/.ansible
+        state: directory
+        mode: "0777"
+
+    - name: Install PostgreSQL
+      apt:
+        name:
+          - postgresql
+          - postgresql-contrib
+          - python3-psycopg2
+          - acl
+        state: present
+        update_cache: true
+
+    - name: Start PostgreSQL
+      service:
+        name: postgresql
+        state: started
+        enabled: true
+
+    - name: Detect installed PostgreSQL version
+      shell: "ls /etc/postgresql | sort -V | tail -n 1"
+      register: postgres_version_cmd
+      changed_when: false
+
+    - name: Set PostgreSQL version fact
+      set_fact:
+        postgres_version: "{{ postgres_version_cmd.stdout }}"
+
+    - name: Allow remote connections in postgresql.conf
+      replace:
+        path: "/etc/postgresql/{{ postgres_version }}/main/postgresql.conf"
+        regexp: "^#?listen_addresses\\s*=.*"
+        replace: "listen_addresses = '*'"
+      notify: restart postgresql
+
+    - name: Allow remote connections in pg_hba.conf
+      blockinfile:
+        path: "/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf"
+        marker: "# {mark} ANSIBLE MANAGED BLOCK"
+        block: |
+          host    all             all             0.0.0.0/0               md5
+          host    all             all             ::/0                    md5
+      notify: restart postgresql
+
+    - name: Restart PostgreSQL before creating DB objects
+      meta: flush_handlers
+
+    - name: Create database
+      become: true
+      become_user: postgres
+      become_method: sudo
+      community.postgresql.postgresql_db:
+        name: "{{ item }}"
+        state: present
+      loop: "{{ postgres_databases }}"
+
+    - name: Create users
+      become: true
+      become_user: postgres
+      become_method: sudo
+      community.postgresql.postgresql_user:
+        name: "{{ item.name }}"
+        password: "{{ item.password }}"
+        state: present
+        role_attr_flags: LOGIN
+      loop: "{{ postgres_users }}"
+
+    - name: Grant privileges
+      become: true
+      become_user: postgres
+      become_method: sudo
+      community.postgresql.postgresql_user:
+        name: "{{ item.name }}"
+        db: "{{ item.db }}"
+        priv: ALL
+        state: present
+      loop: "{{ postgres_users }}"
+
+  handlers:
+    - name: restart postgresql
+      service:
+        name: postgresql
+        state: restarted
