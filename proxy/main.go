@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,7 +10,6 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
-
 type Rate struct {
 	CC   string  `json:"cc"`
 	Txt  string  `json:"txt"`
