@@ -1,5 +1,5 @@
 #!/bin/bash
-# Налаштування VM1 - Flask UI
+# VM1 - Flask UI
 
 echo "=== Налаштування VM1 ==="
 

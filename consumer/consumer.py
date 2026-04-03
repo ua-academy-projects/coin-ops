@@ -1,9 +1,10 @@
 import pika
 import json
 import psycopg2
+import threading
+import time
 from flask import Flask, jsonify
 from psycopg2.extras import RealDictCursor
-import threading
 
 app = Flask(__name__)
 
@@ -20,7 +21,6 @@ def get_db():
     return psycopg2.connect(**DB_CONFIG)
 
 def save_rates(rates):
-    # Зберігаємо курси в PostgreSQL
     conn = get_db()
     cur = conn.cursor()
     for rate in rates:
@@ -33,33 +33,38 @@ def save_rates(rates):
     conn.close()
 
 def consume():
-    # Підключаємось до RabbitMQ
-    credentials = pika.PlainCredentials('coinops', 'coinops123')
-    connection = pika.BlockingConnection(
-        pika.ConnectionParameters(
-            host=RABBITMQ_HOST,
-            credentials=credentials
-        )
-    )
-    channel = connection.channel()
+    # Retry логіка — якщо RabbitMQ недоступний,
+    # чекаємо 5 секунд і пробуємо знову
+    while True:
+        try:
+            credentials = pika.PlainCredentials('coinops', 'coinops123')
+            connection = pika.BlockingConnection(
+                pika.ConnectionParameters(
+                    host=RABBITMQ_HOST,
+                    credentials=credentials,
+                    connection_attempts=3,
+                    retry_delay=5
+                )
+            )
+            channel = connection.channel()
+            channel.queue_declare(queue='rates')
 
-    # Створюємо чергу якщо не існує
-    channel.queue_declare(queue='rates')
+            def callback(ch, method, properties, body):
+                rates = json.loads(body)
+                print(f"Отримано з черги: {rates}")
+                save_rates(rates)
 
-    def callback(ch, method, properties, body):
-        # Отримали повідомлення з черги
-        rates = json.loads(body)
-        print(f"Отримано з черги: {rates}")
-        save_rates(rates)
+            channel.basic_consume(
+                queue='rates',
+                on_message_callback=callback,
+                auto_ack=True
+            )
+            print("Підключено до RabbitMQ, чекаємо повідомлень...")
+            channel.start_consuming()
 
-    # Слухаємо чергу
-    channel.basic_consume(
-        queue='rates',
-        on_message_callback=callback,
-        auto_ack=True
-    )
-    print("Чекаємо повідомлень з черги...")
-    channel.start_consuming()
+        except Exception as e:
+            print(f"Помилка: {e}. Спробую знову через 5 секунд...")
+            time.sleep(5)
 
 @app.route('/history', methods=['GET'])
 def get_history():
@@ -72,10 +77,7 @@ def get_history():
     return jsonify([dict(r) for r in rows])
 
 if __name__ == '__main__':
-    # Запускаємо consumer в окремому потоці
-    # щоб Flask і RabbitMQ працювали одночасно
     t = threading.Thread(target=consume)
     t.daemon = True
     t.start()
-
     app.run(host='0.0.0.0', port=5001, debug=False)
