@@ -5,27 +5,20 @@ app = Flask(__name__)
 
 @app.route('/')
 def index():
-    all_rates = []
+    rates = []
+    crypto = []
 
-    # Отримуємо курси валют з НБУ
     try:
-        rates_response = requests.get('http://192.168.56.102:8080/rates', timeout=5)
-        rates = rates_response.json()
-        if rates:
-            all_rates += rates
+        rates = requests.get('http://192.168.56.102:8080/rates', timeout=5).json()
     except Exception as e:
         print(f"Помилка НБУ: {e}")
 
-    # Отримуємо крипто курси
     try:
-        crypto_response = requests.get('http://192.168.56.102:8080/crypto', timeout=5)
-        crypto = crypto_response.json()
-        if crypto:
-            all_rates += crypto
+        crypto = requests.get('http://192.168.56.102:8080/crypto', timeout=5).json()
     except Exception as e:
         print(f"Помилка CoinGecko: {e}")
 
-    return render_template('index.html', rates=all_rates)
+    return render_template('index.html', rates=rates, crypto=crypto)
 
 @app.route('/history')
 def history():

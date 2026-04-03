@@ -1,24 +1,169 @@
 <!DOCTYPE html>
-<html>
+<html lang="uk">
 <head>
-    <title>Курси валют НБУ</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CoinOps — Курси валют</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #0f1117; color: #e0e0e0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
+        .nav { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; background: #1a1d27; border-bottom: 0.5px solid #2a2d3a; }
+        .nav-logo { font-size: 20px; font-weight: 600; color: #fff; }
+        .nav-logo span { color: #378ADD; }
+        .nav-links { display: flex; gap: 4px; }
+        .nav-link { padding: 7px 16px; border-radius: 8px; font-size: 14px; color: #888; cursor: pointer; text-decoration: none; border: none; background: none; }
+        .nav-link.active, .nav-link:hover { background: #1e2a3a; color: #378ADD; }
+        .nav-time { font-size: 12px; color: #555; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+        .card { background: #1a1d27; border-radius: 12px; border: 0.5px solid #2a2d3a; overflow: hidden; }
+        .card-header { padding: 14px 16px; border-bottom: 0.5px solid #2a2d3a; display: flex; align-items: center; justify-content: space-between; }
+        .card-title { font-size: 14px; font-weight: 500; color: #e0e0e0; }
+        .badge { font-size: 11px; padding: 3px 8px; border-radius: 6px; }
+        .badge-blue { background: #1e2a3a; color: #378ADD; }
+        .badge-green { background: #1a2a1a; color: #3bb554; }
+        .table-wrap { max-height: 320px; overflow-y: auto; }
+        .table-wrap::-webkit-scrollbar { width: 4px; }
+        .table-wrap::-webkit-scrollbar-track { background: #1a1d27; }
+        .table-wrap::-webkit-scrollbar-thumb { background: #2a2d3a; border-radius: 2px; }
+        table { width: 100%; border-collapse: collapse; }
+        th { font-size: 11px; color: #555; font-weight: 400; padding: 8px 16px; text-align: left; border-bottom: 0.5px solid #2a2d3a; position: sticky; top: 0; background: #1a1d27; }
+        td { font-size: 13px; color: #ccc; padding: 8px 16px; border-bottom: 0.5px solid #15171f; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: #1e2130; }
+        .code-blue { color: #378ADD; font-size: 12px; font-weight: 500; }
+        .code-green { color: #3bb554; font-size: 12px; font-weight: 500; }
+        .rate-val { color: #fff; font-weight: 500; font-variant-numeric: tabular-nums; }
+        .converter { background: #1a1d27; border-radius: 12px; border: 0.5px solid #2a2d3a; padding: 20px; margin-bottom: 20px; }
+        .conv-title { font-size: 14px; font-weight: 500; color: #e0e0e0; margin-bottom: 16px; }
+        .conv-row { display: grid; grid-template-columns: 1fr 80px 1fr auto; gap: 12px; align-items: end; }
+        .conv-field label { font-size: 12px; color: #555; margin-bottom: 6px; display: block; }
+        .conv-field input, .conv-field select { width: 100%; padding: 9px 12px; background: #0f1117; border: 0.5px solid #2a2d3a; border-radius: 8px; color: #fff; font-size: 14px; outline: none; }
+        .conv-field input:focus, .conv-field select:focus { border-color: #378ADD; }
+        .conv-field select option { background: #1a1d27; }
+        .conv-arrow { font-size: 20px; color: #378ADD; padding-bottom: 8px; text-align: center; }
+        .conv-btn { padding: 9px 20px; background: #378ADD; border: none; border-radius: 8px; color: #fff; font-size: 14px; cursor: pointer; white-space: nowrap; }
+        .conv-btn:hover { background: #185FA5; }
+        .conv-result { background: #0f1117; border-radius: 8px; padding: 14px 16px; margin-top: 12px; border: 0.5px solid #2a2d3a; display: flex; align-items: baseline; gap: 10px; }
+        .conv-result-label { font-size: 13px; color: #555; }
+        .conv-result-val { font-size: 24px; font-weight: 500; color: #378ADD; }
+        .history-link { display: inline-flex; align-items: center; gap: 6px; padding: 10px 18px; background: #1a1d27; border-radius: 8px; color: #378ADD; font-size: 14px; border: 0.5px solid #2a2d3a; text-decoration: none; }
+        .history-link:hover { background: #1e2a3a; }
+        @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } .conv-row { grid-template-columns: 1fr 1fr; } .conv-arrow { display: none; } }
+    </style>
 </head>
 <body>
-    <h1>Курси валют НБУ</h1>
-    <a href="/history">Переглянути історію ></a>
-    <table border="1">
-        <tr>
-            <th>Валюта</th>
-            <th>Назва</th>
-            <th>Курс (UAH)</th>
-        </tr>
-        {% for r in rates %}
-        <tr>
-            <td>{{ r.cc }}</td>
-            <td>{{ r.txt }}</td>
-            <td>{{ "%.2f"|format(r.rate) }}</td> 
-        </tr>
-        {% endfor %}
-    </table>
+
+<nav class="nav">
+    <div class="nav-logo">coin<span>ops</span></div>
+    <div class="nav-links">
+        <a href="/" class="nav-link active">Курси</a>
+        <a href="/history" class="nav-link">Історія</a>
+    </div>
+    <div class="nav-time" id="update-time">Оновлено: --:--:--</div>
+</nav>
+
+<div class="container">
+    <div class="grid-2">
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">Валюти НБУ</div>
+                <div class="badge badge-blue">НБУ</div>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr><th>Код</th><th>Назва</th><th>Курс (UAH)</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for r in rates %}
+                        {% if r.cc is defined %}
+                        <tr>
+                            <td><span class="code-blue">{{ r.cc }}</span></td>
+                            <td>{{ r.txt }}</td>
+                            <td class="rate-val">{{ "%.2f"|format(r.rate|float) }}</td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">Криптовалюти</div>
+                <div class="badge badge-green">CoinGecko</div>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr><th>Код</th><th>Назва</th><th>Курс (UAH)</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for r in crypto %}
+                        <tr>
+                            <td><span class="code-green">{{ r.cc }}</span></td>
+                            <td>{{ r.txt }}</td>
+                            <td class="rate-val">{{ "%.2f"|format(r.rate|float) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="converter">
+        <div class="conv-title">Конвертер валют</div>
+        <div class="conv-row">
+            <div class="conv-field">
+                <label>Сума</label>
+                <input type="number" id="conv-amount" value="100" min="0">
+            </div>
+            <div class="conv-arrow">→</div>
+            <div class="conv-field">
+                <label>Валюта</label>
+                <select id="conv-currency">
+                    {% for r in rates %}
+                    {% if r.cc is defined %}
+                    <option value="{{ r.rate }}">{{ r.cc }} → UAH</option>
+                    {% endif %}
+                    {% endfor %}
+                    {% for r in crypto %}
+                    <option value="{{ r.rate }}">{{ r.cc }} → UAH</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="conv-field">
+                <label>&nbsp;</label>
+                <button class="conv-btn" onclick="convert()">Конвертувати</button>
+            </div>
+        </div>
+        <div class="conv-result">
+            <div class="conv-result-label">Результат:</div>
+            <div class="conv-result-val" id="conv-result">—</div>
+        </div>
+    </div>
+
+    <a href="/history" class="history-link">Переглянути історію →</a>
+</div>
+
+<script>
+    document.getElementById('update-time').textContent = 'Оновлено: ' + new Date().toLocaleTimeString('uk-UA');
+
+    function convert() {
+        const amount = parseFloat(document.getElementById('conv-amount').value);
+        const rate = parseFloat(document.getElementById('conv-currency').value);
+        if (!amount || !rate) return;
+        const result = (amount * rate).toLocaleString('uk-UA', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById('conv-result').textContent = result + ' UAH';
+    }
+
+    document.getElementById('conv-amount').addEventListener('input', convert);
+    document.getElementById('conv-currency').addEventListener('change', convert);
+    convert();
+</script>
+
 </body>
 </html>
