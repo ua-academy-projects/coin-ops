@@ -89,14 +89,7 @@ func getRates(w http.ResponseWriter, r *http.Request) {
 	var allRates []Rate
 	json.Unmarshal(body, &allRates)
 
-	// Фільтруємо USD, EUR, GBP
-	needed := map[string]bool{"USD": true, "EUR": true, "GBP": true}
-	var filtered []Rate
-	for _, rate := range allRates {
-		if needed[rate.CC] {
-			filtered = append(filtered, rate)
-		}
-	}
+    filtered := allRates
 
 	// Публікуємо в RabbitMQ асинхронно
 	go publishToQueue(filtered)
