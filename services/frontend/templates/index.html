@@ -41,35 +41,35 @@
           <div class="alert alert-warning glass mb-0" role="alert">Не вдалося отримати дані з проксі: {{ live_error }}</div>
         {% else %}
           <div id="coinops-client-error" class="alert alert-danger glass mb-3 d-none" role="alert"></div>
-          <div class="row g-2 mb-3">
-            <div class="col-md-3 col-6">
-              <div class="glass kpi-card kpi-accent-usd p-3 h-100 d-flex flex-column">
-                <div class="co-label">Офіційний USD / UAH</div>
+          <div class="row g-2 mb-3 kpi-row">
+            <div class="col-md-3 col-6 kpi-slot-wrap" data-kpi-slot-col="0">
+              <div class="glass kpi-card kpi-accent-usd p-3 h-100 d-flex flex-column kpi-slot-draggable" draggable="true" data-kpi-slot="0" title="Перетягніть, щоб змінити порядок">
+                <div class="co-label" id="kpi-slot-0-title">Офіційний USD / UAH</div>
                 <div class="fs-5 fw-semibold" id="kpi-usd-uah">—</div>
                 <div class="small mt-auto" id="kpi-usd-trend">—</div>
               </div>
             </div>
-            <div class="col-md-3 col-6">
-              <div class="glass kpi-card kpi-accent-eur p-3 h-100 d-flex flex-column">
-                <div class="co-label">EUR / UAH</div>
+            <div class="col-md-3 col-6 kpi-slot-wrap" data-kpi-slot-col="1">
+              <div class="glass kpi-card kpi-accent-eur p-3 h-100 d-flex flex-column kpi-slot-draggable" draggable="true" data-kpi-slot="1" title="Перетягніть, щоб змінити порядок">
+                <div class="co-label" id="kpi-slot-1-title">EUR / UAH</div>
                 <div class="fs-5 fw-semibold" id="kpi-eur-uah">—</div>
                 <div class="small mt-auto" id="kpi-eur-trend">—</div>
               </div>
             </div>
-            <div class="col-md-3 col-6">
-              <div class="glass kpi-card kpi-accent-btc p-3 h-100 d-flex flex-column">
-                <div class="co-label">BTC / USD</div>
+            <div class="col-md-3 col-6 kpi-slot-wrap" data-kpi-slot-col="2">
+              <div class="glass kpi-card kpi-accent-btc p-3 h-100 d-flex flex-column kpi-slot-draggable" draggable="true" data-kpi-slot="2" title="Перетягніть, щоб змінити порядок">
+                <div class="co-label" id="kpi-slot-2-title">BTC / USD</div>
                 <div class="fs-5 fw-semibold" id="kpi-btc-usd">—</div>
                 <div class="small mt-auto" id="kpi-btc-trend">—</div>
               </div>
             </div>
             <div class="col-md-3 col-6">
-              <div class="glass kpi-card kpi-accent-status p-3 h-100 d-flex flex-column justify-content-between">
+              <div class="glass kpi-card kpi-accent-status kpi-status-card p-3 h-100 d-flex flex-column" data-kpi-slot="status" draggable="false">
                 <div class="co-label">Стан</div>
-                <div class="fs-6" id="kpi-status-line">Оновлено: <span id="kpi-live-time">—</span></div>
-                <div>
-                  <button type="button" class="btn btn-sm btn-glass-outline" id="btn-refresh-live" title="Оновити курси">
-                    <i class="bi bi-arrow-clockwise"></i> Оновити
+                <div class="fs-6 kpi-status-text" id="kpi-status-line">Оновлено: <span id="kpi-live-time">—</span></div>
+                <div class="kpi-status-actions mt-auto">
+                  <button type="button" class="btn btn-co-accent" id="btn-refresh-live" title="Оновити курси">
+                    <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Оновити
                   </button>
                 </div>
               </div>
@@ -121,8 +121,9 @@
                   <select id="conv-from" class="d-none" aria-hidden="true" tabindex="-1"></select>
                 </div>
               </div>
-              <div class="flex-shrink-0 pb-1">
-                <button type="button" class="btn btn-sm btn-glass-outline px-2" id="conv-swap" title="Поміняти валюти місцями" aria-label="Поміняти валюти">
+              <div class="flex-shrink-0 conv-swap-col">
+                <label class="form-label small mb-0 co-label d-none d-lg-block">&nbsp;</label>
+                <button type="button" class="btn btn-sm btn-co-accent conv-swap-btn" id="conv-swap" title="Поміняти валюти місцями" aria-label="Поміняти валюти">
                   <i class="bi bi-arrow-left-right"></i>
                 </button>
               </div>
@@ -148,6 +149,7 @@
             <table class="table table-sm table-striped table-glass align-middle mb-0" id="live-table">
               <thead>
                 <tr>
+                  <th scope="col" class="live-star-col text-center" title="Обрані для тайлів">★</th>
                   <th class="sortable" data-sort="symbol">Актив <span class="text-white-50">⇅</span></th>
                   <th class="sortable text-end" data-sort="uah">Ціна UAH <span class="text-white-50">⇅</span></th>
                   <th class="sortable text-end" data-sort="usd">Ціна USD <span class="text-white-50">⇅</span></th>
@@ -195,8 +197,8 @@
               <select id="hist-range" class="d-none" aria-hidden="true" tabindex="-1"></select>
             </div>
           </div>
-          <div class="col-md-3">
-            <button type="button" class="btn btn-sm btn-primary" id="hist-load">Завантажити</button>
+          <div class="col-md-3 d-flex flex-wrap gap-2 align-items-end">
+            <button type="button" class="btn btn-sm btn-co-accent" id="hist-load">Завантажити</button>
           </div>
         </div>
         <div id="hist-chart-error" class="alert alert-warning d-none mb-3" role="alert"></div>

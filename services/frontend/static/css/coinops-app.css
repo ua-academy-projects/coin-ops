@@ -115,6 +115,27 @@ body.coinops-app {
 .kpi-accent-btc::before { background: linear-gradient(90deg, #fbbf24, #f59e0b, #f97316); }
 .kpi-accent-status::before { background: linear-gradient(90deg, #94a3b8, #64748b, #475569); }
 .kpi-card .co-label { color: var(--co-muted); font-size: 0.8rem; }
+/* Картка «Стан»: відступи між підписом, часом і кнопкою; кнопка на всю ширину з комфортним padding */
+.coinops-app .kpi-status-card {
+  gap: 0.5rem;
+  min-height: 108px;
+}
+.coinops-app .kpi-status-text {
+  line-height: 1.4;
+}
+.coinops-app .kpi-status-actions {
+  padding-top: 0.5rem;
+}
+.coinops-app .kpi-status-actions .btn-co-accent {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
 #converter-result { font-variant-numeric: tabular-nums; }
 .spark-wrap {
   width: 100px;
@@ -193,6 +214,28 @@ body.coinops-app {
   color: var(--co-text);
   border-color: rgba(255, 255, 255, 0.35);
 }
+/* Головна дія (напр. «Завантажити» на історії) — м’який cyan→indigo, без стандартного bootstrap primary */
+.coinops-app .btn-co-accent {
+  color: #f0f9ff;
+  font-weight: 500;
+  border: 1px solid rgba(125, 211, 252, 0.38);
+  background: linear-gradient(145deg, rgba(34, 211, 238, 0.38) 0%, rgba(99, 102, 241, 0.48) 52%, rgba(129, 140, 248, 0.3) 100%);
+  box-shadow: 0 2px 14px rgba(56, 189, 248, 0.12);
+}
+.coinops-app .btn-co-accent:hover {
+  color: #fff;
+  border-color: rgba(165, 243, 252, 0.5);
+  background: linear-gradient(145deg, rgba(34, 211, 238, 0.52) 0%, rgba(99, 102, 241, 0.6) 52%, rgba(129, 140, 248, 0.42) 100%);
+}
+.coinops-app .btn-co-accent:focus {
+  color: #fff;
+  border-color: rgba(165, 243, 252, 0.55);
+  box-shadow: 0 0 0 0.2rem rgba(56, 189, 248, 0.28);
+}
+.coinops-app .btn-co-accent:active {
+  border-color: rgba(125, 211, 252, 0.45);
+  background: linear-gradient(145deg, rgba(6, 182, 212, 0.45) 0%, rgba(79, 70, 229, 0.55) 100%);
+}
 /* Кастомні випадаючі списки (конвертер, актив у історії) — темне меню без нативної білої рамки ОС */
 .co-select-dd-toggle {
   display: flex;
@@ -242,8 +285,22 @@ body.coinops-app {
 }
 
 .converter-row { gap: 0.5rem; }
+/* Кнопка обміну: ті самі вертикальні «сходинки», що й у селектів; трохи повітря з боків */
+.coinops-app .converter-row .conv-swap-col {
+  padding-left: 0.35rem;
+  padding-right: 0.35rem;
+}
+.coinops-app .converter-row .conv-swap-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.25rem;
+  min-height: calc(0.25rem + 0.25rem + 1.5 * 0.875rem + 2px);
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
 @media (min-width: 992px) {
-  .converter-row { flex-wrap: nowrap; align-items: flex-end; }
+  .converter-row { flex-wrap: nowrap; align-items: flex-end; gap: 0.625rem; }
   .converter-row .conv-result-col { flex: 1 1 auto; min-width: 200px; }
 }
 .hist-info-icon { cursor: help; }
@@ -281,4 +338,28 @@ body.coinops-app {
   background: rgba(248, 113, 113, 0.12);
   border: 1px solid rgba(248, 113, 113, 0.4);
   color: #fecaca;
+}
+
+.kpi-slot-draggable {
+  cursor: grab;
+  user-select: none;
+}
+.kpi-slot-draggable:active {
+  cursor: grabbing;
+}
+.kpi-slot-draggable.kpi-dragging {
+  opacity: 0.75;
+}
+.coinops-app .live-star-col {
+  width: 2.5rem;
+  padding-left: 0.35rem !important;
+  padding-right: 0.35rem !important;
+}
+.coinops-app .kpi-star-cell {
+  width: 2.5rem;
+  padding-left: 0.35rem !important;
+  padding-right: 0.35rem !important;
+}
+.coinops-app .kpi-star-toggle:focus {
+  box-shadow: none;
 }

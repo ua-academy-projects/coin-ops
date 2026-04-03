@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional, Tuple
 
 import requests
+import state_store
 from flask import Flask, jsonify, render_template, request
 
 LOG = logging.getLogger("coinops.frontend")
@@ -176,6 +177,21 @@ def fetch_live_rates(cfg: AppConfig) -> Tuple[Optional[list], Optional[str], Opt
     return rates, fetched_s, None
 
 
+def _ui_state_cookie_response(payload: dict[str, Any], set_sid: Optional[str] = None):
+    """JSON response; optionally sets ``coinops_sid`` session cookie (opaque id for Redis state)."""
+    resp = jsonify(payload)
+    if set_sid:
+        resp.set_cookie(
+            "coinops_sid",
+            set_sid,
+            max_age=60 * 60 * 24 * 365,
+            httponly=True,
+            samesite="Lax",
+            path="/",
+        )
+    return resp
+
+
 def create_app() -> Flask:
     """Application factory for tests and ``flask run``."""
     logging.basicConfig(level=logging.INFO)
@@ -250,6 +266,44 @@ def create_app() -> Flask:
         except (requests.RequestException, ValueError) as exc:
             LOG.warning("history dashboard proxy failed: %s", exc)
             return jsonify({"error": str(exc), "items": [], "count": 0}), 502
+
+    @app.route("/api/v1/ui-state", methods=["GET"])
+    def api_ui_state_get():
+        """
+        Return optional Redis-backed UI state for this browser session.
+
+        Sets ``coinops_sid`` cookie when missing. If ``REDIS_URL`` is unset or Redis is down,
+        returns ``enabled: false`` (client keeps ``localStorage`` only).
+        """
+        sid = request.cookies.get("coinops_sid", "")
+        set_sid: Optional[str] = None
+        if not state_store.valid_sid(sid):
+            set_sid = state_store.new_session_id()
+            sid = set_sid
+        if not state_store.redis_ui_enabled():
+            return _ui_state_cookie_response({"enabled": False, "state": {}}, set_sid)
+        return _ui_state_cookie_response(
+            {"enabled": True, "state": state_store.get_ui_state(sid)},
+            set_sid,
+        )
+
+    @app.route("/api/v1/ui-state", methods=["PUT"])
+    def api_ui_state_put():
+        """Persist UI state JSON (same shape as ``coinops_ui_v2`` in localStorage)."""
+        sid = request.cookies.get("coinops_sid", "")
+        if not state_store.valid_sid(sid):
+            return (
+                jsonify({"error": "missing_session", "detail": "GET /api/v1/ui-state first"}),
+                400,
+            )
+        if not state_store.redis_ui_enabled():
+            return jsonify({"error": "redis_unavailable"}), 503
+        body = request.get_json(silent=True) or {}
+        raw = body.get("state")
+        if not isinstance(raw, dict):
+            return jsonify({"error": "invalid_body"}), 400
+        state_store.set_ui_state(sid, raw)
+        return jsonify({"ok": True})
 
     return app
 

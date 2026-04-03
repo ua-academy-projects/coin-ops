@@ -5,7 +5,10 @@
  * Структура: утиліти форматування → завантаження вбудованого JSON → посилання на DOM → віджети dropdown
  * → стан/фільтри → рендер live → конвертер → HTTP → історія → прив’язка подій → ініт.
  */
-(function () {
+(async function () {
+  let _uiStateServerSync = false;
+  let _syncTimer = null;
+
   function initTooltips() {
     if (typeof bootstrap === 'undefined' || !bootstrap.Tooltip) return;
     document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (node) {
@@ -24,6 +27,29 @@
   const POPULAR_FIAT = ['USD', 'EUR', 'GBP', 'PLN', 'CHF', 'CAD'];
   const POPULAR_CRYPTO = ['BTC', 'ETH', 'USDT', 'BNB', 'SOL', 'XRP'];
   const LS_KEY = 'coinops_ui_v2';
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) { return {}; }
+  }
+  function saveState(patch) {
+    const cur = loadState();
+    Object.assign(cur, patch);
+    try { localStorage.setItem(LS_KEY, JSON.stringify(cur)); } catch (e) {}
+    if (_uiStateServerSync) {
+      clearTimeout(_syncTimer);
+      _syncTimer = setTimeout(function () {
+        fetch('/api/v1/ui-state', {
+          method: 'PUT',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state: loadState() })
+        }).catch(function () { /* ignore */ });
+      }, 500);
+    }
+  }
 
   const FIAT_NAMES = {
     USD: 'Долар США', EUR: 'Євро', GBP: 'Фунт стерлінгів', PLN: 'Злотий', CHF: 'Франк', CAD: 'Канадський долар',
@@ -117,16 +143,137 @@
     return false;
   }
 
-  function loadState() {
-    try {
-      const raw = localStorage.getItem(LS_KEY);
-      return raw ? JSON.parse(raw) : {};
-    } catch (e) { return {}; }
+  const MAX_FAVORITES = 8;
+  const KPI_FALLBACK = ['USD:fiat', 'EUR:fiat', 'BTC:crypto'];
+
+  function parsePairKeyString(pk) {
+    if (pk == null || typeof pk !== 'string') return null;
+    const idx = pk.lastIndexOf(':');
+    if (idx <= 0) return null;
+    return { sym: pk.slice(0, idx).toUpperCase(), typ: pk.slice(idx + 1) };
   }
-  function saveState(patch) {
-    const cur = loadState();
-    Object.assign(cur, patch);
-    try { localStorage.setItem(LS_KEY, JSON.stringify(cur)); } catch (e) {}
+
+  function rowForPairKey(pk) {
+    const p = parsePairKeyString(pk);
+    if (!p) return null;
+    return findRate(p.sym, p.typ);
+  }
+
+  function normalizeUiState(s) {
+    if (!Array.isArray(s.favoritePairs)) s.favoritePairs = [];
+    s.favoritePairs = s.favoritePairs.filter(function (x) { return typeof x === 'string' && x.indexOf(':') > 0; });
+    if (s.favoritePairs.length > MAX_FAVORITES) s.favoritePairs = s.favoritePairs.slice(0, MAX_FAVORITES);
+    if (s.histDefaultPair != null && typeof s.histDefaultPair !== 'string') s.histDefaultPair = null;
+    if (s.convFrom != null && typeof s.convFrom !== 'string') delete s.convFrom;
+    if (s.convTo != null && typeof s.convTo !== 'string') delete s.convTo;
+    if (s.convAmount != null && typeof s.convAmount !== 'string') s.convAmount = String(s.convAmount);
+    if (!s.uiStateVersion) s.uiStateVersion = 2;
+  }
+
+  function getKpiSlotPairKeys() {
+    const seen = {};
+    const fav = (st.favoritePairs || []).filter(function (pk) {
+      if (seen[pk]) return false;
+      if (!rowForPairKey(pk)) return false;
+      seen[pk] = true;
+      return true;
+    });
+    const out = [];
+    let fi = 0;
+    for (let slot = 0; slot < 3; slot++) {
+      if (fi < fav.length) {
+        out.push(fav[fi]);
+        fi += 1;
+      } else {
+        let added = false;
+        for (let j = 0; j < KPI_FALLBACK.length; j++) {
+          const fk = KPI_FALLBACK[j];
+          if (out.indexOf(fk) >= 0) continue;
+          if (rowForPairKey(fk)) {
+            out.push(fk);
+            added = true;
+            break;
+          }
+        }
+        if (!added) {
+          const first = liveRates[0];
+          out.push(first ? pairKey(first) : 'USD:fiat');
+        }
+      }
+    }
+    return out;
+  }
+
+  function mergeThreeIntoFavoritePairs(three) {
+    const old = Array.isArray(st.favoritePairs) ? st.favoritePairs.slice() : [];
+    const tail = old.filter(function (k) { return three.indexOf(k) === -1; });
+    st.favoritePairs = three.concat(tail).slice(0, MAX_FAVORITES);
+    saveState({ favoritePairs: st.favoritePairs });
+  }
+
+  function swapKpiSlots(i, j) {
+    if (i === j) return;
+    const three = getKpiSlotPairKeys().slice();
+    const t = three[i];
+    three[i] = three[j];
+    three[j] = t;
+    mergeThreeIntoFavoritePairs(three);
+    updateKpis();
+  }
+
+  function toggleFavoritePair(pk) {
+    if (!pk || pk.indexOf(':') < 0) return;
+    let arr = Array.isArray(st.favoritePairs) ? st.favoritePairs.slice() : [];
+    const ix = arr.indexOf(pk);
+    if (ix >= 0) {
+      arr.splice(ix, 1);
+    } else {
+      const three = getKpiSlotPairKeys();
+      const kick = three[2];
+      if (kick) {
+        arr = arr.filter(function (k) { return k !== kick; });
+      }
+      if (arr.indexOf(pk) < 0) {
+        arr.push(pk);
+      }
+      if (arr.length > MAX_FAVORITES) {
+        arr = arr.slice(0, MAX_FAVORITES);
+      }
+    }
+    st.favoritePairs = arr;
+    saveState({ favoritePairs: arr });
+  }
+
+  let _kpiDragSrc = null;
+
+  function bindKpiDrag() {
+    document.querySelectorAll('.kpi-slot-draggable[data-kpi-slot]').forEach(function (card) {
+      const slot = parseInt(card.getAttribute('data-kpi-slot'), 10);
+      if (Number.isNaN(slot)) return;
+      card.addEventListener('dragstart', function (e) {
+        _kpiDragSrc = slot;
+        card.classList.add('kpi-dragging');
+        try {
+          e.dataTransfer.setData('text/plain', String(slot));
+          e.dataTransfer.effectAllowed = 'move';
+        } catch (err) { /* ignore */ }
+      });
+      card.addEventListener('dragend', function () {
+        card.classList.remove('kpi-dragging');
+        _kpiDragSrc = null;
+      });
+      card.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        try { e.dataTransfer.dropEffect = 'move'; } catch (err) { /* ignore */ }
+      });
+      card.addEventListener('drop', function (e) {
+        e.preventDefault();
+        const dst = parseInt(card.getAttribute('data-kpi-slot'), 10);
+        const src = _kpiDragSrc;
+        if (src === null || Number.isNaN(dst) || src === dst) return;
+        swapKpiSlots(src, dst);
+      });
+    });
   }
 
   /* -------------------------------------------------------------------------- */
@@ -178,7 +325,20 @@
   /* -------------------------------------------------------------------------- */
   /* Посилання на DOM (id з шаблону не змінювати — на них зав’язаний JS/CSS)    */
   /* -------------------------------------------------------------------------- */
-  const st = loadState();
+  const base = loadState();
+  try {
+    const r = await fetch('/api/v1/ui-state', { credentials: 'same-origin' });
+    const data = await r.json();
+    if (data && data.enabled === true) {
+      _uiStateServerSync = true;
+    }
+    if (data && data.enabled && data.state && typeof data.state === 'object') {
+      Object.assign(base, data.state);
+      try { localStorage.setItem(LS_KEY, JSON.stringify(base)); } catch (e) {}
+    }
+  } catch (e) { /* ignore */ }
+  const st = base;
+  normalizeUiState(st);
   const el = {
     liveSearch: document.getElementById('live-search'),
     liveType: document.getElementById('live-type-filter'),
@@ -222,6 +382,9 @@
 
   if (el.liveSearch) { el.liveSearch.value = st.liveSearch || ''; }
   if (el.liveShowAll) { el.liveShowAll.checked = !!st.liveShowAll; }
+  if (el.convAmount && st.convAmount != null && st.convAmount !== '') {
+    el.convAmount.value = st.convAmount;
+  }
 
   let histMainChart = null;
 
@@ -362,23 +525,40 @@
   }
 
   function updateKpis() {
-    const usd = findRate('USD', 'fiat');
-    const eur = findRate('EUR', 'fiat');
-    const btc = findRate('BTC', 'crypto');
-    if (el.kpiUsdUah) el.kpiUsdUah.textContent = usd && usd.price_uah != null ? `${formatPrice(usd.price_uah)} UAH` : '—';
-    if (el.kpiEurUah) el.kpiEurUah.textContent = eur && eur.price_uah != null ? `${formatPrice(eur.price_uah)} UAH` : '—';
-    if (el.kpiBtcUsd) el.kpiBtcUsd.textContent = btc && btc.price_usd != null ? `${formatPrice(btc.price_usd)} USD` : '—';
-
-    function setKpiTrend(trendEl, sym, typ) {
-      if (!trendEl) return;
-      const it = dashboardInsights[`${sym}:${typ}`];
-      const p = it && it.trend_24h_pct;
-      trendEl.className = `small mt-auto ${trendClass(p)}`;
-      trendEl.textContent = `24 год: ${formatPct(p)}`;
+    const keys = getKpiSlotPairKeys();
+    const valEls = [el.kpiUsdUah, el.kpiEurUah, el.kpiBtcUsd];
+    const trendEls = [el.kpiUsdTrend, el.kpiEurTrend, el.kpiBtcTrend];
+    for (let i = 0; i < 3; i++) {
+      const pk = keys[i];
+      const r = rowForPairKey(pk);
+      const titleEl = document.getElementById('kpi-slot-' + i + '-title');
+      if (titleEl) {
+        if (r) {
+          const symU = (r.asset_symbol || '').toUpperCase();
+          titleEl.textContent = r.asset_type === 'fiat' ? `${symU} / UAH` : `${symU} / USD`;
+        } else {
+          titleEl.textContent = '—';
+        }
+      }
+      if (valEls[i]) {
+        if (!r) {
+          valEls[i].textContent = '—';
+        } else if (r.asset_type === 'fiat' && r.price_uah != null) {
+          valEls[i].textContent = `${formatPrice(r.price_uah)} UAH`;
+        } else if (r.asset_type === 'crypto' && r.price_usd != null) {
+          valEls[i].textContent = `${formatPrice(r.price_usd)} USD`;
+        } else {
+          valEls[i].textContent = '—';
+        }
+      }
+      if (trendEls[i]) {
+        const pkTrend = r ? pairKey(r) : '';
+        const ins = pkTrend ? dashboardInsights[pkTrend] : null;
+        const p = ins && ins.trend_24h_pct;
+        trendEls[i].className = `small mt-auto ${trendClass(p)}`;
+        trendEls[i].textContent = `24 год: ${formatPct(p)}`;
+      }
     }
-    setKpiTrend(el.kpiUsdTrend, 'USD', 'fiat');
-    setKpiTrend(el.kpiEurTrend, 'EUR', 'fiat');
-    setKpiTrend(el.kpiBtcTrend, 'BTC', 'crypto');
     if (el.kpiTime) el.kpiTime.textContent = formatLocalDateTime(liveMeta.fetched_at);
   }
 
@@ -470,6 +650,7 @@
     rows = rows.slice().sort(cmpLive);
     // Один запис innerHTML у tbody зменшує reflow; escapeHtml на полях з API.
     const sparkJobs = [];
+    const favSet = new Set(st.favoritePairs || []);
     const rowHtmls = rows.map(function (r, idx) {
       const pk = pairKey(r);
       const ins = dashboardInsights[pk];
@@ -486,7 +667,10 @@
       const usdEsc = escapeHtml(formatPrice(r.price_usd));
       const pctEsc = escapeHtml(formatPct(trend));
       const tc = trendClass(trend);
+      const pkEsc = escapeHtml(pk);
+      const starFill = favSet.has(pk) ? '-fill' : '';
       return (
+        `<td class="text-center kpi-star-cell"><button type="button" class="btn btn-link btn-sm p-0 text-warning kpi-star-toggle" data-pair="${pkEsc}" aria-label="Обране"><i class="bi bi-star${starFill}"></i></button></td>` +
         `<td>${icon} <strong class="fw-bold">${symEsc}</strong><br><span class="small co-label">${nameEsc}</span></td>` +
         `<td class="text-end">${uahEsc}</td>` +
         `<td class="text-end">${usdEsc}</td>` +
@@ -564,8 +748,12 @@
       el.convFromMenu.appendChild(itemFrom);
       el.convToMenu.appendChild(itemTo);
     });
-    if (syms.includes('USD')) el.convFrom.value = 'USD';
-    if (syms.includes('UAH')) el.convTo.value = 'UAH';
+    const wantFrom = st.convFrom && syms.includes(st.convFrom) ? st.convFrom : null;
+    const wantTo = st.convTo && syms.includes(st.convTo) ? st.convTo : null;
+    if (wantFrom) el.convFrom.value = wantFrom;
+    else if (syms.includes('USD')) el.convFrom.value = 'USD';
+    if (wantTo) el.convTo.value = wantTo;
+    else if (syms.includes('UAH')) el.convTo.value = 'UAH';
     else if (syms.length > 1) el.convTo.value = syms[1];
     syncDropdownLabel(el.convFrom, el.convFromLabel);
     syncDropdownLabel(el.convTo, el.convToLabel);
@@ -662,7 +850,10 @@
       el.histAsset.appendChild(new Option(label, value));
       el.histAssetMenu.appendChild(createDropdownMenuItem(value, label, 'dropdown-item text-start py-2'));
     });
-    if (cur && Array.prototype.some.call(el.histAsset.options, function (o) { return o.value === cur; })) {
+    const prefer = st.histDefaultPair && typeof st.histDefaultPair === 'string' ? st.histDefaultPair : null;
+    if (prefer && Array.prototype.some.call(el.histAsset.options, function (o) { return o.value === prefer; })) {
+      el.histAsset.value = prefer;
+    } else if (cur && Array.prototype.some.call(el.histAsset.options, function (o) { return o.value === cur; })) {
       el.histAsset.value = cur;
     } else if (el.histAsset.options.length) {
       el.histAsset.selectedIndex = 0;
@@ -824,10 +1015,45 @@
         renderLive();
       });
     }
-    if (el.convAmount) el.convAmount.addEventListener('input', updateConverter);
-    wireCoSelectDropdown(el.convFromToggle, el.convFromMenu, el.convFrom, updateConverter);
-    wireCoSelectDropdown(el.convToToggle, el.convToMenu, el.convTo, updateConverter);
-    wireCoSelectDropdown(el.histAssetToggle, el.histAssetMenu, el.histAsset, null);
+    if (el.liveTbody) {
+      el.liveTbody.addEventListener('click', function (ev) {
+        const btn = ev.target.closest('.kpi-star-toggle');
+        if (!btn || !el.liveTbody.contains(btn)) return;
+        ev.preventDefault();
+        const pk = btn.getAttribute('data-pair');
+        if (!pk) return;
+        toggleFavoritePair(pk);
+        renderLive();
+      });
+    }
+    let _convAmtTimer = null;
+    if (el.convAmount) {
+      el.convAmount.addEventListener('input', function () {
+        updateConverter();
+        clearTimeout(_convAmtTimer);
+        _convAmtTimer = setTimeout(function () {
+          saveState({ convAmount: el.convAmount.value });
+        }, 300);
+      });
+    }
+    if (el.convFromToggle && el.convFromMenu && el.convFrom) {
+      wireCoSelectDropdown(el.convFromToggle, el.convFromMenu, el.convFrom, function () {
+        saveState({ convFrom: el.convFrom.value, convTo: el.convTo.value });
+        updateConverter();
+      });
+    }
+    if (el.convToToggle && el.convToMenu && el.convTo) {
+      wireCoSelectDropdown(el.convToToggle, el.convToMenu, el.convTo, function () {
+        saveState({ convFrom: el.convFrom.value, convTo: el.convTo.value });
+        updateConverter();
+      });
+    }
+    wireCoSelectDropdown(el.histAssetToggle, el.histAssetMenu, el.histAsset, function () {
+      const v = el.histAsset && el.histAsset.value;
+      if (!v) return;
+      st.histDefaultPair = v;
+      saveState({ histDefaultPair: v });
+    });
     wireCoSelectTypeahead(el.convFromToggle, el.convFromMenu);
     wireCoSelectTypeahead(el.convToToggle, el.convToMenu);
     wireCoSelectTypeahead(el.histAssetToggle, el.histAssetMenu);
@@ -839,10 +1065,12 @@
         el.convTo.value = fromVal;
         syncDropdownLabel(el.convFrom, el.convFromLabel);
         syncDropdownLabel(el.convTo, el.convToLabel);
+        saveState({ convFrom: el.convFrom.value, convTo: el.convTo.value });
         updateConverter();
       });
     }
     if (el.btnRefresh) el.btnRefresh.addEventListener('click', refreshLive);
+    bindKpiDrag();
   }
 
   function bindHist() {

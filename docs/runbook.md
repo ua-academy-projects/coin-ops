@@ -20,6 +20,7 @@ From `Vagrantfile` (base `10.10.1.` plus VM index):
 - History Service (vm3): `8090` (HTTP)
 - RabbitMQ (vm4): `5672` (AMQP)
 - PostgreSQL (vm5): `5432` (TCP)
+- Redis (vm1, **localhost**): `6379` (TCP) — optional Phase D UI state (`REDIS_URL`, same-origin `/api/v1/ui-state`)
 
 ## Network matrix (required east-west traffic)
 
@@ -29,6 +30,7 @@ From `Vagrantfile` (base `10.10.1.` plus VM index):
 | `vm1` | `vm3` | TCP (HTTP) | `8090` | History API: `GET http://10.10.1.4:8090/api/v1/history?limit=5` (UI fetches via Flask same-origin proxy) |
 | `vm3` | `vm4` | TCP (AMQP) | `5672` | Worker consumes MQ events from `RABBITMQ_URL` |
 | `vm3` | `vm5` | TCP | `5432` | History Service writes to PostgreSQL using `PGHOST/PGPORT` |
+| `vm1` (Flask) | `vm1` (Redis) | TCP | `6379` | `127.0.0.1:6379` — UI state (no east-west traffic) |
 
 Outgoing from `vm2`:
 - `vm2 -> external`: outbound HTTP(S) to public data sources (NBU, CoinGecko)
@@ -41,7 +43,7 @@ Typical order to avoid dependency issues:
 2. `vm4`: `sudo systemctl restart rabbitmq-server`
 3. `vm2`: `sudo systemctl restart proxy`
 4. `vm3`: `sudo systemctl restart worker`
-5. `vm1`: `sudo systemctl restart frontend`
+5. `vm1`: `sudo systemctl restart redis-server` then `sudo systemctl restart frontend`
 
 After env changes on a VM:
 - `sudo systemctl daemon-reload`

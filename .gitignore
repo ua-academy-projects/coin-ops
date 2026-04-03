@@ -6,6 +6,7 @@ env/
 *.env
 
 *.exe
+*.bin
 /bin/
 
-docs/*
+docs/task.md

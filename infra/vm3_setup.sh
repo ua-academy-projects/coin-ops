@@ -6,6 +6,7 @@ VENV_DIR="/home/vagrant/venv"
 
 # vm 3 - history service (MQ consumer + history API)
 sudo apt install -y python3 python3-pip python3-venv
+sudo systemctl stop worker
 sudo cp "$WORKING_DIR/worker.service" "/lib/systemd/system/"
 if [ ! -d "$VENV_DIR" ]; then
     python3 -m venv "$VENV_DIR"
