@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"os"
 	"sync"
 	"time"
 
@@ -12,10 +10,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-const (
-	defaultMQExchange   = "coinops.rates"
-	defaultMQRoutingKey = "rates.snapshot"
-)
+const maxPublishAttempts = 5
 
 // RatePublisher publishes normalized snapshots to an asynchronous transport.
 type RatePublisher interface {
@@ -29,7 +24,7 @@ type NoopPublisher struct{}
 func (n *NoopPublisher) Publish(_ context.Context, _ RatesResponse) error { return nil }
 func (n *NoopPublisher) Close() error                                     { return nil }
 
-// RabbitPublisher publishes events to RabbitMQ direct exchange.
+// RabbitPublisher publishes events to a RabbitMQ direct exchange.
 type RabbitPublisher struct {
 	url        string
 	exchange   string
@@ -39,38 +34,15 @@ type RabbitPublisher struct {
 	ch         *amqp.Channel
 }
 
-func mqEnabled() bool {
-	v := os.Getenv("MQ_ENABLED")
-	return v == "1" || v == "true" || v == "TRUE" || v == "yes" || v == "YES"
-}
-
-func mqURL() string { return os.Getenv("RABBITMQ_URL") }
-
-func mqExchange() string {
-	if v := os.Getenv("RABBITMQ_EXCHANGE"); v != "" {
-		return v
-	}
-	return defaultMQExchange
-}
-
-func mqRoutingKey() string {
-	if v := os.Getenv("RABBITMQ_ROUTING_KEY"); v != "" {
-		return v
-	}
-	return defaultMQRoutingKey
-}
-
-func NewPublisherFromEnv() (RatePublisher, error) {
-	if !mqEnabled() {
+// NewPublisher creates a RatePublisher based on Config.
+func NewPublisher(cfg *Config) (RatePublisher, error) {
+	if !cfg.MQEnabled {
 		return &NoopPublisher{}, nil
 	}
 	r := &RabbitPublisher{
-		url:        mqURL(),
-		exchange:   mqExchange(),
-		routingKey: mqRoutingKey(),
-	}
-	if r.url == "" {
-		return nil, errors.New("MQ_ENABLED=true but RABBITMQ_URL is empty")
+		url:        cfg.MQURL,
+		exchange:   cfg.MQExchange,
+		routingKey: cfg.MQRoutingKey,
 	}
 	if err := r.connect(); err != nil {
 		return nil, err
@@ -88,15 +60,7 @@ func (r *RabbitPublisher) connect() error {
 		_ = conn.Close()
 		return err
 	}
-	if err := ch.ExchangeDeclare(
-		r.exchange,
-		"direct",
-		true,
-		false,
-		false,
-		false,
-		nil,
-	); err != nil {
+	if err := ch.ExchangeDeclare(r.exchange, "direct", true, false, false, false, nil); err != nil {
 		_ = ch.Close()
 		_ = conn.Close()
 		return err
@@ -115,12 +79,9 @@ func (r *RabbitPublisher) reconnect() error {
 		_ = r.conn.Close()
 		r.conn = nil
 	}
-	// Tiny backoff to avoid hot looping on transient broker errors.
 	time.Sleep(200 * time.Millisecond)
 	return r.connect()
 }
-
-const maxPublishAttempts = 5
 
 func (r *RabbitPublisher) Publish(ctx context.Context, payload RatesResponse) error {
 	if payload.Rates == nil {

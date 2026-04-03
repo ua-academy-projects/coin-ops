@@ -3,14 +3,8 @@ package main
 import (
 	"log"
 	"net/http"
-	"os"
-	"strings"
+	"time"
 )
-
-// corsAllowOrigin returns COINOPS_CORS_ALLOW_ORIGIN (trimmed). Empty means no CORS headers.
-func corsAllowOrigin() string {
-	return strings.TrimSpace(os.Getenv("COINOPS_CORS_ALLOW_ORIGIN"))
-}
 
 func withRecover(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -33,7 +27,7 @@ func withSecurityHeaders(next http.Handler) http.Handler {
 	})
 }
 
-// withCORS adds Access-Control-* when COINOPS_CORS_ALLOW_ORIGIN is set (e.g. * or https://app.example).
+// withCORS adds Access-Control-* when allowOrigin is non-empty (e.g. "*" or "https://app.example").
 func withCORS(allowOrigin string, next http.Handler) http.Handler {
 	if allowOrigin == "" {
 		return next
@@ -47,5 +41,24 @@ func withCORS(allowOrigin string, next http.Handler) http.Handler {
 			return
 		}
 		next.ServeHTTP(w, r)
+	})
+}
+
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *statusWriter) WriteHeader(code int) {
+	w.status = code
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func withRequestLog(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(sw, r)
+		log.Printf("%s %s %d %s", r.Method, r.URL.Path, sw.status, time.Since(start).Round(time.Millisecond))
 	})
 }

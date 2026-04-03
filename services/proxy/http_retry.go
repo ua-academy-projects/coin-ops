@@ -58,7 +58,7 @@ func fetchURL(ctx context.Context, client *http.Client, url string) ([]byte, err
 			return body, nil
 		}
 
-		lastErr = fmt.Errorf("http status %d: %s", res.StatusCode, strings.TrimSpace(string(truncateRunes(body, 512))))
+		lastErr = fmt.Errorf("http status %d: %s", res.StatusCode, strings.TrimSpace(string(truncateBytes(body, 512))))
 		if attempt >= maxUpstreamRetries || !retriableHTTPStatus(res.StatusCode) {
 			return nil, lastErr
 		}
@@ -119,9 +119,9 @@ func wait(ctx context.Context, d time.Duration) error {
 	}
 }
 
-func truncateRunes(b []byte, maxBytes int) []byte {
-	if len(b) <= maxBytes {
+func truncateBytes(b []byte, maxLen int) []byte {
+	if len(b) <= maxLen {
 		return b
 	}
-	return b[:maxBytes]
+	return b[:maxLen]
 }

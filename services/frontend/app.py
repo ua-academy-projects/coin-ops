@@ -13,14 +13,15 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
-from typing import Any, Optional, Tuple
+from datetime import date
+from typing import Any, Optional
 
 import requests
 import state_store
 from flask import Flask, jsonify, render_template, request
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from helpers import fetch_live_rates
 
 LOG = logging.getLogger("coinops.frontend")
 
@@ -83,104 +84,23 @@ class AppConfig:
         )
 
 
-def enrich_rates_with_crypto_uah(rates: list) -> None:
-    """
-    For crypto rows, set ``price_uah`` = ``price_usd * uah_per_usd`` where
-    ``uah_per_usd`` is the official UAH price of USD (NBU) from the USD fiat row.
+# ---------------------------------------------------------------------------
+# Shared proxy helper (DRY for history endpoints)
+# ---------------------------------------------------------------------------
 
-    Mutates rate dicts in place. Round to 2 decimals.
-    """
-    uah_per_usd: Optional[float] = None
-    for item in rates:
-        if not isinstance(item, dict):
-            continue
-        if str(item.get("asset_type", "")).lower() != "fiat":
-            continue
-        if str(item.get("asset_symbol", "")).upper() != "USD":
-            continue
-        pu = item.get("price_uah")
-        if pu is None:
-            continue
-        try:
-            uah_per_usd = float(pu)
-        except (TypeError, ValueError):
-            pass
-        break
-    if uah_per_usd is None or uah_per_usd <= 0:
-        return
-    for item in rates:
-        if not isinstance(item, dict):
-            continue
-        if str(item.get("asset_type", "")).lower() != "crypto":
-            continue
-        pusd = item.get("price_usd")
-        if pusd is None:
-            continue
-        try:
-            item["price_uah"] = round(float(pusd) * uah_per_usd, 2)
-        except (TypeError, ValueError):
-            pass
-
-
-def normalize_utc_iso_string(value: Any) -> Optional[str]:
-    """
-    Parse an ISO-like timestamp from the proxy or APIs and return UTC ISO-8601 with Z.
-
-    Ensures the browser always receives an unambiguous instant (avoids mixing naive local
-    vs Z/+00:00 parsing between tabs).
-    """
-    if value is None:
-        return None
-    if isinstance(value, datetime):
-        dt = value
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        else:
-            dt = dt.astimezone(timezone.utc)
-        return dt.strftime("%Y-%m-%dT%H:%M:%S") + "Z"
-    s = str(value).strip()
-    if not s or s.lower() in ("none", "null"):
-        return None
+def _proxy_json(url: str, params: dict, timeout: float, label: str):
+    """Forward a GET request and return JSON or a 502 error tuple."""
     try:
-        if len(s) >= 11 and s[10] == " ":
-            s = s[:10] + "T" + s[11:]
-        if s.endswith("Z") or s.endswith("z"):
-            s = s[:-1] + "+00:00"
-        dt = datetime.fromisoformat(s)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        else:
-            dt = dt.astimezone(timezone.utc)
-        return dt.strftime("%Y-%m-%dT%H:%M:%S") + "Z"
-    except (ValueError, TypeError, OSError):
-        return s
-
-
-def fetch_live_rates(cfg: AppConfig) -> Tuple[Optional[list], Optional[str], Optional[str]]:
-    """
-    Return (rates_list, fetched_at_iso, error_message).
-
-    On success ``error_message`` is None; on transport/parse failure ``rates_list`` is None.
-    """
-    url = cfg.proxy_base_url + cfg.rates_path
-    try:
-        resp = requests.get(url, timeout=cfg.http_timeout)
+        resp = requests.get(url, params=params, timeout=timeout)
         resp.raise_for_status()
-        data = resp.json()
+        return jsonify(resp.json())
     except (requests.RequestException, ValueError) as exc:
-        LOG.warning("live rates fetch failed: %s", exc)
-        return None, None, str(exc)
-    rates = data.get("rates")
-    if not isinstance(rates, list):
-        return None, None, "Invalid proxy payload: rates is not a list"
-    enrich_rates_with_crypto_uah(rates)
-    fetched = data.get("fetched_at")
-    fetched_s = normalize_utc_iso_string(fetched) if fetched is not None else None
-    return rates, fetched_s, None
+        LOG.warning("%s proxy failed: %s", label, exc)
+        return jsonify({"error": str(exc), "items": [], "count": 0}), 502
 
 
 def _ui_state_cookie_response(payload: dict[str, Any], set_sid: Optional[str] = None):
-    """JSON response; optionally sets ``coinops_sid`` session cookie (opaque id for Redis state)."""
+    """JSON response; optionally sets ``coinops_sid`` session cookie."""
     resp = jsonify(payload)
     if set_sid:
         resp.set_cookie(
@@ -226,11 +146,17 @@ def create_app() -> Flask:
         response.headers["Content-Security-Policy"] = csp
         return response
 
+    # ------------------------------------------------------------------
+    # Routes
+    # ------------------------------------------------------------------
+
     @app.route("/")
     def index() -> str:
         """Render the dashboard with current rates."""
         c: AppConfig = app.config["COINOPS_CFG"]
-        live_rates, fetched_at, live_error = fetch_live_rates(c)
+        live_rates, fetched_at, live_error = fetch_live_rates(
+            c.proxy_base_url, c.rates_path, c.http_timeout,
+        )
         return render_template(
             "index.html",
             live_rates=live_rates,
@@ -244,7 +170,9 @@ def create_app() -> Flask:
     def api_live():
         """Same-origin JSON for current rates (refresh without full page reload)."""
         c: AppConfig = app.config["COINOPS_CFG"]
-        rates, fetched_at, err = fetch_live_rates(c)
+        rates, fetched_at, err = fetch_live_rates(
+            c.proxy_base_url, c.rates_path, c.http_timeout,
+        )
         if err:
             return jsonify({"error": err, "rates": [], "fetched_at": None}), 502
         return jsonify({"rates": rates or [], "fetched_at": fetched_at})
@@ -252,7 +180,7 @@ def create_app() -> Flask:
     @app.route("/api/history")
     @limiter.limit("30/minute")
     def api_history_proxy():
-        """Same-origin proxy to History Service (avoids CORS for client-side refetch)."""
+        """Same-origin proxy to History Service list endpoint."""
         c: AppConfig = app.config["COINOPS_CFG"]
         limit = request.args.get("limit", default=50, type=int)
         if limit is None or limit < 1:
@@ -265,39 +193,23 @@ def create_app() -> Flask:
             params["asset_symbol"] = sym
         if typ in ("fiat", "crypto"):
             params["asset_type"] = typ
-        try:
-            resp = requests.get(c.history_list_url, params=params, timeout=c.http_timeout)
-            resp.raise_for_status()
-            return jsonify(resp.json())
-        except (requests.RequestException, ValueError) as exc:
-            LOG.warning("history proxy failed: %s", exc)
-            return jsonify({"error": str(exc), "items": [], "count": 0}), 502
+        return _proxy_json(c.history_list_url, params, c.http_timeout, "history")
 
     @app.route("/api/history/series")
     @limiter.limit("30/minute")
     def api_history_series_proxy():
         c: AppConfig = app.config["COINOPS_CFG"]
-        params = dict(request.args)
-        try:
-            resp = requests.get(c.history_series_url, params=params, timeout=c.http_timeout)
-            resp.raise_for_status()
-            return jsonify(resp.json())
-        except (requests.RequestException, ValueError) as exc:
-            LOG.warning("history series proxy failed: %s", exc)
-            return jsonify({"error": str(exc), "items": [], "count": 0}), 502
+        return _proxy_json(
+            c.history_series_url, dict(request.args), c.http_timeout, "history series",
+        )
 
     @app.route("/api/history/dashboard")
     @limiter.limit("30/minute")
     def api_history_dashboard_proxy():
         c: AppConfig = app.config["COINOPS_CFG"]
-        params = dict(request.args)
-        try:
-            resp = requests.get(c.history_dashboard_url, params=params, timeout=c.http_timeout)
-            resp.raise_for_status()
-            return jsonify(resp.json())
-        except (requests.RequestException, ValueError) as exc:
-            LOG.warning("history dashboard proxy failed: %s", exc)
-            return jsonify({"error": str(exc), "items": [], "count": 0}), 502
+        return _proxy_json(
+            c.history_dashboard_url, dict(request.args), c.http_timeout, "history dashboard",
+        )
 
     @app.route("/api/v1/ui-state", methods=["GET"])
     def api_ui_state_get():
@@ -345,5 +257,4 @@ app = create_app()
 
 
 if __name__ == "__main__":
-    # Dev server; production on VM1 typically sits behind gunicorn/nginx.
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "5000")))
