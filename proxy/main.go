@@ -102,7 +102,7 @@ func getRates(w http.ResponseWriter, r *http.Request) {
 }
 
 func getCrypto(w http.ResponseWriter, r *http.Request) {
-	resp, err := http.Get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=uah")
+	resp, err := http.Get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,binancecoin,cardano,ripple,dogecoin,polkadot,avalanche-2,chainlink&vs_currencies=uah")
 	if err != nil {
 		http.Error(w, "Помилка запиту до CoinGecko", http.StatusInternalServerError)
 		return
@@ -118,19 +118,38 @@ func getCrypto(w http.ResponseWriter, r *http.Request) {
 	var raw map[string]map[string]float64
 	json.Unmarshal(body, &raw)
 
-	var result []CryptoRate
-	if btc, ok := raw["bitcoin"]; ok {
-		result = append(result, CryptoRate{
-			CC:   "BTC",
-			Txt:  "Bitcoin",
-			Rate: btc["uah"],
-		})
+	names := map[string]string{
+		"bitcoin":     "Bitcoin",
+		"ethereum":    "Ethereum",
+		"solana":      "Solana",
+		"binancecoin": "BNB",
+		"cardano":     "Cardano",
+		"ripple":      "XRP",
+		"dogecoin":    "Dogecoin",
+		"polkadot":    "Polkadot",
+		"avalanche-2": "Avalanche",
+		"chainlink":   "Chainlink",
 	}
-	if eth, ok := raw["ethereum"]; ok {
+
+	codes := map[string]string{
+		"bitcoin":     "BTC",
+		"ethereum":    "ETH",
+		"solana":      "SOL",
+		"binancecoin": "BNB",
+		"cardano":     "ADA",
+		"ripple":      "XRP",
+		"dogecoin":    "DOGE",
+		"polkadot":    "DOT",
+		"avalanche-2": "AVAX",
+		"chainlink":   "LINK",
+	}
+
+	var result []CryptoRate
+	for id, data := range raw {
 		result = append(result, CryptoRate{
-			CC:   "ETH",
-			Txt:  "Ethereum",
-			Rate: eth["uah"],
+			CC:   codes[id],
+			Txt:  names[id],
+			Rate: data["uah"],
 		})
 	}
 
