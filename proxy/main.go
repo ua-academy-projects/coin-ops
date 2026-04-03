@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -16,28 +18,36 @@ type Rate struct {
 	Rate float64 `json:"rate"`
 }
 
+type CryptoRate struct {
+	CC   string  `json:"cc"`
+	Txt  string  `json:"txt"`
+	Rate float64 `json:"rate"`
+}
+
 var rabbitConn *amqp.Connection
 var rabbitChannel *amqp.Channel
 
 func connectRabbitMQ() {
-	// Підключаємось до RabbitMQ на VM4
-	conn, err := amqp.Dial("amqp://coinops:coinops123@192.168.56.104:5672/")
-	if err != nil {
-		log.Printf("Помилка підключення до RabbitMQ: %s", err)
+	for {
+		conn, err := amqp.Dial("amqp://coinops:coinops123@192.168.56.104:5672/")
+		if err != nil {
+			log.Printf("RabbitMQ не підключений, спробую знову через 5 секунд...")
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		rabbitConn = conn
+
+		ch, err := conn.Channel()
+		if err != nil {
+			log.Printf("Помилка каналу, спробую знову...")
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		rabbitChannel = ch
+		ch.QueueDeclare("rates", false, false, false, false, nil)
+		log.Println("Підключено до RabbitMQ")
 		return
 	}
-	rabbitConn = conn
-
-	ch, err := conn.Channel()
-	if err != nil {
-		log.Printf("Помилка відкриття каналу: %s", err)
-		return
-	}
-	rabbitChannel = ch
-
-	// Створюємо чергу якщо не існує
-	ch.QueueDeclare("rates", false, false, false, false, nil)
-	log.Println("Підключено до RabbitMQ")
 }
 
 func publishToQueue(rates []Rate) {
@@ -46,17 +56,15 @@ func publishToQueue(rates []Rate) {
 		return
 	}
 
-	// Конвертуємо в JSON
 	body, err := json.Marshal(rates)
 	if err != nil {
 		log.Printf("Помилка конвертації: %s", err)
 		return
 	}
 
-	// Публікуємо в чергу
 	err = rabbitChannel.Publish(
-		"",      // exchange
-		"rates", // queue name
+		"",
+		"rates",
 		false,
 		false,
 		amqp.Publishing{
@@ -72,7 +80,6 @@ func publishToQueue(rates []Rate) {
 }
 
 func getRates(w http.ResponseWriter, r *http.Request) {
-	// Йдемо до НБУ API
 	resp, err := http.Get("https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json")
 	if err != nil {
 		http.Error(w, "Помилка запиту до НБУ", http.StatusInternalServerError)
@@ -89,29 +96,11 @@ func getRates(w http.ResponseWriter, r *http.Request) {
 	var allRates []Rate
 	json.Unmarshal(body, &allRates)
 
-    filtered := allRates
+	// Публікуємо всі валюти в RabbitMQ асинхронно
+	go publishToQueue(allRates)
 
-	// Публікуємо в RabbitMQ асинхронно
-	go publishToQueue(filtered)
-
-	// Повертаємо дані Flask
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(filtered)
-}
-
-func main() {
-	// Підключаємось до RabbitMQ при старті
-	connectRabbitMQ()
-
-	http.HandleFunc("/rates", getRates)
-	fmt.Println("Проксі сервіс запущено на порту 8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
-}
-
-type CryptoRate struct {
-	CC   string  `json:"cc"`
-	Txt  string  `json:"txt"`
-	Rate float64 `json:"rate"`
+	json.NewEncoder(w).Encode(allRates)
 }
 
 func getCrypto(w http.ResponseWriter, r *http.Request) {
@@ -128,7 +117,6 @@ func getCrypto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// CoinGecko повертає: {"bitcoin":{"uah":123},"ethereum":{"uah":456}}
 	var raw map[string]map[string]float64
 	json.Unmarshal(body, &raw)
 
@@ -150,4 +138,14 @@ func getCrypto(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
+}
+
+func main() {
+	go connectRabbitMQ()
+
+	http.HandleFunc("/rates", getRates)
+	http.HandleFunc("/crypto", getCrypto)
+
+	fmt.Println("Проксі сервіс запущено на порту 8080")
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
