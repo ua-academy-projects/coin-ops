@@ -1,0 +1,266 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# coin-ops — multi-VM deployment
+#
+# VM layout (VirtualBox host-only network 192.168.56.0/24):
+#   192.168.56.11  ui       VM1 — nginx serving the frontend (host port 8080→80)
+#   192.168.56.12  proxy    VM2 — FastAPI backend + Go api_getter (host port 8000→8000)
+#   192.168.56.13  history  VM3 — Python RabbitMQ consumer
+#   192.168.56.14  queue    VM4 — RabbitMQ (host port 15672→15672 management UI)
+#   192.168.56.15  db       VM5 — PostgreSQL
+#
+# Usage:
+#   vagrant up             # start all VMs
+#   vagrant up ui          # start a single VM
+#   vagrant ssh proxy      # SSH into a VM
+#   vagrant halt           # stop all VMs
+#   vagrant destroy -f     # remove all VMs
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "ubuntu/jammy64"   # Ubuntu 22.04 LTS
+  config.vm.boot_timeout = 600       # 10 min — needed when Hyper-V (WSL2) is active
+
+  # ── VM5 — Database (PostgreSQL) ───────────────────────────────────────────────
+  config.vm.define "db" do |db|
+    db.vm.hostname = "db"
+    db.vm.network "private_network", ip: "192.168.56.15"
+
+    db.vm.provider "virtualbox" do |vb|
+      vb.name   = "coinops-db"
+      vb.memory = 512
+      vb.cpus   = 1
+    end
+
+    db.vm.provision "shell", inline: <<~'SHELL'
+      set -e
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -qq
+      apt-get install -yq postgresql postgresql-contrib
+
+      PG_VER=$(ls /etc/postgresql/)
+      PG_HBA=/etc/postgresql/$PG_VER/main/pg_hba.conf
+      PG_CONF=/etc/postgresql/$PG_VER/main/postgresql.conf
+
+      # Create user and database (idempotent)
+      sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='coinops'" \
+        | grep -q 1 \
+        || sudo -u postgres psql -c "CREATE USER coinops WITH PASSWORD 'coinops123';"
+      sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname='coinops'" \
+        | grep -q 1 \
+        || sudo -u postgres psql -c "CREATE DATABASE coinops OWNER coinops;"
+
+      # Apply schema
+      sudo -u postgres psql -d coinops -f /vagrant/postgre_db/init.sql
+
+      # Allow connections from the private network
+      grep -q "192.168.56.0/24" "$PG_HBA" \
+        || echo "host coinops coinops 192.168.56.0/24 md5" >> "$PG_HBA"
+      sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/" "$PG_CONF"
+
+      systemctl restart postgresql
+    SHELL
+  end
+
+  # ── VM4 — Queue (RabbitMQ) ────────────────────────────────────────────────────
+  config.vm.define "queue" do |q|
+    q.vm.hostname = "queue"
+    q.vm.network "private_network", ip: "192.168.56.14"
+    q.vm.network "forwarded_port", guest: 15672, host: 15672  # management UI
+
+    q.vm.provider "virtualbox" do |vb|
+      vb.name   = "coinops-queue"
+      vb.memory = 512
+      vb.cpus   = 1
+    end
+
+    q.vm.provision "shell", inline: <<~'SHELL'
+      set -e
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -qq
+      apt-get install -yq rabbitmq-server
+
+      rabbitmq-plugins enable rabbitmq_management
+
+      # Create coinops user (ignore error if it already exists)
+      rabbitmqctl add_user coinops coinops123 2>/dev/null || true
+      rabbitmqctl set_user_tags coinops administrator
+      rabbitmqctl set_permissions -p / coinops ".*" ".*" ".*"
+
+      systemctl enable rabbitmq-server
+      systemctl restart rabbitmq-server
+    SHELL
+  end
+
+  # ── VM3 — History (Python RabbitMQ→PostgreSQL consumer) ──────────────────────
+  config.vm.define "history" do |h|
+    h.vm.hostname = "history"
+    h.vm.network "private_network", ip: "192.168.56.13"
+
+    h.vm.provider "virtualbox" do |vb|
+      vb.name   = "coinops-history"
+      vb.memory = 512
+      vb.cpus   = 1
+    end
+
+    h.vm.provision "shell", inline: <<~'SHELL'
+      set -e
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -qq
+      apt-get install -yq python3 python3-pip python3-venv
+
+      python3 -m venv /opt/history-venv
+      /opt/history-venv/bin/pip install --quiet -r /vagrant/postgre_db/requirements.txt
+
+      cat > /etc/systemd/system/history.service <<'EOF'
+[Unit]
+Description=Coin-Ops History Consumer
+After=network.target
+
+[Service]
+Type=simple
+User=vagrant
+WorkingDirectory=/vagrant/postgre_db
+Environment=RABBITMQ_URL=amqp://coinops:coinops123@192.168.56.14:5672/
+Environment=DATABASE_URL=postgresql://coinops:coinops123@192.168.56.15:5432/coinops
+ExecStart=/opt/history-venv/bin/python consumer.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+      systemctl daemon-reload
+      systemctl enable history
+      systemctl start history
+    SHELL
+  end
+
+  # ── VM2 — API Proxy (FastAPI backend + Go api_getter) ─────────────────────────
+  config.vm.define "proxy" do |p|
+    p.vm.hostname = "proxy"
+    p.vm.network "private_network", ip: "192.168.56.12"
+    p.vm.network "forwarded_port", guest: 8000, host: 8000
+
+    p.vm.provider "virtualbox" do |vb|
+      vb.name   = "coinops-proxy"
+      vb.memory = 1024
+      vb.cpus   = 2
+    end
+
+    p.vm.provision "shell", inline: <<~'SHELL'
+      set -e
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -qq
+      apt-get install -yq python3 python3-pip python3-venv
+
+      # Install Go 1.21 (Ubuntu 22.04 ships only 1.18)
+      if ! /usr/local/go/bin/go version 2>/dev/null | grep -q "go1.21"; then
+        curl -fsSL https://go.dev/dl/go1.21.13.linux-amd64.tar.gz \
+          | tar -C /usr/local -xz
+      fi
+      export PATH="/usr/local/go/bin:$PATH"
+      echo 'export PATH="/usr/local/go/bin:$PATH"' >> /etc/profile.d/go.sh
+
+      # ── FastAPI backend ──────────────────────────────────────────────────────
+      python3 -m venv /opt/backend-venv
+      /opt/backend-venv/bin/pip install --quiet -r /vagrant/backend/requirements.txt
+
+      cat > /etc/systemd/system/backend.service <<'EOF'
+[Unit]
+Description=Coin-Ops Backend API
+After=network.target
+
+[Service]
+Type=simple
+User=vagrant
+WorkingDirectory=/vagrant/backend
+Environment=DATABASE_URL=postgresql://coinops:coinops123@192.168.56.15:5432/coinops
+ExecStart=/opt/backend-venv/bin/uvicorn app:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+      # ── Go api_getter ────────────────────────────────────────────────────────
+      cd /vagrant/api_getter
+      go mod tidy
+      go build -o /usr/local/bin/api_getter .
+
+      cat > /etc/systemd/system/api-getter.service <<'EOF'
+[Unit]
+Description=Coin-Ops API Getter (fetches rates and publishes to RabbitMQ)
+After=network.target
+
+[Service]
+Type=simple
+User=vagrant
+WorkingDirectory=/vagrant/api_getter
+Environment=RABBITMQ_URL=amqp://coinops:coinops123@192.168.56.14:5672/
+Environment=FETCH_INTERVAL=5m
+ExecStart=/usr/local/bin/api_getter
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+      systemctl daemon-reload
+      systemctl enable backend api-getter
+      systemctl start backend api-getter
+    SHELL
+  end
+
+  # ── VM1 — UI (nginx serving the frontend, proxying /api/ to VM2) ──────────────
+  config.vm.define "ui" do |u|
+    u.vm.hostname = "ui"
+    u.vm.network "private_network", ip: "192.168.56.11"
+    u.vm.network "forwarded_port", guest: 80, host: 8081
+
+    u.vm.provider "virtualbox" do |vb|
+      vb.name   = "coinops-ui"
+      vb.memory = 512
+      vb.cpus   = 1
+    end
+
+    u.vm.provision "shell", inline: <<~'SHELL'
+      set -e
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -qq
+      apt-get install -yq nginx
+
+      cat > /etc/nginx/sites-available/coinops <<'EOF'
+server {
+    listen 80;
+    server_name _;
+
+    root /vagrant/frontend;
+    index index.html;
+
+    # Serve static frontend files
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Proxy API calls to the backend on VM2
+    location /api/ {
+        proxy_pass         http://192.168.56.12:8000;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+    }
+}
+EOF
+
+      ln -sf /etc/nginx/sites-available/coinops /etc/nginx/sites-enabled/coinops
+      rm -f /etc/nginx/sites-enabled/default
+      nginx -t
+      systemctl enable nginx
+      systemctl reload nginx
+    SHELL
+  end
+end

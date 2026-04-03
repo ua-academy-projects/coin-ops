@@ -10,3 +10,6 @@ CREATE TABLE IF NOT EXISTS currency_rates (
 
 CREATE INDEX IF NOT EXISTS idx_cr_code_base ON currency_rates (currency_code, base_currency);
 CREATE INDEX IF NOT EXISTS idx_cr_fetched   ON currency_rates (fetched_at DESC);
+
+GRANT ALL PRIVILEGES ON TABLE currency_rates TO coinops;
+GRANT USAGE, SELECT ON SEQUENCE currency_rates_id_seq TO coinops;
