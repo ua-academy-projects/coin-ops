@@ -13,12 +13,14 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Optional, Tuple
 
 import requests
 import state_store
 from flask import Flask, jsonify, render_template, request
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 LOG = logging.getLogger("coinops.frontend")
 
@@ -199,6 +201,31 @@ def create_app() -> Flask:
     app = Flask(__name__)
     app.config["COINOPS_CFG"] = cfg
 
+    limiter = Limiter(
+        get_remote_address,
+        app=app,
+        default_limits=["60/minute"],
+        storage_uri="memory://",
+    )
+
+    @app.after_request
+    def set_security_headers(response):
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        csp = (
+            "default-src 'self'; "
+            "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+            "style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+            "font-src 'self' https://cdn.jsdelivr.net; "
+            "img-src 'self' data:; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none'"
+        )
+        response.headers["Content-Security-Policy"] = csp
+        return response
+
     @app.route("/")
     def index() -> str:
         """Render the dashboard with current rates."""
@@ -209,9 +236,11 @@ def create_app() -> Flask:
             live_rates=live_rates,
             live_fetched_at=fetched_at,
             live_error=live_error,
+            now_year=date.today().year,
         )
 
     @app.route("/api/live")
+    @limiter.limit("120/minute")
     def api_live():
         """Same-origin JSON for current rates (refresh without full page reload)."""
         c: AppConfig = app.config["COINOPS_CFG"]
@@ -221,6 +250,7 @@ def create_app() -> Flask:
         return jsonify({"rates": rates or [], "fetched_at": fetched_at})
 
     @app.route("/api/history")
+    @limiter.limit("30/minute")
     def api_history_proxy():
         """Same-origin proxy to History Service (avoids CORS for client-side refetch)."""
         c: AppConfig = app.config["COINOPS_CFG"]
@@ -244,6 +274,7 @@ def create_app() -> Flask:
             return jsonify({"error": str(exc), "items": [], "count": 0}), 502
 
     @app.route("/api/history/series")
+    @limiter.limit("30/minute")
     def api_history_series_proxy():
         c: AppConfig = app.config["COINOPS_CFG"]
         params = dict(request.args)
@@ -256,6 +287,7 @@ def create_app() -> Flask:
             return jsonify({"error": str(exc), "items": [], "count": 0}), 502
 
     @app.route("/api/history/dashboard")
+    @limiter.limit("30/minute")
     def api_history_dashboard_proxy():
         c: AppConfig = app.config["COINOPS_CFG"]
         params = dict(request.args)
@@ -288,6 +320,7 @@ def create_app() -> Flask:
         )
 
     @app.route("/api/v1/ui-state", methods=["PUT"])
+    @limiter.limit("30/minute")
     def api_ui_state_put():
         """Persist UI state JSON (same shape as ``coinops_ui_v2`` in localStorage)."""
         sid = request.cookies.get("coinops_sid", "")

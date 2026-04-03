@@ -3,7 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="CoinOps — моніторинг курсів валют та криптовалют в реальному часі">
+  <meta name="theme-color" content="#0e1117" id="meta-theme-color">
   <title>CoinOps — курси та історія</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%2310b981'/><text x='50' y='68' font-size='55' font-weight='bold' text-anchor='middle' fill='white'>C</text></svg>">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
         integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
@@ -18,7 +21,10 @@
   <nav class="navbar navbar-expand navbar-glass mb-3">
     <div class="container">
       <span class="navbar-brand mb-0 h1">CoinOps</span>
-      <span class="navbar-text">курси та історія</span>
+      <span class="navbar-text me-auto">курси та історія</span>
+      <button type="button" class="btn btn-sm btn-glass-outline" id="theme-toggle" title="Перемкнути тему" aria-label="Перемкнути тему">
+        <i class="bi bi-moon-stars" id="theme-icon"></i>
+      </button>
     </div>
   </nav>
 
@@ -78,14 +84,14 @@
 
           <div class="row g-2 align-items-end mb-3">
             <div class="col-md-4">
-              <label class="form-label small mb-0 co-label">Пошук (код / назва)</label>
+              <label class="form-label small mb-0 co-label" for="live-search">Пошук (код / назва)</label>
               <div class="input-group input-group-sm">
                 <span class="input-group-text"><i class="bi bi-search" aria-hidden="true"></i></span>
                 <input type="search" class="form-control" id="live-search" placeholder="напр. USD, EUR, Bitcoin…" autocomplete="off">
               </div>
             </div>
             <div class="col-md-3">
-              <label class="form-label small mb-0 co-label">Тип</label>
+              <label class="form-label small mb-0 co-label" for="live-type-toggle">Тип</label>
               <div class="dropdown co-select-dd w-100">
                 <button type="button" class="btn btn-sm co-select-dd-toggle dropdown-toggle w-100 text-start" id="live-type-toggle"
                         data-bs-toggle="dropdown" data-bs-display="static" aria-expanded="false" aria-haspopup="listbox">
@@ -107,7 +113,7 @@
             <div class="co-label mb-2">Конвертер валют (через USD)</div>
             <div class="d-flex flex-wrap align-items-end converter-row">
               <div class="flex-shrink-0" style="min-width: 5rem;">
-                <label class="form-label small mb-0 co-label">Сума</label>
+                <label class="form-label small mb-0 co-label" for="conv-amount">Сума</label>
                 <input type="number" class="form-control form-control-sm" id="conv-amount" value="1" min="0" step="any">
               </div>
               <div class="flex-shrink-0" style="min-width: 6rem;">
@@ -147,13 +153,14 @@
 
           <div class="table-responsive glass glass-table-wrap">
             <table class="table table-sm table-striped table-glass align-middle mb-0" id="live-table">
+              <caption class="visually-hidden">Поточні курси валют та криптовалют</caption>
               <thead>
                 <tr>
                   <th scope="col" class="live-star-col text-center" title="Обрані для тайлів">★</th>
-                  <th class="sortable" data-sort="symbol">Актив <span class="text-white-50">⇅</span></th>
-                  <th class="sortable text-end" data-sort="uah">Ціна UAH <span class="text-white-50">⇅</span></th>
-                  <th class="sortable text-end" data-sort="usd">Ціна USD <span class="text-white-50">⇅</span></th>
-                  <th class="text-end">
+                  <th scope="col" class="sortable" data-sort="symbol">Актив <span class="text-white-50">⇅</span></th>
+                  <th scope="col" class="sortable text-end" data-sort="uah">Ціна UAH <span class="text-white-50">⇅</span></th>
+                  <th scope="col" class="sortable text-end" data-sort="usd">Ціна USD <span class="text-white-50">⇅</span></th>
+                  <th scope="col" class="text-end">
                     Тренд ~24 год
                     <i class="bi bi-info-circle co-label hist-info-icon ms-1" data-bs-toggle="tooltip" data-bs-placement="top"
                        data-bs-title="Тренд: порівняння з останнім записом у БД на час або до «зараз мінус 24 год». Міні-графік ціни: останні 24 точки з історії. Відсотки: фіат — UAH, крипта — USD."></i>
@@ -164,6 +171,7 @@
               <tbody id="live-tbody"></tbody>
             </table>
           </div>
+          <div id="live-empty" class="glass co-footnote p-3 mt-2 d-none" role="status">Нічого не знайдено за обраними фільтрами.</div>
         {% endif %}
       </div>
 
@@ -176,18 +184,18 @@
         </p>
         <div class="row g-2 mb-3 align-items-end">
           <div class="col-md-4">
-            <label class="form-label small mb-0 co-label">Актив</label>
+            <label class="form-label small mb-0 co-label" for="hist-asset-toggle">Активи (до 5)</label>
             <div class="dropdown co-select-dd w-100">
               <button type="button" class="btn btn-sm co-select-dd-toggle dropdown-toggle w-100 text-start text-truncate" id="hist-asset-toggle"
-                      data-bs-toggle="dropdown" data-bs-display="static" aria-expanded="false" aria-haspopup="listbox">
+                      data-bs-toggle="dropdown" data-bs-display="static" data-bs-auto-close="outside" aria-expanded="false" aria-haspopup="listbox">
                 <span data-co-select-label id="hist-asset-label">—</span>
               </button>
               <ul class="dropdown-menu dropdown-menu-dark co-select-dd-menu w-100" id="hist-asset-menu" role="listbox"></ul>
-              <select id="hist-asset" class="d-none" aria-hidden="true" tabindex="-1"></select>
+              <select id="hist-asset" class="d-none" aria-hidden="true" tabindex="-1" multiple></select>
             </div>
           </div>
           <div class="col-md-3">
-            <label class="form-label small mb-0 co-label">Період</label>
+            <label class="form-label small mb-0 co-label" for="hist-range-toggle">Період</label>
             <div class="dropdown co-select-dd w-100">
               <button type="button" class="btn btn-sm co-select-dd-toggle dropdown-toggle w-100 text-start" id="hist-range-toggle"
                       data-bs-toggle="dropdown" data-bs-display="static" aria-expanded="false" aria-haspopup="listbox">
@@ -197,31 +205,64 @@
               <select id="hist-range" class="d-none" aria-hidden="true" tabindex="-1"></select>
             </div>
           </div>
-          <div class="col-md-3 d-flex flex-wrap gap-2 align-items-end">
+          <div class="col-md-2 d-flex flex-wrap gap-2 align-items-end">
             <button type="button" class="btn btn-sm btn-co-accent" id="hist-load">Завантажити</button>
+          </div>
+          <div class="col-12 d-none" id="hist-custom-range-wrap">
+            <div class="d-flex flex-wrap gap-2 align-items-end">
+              <div>
+                <label class="form-label small mb-0 co-label" for="hist-date-from">Від</label>
+                <input type="date" class="form-control form-control-sm" id="hist-date-from">
+              </div>
+              <div>
+                <label class="form-label small mb-0 co-label" for="hist-date-to">До</label>
+                <input type="date" class="form-control form-control-sm" id="hist-date-to">
+              </div>
+            </div>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small mb-0 co-label" for="hist-page-size-toggle">Рядків</label>
+            <div class="dropdown co-select-dd w-100">
+              <button type="button" class="btn btn-sm co-select-dd-toggle dropdown-toggle w-100 text-start" id="hist-page-size-toggle"
+                      data-bs-toggle="dropdown" data-bs-display="static" aria-expanded="false" aria-haspopup="listbox">
+                <span data-co-select-label id="hist-page-size-label">15</span>
+              </button>
+              <ul class="dropdown-menu dropdown-menu-dark co-select-dd-menu w-100" id="hist-page-size-menu" role="listbox"></ul>
+              <select id="hist-page-size" class="d-none" aria-hidden="true" tabindex="-1"></select>
+            </div>
           </div>
         </div>
         <div id="hist-chart-error" class="alert alert-warning d-none mb-3" role="alert"></div>
-        <div id="hist-chart-wrap" class="glass p-3 mb-3">
-          <canvas id="hist-chart"></canvas>
+        <div id="hist-chart-wrap" class="glass p-3 mb-3 position-relative">
+          <button id="hist-fullscreen" type="button" class="btn btn-sm btn-outline-secondary hist-fs-btn" aria-label="Повноекранний режим" title="Повноекранний режим"><i class="bi bi-arrows-fullscreen"></i></button>
+          <canvas id="hist-chart" aria-label="Графік історії курсу" role="img"></canvas>
         </div>
+        <div id="hist-stats" class="d-none d-flex flex-wrap gap-2 mb-3" role="status"></div>
         <div class="table-responsive glass glass-table-wrap">
           <table class="table table-sm table-hover table-glass align-middle mb-0">
+            <caption class="visually-hidden">Історичні дані курсу обраного активу</caption>
             <thead>
               <tr>
-                <th>Дата / час</th>
-                <th class="text-end">Ціна UAH</th>
-                <th class="text-end">Ціна USD</th>
-                <th class="text-end">Зміна від попереднього</th>
+                <th scope="col">Дата / час</th>
+                <th scope="col" class="text-end">Ціна UAH</th>
+                <th scope="col" class="text-end">Ціна USD</th>
+                <th scope="col" class="text-end">Зміна від попереднього</th>
               </tr>
             </thead>
             <tbody id="hist-tbody"></tbody>
           </table>
         </div>
+        <button type="button" class="btn btn-sm btn-glass-outline w-100 mt-2 d-none" id="hist-show-more">Показати ще</button>
         <div id="hist-empty" class="glass co-footnote p-3 d-none" role="status">Немає даних за обраними умовами.</div>
       </div>
     </div>
   </main>
+
+  <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toast-box" style="z-index:1090;" aria-live="polite" aria-atomic="true"></div>
+
+  <footer class="container text-center py-3 co-footnote" style="position:relative;z-index:1;">
+    CoinOps | Dmytro Hrenchevskyi | SoftServe Academy &copy; {{ now_year | default(2026) }}
+  </footer>
 
   <script type="application/json" id="coinops-initial-live">{{ (live_rates or [])|tojson }}</script>
   <script type="application/json" id="coinops-live-meta">{{ {'fetched_at': live_fetched_at}|tojson }}</script>

@@ -38,6 +38,7 @@
     const cur = loadState();
     Object.assign(cur, patch);
     try { localStorage.setItem(LS_KEY, JSON.stringify(cur)); } catch (e) {}
+    pushHash(cur);
     if (_uiStateServerSync) {
       clearTimeout(_syncTimer);
       _syncTimer = setTimeout(function () {
@@ -48,6 +49,34 @@
           body: JSON.stringify({ state: loadState() })
         }).catch(function () { /* ignore */ });
       }, 500);
+    }
+  }
+
+  var HASH_KEYS = ['histDefaultPair', 'histRange', 'histMetric', 'liveTypeFilter', 'theme'];
+  function stateToHash(state) {
+    var parts = [];
+    HASH_KEYS.forEach(function (k) {
+      if (state[k] != null && state[k] !== '') parts.push(encodeURIComponent(k) + '=' + encodeURIComponent(state[k]));
+    });
+    return parts.length ? '#' + parts.join('&') : '';
+  }
+  function hashToState() {
+    var h = location.hash.replace(/^#/, '');
+    if (!h) return {};
+    var obj = {};
+    h.split('&').forEach(function (seg) {
+      var idx = seg.indexOf('=');
+      if (idx < 0) return;
+      var k = decodeURIComponent(seg.slice(0, idx));
+      var v = decodeURIComponent(seg.slice(idx + 1));
+      if (HASH_KEYS.indexOf(k) >= 0) obj[k] = v;
+    });
+    return obj;
+  }
+  function pushHash(state) {
+    var h = stateToHash(state);
+    if (h !== location.hash && h !== '#') {
+      history.replaceState(null, '', h || location.pathname);
     }
   }
 
@@ -108,11 +137,19 @@
     }
     return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()}`;
   }
+  function addThousandsSep(s) {
+    var parts = s.split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0');
+    return parts.join('.');
+  }
   function formatPrice(v) {
     if (v === null || v === undefined) return '—';
     const n = Number(v);
     if (Number.isNaN(n)) return '—';
-    return n.toFixed(2);
+    const abs = Math.abs(n);
+    if (abs > 0 && abs < 0.01) return addThousandsSep(n.toPrecision(4));
+    if (abs > 0 && abs < 1) return addThousandsSep(n.toFixed(4));
+    return addThousandsSep(n.toFixed(2));
   }
   function formatPct(v) {
     if (v === null || v === undefined || Number.isNaN(Number(v))) return '—';
@@ -143,6 +180,9 @@
     return false;
   }
 
+  const HIST_PAGE_SIZES = [15, 30, 50];
+  const HIST_DEFAULT_PAGE = 15;
+  const AUTO_REFRESH_INTERVAL_MS = 60000;
   const MAX_FAVORITES = 8;
   const KPI_FALLBACK = ['USD:fiat', 'EUR:fiat', 'BTC:crypto'];
 
@@ -321,6 +361,150 @@
   let dashboardInsights = {};
   let liveSort = { key: 'symbol', dir: 1 };
   let sparkCharts = {};
+  let _histAllItems = [];
+  let _histShown = 0;
+  let _autoRefreshId = null;
+  let _relativeTimeId = null;
+  let _lastFetchedDate = null;
+
+  function insertGapMarkers(items) {
+    if (!items || items.length < 2) return items;
+    var timestamps = items.map(function (it) {
+      var d = parseTimestamp(it.created_at);
+      return d ? d.getTime() : 0;
+    });
+    var diffs = [];
+    for (var i = 1; i < timestamps.length; i++) {
+      var diff = timestamps[i] - timestamps[i - 1];
+      if (diff > 0) diffs.push(diff);
+    }
+    if (!diffs.length) return items;
+    diffs.sort(function (a, b) { return a - b; });
+    var median = diffs[Math.floor(diffs.length / 2)];
+    var threshold = median * 3;
+    var minGap = 30 * 60 * 1000;
+    if (threshold < minGap) threshold = minGap;
+    var result = [items[0]];
+    for (var j = 1; j < items.length; j++) {
+      var gap = timestamps[j] - timestamps[j - 1];
+      if (gap > threshold) {
+        result.push({
+          created_at: items[j - 1].created_at,
+          price_uah: null, price_usd: null,
+          pct_change_from_prev: null, _gap: true
+        });
+      }
+      result.push(items[j]);
+    }
+    return result;
+  }
+
+  function withButtonSpinner(btn, asyncFn) {
+    if (!btn) return asyncFn();
+    var original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+    return asyncFn().finally(function () {
+      btn.innerHTML = original;
+      btn.disabled = false;
+    });
+  }
+
+  function formatRelativeTime(date) {
+    if (!date) return '';
+    var diff = Math.max(0, Date.now() - date.getTime());
+    var sec = Math.floor(diff / 1000);
+    if (sec < 60) return sec + '\u00a0\u0441 \u0442\u043e\u043c\u0443';
+    var min = Math.floor(sec / 60);
+    if (min < 60) return min + '\u00a0\u0445\u0432 \u0442\u043e\u043c\u0443';
+    return Math.floor(min / 60) + '\u00a0\u0433\u043e\u0434 \u0442\u043e\u043c\u0443';
+  }
+
+  function showToast(message, type) {
+    var box = document.getElementById('toast-box');
+    if (!box) return;
+    var id = 'toast-' + Date.now();
+    var cls = 'toast-' + (type || 'info');
+    var html =
+      '<div id="' + id + '" class="toast toast-glass ' + cls + '" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="5000">' +
+        '<div class="d-flex">' +
+          '<div class="toast-body">' + escapeHtml(message) + '</div>' +
+          '<button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Закрити"></button>' +
+        '</div>' +
+      '</div>';
+    box.insertAdjacentHTML('beforeend', html);
+    var el = document.getElementById(id);
+    if (el && typeof bootstrap !== 'undefined' && bootstrap.Toast) {
+      var t = new bootstrap.Toast(el);
+      t.show();
+      el.addEventListener('hidden.bs.toast', function () { el.remove(); });
+    }
+  }
+
+  var RATE_CHANGE_THRESHOLD_PCT = 1;
+  var _prevKpiRates = {};
+
+  function detectRateAlerts(oldRates, newRates) {
+    if (!oldRates || !Object.keys(oldRates).length) return;
+    var keys = getKpiSlotPairKeys();
+    keys.forEach(function (pk) {
+      var oldVal = oldRates[pk];
+      var newRow = rowForPairKey(pk);
+      if (!newRow || oldVal == null) return;
+      var newVal = newRow.asset_type === 'fiat' ? Number(newRow.price_uah) : Number(newRow.price_usd);
+      if (!newVal || Number.isNaN(newVal) || Number.isNaN(oldVal)) return;
+      var pctChange = ((newVal - oldVal) / oldVal) * 100;
+      if (Math.abs(pctChange) >= RATE_CHANGE_THRESHOLD_PCT) {
+        var sym = (newRow.asset_symbol || '').toUpperCase();
+        var arrow = pctChange > 0 ? '\u2191' : '\u2193';
+        var sign = pctChange > 0 ? '+' : '';
+        showToast(sym + ' ' + arrow + ' ' + sign + pctChange.toFixed(2) + '%', pctChange > 0 ? 'success' : 'warning');
+      }
+    });
+  }
+
+  function snapshotKpiRates() {
+    var snap = {};
+    var keys = getKpiSlotPairKeys();
+    keys.forEach(function (pk) {
+      var r = rowForPairKey(pk);
+      if (!r) return;
+      snap[pk] = r.asset_type === 'fiat' ? Number(r.price_uah) : Number(r.price_usd);
+    });
+    return snap;
+  }
+
+  function fetchWithRetry(url, opts, cfg) {
+    var retries = (cfg && cfg.retries) || 3;
+    var baseDelay = (cfg && cfg.baseDelay) || 1000;
+    function attempt(n) {
+      return fetch(url, opts).then(function (res) {
+        if (res.status >= 500 && n < retries) {
+          return new Promise(function (resolve) {
+            setTimeout(resolve, baseDelay * Math.pow(2, n));
+          }).then(function () { return attempt(n + 1); });
+        }
+        return res;
+      }).catch(function (err) {
+        if (n < retries) {
+          return new Promise(function (resolve) {
+            setTimeout(resolve, baseDelay * Math.pow(2, n));
+          }).then(function () { return attempt(n + 1); });
+        }
+        throw err;
+      });
+    }
+    return attempt(0);
+  }
+
+  function startRelativeTimeTicker() {
+    if (_relativeTimeId) clearInterval(_relativeTimeId);
+    _relativeTimeId = setInterval(function () {
+      if (!_lastFetchedDate || !el.kpiTime) return;
+      el.kpiTime.textContent = formatRelativeTime(_lastFetchedDate);
+      el.kpiTime.title = formatLocalDateTime(liveMeta.fetched_at);
+    }, 1000);
+  }
 
   /* -------------------------------------------------------------------------- */
   /* Посилання на DOM (id з шаблону не змінювати — на них зав’язаний JS/CSS)    */
@@ -337,6 +521,8 @@
       try { localStorage.setItem(LS_KEY, JSON.stringify(base)); } catch (e) {}
     }
   } catch (e) { /* ignore */ }
+  var fromHash = hashToState();
+  Object.assign(base, fromHash);
   const st = base;
   normalizeUiState(st);
   const el = {
@@ -378,6 +564,14 @@
     histTbody: document.getElementById('hist-tbody'),
     histEmpty: document.getElementById('hist-empty'),
     histChartErr: document.getElementById('hist-chart-error'),
+    histChartWrap: document.getElementById('hist-chart-wrap'),
+    histFullscreen: document.getElementById('hist-fullscreen'),
+    histShowMore: document.getElementById('hist-show-more'),
+    histPageSizeMenu: document.getElementById('hist-page-size-menu'),
+    histPageSizeToggle: document.getElementById('hist-page-size-toggle'),
+    histPageSizeLabel: document.getElementById('hist-page-size-label'),
+    histPageSize: document.getElementById('hist-page-size'),
+    liveEmpty: document.getElementById('live-empty'),
   };
 
   if (el.liveSearch) { el.liveSearch.value = st.liveSearch || ''; }
@@ -494,19 +688,27 @@
     syncDropdownLabel(el.liveType, el.liveTypeLabel);
   }
 
+  function toggleCustomRangeFields() {
+    var wrap = document.getElementById('hist-custom-range-wrap');
+    if (!wrap) return;
+    wrap.classList.toggle('d-none', el.histRange.value !== 'custom');
+  }
+
   function initHistRangeFilter() {
     if (!el.histRange || !el.histRangeMenu || !el.histRangeLabel) return;
     const defs = [
       { value: '24h', label: '24 години' },
       { value: '7d', label: '7 днів' },
       { value: '30d', label: '1 місяць' },
-      { value: 'all', label: 'Увесь час' }
+      { value: 'all', label: 'Увесь час' },
+      { value: 'custom', label: 'Свій діапазон' }
     ];
     fillHiddenSelectAndMenu(el.histRange, el.histRangeMenu, defs);
     const saved = st.histRange || '7d';
     const allowed = new Set(defs.map(function (d) { return d.value; }));
     el.histRange.value = allowed.has(saved) ? saved : '7d';
     syncDropdownLabel(el.histRange, el.histRangeLabel);
+    toggleCustomRangeFields();
   }
 
   function findRate(sym, type) {
@@ -521,6 +723,20 @@
     const s = sym.toUpperCase();
     return liveRates.find(function (x) {
       return (x.asset_symbol || '').toUpperCase() === s;
+    });
+  }
+
+  let _prevKpiValues = ['', '', ''];
+
+  function flashKpiCard(slotIndex) {
+    var card = document.querySelector('.kpi-slot-draggable[data-kpi-slot="' + slotIndex + '"]');
+    if (!card) return;
+    card.classList.remove('kpi-updated');
+    void card.offsetWidth;
+    card.classList.add('kpi-updated');
+    card.addEventListener('animationend', function handler() {
+      card.classList.remove('kpi-updated');
+      card.removeEventListener('animationend', handler);
     });
   }
 
@@ -540,16 +756,20 @@
           titleEl.textContent = '—';
         }
       }
+      var newVal = '—';
       if (valEls[i]) {
         if (!r) {
-          valEls[i].textContent = '—';
+          newVal = '—';
         } else if (r.asset_type === 'fiat' && r.price_uah != null) {
-          valEls[i].textContent = `${formatPrice(r.price_uah)} UAH`;
+          newVal = `${formatPrice(r.price_uah)} UAH`;
         } else if (r.asset_type === 'crypto' && r.price_usd != null) {
-          valEls[i].textContent = `${formatPrice(r.price_usd)} USD`;
-        } else {
-          valEls[i].textContent = '—';
+          newVal = `${formatPrice(r.price_usd)} USD`;
         }
+        valEls[i].textContent = newVal;
+        if (_prevKpiValues[i] && _prevKpiValues[i] !== newVal) {
+          flashKpiCard(i);
+        }
+        _prevKpiValues[i] = newVal;
       }
       if (trendEls[i]) {
         const pkTrend = r ? pairKey(r) : '';
@@ -559,7 +779,15 @@
         trendEls[i].textContent = `24 год: ${formatPct(p)}`;
       }
     }
-    if (el.kpiTime) el.kpiTime.textContent = formatLocalDateTime(liveMeta.fetched_at);
+    _lastFetchedDate = parseTimestamp(liveMeta.fetched_at);
+    if (el.kpiTime) {
+      if (_lastFetchedDate) {
+        el.kpiTime.textContent = formatRelativeTime(_lastFetchedDate);
+        el.kpiTime.title = formatLocalDateTime(liveMeta.fetched_at);
+      } else {
+        el.kpiTime.textContent = formatLocalDateTime(liveMeta.fetched_at);
+      }
+    }
   }
 
   function filterLiveRows() {
@@ -678,7 +906,20 @@
         `<td><div class="spark-wrap"><canvas id="${canvasId}" height="36"></canvas></div></td>`
       );
     });
-    el.liveTbody.innerHTML = rowHtmls.map(function (cells) { return `<tr>${cells}</tr>`; }).join('');
+    el.liveTbody.innerHTML = rowHtmls.map(function (cells, i) {
+      var row = rows[i];
+      var ins = dashboardInsights[pairKey(row)];
+      var t24 = ins && ins.trend_24h_pct;
+      var trCls = '';
+      if (t24 != null && !Number.isNaN(Number(t24))) {
+        if (Number(t24) >= 2) trCls = ' class="tr-trend-up"';
+        else if (Number(t24) <= -2) trCls = ' class="tr-trend-down"';
+      }
+      return '<tr' + trCls + '>' + cells + '</tr>';
+    }).join('');
+    if (el.liveEmpty) {
+      el.liveEmpty.classList.toggle('d-none', rows.length > 0);
+    }
     sparkJobs.forEach(function (job) {
       renderSparkline(job.canvasId, job.points, job.trendPct);
     });
@@ -808,7 +1049,7 @@
       return;
     }
     try {
-      const res = await fetch(`/api/history/dashboard?pairs=${encodeURIComponent(pairs)}`);
+      const res = await fetchWithRetry(`/api/history/dashboard?pairs=${encodeURIComponent(pairs)}`);
       const data = await res.json();
       dashboardInsights = {};
       if (data.items && Array.isArray(data.items)) {
@@ -822,9 +1063,10 @@
     renderLive();
   }
 
-  async function refreshLive() {
+  async function _doRefreshLive() {
+    var prevSnap = snapshotKpiRates();
     try {
-      const res = await fetch('/api/live');
+      const res = await fetchWithRetry('/api/live');
       const data = await res.json();
       if (data.error) return;
       liveRates = Array.isArray(data.rates) ? data.rates.slice() : [];
@@ -833,102 +1075,473 @@
       updateConverter();
       fillHistAssetSelect();
       await fetchDashboard();
+      detectRateAlerts(prevSnap, liveRates);
     } catch (e) {
-      /* мережа / JSON — залишаємо поточний стан без змін */
+      showToast('Не вдалося оновити курси. Перевірте з\'єднання.', 'error');
+    }
+  }
+
+  function refreshLive() {
+    return withButtonSpinner(el.btnRefresh, _doRefreshLive);
+  }
+
+  var CHART_COLORS = ['#34d399', '#fbbf24', '#60a5fa', '#f87171', '#a78bfa'];
+  var MAX_HIST_ASSETS = 5;
+
+  function getSelectedHistAssets() {
+    if (!el.histAsset) return [];
+    var selected = [];
+    Array.prototype.forEach.call(el.histAsset.options, function (o) {
+      if (o.selected) selected.push(o.value);
+    });
+    return selected;
+  }
+
+  function updateHistAssetLabel() {
+    var sel = getSelectedHistAssets();
+    if (!el.histAssetLabel) return;
+    if (sel.length === 0) {
+      el.histAssetLabel.textContent = '—';
+    } else if (sel.length === 1) {
+      var p = parsePairKeyString(sel[0]);
+      el.histAssetLabel.textContent = p ? p.sym : sel[0];
+    } else {
+      el.histAssetLabel.textContent = sel.length + ' активів обрано';
     }
   }
 
   function fillHistAssetSelect() {
     if (!el.histAsset || !el.histAssetMenu) return;
-    const cur = el.histAsset.value;
+    var prevSelected = getSelectedHistAssets();
     el.histAsset.innerHTML = '';
     el.histAssetMenu.innerHTML = '';
-    liveRates.forEach(function (r) {
-      const value = `${(r.asset_symbol || '').toUpperCase()}:${r.asset_type}`;
-      const symU = (r.asset_symbol || '').toUpperCase();
-      const label = `${symU} — ${displayName(r)}  ${displayIcon(r)}`;
-      el.histAsset.appendChild(new Option(label, value));
-      el.histAssetMenu.appendChild(createDropdownMenuItem(value, label, 'dropdown-item text-start py-2'));
+
+    var searchLi = document.createElement('li');
+    searchLi.className = 'px-2 pb-2 hist-asset-search-wrap';
+    var searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.className = 'form-control form-control-sm';
+    searchInput.placeholder = 'Пошук активу\u2026';
+    searchInput.setAttribute('aria-label', 'Пошук активу');
+    searchLi.appendChild(searchInput);
+    el.histAssetMenu.appendChild(searchLi);
+
+    searchInput.addEventListener('input', function () {
+      var q = this.value.toLowerCase().trim();
+      el.histAssetMenu.querySelectorAll('li[data-asset-item]').forEach(function (li) {
+        var label = (li.getAttribute('data-search-label') || '').toLowerCase();
+        li.style.display = label.indexOf(q) >= 0 ? '' : 'none';
+      });
     });
-    const prefer = st.histDefaultPair && typeof st.histDefaultPair === 'string' ? st.histDefaultPair : null;
-    if (prefer && Array.prototype.some.call(el.histAsset.options, function (o) { return o.value === prefer; })) {
-      el.histAsset.value = prefer;
-    } else if (cur && Array.prototype.some.call(el.histAsset.options, function (o) { return o.value === cur; })) {
-      el.histAsset.value = cur;
-    } else if (el.histAsset.options.length) {
-      el.histAsset.selectedIndex = 0;
+    searchInput.addEventListener('click', function (ev) { ev.stopPropagation(); });
+    searchInput.addEventListener('keydown', function (ev) { ev.stopPropagation(); });
+
+    liveRates.forEach(function (r) {
+      var value = (r.asset_symbol || '').toUpperCase() + ':' + r.asset_type;
+      var symU = (r.asset_symbol || '').toUpperCase();
+      var label = symU + ' \u2014 ' + displayName(r) + '  ' + displayIcon(r);
+      var opt = new Option(label, value);
+      el.histAsset.appendChild(opt);
+      var li = document.createElement('li');
+      li.setAttribute('data-asset-item', '1');
+      li.setAttribute('data-search-label', symU + ' ' + displayName(r));
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'dropdown-item text-start py-2 d-flex align-items-center gap-2';
+      btn.setAttribute('data-value', value);
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'form-check-input me-0';
+      cb.style.pointerEvents = 'none';
+      cb.setAttribute('data-cb-value', value);
+      btn.appendChild(cb);
+      btn.appendChild(document.createTextNode(label));
+      li.appendChild(btn);
+      el.histAssetMenu.appendChild(li);
+    });
+    var prefer = st.histDefaultPair;
+    if (prevSelected.length) {
+      prevSelected.forEach(function (v) {
+        var o = el.histAsset.querySelector('option[value="' + v + '"]');
+        if (o) o.selected = true;
+      });
+    } else if (prefer && typeof prefer === 'string') {
+      var arr = prefer.indexOf(',') >= 0 ? prefer.split(',') : [prefer];
+      arr.forEach(function (v) {
+        var o = el.histAsset.querySelector('option[value="' + v.trim() + '"]');
+        if (o) o.selected = true;
+      });
     }
-    syncDropdownLabel(el.histAsset, el.histAssetLabel);
+    if (!getSelectedHistAssets().length && el.histAsset.options.length) {
+      el.histAsset.options[0].selected = true;
+    }
+    syncHistAssetCheckboxes();
+    updateHistAssetLabel();
   }
 
-  /** HTML рядків таблиці історії (лише розмітка; дані з API екрануються). */
-  function buildHistoryTableRowsHtml(items) {
+  function syncHistAssetCheckboxes() {
+    var sel = new Set(getSelectedHistAssets());
+    el.histAssetMenu.querySelectorAll('input[data-cb-value]').forEach(function (cb) {
+      cb.checked = sel.has(cb.getAttribute('data-cb-value'));
+    });
+  }
+
+  function wireHistAssetMultiSelect() {
+    if (!el.histAssetMenu || !el.histAsset) return;
+    el.histAssetMenu.addEventListener('click', function (ev) {
+      var item = ev.target.closest('button[data-value]');
+      if (!item || !el.histAssetMenu.contains(item)) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      var val = item.getAttribute('data-value');
+      var opt = el.histAsset.querySelector('option[value="' + val + '"]');
+      if (!opt) return;
+      if (opt.selected) {
+        opt.selected = false;
+      } else {
+        if (getSelectedHistAssets().length >= MAX_HIST_ASSETS) {
+          showToast('Максимум ' + MAX_HIST_ASSETS + ' активів одночасно', 'warning');
+          return;
+        }
+        opt.selected = true;
+      }
+      syncHistAssetCheckboxes();
+      updateHistAssetLabel();
+      var selected = getSelectedHistAssets();
+      st.histDefaultPair = selected.join(',');
+      saveState({ histDefaultPair: st.histDefaultPair });
+    });
+  }
+
+  function buildHistoryTableRowsHtml(items, showAssetCol) {
     return items.map(function (it) {
-      const pct = it.pct_change_from_prev;
-      const pctCell = pct == null ? '—' : formatPct(pct);
-      const dtEsc = escapeHtml(formatLocalDateTime(it.created_at));
-      const uahEsc = escapeHtml(formatPrice(it.price_uah));
-      const usdEsc = escapeHtml(formatPrice(it.price_usd));
-      const pctEsc = escapeHtml(pctCell);
-      const tc = trendClass(pct);
+      if (it._gap) return '';
+      var pct = it.pct_change_from_prev;
+      var pctCell = pct == null ? '—' : formatPct(pct);
+      var dtEsc = escapeHtml(formatLocalDateTime(it.created_at));
+      var uahEsc = escapeHtml(formatPrice(it.price_uah));
+      var usdEsc = escapeHtml(formatPrice(it.price_usd));
+      var pctEsc = escapeHtml(pctCell);
+      var tc = trendClass(pct);
+      var symCell = showAssetCol ? '<td><strong>' + escapeHtml(it._sym || '') + '</strong></td>' : '';
       return (
-        `<tr><td>${dtEsc}</td>` +
-        `<td class="text-end">${uahEsc}</td>` +
-        `<td class="text-end">${usdEsc}</td>` +
-        `<td class="text-end ${tc}">${pctEsc}</td></tr>`
+        '<tr>' + symCell + '<td>' + dtEsc + '</td>' +
+        '<td class="text-end">' + uahEsc + '</td>' +
+        '<td class="text-end">' + usdEsc + '</td>' +
+        '<td class="text-end ' + tc + '">' + pctEsc + '</td></tr>'
       );
     }).join('');
   }
 
+  function getHistPageSize() {
+    return Number(st.histPageSize) || HIST_DEFAULT_PAGE;
+  }
+
+  function renderHistoryTable() {
+    if (!el.histTbody) return;
+    var showAssetCol = _histMultiMode;
+    var realItems = _histAllItems.filter(function (it) { return !it._gap; });
+    if (!_histMultiMode) realItems = realItems.slice().reverse();
+    var pageSize = getHistPageSize();
+    var slice = realItems.slice(0, _histShown + pageSize);
+    el.histTbody.innerHTML = buildHistoryTableRowsHtml(slice, showAssetCol);
+    _histShown = slice.length;
+
+    var thead = el.histTbody.closest('table');
+    if (thead) {
+      var existingAssetTh = thead.querySelector('th[data-hist-asset-col]');
+      var firstTh = thead.querySelector('thead tr th');
+      if (showAssetCol && !existingAssetTh && firstTh) {
+        var th = document.createElement('th');
+        th.setAttribute('scope', 'col');
+        th.setAttribute('data-hist-asset-col', '1');
+        th.textContent = 'Актив';
+        firstTh.parentNode.insertBefore(th, firstTh);
+      } else if (!showAssetCol && existingAssetTh) {
+        existingAssetTh.remove();
+      }
+    }
+
+    var remaining = realItems.length - _histShown;
+    if (el.histShowMore) {
+      if (remaining > 0) {
+        el.histShowMore.textContent = 'Показати ще ' + Math.min(remaining, pageSize);
+        el.histShowMore.classList.remove('d-none');
+      } else {
+        el.histShowMore.classList.add('d-none');
+      }
+    }
+  }
+
+  function buildHistQueryString(sym, typ, range) {
+    var qParts = ['asset_symbol=' + encodeURIComponent(sym), 'asset_type=' + encodeURIComponent(typ)];
+    if (range === 'custom') {
+      var dfrom = document.getElementById('hist-date-from');
+      var dto = document.getElementById('hist-date-to');
+      if (dfrom && dfrom.value) qParts.push('date_from=' + encodeURIComponent(dfrom.value));
+      if (dto && dto.value) qParts.push('date_to=' + encodeURIComponent(dto.value));
+      qParts.push('range=custom');
+    } else {
+      qParts.push('range=' + encodeURIComponent(range));
+    }
+    return qParts.join('&');
+  }
+
+  /**
+   * Build a unified epoch-based timeline from multiple series.
+   * Returns sorted array of unique epoch-ms values.
+   */
+  function buildUnifiedTimeline(seriesArr) {
+    var set = {};
+    seriesArr.forEach(function (items) {
+      items.forEach(function (it) {
+        if (it._gap) return;
+        var d = parseTimestamp(it.created_at);
+        if (d) set[d.getTime()] = true;
+      });
+    });
+    return Object.keys(set).map(Number).sort(function (a, b) { return a - b; });
+  }
+
+  /**
+   * Align a single series to the unified timeline.
+   * For each timeline epoch, find the nearest data point within `tolerance` ms.
+   * Returns array of values (or null for gaps/missing).
+   */
+  function alignSeriesToTimeline(items, timeline, metric, toleranceMs) {
+    var epochMap = [];
+    items.forEach(function (it) {
+      if (it._gap) { epochMap.push({ epoch: null, val: null }); return; }
+      var d = parseTimestamp(it.created_at);
+      var val = metric === 'uah' ? it.price_uah : it.price_usd;
+      if (d && val != null) epochMap.push({ epoch: d.getTime(), val: Number(val) });
+    });
+    var sorted = epochMap.filter(function (e) { return e.epoch != null; });
+    return timeline.map(function (ts) {
+      var best = null;
+      var bestDist = Infinity;
+      for (var i = 0; i < sorted.length; i++) {
+        var dist = Math.abs(sorted[i].epoch - ts);
+        if (dist < bestDist) { bestDist = dist; best = sorted[i]; }
+        if (sorted[i].epoch > ts) break;
+      }
+      if (best && bestDist <= toleranceMs) return best.val;
+      return null;
+    });
+  }
+
+  /**
+   * Normalize values to % change from first non-null value (baseline = 0%).
+   */
+  function normalizeToPctChange(values) {
+    var base = null;
+    for (var i = 0; i < values.length; i++) {
+      if (values[i] != null) { base = values[i]; break; }
+    }
+    if (base == null || base === 0) return values;
+    return values.map(function (v) {
+      if (v == null) return null;
+      return ((v - base) / base) * 100;
+    });
+  }
+
+  function computeStats(values) {
+    var nums = values.filter(function (v) { return v != null && !Number.isNaN(Number(v)); }).map(Number);
+    if (!nums.length) return null;
+    var sorted = nums.slice().sort(function (a, b) { return a - b; });
+    var sum = sorted.reduce(function (s, v) { return s + v; }, 0);
+    var mid = Math.floor(sorted.length / 2);
+    var median = sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    return { min: sorted[0], max: sorted[sorted.length - 1], avg: sum / sorted.length, median: median, count: sorted.length };
+  }
+
+  function renderHistStats(parsed, isMulti) {
+    var box = document.getElementById('hist-stats');
+    if (!box) return;
+    if (!parsed || !parsed.length) { box.classList.add('d-none'); box.innerHTML = ''; return; }
+
+    var html = '';
+    parsed.forEach(function (p, idx) {
+      var vals = (p.items || []).map(function (it) {
+        return p.metric === 'uah' ? it.price_uah : it.price_usd;
+      });
+      var s = computeStats(vals);
+      if (!s) return;
+      var unit = p.metricLabel || '';
+      var color = CHART_COLORS[idx % CHART_COLORS.length];
+      if (isMulti) {
+        html += '<div class="d-flex flex-wrap gap-2 align-items-center w-100">';
+        html += '<span class="hist-stat-group-label"><span class="hist-stat-dot" style="background:' + color + '"></span>' + escapeHtml(p.sym) + ' (' + unit + ')</span>';
+      }
+      html += '<span class="glass hist-stat-badge">Мін: ' + escapeHtml(formatPrice(s.min)) + '</span>';
+      html += '<span class="glass hist-stat-badge">Макс: ' + escapeHtml(formatPrice(s.max)) + '</span>';
+      html += '<span class="glass hist-stat-badge">Середнє: ' + escapeHtml(formatPrice(s.avg)) + '</span>';
+      html += '<span class="glass hist-stat-badge">Медіана: ' + escapeHtml(formatPrice(s.median)) + '</span>';
+      if (isMulti) html += '</div>';
+    });
+    box.innerHTML = html;
+    box.classList.toggle('d-none', !html);
+  }
+
+  function _isLight() {
+    return document.documentElement.getAttribute('data-theme') === 'light';
+  }
+  function _chartTheme() {
+    if (_isLight()) return {
+      text: 'rgba(17,19,24,0.78)',
+      tick: 'rgba(17,19,24,0.62)',
+      grid: 'rgba(17,19,24,0.08)',
+      tooltipText: '#1e2028',
+      tooltipBg: 'rgba(255,255,255,0.88)',
+      tooltipBorder: 'rgba(0,0,0,0.10)'
+    };
+    return {
+      text: 'rgba(232,234,239,0.92)',
+      tick: 'rgba(232,234,239,0.78)',
+      grid: 'rgba(255,255,255,0.07)',
+      tooltipText: '#e8eaef',
+      tooltipBg: 'rgba(15,20,35,0.92)',
+      tooltipBorder: 'rgba(255,255,255,0.12)'
+    };
+  }
+
+  var _histMultiMode = false;
+  var _histAbsoluteValues = {};
+
   async function loadHistorySeries() {
     if (!el.histAsset || !el.histRange) return;
-    const v = el.histAsset.value;
-    if (!v || !v.includes(':')) return;
-    const [sym, typ] = v.split(':');
-    const range = el.histRange.value;
+    var selected = getSelectedHistAssets();
+    if (!selected.length) return;
+    var range = el.histRange.value;
+    var isMulti = selected.length > 1;
+    _histMultiMode = isMulti;
     saveState({ histRange: range });
     if (el.histChartErr) {
       el.histChartErr.classList.add('d-none');
       el.histChartErr.textContent = '';
     }
-    const q = `asset_symbol=${encodeURIComponent(sym)}&asset_type=${encodeURIComponent(typ)}&range=${encodeURIComponent(range)}`;
+
     try {
-      const res = await fetch(`/api/history/series?${q}`);
-      const data = await res.json();
-      if (data.error) {
+      var fetches = selected.map(function (v) {
+        var parts = v.split(':');
+        var sym = parts[0];
+        var typ = parts[1];
+        var q = buildHistQueryString(sym, typ, range);
+        return fetchWithRetry('/api/history/series?' + q).then(function (r) { return r.json(); }).then(function (data) {
+          return { key: v, sym: sym, typ: typ, data: data };
+        });
+      });
+      var results = await Promise.all(fetches);
+
+      var firstError = results.find(function (r) { return r.data && r.data.error; });
+      if (firstError && results.length === 1) {
         if (el.histChartErr) {
-          el.histChartErr.textContent = data.detail || data.error || 'Помилка';
+          el.histChartErr.textContent = firstError.data.detail || firstError.data.error || 'Помилка';
           el.histChartErr.classList.remove('d-none');
         }
         return;
       }
-      const items = data.items || [];
-      if (el.histEmpty) el.histEmpty.classList.toggle('d-none', items.length > 0);
-      if (!items.length) {
+
+      var parsed = [];
+      var allRawItems = [];
+      results.forEach(function (r) {
+        var items = (r.data && r.data.items) || [];
+        if (!items.length) return;
+        var metric = (r.data && r.data.series_metric) || 'uah';
+        var chartItems = insertGapMarkers(items);
+        items.forEach(function (it) {
+          allRawItems.push({ _sym: r.sym, _metric: metric, created_at: it.created_at, price_uah: it.price_uah, price_usd: it.price_usd, pct_change_from_prev: it.pct_change_from_prev });
+        });
+        parsed.push({ sym: r.sym, metric: metric, metricLabel: metric === 'uah' ? 'UAH' : 'USD', items: items, chartItems: chartItems });
+      });
+
+      var hasData = parsed.length > 0;
+      if (el.histEmpty) el.histEmpty.classList.toggle('d-none', hasData);
+      if (!hasData) {
+        _histAllItems = [];
+        _histShown = 0;
         if (el.histTbody) el.histTbody.innerHTML = '';
+        if (el.histShowMore) el.histShowMore.classList.add('d-none');
         destroyChartInstance(histMainChart);
         histMainChart = null;
         return;
       }
-      const metric = data.series_metric || 'uah';
-      const labels = items.map(function (it) { return formatChartAxisLabel(it.created_at, range); });
-      const seriesData = items.map(function (it) {
-        return metric === 'uah' ? it.price_uah : it.price_usd;
-      });
-      const ctx = document.getElementById('hist-chart');
+
+      var datasets;
+      var chartLabels;
+      var yAxisLabel;
+      _histAbsoluteValues = {};
+
+      if (!isMulti) {
+        var p = parsed[0];
+        var ci = p.chartItems;
+        chartLabels = ci.map(function (it) { return formatChartAxisLabel(it.created_at, range); });
+        var vals = ci.map(function (it) {
+          if (it._gap) return null;
+          return p.metric === 'uah' ? it.price_uah : it.price_usd;
+        });
+        yAxisLabel = p.metricLabel;
+        datasets = [{
+          label: p.sym + ' (' + p.metricLabel + ')',
+          data: vals,
+          borderColor: CHART_COLORS[0],
+          backgroundColor: CHART_COLORS[0],
+          tension: 0.32,
+          fill: false,
+          spanGaps: false
+        }];
+      } else {
+        var allSeries = parsed.map(function (p) { return p.chartItems; });
+        var timeline = buildUnifiedTimeline(allSeries);
+        var toleranceMs = 15 * 60 * 1000;
+        if (range === '24h') toleranceMs = 5 * 60 * 1000;
+
+        chartLabels = timeline.map(function (epoch) {
+          var d = new Date(epoch);
+          if (range === '24h') return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+          return pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1) + '.' + d.getFullYear();
+        });
+
+        datasets = parsed.map(function (p, idx) {
+          var aligned = alignSeriesToTimeline(p.chartItems, timeline, p.metric, toleranceMs);
+          _histAbsoluteValues[p.sym] = aligned.slice();
+          var normalized = normalizeToPctChange(aligned);
+          return {
+            label: p.sym + ' (' + p.metricLabel + ')',
+            data: normalized,
+            borderColor: CHART_COLORS[idx % CHART_COLORS.length],
+            backgroundColor: CHART_COLORS[idx % CHART_COLORS.length],
+            tension: 0.32,
+            fill: false,
+            spanGaps: false,
+            _sym: p.sym,
+            _metricLabel: p.metricLabel
+          };
+        });
+        yAxisLabel = '% зміна';
+      }
+
+      var tooltipCallbacks = {};
+      if (isMulti) {
+        tooltipCallbacks.label = function (ctx) {
+          var ds = ctx.dataset;
+          var sym = ds._sym || ds.label;
+          var ml = ds._metricLabel || '';
+          var pct = ctx.parsed.y;
+          if (pct == null) return null;
+          var absArr = _histAbsoluteValues[sym];
+          var absVal = absArr ? absArr[ctx.dataIndex] : null;
+          var parts = sym + ': ' + (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
+          if (absVal != null) parts += '  (' + formatPrice(absVal) + ' ' + ml + ')';
+          return parts;
+        };
+      }
+
+      var ctx = document.getElementById('hist-chart');
       destroyChartInstance(histMainChart);
       histMainChart = new Chart(ctx, {
         type: 'line',
-        data: {
-          labels: labels,
-          datasets: [{
-            label: metric === 'uah' ? 'UAH' : 'USD',
-            data: seriesData,
-            borderColor: '#6ea8fe',
-            tension: 0.32,
-            fill: false
-          }]
-        },
+        data: { labels: chartLabels, datasets: datasets },
         options: {
           responsive: true,
           maintainAspectRatio: false,
@@ -936,21 +1549,23 @@
           plugins: {
             legend: {
               display: true,
-              labels: { color: 'rgba(232,234,239,0.85)' }
+              labels: { color: _chartTheme().text }
             },
             tooltip: {
-              titleColor: '#e8eaef',
-              bodyColor: '#e8eaef',
-              backgroundColor: 'rgba(15, 20, 35, 0.92)',
-              borderColor: 'rgba(255,255,255,0.12)',
-              borderWidth: 1
+              titleColor: _chartTheme().tooltipText,
+              bodyColor: _chartTheme().tooltipText,
+              backgroundColor: _chartTheme().tooltipBg,
+              borderColor: _chartTheme().tooltipBorder,
+              borderWidth: 1,
+              filter: function (item) { return item.raw != null; },
+              callbacks: tooltipCallbacks
             }
           },
           scales: {
             x: {
-              grid: { color: 'rgba(255,255,255,0.08)' },
+              grid: { color: _chartTheme().grid },
               ticks: {
-                color: 'rgba(232,234,239,0.65)',
+                color: _chartTheme().tick,
                 autoSkip: true,
                 maxTicksLimit: 12,
                 maxRotation: 0,
@@ -958,20 +1573,38 @@
               }
             },
             y: {
-              grid: { color: 'rgba(255,255,255,0.08)' },
-              ticks: { color: 'rgba(232,234,239,0.65)' }
+              grid: { color: _chartTheme().grid },
+              ticks: { color: _chartTheme().tick },
+              title: {
+                display: !!yAxisLabel,
+                text: yAxisLabel || '',
+                color: _chartTheme().tick
+              }
             }
           }
         }
       });
-      if (el.histTbody) {
-        el.histTbody.innerHTML = buildHistoryTableRowsHtml(items);
+
+      if (isMulti) {
+        allRawItems.sort(function (a, b) {
+          var da = parseTimestamp(a.created_at);
+          var db = parseTimestamp(b.created_at);
+          if (!da || !db) return 0;
+          return db.getTime() - da.getTime();
+        });
+        _histAllItems = allRawItems;
+      } else {
+        _histAllItems = parsed[0] ? insertGapMarkers(parsed[0].items) : [];
       }
+      _histShown = 0;
+      renderHistoryTable();
+      renderHistStats(parsed, isMulti);
     } catch (err) {
       if (el.histChartErr) {
         el.histChartErr.textContent = 'Не вдалося завантажити історію.';
         el.histChartErr.classList.remove('d-none');
       }
+      showToast('Не вдалося завантажити історію.', 'error');
     }
   }
 
@@ -1048,15 +1681,9 @@
         updateConverter();
       });
     }
-    wireCoSelectDropdown(el.histAssetToggle, el.histAssetMenu, el.histAsset, function () {
-      const v = el.histAsset && el.histAsset.value;
-      if (!v) return;
-      st.histDefaultPair = v;
-      saveState({ histDefaultPair: v });
-    });
+    wireHistAssetMultiSelect();
     wireCoSelectTypeahead(el.convFromToggle, el.convFromMenu);
     wireCoSelectTypeahead(el.convToToggle, el.convToMenu);
-    wireCoSelectTypeahead(el.histAssetToggle, el.histAssetMenu);
     const convSwap = document.getElementById('conv-swap');
     if (convSwap && el.convFrom && el.convTo) {
       convSwap.addEventListener('click', function () {
@@ -1074,13 +1701,47 @@
   }
 
   function bindHist() {
-    if (el.histLoad) el.histLoad.addEventListener('click', loadHistorySeries);
+    if (el.histLoad) {
+      el.histLoad.addEventListener('click', function () {
+        withButtonSpinner(el.histLoad, loadHistorySeries);
+      });
+    }
+    if (el.histShowMore) {
+      el.histShowMore.addEventListener('click', renderHistoryTable);
+    }
+    if (el.histPageSize && el.histPageSizeToggle && el.histPageSizeMenu) {
+      wireCoSelectDropdown(el.histPageSizeToggle, el.histPageSizeMenu, el.histPageSize, function () {
+        var v = parseInt(el.histPageSize.value, 10);
+        if (!isNaN(v)) {
+          st.histPageSize = v;
+          saveState({ histPageSize: v });
+        }
+        _histShown = 0;
+        renderHistoryTable();
+      });
+    }
     if (el.histRange && el.histRangeToggle && el.histRangeMenu) {
       const onRange = function () {
         saveState({ histRange: el.histRange.value });
+        toggleCustomRangeFields();
       };
       wireCoSelectDropdown(el.histRangeToggle, el.histRangeMenu, el.histRange, onRange);
       wireCoSelectTypeahead(el.histRangeToggle, el.histRangeMenu);
+    }
+    if (el.histFullscreen && el.histChartWrap) {
+      el.histFullscreen.addEventListener('click', function () {
+        if (document.fullscreenElement) {
+          document.exitFullscreen();
+        } else {
+          (el.histChartWrap.requestFullscreen || el.histChartWrap.webkitRequestFullscreen || function () {}).call(el.histChartWrap);
+        }
+      });
+      document.addEventListener('fullscreenchange', function () {
+        var icon = el.histFullscreen.querySelector('i');
+        if (!icon) return;
+        icon.className = document.fullscreenElement ? 'bi bi-fullscreen-exit' : 'bi bi-arrows-fullscreen';
+        if (histMainChart) setTimeout(function () { histMainChart.resize(); }, 150);
+      });
     }
     const histTab = document.getElementById('hist-tab');
     if (histTab) {
@@ -1107,8 +1768,56 @@
     syncTabShellRadius();
   }
 
+  function initHistPageSizeFilter() {
+    if (!el.histPageSize || !el.histPageSizeMenu || !el.histPageSizeLabel) return;
+    var defs = HIST_PAGE_SIZES.map(function (n) { return { value: String(n), label: String(n) }; });
+    fillHiddenSelectAndMenu(el.histPageSize, el.histPageSizeMenu, defs);
+    el.histPageSize.value = String(st.histPageSize || HIST_DEFAULT_PAGE);
+    syncDropdownLabel(el.histPageSize, el.histPageSizeLabel);
+  }
+
+  function startAutoRefresh() {
+    if (_autoRefreshId) clearInterval(_autoRefreshId);
+    _autoRefreshId = setInterval(function () {
+      if (document.visibilityState !== 'visible') return;
+      _doRefreshLive();
+    }, AUTO_REFRESH_INTERVAL_MS);
+  }
+
+  var THEME_COLORS = { dark: '#080b14', light: '#e4f0ec' };
+
+  function setThemeColorMeta(theme) {
+    var meta = document.getElementById('meta-theme-color');
+    if (meta) meta.setAttribute('content', THEME_COLORS[theme] || THEME_COLORS.dark);
+  }
+
+  function initThemeToggle() {
+    var toggle = document.getElementById('theme-toggle');
+    var icon = document.getElementById('theme-icon');
+    if (!toggle) return;
+    var saved = st.theme || 'dark';
+    if (saved === 'light') {
+      document.documentElement.setAttribute('data-theme', 'light');
+      if (icon) { icon.className = 'bi bi-sun-fill'; }
+      setThemeColorMeta('light');
+    }
+    toggle.addEventListener('click', function () {
+      var current = document.documentElement.getAttribute('data-theme');
+      var next = current === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', next);
+      if (icon) {
+        icon.className = next === 'light' ? 'bi bi-sun-fill' : 'bi bi-moon-stars';
+      }
+      setThemeColorMeta(next);
+      st.theme = next;
+      saveState({ theme: next });
+    });
+  }
+
+  initThemeToggle();
   initLiveTypeFilter();
   initHistRangeFilter();
+  initHistPageSizeFilter();
   bindLive();
   bindHist();
   bindMainTabs();
@@ -1119,4 +1828,6 @@
   renderLive();
   fetchDashboard();
   initTooltips();
+  startRelativeTimeTicker();
+  startAutoRefresh();
 })();

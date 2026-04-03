@@ -11,6 +11,7 @@ Responsibilities in Phase A:
 
 from __future__ import annotations
 
+import bisect
 import json
 import logging
 import os
@@ -251,12 +252,47 @@ def _stable_event_id(body: bytes, payload: Mapping[str, Any]) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_OID, body))
 
 
+def _enrich_crypto_uah(rates: Iterable[Mapping[str, Any]]) -> list[MutableMapping[str, Any]]:
+    """Copy of frontend's enrich logic: set price_uah = price_usd * uah_per_usd for crypto rows."""
+    items = [dict(r) for r in rates]
+    uah_per_usd: Optional[float] = None
+    for it in items:
+        if str(it.get("asset_type", "")).lower() != "fiat":
+            continue
+        if str(it.get("asset_symbol", "")).upper() != "USD":
+            continue
+        pu = it.get("price_uah")
+        if pu is None:
+            continue
+        try:
+            uah_per_usd = float(pu)
+        except (TypeError, ValueError):
+            pass
+        break
+    if uah_per_usd is None or uah_per_usd <= 0:
+        return items
+    for it in items:
+        if str(it.get("asset_type", "")).lower() != "crypto":
+            continue
+        if it.get("price_uah") is not None:
+            continue
+        pusd = it.get("price_usd")
+        if pusd is None:
+            continue
+        try:
+            it["price_uah"] = round(float(pusd) * uah_per_usd, 2)
+        except (TypeError, ValueError):
+            pass
+    return items
+
+
 def insert_rates(conn: Any, rates: Iterable[Mapping[str, Any]], snapshot_event_id: str) -> tuple[int, int]:
     """Insert rows for one MQ event; duplicate (event, symbol, type, source) are skipped (idempotent)."""
     # Use str, not uuid.UUID: psycopg2's execute_values does not adapt UUID by default on all builds.
     eid_str = str(uuid.UUID(snapshot_event_id))
+    enriched = _enrich_crypto_uah(rates)
     rows: list[tuple[Any, ...]] = []
-    for item in rates:
+    for item in enriched:
         sym = str(item.get("asset_symbol", "")).strip()
         typ = str(item.get("asset_type", "")).strip()
         src = str(item.get("source", "")).strip()
@@ -758,19 +794,83 @@ def _thin_series_to_max_points(
     return _recompute_pct_series(picked, asset_type)
 
 
+def _backfill_crypto_uah_series(
+    conn: Any,
+    rows: list[dict[str, Any]],
+    _where_sql: str,
+    _params: list[Any],
+) -> None:
+    """Fill missing price_uah for crypto series rows using closest USD/UAH rate from the same time window."""
+    need = [r for r in rows if r.get("price_uah") is None and r.get("price_usd") is not None]
+    if not need:
+        return
+    ts_min = min((r["created_at"] for r in need), default=None)
+    ts_max = max((r["created_at"] for r in need), default=None)
+    if ts_min is None:
+        return
+    usd_sql = """
+        SELECT price_uah, created_at
+        FROM exchange_rates
+        WHERE asset_symbol = 'USD' AND asset_type = 'fiat'
+          AND created_at >= (%s::timestamptz - interval '1 day')
+          AND created_at <= (%s::timestamptz + interval '1 day')
+        ORDER BY created_at ASC
+    """
+    with conn.cursor() as cur:
+        cur.execute(usd_sql, (ts_min, ts_max))
+        usd_rows = cur.fetchall()
+    if not usd_rows:
+        return
+    usd_ts = []
+    usd_vals = []
+    for pu, ts in usd_rows:
+        if pu is None or not isinstance(ts, datetime):
+            continue
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        usd_ts.append(ts.timestamp())
+        usd_vals.append(float(pu))
+    if not usd_ts:
+        return
+    for r in need:
+        iso = r["created_at"]
+        try:
+            dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            continue
+        t = dt.timestamp()
+        idx = bisect.bisect_left(usd_ts, t)
+        best = None
+        for ci in (idx - 1, idx):
+            if 0 <= ci < len(usd_ts):
+                if best is None or abs(usd_ts[ci] - t) < abs(usd_ts[best] - t):
+                    best = ci
+        if best is not None:
+            r["price_uah"] = round(float(r["price_usd"]) * usd_vals[best], 2)
+
+
 def fetch_series_for_range(
     cfg: HistoryConfig,
     asset_symbol: str,
     asset_type: str,
     range_key: str,
+    date_from: str | None = None,
+    date_to: str | None = None,
 ) -> list[dict[str, Any]]:
     """Chronological snapshots with pct_change_from_prev on one metric (UAH or USD)."""
     rk = (range_key or "7d").lower().strip()
-    if rk not in {"7d", "30d", "all", "24h"}:
+    if rk not in {"7d", "30d", "all", "24h", "custom"}:
         rk = "7d"
     clauses = ["asset_symbol = %s", "asset_type = %s"]
     params: list[Any] = [asset_symbol.upper(), asset_type]
-    if rk == "7d":
+    if rk == "custom":
+        if date_from:
+            clauses.append("created_at >= %s")
+            params.append(date_from + " 00:00:00+00")
+        if date_to:
+            clauses.append("created_at <= %s")
+            params.append(date_to + " 23:59:59+00")
+    elif rk == "7d":
         clauses.append("created_at >= %s")
         params.append(datetime.now(timezone.utc) - timedelta(days=7))
     elif rk == "30d":
@@ -792,20 +892,24 @@ def fetch_series_for_range(
             cur.execute(sql, tuple(params))
             raw_rows = cur.fetchall()
 
-    metric = _metric_for_asset_type(asset_type)
-    out: list[dict[str, Any]] = []
-    for pu, pusd, ts in raw_rows:
-        if not isinstance(ts, datetime):
-            continue
-        ts_iso = _utc_iso_z(ts)
-        out.append(
-            {
-                "created_at": ts_iso,
-                "price_uah": float(pu) if pu is not None else None,
-                "price_usd": float(pusd) if pusd is not None else None,
-                "series_metric": metric,
-            }
-        )
+        metric = _metric_for_asset_type(asset_type)
+        out: list[dict[str, Any]] = []
+        for pu, pusd, ts in raw_rows:
+            if not isinstance(ts, datetime):
+                continue
+            ts_iso = _utc_iso_z(ts)
+            out.append(
+                {
+                    "created_at": ts_iso,
+                    "price_uah": float(pu) if pu is not None else None,
+                    "price_usd": float(pusd) if pusd is not None else None,
+                    "series_metric": metric,
+                }
+            )
+
+        if asset_type == "crypto":
+            _backfill_crypto_uah_series(conn, out, where_sql, params)
+
     bucketed = _bucket_series_by_minutes(out, asset_type, SERIES_BUCKET_MINUTES)
     return _thin_series_to_max_points(bucketed, asset_type, MAX_SERIES_POINTS)
 
@@ -914,10 +1018,12 @@ def create_app(cfg: HistoryConfig) -> Flask:
         symbol = (request.args.get("asset_symbol") or "").strip().upper()
         asset_type = (request.args.get("asset_type") or "").strip().lower()
         range_key = (request.args.get("range") or "7d").strip()
+        date_from = (request.args.get("date_from") or "").strip() or None
+        date_to = (request.args.get("date_to") or "").strip() or None
         if not symbol or asset_type not in ("fiat", "crypto"):
             return jsonify({"error": "invalid_params", "detail": "asset_symbol and asset_type (fiat|crypto) required"}), 400
         try:
-            rows = fetch_series_for_range(cfg, symbol, asset_type, range_key)
+            rows = fetch_series_for_range(cfg, symbol, asset_type, range_key, date_from=date_from, date_to=date_to)
             return jsonify(
                 {
                     "asset_symbol": symbol,
