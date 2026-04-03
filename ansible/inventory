@@ -1,0 +1,8 @@
+[history]
+softserve-node-01 ansible_host=172.31.1.10
+
+[proxy]
+softserve-node-02 ansible_host=172.31.1.11
+
+[ui]
+softserve-node-03 ansible_host=172.31.1.12

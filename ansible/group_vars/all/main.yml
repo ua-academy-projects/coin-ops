@@ -2,9 +2,8 @@
 # Secrets (passwords) live in group_vars/secrets.yml which is gitignored.
 
 # ── SSH ───────────────────────────────────────────────────────
-# Key path is set per-host in ansible/inventory (gitignored).
-# Copy ansible/inventory.example → ansible/inventory and fill in paths.
 ansible_user: vagrant
+ansible_password: vagrant
 ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
 
 # ── Service accounts ──────────────────────────────────────────

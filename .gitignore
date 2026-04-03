@@ -1,5 +1,4 @@
 DASHBOARD_PROJECT.md
 
-# Ansible — never commit real secrets or machine-specific paths
+# Ansible secrets — never commit real passwords
 ansible/group_vars/all/secrets.yml
-ansible/inventory
