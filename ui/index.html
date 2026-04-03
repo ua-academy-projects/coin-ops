@@ -241,9 +241,9 @@
     // ── Config ────────────────────────────────────────────────────
     const PROXY_URL      = 'http://172.31.1.11:8080';
     const HISTORY_URL    = 'http://172.31.1.10:8000';
-    const REFRESH_MS     = 30_000;
-    const CRYPTO_REFRESH = 60_000;
-    const NBU_REFRESH    = 300_000;
+    const REFRESH_MS         = 30_000;
+    const CRYPTO_REFRESH_MS  = 60_000;
+    const NBU_REFRESH_MS     = 300_000;
 
     let refreshTimer     = null;
     let cryptoTimer      = null;
@@ -778,8 +778,8 @@
     refreshAll();
     refreshTicker();
 
-    refreshTimer = setInterval(refreshAll,   REFRESH_MS);
-    cryptoTimer  = setInterval(refreshTicker, CRYPTO_REFRESH);
+    refreshTimer = setInterval(refreshAll,    REFRESH_MS);
+    cryptoTimer  = setInterval(refreshTicker, CRYPTO_REFRESH_MS);
   </script>
 </body>
 </html>
