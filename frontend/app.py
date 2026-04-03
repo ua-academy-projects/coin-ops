@@ -5,16 +5,25 @@ app = Flask(__name__)
 
 @app.route('/')
 def index():
+    all_rates = []
+
     # Отримуємо курси валют з НБУ
-    rates_response = requests.get('http://192.168.56.102:8080/rates')
-    rates = rates_response.json()
+    try:
+        rates_response = requests.get('http://192.168.56.102:8080/rates', timeout=5)
+        rates = rates_response.json()
+        if rates:
+            all_rates += rates
+    except Exception as e:
+        print(f"Помилка НБУ: {e}")
 
     # Отримуємо крипто курси
-    crypto_response = requests.get('http://192.168.56.102:8080/crypto')
-    crypto = crypto_response.json()
-
-    # Об'єднуємо в один список
-    all_rates = rates + crypto
+    try:
+        crypto_response = requests.get('http://192.168.56.102:8080/crypto', timeout=5)
+        crypto = crypto_response.json()
+        if crypto:
+            all_rates += crypto
+    except Exception as e:
+        print(f"Помилка CoinGecko: {e}")
 
     return render_template('index.html', rates=all_rates)
 
