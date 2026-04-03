@@ -107,3 +107,47 @@ func main() {
 	fmt.Println("Проксі сервіс запущено на порту 8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
+
+type CryptoRate struct {
+	CC   string  `json:"cc"`
+	Txt  string  `json:"txt"`
+	Rate float64 `json:"rate"`
+}
+
+func getCrypto(w http.ResponseWriter, r *http.Request) {
+	resp, err := http.Get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=uah")
+	if err != nil {
+		http.Error(w, "Помилка запиту до CoinGecko", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		http.Error(w, "Помилка читання", http.StatusInternalServerError)
+		return
+	}
+
+	// CoinGecko повертає: {"bitcoin":{"uah":123},"ethereum":{"uah":456}}
+	var raw map[string]map[string]float64
+	json.Unmarshal(body, &raw)
+
+	var result []CryptoRate
+	if btc, ok := raw["bitcoin"]; ok {
+		result = append(result, CryptoRate{
+			CC:   "BTC",
+			Txt:  "Bitcoin",
+			Rate: btc["uah"],
+		})
+	}
+	if eth, ok := raw["ethereum"]; ok {
+		result = append(result, CryptoRate{
+			CC:   "ETH",
+			Txt:  "Ethereum",
+			Rate: eth["uah"],
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
