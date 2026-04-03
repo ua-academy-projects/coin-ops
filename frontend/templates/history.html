@@ -1,29 +1,316 @@
 <!DOCTYPE html>
-<html>
+<html lang="uk">
 <head>
-    <title>Історія курсів</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CoinOps — Історія</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f1117;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh}
+.nav{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:#1a1d27;border-bottom:0.5px solid #2a2d3a}
+.logo{font-size:20px;font-weight:600;color:#fff}.logo span{color:#378ADD}
+.nav-links{display:flex;gap:4px}
+.nav-link{padding:7px 16px;border-radius:8px;font-size:14px;color:#888;text-decoration:none}
+.nav-link:hover{background:#1e2a3a;color:#378ADD}
+.nav-link.active{background:#1e2a3a;color:#378ADD}
+.container{max-width:1200px;margin:0 auto;padding:20px 24px}
+.page-title{font-size:20px;font-weight:500;color:#fff;margin-bottom:20px}
+
+.controls{background:#1a1d27;border-radius:12px;border:0.5px solid #2a2d3a;padding:16px 20px;margin-bottom:16px}
+.controls-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.ctrl-label{font-size:11px;color:#555;margin-bottom:5px}
+.ctrl-group{display:flex;flex-direction:column}
+
+.type-btns{display:flex;gap:4px}
+.type-btn{padding:7px 14px;border-radius:8px;font-size:13px;background:#0f1117;border:0.5px solid #2a2d3a;color:#888;cursor:pointer;transition:all .15s}
+.type-btn:hover{color:#ccc;border-color:#444}
+.type-btn.active{background:#1e2a3a;color:#378ADD;border-color:#378ADD}
+
+.period-btns{display:flex;gap:4px}
+.period-btn{padding:7px 14px;border-radius:8px;font-size:13px;background:#0f1117;border:0.5px solid #2a2d3a;color:#888;cursor:pointer;transition:all .15s}
+.period-btn:hover{color:#ccc;border-color:#444}
+.period-btn.active{background:#1e2a3a;color:#378ADD;border-color:#378ADD}
+
+.divider{width:0.5px;background:#2a2d3a;height:36px;align-self:flex-end;margin-bottom:2px}
+
+.pills-section{margin-top:14px;padding-top:14px;border-top:0.5px solid #2a2d3a}
+.pills-label{font-size:11px;color:#555;margin-bottom:8px}
+.pills{display:flex;gap:6px;flex-wrap:wrap}
+.pill{padding:5px 12px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:0.5px solid #2a2d3a;background:#0f1117;color:#666;transition:all .15s;user-select:none}
+.pill:hover{color:#aaa;border-color:#444}
+.pill.on{border-color:var(--c);color:var(--c);background:var(--bg)}
+
+.chart-card{background:#1a1d27;border-radius:12px;border:0.5px solid #2a2d3a;padding:20px;margin-bottom:16px}
+.chart-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.chart-title{font-size:14px;font-weight:500;color:#e0e0e0}
+.chart-legend{display:flex;gap:16px;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:#888}
+.legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.chart-wrap{position:relative;height:260px}
+
+.table-card{background:#1a1d27;border-radius:12px;border:0.5px solid #2a2d3a;overflow:hidden}
+.table-header{padding:12px 16px;border-bottom:0.5px solid #2a2d3a;display:flex;align-items:center;justify-content:space-between}
+.table-title{font-size:14px;font-weight:500;color:#e0e0e0}
+.table-count{font-size:12px;color:#555}
+.table-wrap{max-height:400px;overflow-y:auto}
+.table-wrap::-webkit-scrollbar{width:3px}
+.table-wrap::-webkit-scrollbar-thumb{background:#2a2d3a;border-radius:2px}
+table{width:100%;border-collapse:collapse}
+th{font-size:11px;color:#555;font-weight:400;padding:8px 16px;text-align:left;border-bottom:0.5px solid #2a2d3a;background:#1a1d27;position:sticky;top:0}
+td{font-size:13px;color:#ccc;padding:8px 16px;border-bottom:0.5px solid #15171f}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#1e2130}
+.code-blue{color:#378ADD;font-size:12px;font-weight:500}
+.code-green{color:#3bb554;font-size:12px;font-weight:500}
+.rate-val{color:#fff;font-weight:500;font-variant-numeric:tabular-nums}
+.time-val{color:#555;font-size:12px}
+.empty{text-align:center;padding:40px;color:#444;font-size:14px}
+</style>
 </head>
 <body>
-    <h1>Історія курсів валют</h1>
-    <a href="/">← Поточні курси</a>
-    <br><br>
-    <table border="1">
-        <tr>
-            <th>Валюта</th>
-            <th>Назва</th>
-            <th>Курс (UAH)</th>
-            <th>Час</th>
-        </tr>
-        {% for r in records %}
-        <tr>
-            <td>{{ r.currency }}</td>
-            <td>{{ r.name }}</td>
-            <td>{{ r.rate|float|round(2) }}</td>
-            <td>{{ r.created_at }}</td>
-        </tr>
-        {% endfor %}
-    </table>
-    <br>
-    <a href="/history">Оновити</a>
+
+<nav class="nav">
+  <div class="logo">coin<span>ops</span></div>
+  <div class="nav-links">
+    <a href="/" class="nav-link">← Курси</a>
+    <a href="/history" class="nav-link active">Історія</a>
+  </div>
+</nav>
+
+<div class="container">
+  <div class="page-title">Історія курсів</div>
+
+  <div class="controls">
+    <div class="controls-row">
+      <div class="ctrl-group">
+        <div class="ctrl-label">Тип даних</div>
+        <div class="type-btns">
+          <button class="type-btn active" onclick="setType('all',this)">Всі</button>
+          <button class="type-btn" onclick="setType('fiat',this)">Валюти НБУ</button>
+          <button class="type-btn" onclick="setType('crypto',this)">Крипта</button>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="ctrl-group">
+        <div class="ctrl-label">Період</div>
+        <div class="period-btns">
+          <button class="period-btn" onclick="setPeriod(6,this)">6г</button>
+          <button class="period-btn active" onclick="setPeriod(24,this)">День</button>
+          <button class="period-btn" onclick="setPeriod(168,this)">Тиждень</button>
+          <button class="period-btn" onclick="setPeriod(720,this)">Місяць</button>
+          <button class="period-btn" onclick="setPeriod(0,this)">Все</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="pills-section">
+      <div class="pills-label">Валюти для графіку (клікни щоб увімкнути/вимкнути):</div>
+      <div class="pills" id="pills"></div>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-header">
+      <div class="chart-title">Динаміка курсів</div>
+      <div class="chart-legend" id="legend"></div>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="chart"></canvas>
+    </div>
+  </div>
+
+  <div class="table-card">
+    <div class="table-header">
+      <div class="table-title">Записи</div>
+      <div class="table-count" id="table-count"></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Валюта</th><th>Назва</th><th>Курс (UAH)</th><th>Час</th></tr></thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const CRYPTO_CODES = new Set(['BTC','ETH','SOL','BNB','ADA','XRP','DOGE','DOT','AVAX','LINK']);
+const COLORS = ['#378ADD','#3bb554','#EF9F27','#D4537E','#5DCAA5','#E24B4A','#7F77DD','#F0997B','#639922','#BA7517'];
+
+const allRecords = {{ records | tojson }};
+
+let currentType = 'all';
+let currentHours = 24;
+let activeCurrencies = new Set();
+let chart = null;
+
+function isCrypto(cc) { return CRYPTO_CODES.has(cc); }
+
+function formatDate(dateStr) {
+  const d = new Date(dateStr);
+  if (isNaN(d)) return dateStr;
+  const day = String(d.getDate()).padStart(2,'0');
+  const mon = String(d.getMonth()+1).padStart(2,'0');
+  const h = String(d.getHours()).padStart(2,'0');
+  const m = String(d.getMinutes()).padStart(2,'0');
+  return `${day}.${mon} ${h}:${m}`;
+}
+
+function getFiltered() {
+  let data = [...allRecords];
+  if (currentType === 'fiat') data = data.filter(r => !isCrypto(r.currency));
+  if (currentType === 'crypto') data = data.filter(r => isCrypto(r.currency));
+  if (currentHours > 0) {
+    const cutoff = new Date(Date.now() - currentHours * 3600 * 1000);
+    data = data.filter(r => new Date(r.created_at) >= cutoff);
+  }
+  return data;
+}
+
+function buildPills() {
+  const data = getFiltered();
+  const codes = [...new Set(data.map(r => r.currency))].sort();
+  const container = document.getElementById('pills');
+  container.innerHTML = '';
+  if (activeCurrencies.size === 0 && codes.length > 0) {
+    const defaults = codes.slice(0, 3);
+    defaults.forEach(c => activeCurrencies.add(c));
+  }
+  codes.forEach((code, i) => {
+    const color = COLORS[i % COLORS.length];
+    const bg = color + '22';
+    const pill = document.createElement('div');
+    pill.className = 'pill' + (activeCurrencies.has(code) ? ' on' : '');
+    pill.style.setProperty('--c', color);
+    pill.style.setProperty('--bg', bg);
+    pill.textContent = code;
+    pill.onclick = () => {
+      if (activeCurrencies.has(code)) activeCurrencies.delete(code);
+      else activeCurrencies.add(code);
+      render();
+    };
+    container.appendChild(pill);
+  });
+}
+
+function buildChart(data) {
+  const codes = [...activeCurrencies];
+  const colorMap = {};
+  [...new Set(data.map(r => r.currency))].sort().forEach((c, i) => {
+    colorMap[c] = COLORS[i % COLORS.length];
+  });
+
+  const datasets = codes.map(code => {
+    const pts = data
+      .filter(r => r.currency === code)
+      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    return {
+      label: code,
+      data: pts.map(r => ({ x: formatDate(r.created_at), y: parseFloat(r.rate) })),
+      borderColor: colorMap[code] || '#378ADD',
+      backgroundColor: 'transparent',
+      borderWidth: 2,
+      pointRadius: pts.length > 50 ? 0 : 3,
+      pointHoverRadius: 5,
+      tension: 0.3,
+    };
+  });
+
+  const legend = document.getElementById('legend');
+  legend.innerHTML = codes.map(code =>
+    `<div class="legend-item"><div class="legend-dot" style="background:${colorMap[code]}"></div>${code}</div>`
+  ).join('');
+
+  if (chart) chart.destroy();
+  const ctx = document.getElementById('chart').getContext('2d');
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: { datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1a1d27',
+          borderColor: '#2a2d3a',
+          borderWidth: 1,
+          titleColor: '#888',
+          bodyColor: '#fff',
+          callbacks: {
+            label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString('uk-UA', {minimumFractionDigits:2, maximumFractionDigits:2})} UAH`
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'category',
+          ticks: {
+            color: '#444',
+            maxRotation: 0,
+            maxTicksLimit: 8,
+            font: { size: 11 }
+          },
+          grid: { color: '#1e2130' }
+        },
+        y: {
+          ticks: {
+            color: '#444',
+            font: { size: 11 },
+            callback: v => v.toLocaleString('uk-UA')
+          },
+          grid: { color: '#1e2130' }
+        }
+      }
+    }
+  });
+}
+
+function buildTable(data) {
+  const tbody = document.getElementById('table-body');
+  document.getElementById('table-count').textContent = `${data.length} записів`;
+  if (data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty">Немає даних за цей період</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(r => {
+    const isCr = isCrypto(r.currency);
+    const codeClass = isCr ? 'code-green' : 'code-blue';
+    const rate = parseFloat(r.rate).toLocaleString('uk-UA', {minimumFractionDigits:2, maximumFractionDigits:2});
+    return `<tr>
+      <td><span class="${codeClass}">${r.currency}</span></td>
+      <td>${r.name || '—'}</td>
+      <td class="rate-val">${rate}</td>
+      <td class="time-val">${formatDate(r.created_at)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function render() {
+  const data = getFiltered();
+  buildPills();
+  buildChart(data.filter(r => activeCurrencies.has(r.currency)));
+  buildTable(data);
+}
+
+function setType(type, btn) {
+  currentType = type;
+  document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeCurrencies.clear();
+  render();
+}
+
+function setPeriod(hours, btn) {
+  currentHours = hours;
+  document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  render();
+}
+
+render();
+</script>
 </body>
 </html>
