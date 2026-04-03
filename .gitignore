@@ -6,3 +6,6 @@ ansible/group_vars/all/secrets.yml
 # Ansible host-specific variables — machine-specific paths
 ansible/host_vars/*.yml
 
+
+# Worktrees created by agent runs
+.claude/worktrees/
