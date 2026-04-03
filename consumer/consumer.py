@@ -68,9 +68,18 @@ def consume():
 
 @app.route('/history', methods=['GET'])
 def get_history():
+    hours = request.args.get('hours', 24, type=int)
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute('SELECT * FROM rates ORDER BY created_at DESC LIMIT 500')
+
+    if hours > 0:
+        cur.execute(
+            "SELECT * FROM rates WHERE created_at >= NOW() - INTERVAL '%s hours' ORDER BY created_at DESC LIMIT 5000",
+            (hours,)
+        )
+    else:
+        cur.execute('SELECT * FROM rates ORDER BY created_at DESC LIMIT 10000')
+
     rows = cur.fetchall()
     cur.close()
     conn.close()

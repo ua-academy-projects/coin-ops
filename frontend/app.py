@@ -22,9 +22,17 @@ def index():
 
 @app.route('/history')
 def history():
-    response = requests.get('http://192.168.56.103:5001/history')
-    records = response.json()
-    return render_template('history.html', records=records)
+    hours = request.args.get('hours', 24, type=int)
+    try:
+        response = requests.get(
+            f'http://192.168.56.103:5001/history?hours={hours}',
+            timeout=10
+        )
+        records = response.json()
+    except Exception as e:
+        print(f"Помилка history: {e}")
+        records = []
+    return render_template('history.html', records=records, current_hours=hours)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
