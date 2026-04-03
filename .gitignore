@@ -2,3 +2,10 @@ DASHBOARD_PROJECT.md
 
 # Ansible secrets — never commit real passwords
 ansible/group_vars/all/secrets.yml
+
+# Terraform state and local variable overrides
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/terraform.tfvars
