@@ -5,3 +5,10 @@ ansible/group_vars/all/secrets.yml
 
 # Ansible host-specific variables — machine-specific paths
 ansible/host_vars/*.yml
+
+# Terraform state and local variable overrides
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/terraform.tfvars
