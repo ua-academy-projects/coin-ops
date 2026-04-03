@@ -1,0 +1,23 @@
+---
+- name: Update all VMs
+  hosts: all
+  become: yes
+  tasks:
+    - name: Pull latest changes
+      git:
+        repo: https://github.com/ua-academy-projects/coin-ops.git
+        dest: /home/user/coin-ops
+        version: kazachuk
+        force: yes
+      become_user: user
+
+    - name: Restart services
+      systemd:
+        name: "{{ item }}"
+        state: restarted
+        daemon_reload: yes
+      loop:
+        - flask
+        - proxy
+        - consumer
+      ignore_errors: yes
