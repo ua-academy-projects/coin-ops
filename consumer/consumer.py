@@ -70,7 +70,7 @@ def consume():
 def get_history():
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute('SELECT * FROM rates ORDER BY created_at DESC LIMIT 100')
+    cur.execute('SELECT * FROM rates ORDER BY created_at DESC LIMIT 500')
     rows = cur.fetchall()
     cur.close()
     conn.close()
