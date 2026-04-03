@@ -312,6 +312,23 @@
       return 'Other';
     }
 
+    function computeSentiment(markets, category) {
+      const src = category === 'All'
+        ? markets
+        : markets.filter(m => detectCategory(m.question) === category);
+      if (src.length === 0) return null;
+      const avg = src.reduce((s, m) => s + (m.yes_price || 0), 0) / src.length;
+      return (avg * 100).toFixed(0);
+    }
+
+    function updateCategoryLabels() {
+      const cats = ['All', 'Crypto', 'Politics', 'Sports', 'Other'];
+      document.querySelectorAll('#cat-filters button').forEach((btn, i) => {
+        const score = computeSentiment(allMarkets, cats[i]);
+        btn.textContent = score != null ? `${cats[i]} ${score}%` : cats[i];
+      });
+    }
+
     function setStatus(ok) {
       const dot = document.getElementById('status-dot');
       dot.className = 'w-2 h-2 rounded-full ' + (ok ? 'bg-yes' : 'bg-no');
@@ -332,7 +349,7 @@
     function setCategory(cat) {
       activeCategory = cat;
       document.querySelectorAll('#cat-filters button').forEach(btn => {
-        const isCat = btn.textContent.trim() === cat;
+        const isCat = btn.textContent.trim().startsWith(cat);
         btn.className = (isCat ? 'cat-active' : 'cat-inactive') +
           ' text-xs border rounded px-2.5 py-1 transition-colors';
       });
@@ -397,6 +414,7 @@
         grid.innerHTML = '<div class="text-muted text-sm">No markets in this category.</div>';
         return;
       }
+      const maxVol = Math.max(...markets.map(m => m.volume_24h || 0), 1);
       grid.innerHTML = markets.map(m => {
         const yes = m.yes_price ?? 0;
         const no  = m.no_price  ?? 0;
@@ -405,10 +423,13 @@
         const cat    = m.category || detectCategory(m.question);
         const cd     = fmtCountdown(m.end_date);
         const urgentClass = cd?.urgent ? 'urgent-glow border-red-900' : '';
+        const volRatio   = Math.min(1, (m.volume_24h || 0) / maxVol);
+        const volOpacity = (0.15 + volRatio * 0.55).toFixed(2);
+        const volBorder  = `rgba(99, 102, 241, ${volOpacity})`;
 
         return `
-          <div class="rounded-lg border border-border p-4 hover:border-accent transition-colors cursor-pointer slide-in ${urgentClass}"
-               style="background:#141720"
+          <div class="rounded-lg border p-4 hover:border-accent transition-colors cursor-pointer slide-in ${urgentClass}"
+               style="background:#141720; border-color:${volBorder}"
                onclick="showMarketHistory(this.dataset.slug, this.dataset.q)"
                data-slug="${escHtml(m.slug)}"
                data-q="${escHtml(m.question)}">
@@ -732,6 +753,7 @@
 
         updateStats(allMarkets, allWhales);
         renderMarketsFiltered();
+        updateCategoryLabels();
         renderMovers(movers);
         renderWhaleFeed(allWhales);
         renderWhales(allWhales);
