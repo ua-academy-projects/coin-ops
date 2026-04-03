@@ -101,9 +101,25 @@ func getRates(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(allRates)
 }
 
+var cryptoCache []CryptoRate
+var cryptoCacheTime time.Time
+
 func getCrypto(w http.ResponseWriter, r *http.Request) {
+	// Якщо кеш свіжий (менше 60 секунд) — повертаємо його
+	if time.Since(cryptoCacheTime) < 60*time.Second && len(cryptoCache) > 0 {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(cryptoCache)
+		return
+	}
+
 	resp, err := http.Get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,binancecoin,cardano,ripple,dogecoin,polkadot,avalanche-2,chainlink&vs_currencies=uah")
 	if err != nil {
+		// Якщо помилка але є кеш — повертаємо кеш
+		if len(cryptoCache) > 0 {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(cryptoCache)
+			return
+		}
 		http.Error(w, "Помилка запиту до CoinGecko", http.StatusInternalServerError)
 		return
 	}
@@ -118,30 +134,26 @@ func getCrypto(w http.ResponseWriter, r *http.Request) {
 	var raw map[string]map[string]float64
 	json.Unmarshal(body, &raw)
 
-	names := map[string]string{
-		"bitcoin":     "Bitcoin",
-		"ethereum":    "Ethereum",
-		"solana":      "Solana",
-		"binancecoin": "BNB",
-		"cardano":     "Cardano",
-		"ripple":      "XRP",
-		"dogecoin":    "Dogecoin",
-		"polkadot":    "Polkadot",
-		"avalanche-2": "Avalanche",
-		"chainlink":   "Chainlink",
+	if len(raw) == 0 {
+		// CoinGecko повернув порожньо (rate limit) — повертаємо кеш
+		if len(cryptoCache) > 0 {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(cryptoCache)
+			return
+		}
 	}
 
+	names := map[string]string{
+		"bitcoin": "Bitcoin", "ethereum": "Ethereum", "solana": "Solana",
+		"binancecoin": "BNB", "cardano": "Cardano", "ripple": "XRP",
+		"dogecoin": "Dogecoin", "polkadot": "Polkadot", "avalanche-2": "Avalanche",
+		"chainlink": "Chainlink",
+	}
 	codes := map[string]string{
-		"bitcoin":     "BTC",
-		"ethereum":    "ETH",
-		"solana":      "SOL",
-		"binancecoin": "BNB",
-		"cardano":     "ADA",
-		"ripple":      "XRP",
-		"dogecoin":    "DOGE",
-		"polkadot":    "DOT",
-		"avalanche-2": "AVAX",
-		"chainlink":   "LINK",
+		"bitcoin": "BTC", "ethereum": "ETH", "solana": "SOL",
+		"binancecoin": "BNB", "cardano": "ADA", "ripple": "XRP",
+		"dogecoin": "DOGE", "polkadot": "DOT", "avalanche-2": "AVAX",
+		"chainlink": "LINK",
 	}
 
 	var result []CryptoRate
@@ -153,10 +165,13 @@ func getCrypto(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	// Зберігаємо в кеш
+	cryptoCache = result
+	cryptoCacheTime = time.Now()
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
 }
-
 func main() {
 	go connectRabbitMQ()
 
