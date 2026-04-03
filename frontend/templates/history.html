@@ -2,34 +2,12 @@
 <html>
 <head>
     <title>Історія курсів</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
-    <style>
-        body { font-family: sans-serif; padding: 20px; }
-        .pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-        .pill {
-            padding: 4px 14px; border-radius: 20px; cursor: pointer;
-            border: 2px solid transparent; font-size: 13px; font-weight: 600;
-            color: white; transition: opacity 0.15s;
-        }
-        .pill.inactive { opacity: 0.35; }
-        #chartContainer { width: 100%; height: 420px; margin-bottom: 28px; }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #ddd; padding: 6px 12px; text-align: left; }
-        th { background: #f4f4f4; }
-    </style>
 </head>
 <body>
     <h1>Історія курсів валют</h1>
     <a href="/">← Поточні курси</a>
     <br><br>
-
-    <div class="pills" id="pills"></div>
-    <div id="chartContainer">
-        <canvas id="ratesChart"></canvas>
-    </div>
-
-    <table>
+    <table border="1">
         <tr>
             <th>Валюта</th>
             <th>Назва</th>
@@ -40,100 +18,12 @@
         <tr>
             <td>{{ r.currency }}</td>
             <td>{{ r.name }}</td>
-            <td>{{ r.rate|float|round(4) }}</td>
+            <td>{{ r.rate|float|round(2) }}</td>
             <td>{{ r.created_at }}</td>
         </tr>
         {% endfor %}
     </table>
     <br>
     <a href="/history">Оновити</a>
-
-    <script>
-        const records = {{ records | tojson }};
-
-        // Group records by currency, sort each group by time
-        const grouped = {};
-        records.forEach(r => {
-            if (!grouped[r.currency]) grouped[r.currency] = { name: r.name, points: [] };
-            grouped[r.currency].points.push({ x: new Date(r.created_at), y: parseFloat(r.rate) });
-        });
-        Object.values(grouped).forEach(g => g.points.sort((a, b) => a.x - b.x));
-
-        const currencies = Object.keys(grouped).sort();
-
-        const palette = [
-            '#e6194b','#3cb44b','#4363d8','#f58231','#911eb4',
-            '#42d4f4','#f032e6','#a9c900','#469990','#dcbeff',
-            '#9A6324','#800000','#aaffc3','#808000','#000075'
-        ];
-        const colorMap = {};
-        currencies.forEach((c, i) => { colorMap[c] = palette[i % palette.length]; });
-
-        const datasets = currencies.map(c => ({
-            label: c,
-            data: grouped[c].points,
-            borderColor: colorMap[c],
-            backgroundColor: colorMap[c] + '22',
-            tension: 0.2,
-            pointRadius: 4,
-            hidden: false
-        }));
-
-        const ctx = document.getElementById('ratesChart').getContext('2d');
-        const chart = new Chart(ctx, {
-            type: 'line',
-            data: { datasets },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    x: {
-                        type: 'time',
-                        time: { tooltipFormat: 'dd.MM.yyyy HH:mm' },
-                        title: { display: true, text: 'Час' }
-                    },
-                    y: {
-                        title: { display: true, text: 'Курс (UAH)' }
-                    }
-                },
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(4)} UAH`
-                        }
-                    }
-                }
-            }
-        });
-
-        // Build pills
-        const pillsContainer = document.getElementById('pills');
-        const active = new Set(currencies);
-
-        currencies.forEach(c => {
-            const pill = document.createElement('div');
-            pill.className = 'pill';
-            pill.textContent = c;
-            pill.style.backgroundColor = colorMap[c];
-            pill.title = grouped[c].name;
-
-            pill.addEventListener('click', () => {
-                if (active.has(c)) {
-                    active.delete(c);
-                    pill.classList.add('inactive');
-                } else {
-                    active.add(c);
-                    pill.classList.remove('inactive');
-                }
-                chart.data.datasets.forEach(ds => {
-                    ds.hidden = !active.has(ds.label);
-                });
-                chart.update();
-            });
-
-            pillsContainer.appendChild(pill);
-        });
-    </script>
 </body>
 </html>
