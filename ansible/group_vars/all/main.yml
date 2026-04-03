@@ -2,8 +2,9 @@
 # Secrets (passwords) live in group_vars/secrets.yml which is gitignored.
 
 # ── SSH ───────────────────────────────────────────────────────
+# SSH key paths are set per-host in ansible/host_vars/<hostname>.yml (gitignored).
+# Copy ansible/host_vars/softserve-node-01.yml.example for each host and fill in paths.
 ansible_user: vagrant
-ansible_password: vagrant
 ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
 
 # ── Service accounts ──────────────────────────────────────────

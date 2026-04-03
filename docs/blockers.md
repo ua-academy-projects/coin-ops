@@ -278,3 +278,18 @@ go: github.com/rabbitmq/amqp091-go@v1.10.0: dial tcp: connection refused
 2. Verify HTTP access: `curl -I https://proxy.golang.org`
 3. If behind a corporate proxy, set `HTTPS_PROXY` in the Ansible task environment or in `/etc/environment`.
 4. Alternatively, build the binary locally with `make build` (cross-compiles to Linux amd64) and add a copy task to `ansible/roles/proxy/tasks/main.yml` to upload the binary instead of building on the VM.
+
+---
+
+## 12. Ansible SSH fails with "UNPROTECTED PRIVATE KEY FILE" on WSL
+
+**Symptom:** `ansible all -m ping` fails with "Warning: Unprotected private key file" and UNREACHABLE.
+
+**Root cause:** Windows NTFS permissions on the `.vagrant` folder are too permissive. WSL mounts Windows drives without enforcing Unix permissions. SSH refuses key files readable by other users.
+
+**Workaround:**
+```bash
+chmod 600 /mnt/f/univ/softserv-internship/.vagrant/machines/*/hyperv/private_key
+```
+
+Must be re-run after each `vagrant up` since Vagrant regenerates keys with open permissions.

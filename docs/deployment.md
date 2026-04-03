@@ -20,6 +20,44 @@ Gateway: `172.31.0.1`. Subnet: `/20`. All VMs use static IPs set via netplan.
 - SSH access to all three VMs (Vagrant key or your own key — set in `ansible/inventory`)
 - VMs provisioned with static IPs (see [blockers.md](blockers.md) for the Hyper-V one-time fix)
 
+## SSH Authentication Setup
+
+Ansible authenticates to VMs using Vagrant's auto-generated SSH private keys. Key paths are machine-specific (WSL paths differ per workstation) and are stored in per-host files that are gitignored.
+
+**Step 1 — create host_vars files for each VM:**
+
+```bash
+cp ansible/host_vars/softserve-node-01.yml.example ansible/host_vars/softserve-node-01.yml
+cp ansible/host_vars/softserve-node-01.yml.example ansible/host_vars/softserve-node-02.yml
+cp ansible/host_vars/softserve-node-01.yml.example ansible/host_vars/softserve-node-03.yml
+```
+
+**Step 2 — fill in the correct key path for each host:**
+
+```yaml
+# ansible/host_vars/softserve-node-01.yml
+ansible_ssh_private_key_file: /mnt/f/univ/softserv-internship/.vagrant/machines/node-1/hyperv/private_key
+```
+
+Find the VM names with:
+```bash
+ls /mnt/f/univ/softserv-internship/.vagrant/machines/
+```
+
+**Step 3 — fix key permissions (required on WSL):**
+
+```bash
+chmod 600 /mnt/f/univ/softserv-internship/.vagrant/machines/*/hyperv/private_key
+```
+
+SSH rejects key files that are readable by other users. Vagrant regenerates keys with open permissions on every `vagrant up`, so this must be re-run after each `vagrant up`. See [blockers.md](blockers.md) blocker #12 for details.
+
+**Step 4 — verify connectivity:**
+
+```bash
+ansible all -m ping
+```
+
 ## First-Time Setup
 
 ```bash
