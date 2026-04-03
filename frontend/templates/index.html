@@ -16,7 +16,7 @@
         <tr>
             <td>{{ r.cc }}</td>
             <td>{{ r.txt }}</td>
-            <td>{{ r.rate }}</td>
+            <td>{{ "%.2f"|format(r.rate) }}</td> 
         </tr>
         {% endfor %}
     </table>
