@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CoinOps — Currency Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <header>
+    <span class="logo">CoinOps</span>
+    <div class="status">
+      <span class="dot" id="status-dot"></span>
+      <span id="status-text">connecting…</span>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="rates">Current Rates</button>
+    <button class="tab-btn"        data-tab="history">Price History</button>
+  </nav>
+
+  <main>
+
+    <!-- ── Tab 1: Current Rates ─────────────────────────────── -->
+    <section id="tab-rates" class="tab-content active">
+      <div class="toolbar">
+        <h2>Live Exchange Rates</h2>
+        <button class="btn btn-outline" id="btn-refresh">↻ Refresh</button>
+      </div>
+      <div class="table-wrapper">
+        <table id="rates-table">
+          <thead>
+            <tr>
+              <th>Source</th>
+              <th>Symbol</th>
+              <th>Name</th>
+              <th>Rate</th>
+              <th>Base</th>
+              <th>Last Updated</th>
+            </tr>
+          </thead>
+          <tbody id="rates-body">
+            <tr><td colspan="6" class="placeholder">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── Tab 2: Price History ──────────────────────────────── -->
+    <section id="tab-history" class="tab-content">
+      <div class="toolbar">
+        <h2>Price History</h2>
+        <button class="btn btn-green" id="btn-add-chart">+ Add Chart</button>
+      </div>
+      <div id="charts-container"></div>
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
