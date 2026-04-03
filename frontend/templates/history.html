@@ -18,7 +18,7 @@
         <tr>
             <td>{{ r.currency }}</td>
             <td>{{ r.name }}</td>
-            <td>{{ "%.2f"|format(r.rate) }}</td>
+            <td>{{ r.rate|float|round(2) }}</td>
             <td>{{ r.created_at }}</td>
         </tr>
         {% endfor %}
