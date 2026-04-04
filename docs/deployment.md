@@ -7,7 +7,7 @@ Three Hyper-V VMs running Ubuntu 24.04 Server (no GUI):
 | Hostname | Static IP | Services |
 |----------|-----------|---------|
 | softserve-node-01 | 172.31.1.10 | PostgreSQL · RabbitMQ · History Consumer · History API |
-| softserve-node-02 | 172.31.1.11 | Proxy Service (Go) |
+| softserve-node-02 | 172.31.1.11 | Proxy Service (Go) · Redis |
 | softserve-node-03 | 172.31.1.12 | Web UI (nginx) |
 
 node-01 consolidates the queue, database, and history service because only 3 VMs are available. The ТЗ marks VM4 (queue) and VM5 (DB) as optional — this is within spec.
@@ -104,7 +104,7 @@ ansible-playbook -i ansible/inventory ansible/deploy.yml
 | VM | Packages installed |
 |----|--------------------|
 | node-01 | postgresql, postgresql-contrib, rabbitmq-server, python3, python3-venv, python3-pip, python3-psycopg2 |
-| node-02 | golang-go |
+| node-02 | golang-go, redis-server |
 | node-03 | nginx |
 
 Also creates the PostgreSQL database/user and RabbitMQ user during provisioning.
@@ -169,4 +169,7 @@ Both files are mode `0640`, owned by the respective service user. Ansible writes
 | node-01 | 15672 | RabbitMQ Management UI (optional) |
 | node-01 | 8000 | History API |
 | node-02 | 8080 | Proxy Service |
+| node-02 | 6379 | Redis (localhost only — not accessible externally) |
 | node-03 | 80 | Web UI (nginx) |
+
+Redis on node-02 binds to 127.0.0.1 by default. No UFW rule opens port 6379 externally — only the proxy process on node-02 can reach it.
