@@ -9,3 +9,7 @@ ansible/host_vars/*.yml
 
 # Worktrees created by agent runs
 .claude/worktrees/
+
+docs/superpowers/plans/2026-04-03-revert-and-reinstate.md
+
+scripts
