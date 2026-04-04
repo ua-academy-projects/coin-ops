@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/redis/go-redis/v9"
 )
 
 const (
@@ -83,14 +85,19 @@ type Whale struct {
 	Positions []WhalePosition `json:"positions"`
 }
 
+// Prices holds cached crypto prices. Populated by Task 4.
+type Prices struct{}
+
 // ---- Server ----
 
 type Server struct {
 	ch    *amqp.Channel
 	chMu  sync.Mutex
+	rdb   *redis.Client
 	cache struct {
 		sync.RWMutex
 		whales []Whale
+		prices Prices
 	}
 }
 
@@ -294,7 +301,7 @@ func (s *Server) fetchAndUpdateCache() {
 func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
@@ -339,6 +346,66 @@ func (s *Server) handleWhales(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(whales)
 }
 
+func (s *Server) handleGetState(w http.ResponseWriter, r *http.Request) {
+	sid := r.URL.Query().Get("sid")
+	if sid == "" {
+		http.Error(w, "missing sid parameter", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+
+	val, err := s.rdb.Get(ctx, "session:"+sid).Result()
+	if err == redis.Nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("{}"))
+		return
+	}
+	if err != nil {
+		http.Error(w, "state unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(val))
+}
+
+func (s *Server) handlePostState(w http.ResponseWriter, r *http.Request) {
+	sid := r.URL.Query().Get("sid")
+	if sid == "" {
+		http.Error(w, "missing sid parameter", http.StatusBadRequest)
+		return
+	}
+
+	body, err := io.ReadAll(io.LimitReader(r.Body, 4096))
+	if err != nil {
+		http.Error(w, "read body failed", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+
+	if err := s.rdb.Set(ctx, "session:"+sid, string(body), 24*time.Hour).Err(); err != nil {
+		http.Error(w, "state unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		s.handleGetState(w, r)
+	case http.MethodPost:
+		s.handlePostState(w, r)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 // ---- main ----
 
 func main() {
@@ -366,6 +433,25 @@ func main() {
 
 	srv := &Server{ch: ch}
 
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL == "" {
+		redisURL = "redis://localhost:6379/0"
+	}
+	redisOpts, err := redis.ParseURL(redisURL)
+	if err != nil {
+		log.Fatalf("parse redis url: %v", err)
+	}
+	srv.rdb = redis.NewClient(redisOpts)
+
+	// Verify Redis is reachable (non-fatal — state endpoints will return 503 if down)
+	pingCtx, pingCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	if pingErr := srv.rdb.Ping(pingCtx).Err(); pingErr != nil {
+		log.Printf("Warning: Redis not reachable: %v — /state will return 503", pingErr)
+	} else {
+		log.Println("Connected to Redis")
+	}
+	pingCancel()
+
 	// Populate whale cache immediately, then refresh every 5 minutes.
 	go func() {
 		srv.fetchAndUpdateCache()
@@ -380,6 +466,7 @@ func main() {
 	mux.HandleFunc("/health", corsMiddleware(srv.handleHealth))
 	mux.HandleFunc("/current", corsMiddleware(srv.handleCurrent))
 	mux.HandleFunc("/whales", corsMiddleware(srv.handleWhales))
+	mux.HandleFunc("/state", corsMiddleware(srv.handleState))
 
 	log.Printf("Proxy service listening on :%s", port)
 	if err := http.ListenAndServe(":"+port, mux); err != nil {

@@ -1,6 +1,6 @@
 [Unit]
 Description=Coin-Ops Proxy Service (Go)
-After=network.target
+After=network.target redis-server.service
 Wants=network.target
 
 [Service]
