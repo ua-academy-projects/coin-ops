@@ -1,0 +1,6 @@
+---
+# handlers file for base
+- name: Restart systemd-resolved
+  systemd:
+    name: systemd-resolved
+    state: restarted

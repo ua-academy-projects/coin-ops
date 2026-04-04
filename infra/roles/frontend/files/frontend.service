@@ -1,0 +1,18 @@
+[Unit]
+Description="Frontend Flask App"
+After=multi-user.target
+RequiresMountsFor=/home/vagrant/shared_folder/
+StartLimitBurst=10
+StartLimitIntervalSec=60
+
+[Service]
+Type=simple
+EnvironmentFile=/home/vagrant/shared_folder/frontend/frontend.env
+ExecStart=/home/vagrant/venv/bin/python /home/vagrant/shared_folder/frontend/app.py
+User=vagrant
+WorkingDirectory=/home/vagrant/shared_folder/frontend
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

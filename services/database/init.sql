@@ -9,7 +9,7 @@ GRANT ALL PRIVILEGES ON DATABASE coinops_db TO :user_name;
 -- The following meta-commands require psql (not plain libpq batch without psql).
 \c coinops_db
 
--- Historical snapshots written by the worker from the proxy JSON.
+-- Historical snapshots written by the history service from the proxy JSON.
 -- snapshot_event_id matches envelope event_id (proxy publisher); UNIQUE enables idempotent replays.
 CREATE TABLE IF NOT EXISTS exchange_rates (
   id                  BIGSERIAL PRIMARY KEY,

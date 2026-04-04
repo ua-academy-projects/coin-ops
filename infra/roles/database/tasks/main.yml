@@ -1,0 +1,71 @@
+---
+# tasks file for database
+- name: Install database packages
+  apt:
+    name:
+      - postgresql
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Allow PostgreSQL to listen on all interfaces
+  lineinfile:
+    path: /etc/postgresql/16/main/postgresql.conf
+    regexp: '^#listen_addresses'
+    line: "listen_addresses = '*'"
+  notify: Restart PostgreSQL
+
+- name: Allow PostgreSQL to accept remote connections
+  lineinfile:
+    path: /etc/postgresql/16/main/pg_hba.conf
+    line: "{{ item }}"
+    state: present
+  loop:
+    - "host    all             all             10.10.1.0/24            scram-sha-256"
+    - "host    all             all             10.10.2.0/24            scram-sha-256"
+  notify: Restart PostgreSQL
+
+- name: Apply PostgreSQL config before local init
+  meta: flush_handlers
+
+# LEGACY
+- name: Copy database init files to tmp
+  copy:
+    src: "/home/vagrant/shared_folder/database/{{ item }}"
+    dest: "/tmp/{{ item }}"
+    mode: "0644"
+    remote_src: yes
+  loop:
+    - database.env
+    - init.sql
+
+# database.env містить PGHOST для клієнтів; для init треба сокет postgres, інакше psql йде на TCP і отримує connection refused
+- name: Initialize database
+  shell: |
+    set -e
+    PGUSER_APP=$(grep -E '^[[:space:]]*PGUSER=' /tmp/database.env | head -1 | cut -d= -f2- | tr -d '"\r' | xargs)
+    PGPASS_APP=$(grep -E '^[[:space:]]*PGPASSWORD=' /tmp/database.env | head -1 | cut -d= -f2- | tr -d '"\r' | xargs)
+    unset PGHOST PGPORT PGDATABASE PGUSER PGPASSWORD
+    psql -d postgres \
+      -v user_name="$PGUSER_APP" \
+      -v user_password="'$PGPASS_APP'" \
+      -f /tmp/init.sql
+  args:
+    executable: /bin/bash
+  become: yes
+  become_user: postgres
+
+- name: Clean up temporary database files
+  file:
+    path: "/tmp/{{ item }}"
+    state: absent
+  loop:
+    - database.env
+    - init.sql
+
+- name: Start PostgreSQL service
+  systemd:
+    name: postgresql
+    enabled: yes
+    state: started
+    daemon_reload: yes

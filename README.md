@@ -31,15 +31,15 @@ Ensure you have the following installed on your host machine before starting:
 ### Environment files
 Example of environment file is stored in ./services.env.example.
 - Proxy: `./services/proxy/proxy.env`
-- History Service: `./services/worker/worker.env`
+- History Service: `./services/history_service/history_service.env`
 - Frontend: `./services/frontend/frontend.env`
 
 ### Basic run notes (systemd)
 After updating env files:
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl restart proxy worker frontend
-sudo systemctl status proxy worker frontend
+sudo systemctl restart proxy history_service frontend
+sudo systemctl status proxy history_service frontend
 ```
 
 ## To-Do List

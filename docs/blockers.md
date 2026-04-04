@@ -1,10 +1,10 @@
 # Blockers and Workarounds
 
-## 1) Worker logs inserts but DB on VM5 looks empty
+## 1) History service logs inserts but DB on VM5 looks empty
 - **Common cause**: wrong runtime env (e.g., `DATABASE_URL` points elsewhere).
 - **Workaround**:
   - Check effective env in service:
-  - `systemctl show worker --property=Environment`
+  - `systemctl show history_service --property=Environment`
   - Verify DB target from VM3:
   - `psql "host=10.10.1.6 ..."`
   - Capture traffic on all interfaces:

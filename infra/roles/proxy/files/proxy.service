@@ -1,0 +1,18 @@
+[Unit]
+Description="Proxy Service App"
+After=multi-user.target
+RequiresMountsFor=/home/vagrant/shared_folder/
+StartLimitBurst=10
+StartLimitIntervalSec=60
+
+[Service]
+Type=simple
+EnvironmentFile=/home/vagrant/shared_folder/proxy/proxy.env
+ExecStart=/home/vagrant/shared_folder/proxy/proxy.bin
+User=vagrant
+WorkingDirectory=/home/vagrant/shared_folder/proxy
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

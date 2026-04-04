@@ -28,7 +28,7 @@ From `Vagrantfile` (base `10.10.1.` plus VM index):
 | --- | --- | --- | --- | --- |
 | `vm1` | `vm2` | TCP (HTTP) | `8080` | UI live data refresh: `GET http://10.10.1.3:8080/api/v1/rates` |
 | `vm1` | `vm3` | TCP (HTTP) | `8090` | History API: `GET http://10.10.1.4:8090/api/v1/history?limit=5` (UI fetches via Flask same-origin proxy) |
-| `vm3` | `vm4` | TCP (AMQP) | `5672` | Worker consumes MQ events from `RABBITMQ_URL` |
+| `vm3` | `vm4` | TCP (AMQP) | `5672` | History service consumes MQ events from `RABBITMQ_URL` |
 | `vm3` | `vm5` | TCP | `5432` | History Service writes to PostgreSQL using `PGHOST/PGPORT` |
 | `vm1` (Flask) | `vm1` (Redis) | TCP | `6379` | `127.0.0.1:6379` — UI state (no east-west traffic) |
 
@@ -42,7 +42,7 @@ Typical order to avoid dependency issues:
 1. `vm5`: `sudo systemctl restart postgresql`
 2. `vm4`: `sudo systemctl restart rabbitmq-server`
 3. `vm2`: `sudo systemctl restart proxy`
-4. `vm3`: `sudo systemctl restart worker`
+4. `vm3`: `sudo systemctl restart history_service`
 5. `vm1`: `sudo systemctl restart redis-server` then `sudo systemctl restart frontend`
 
 After env changes on a VM:

@@ -1,0 +1,26 @@
+---
+# tasks file for message_queue
+- name: Install message_queue packages
+  apt:
+    name:
+      - rabbitmq-server
+    state: present
+    update_cache: yes
+
+- name: Setup systemd rabbitmq-server service
+  systemd:
+    name: rabbitmq-server
+    enabled: yes
+    state: started
+    daemon_reload: yes
+
+- name: Setup rabbitmq user and permissions
+  community.rabbitmq.rabbitmq_user:
+    user: coinops
+    password: coinops ### INSECURE
+    tags: management
+    vhost: /
+    configure_priv: ".*"
+    read_priv: ".*"
+    write_priv: ".*"
+    state: present

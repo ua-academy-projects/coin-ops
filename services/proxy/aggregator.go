@@ -62,7 +62,7 @@ func (a *rateAggregator) buildResponse(ctx context.Context) *RatesResponse {
 			out.Errors["coingecko"] = coingeckoErr.Error()
 		}
 	}
-	// encoding/json marshals nil []Rate as "rates":null; Python worker expects a JSON array.
+	// encoding/json marshals nil []Rate as "rates":null; Python history service expects a JSON array.
 	if out.Rates == nil {
 		out.Rates = []Rate{}
 	}

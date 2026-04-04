@@ -1,0 +1,18 @@
+[Unit]
+Description="CoinOps History Service (MQ consumer + HTTP API)"
+After=multi-user.target
+RequiresMountsFor=/home/vagrant/shared_folder/
+StartLimitBurst=10
+StartLimitIntervalSec=60
+
+[Service]
+Type=simple
+EnvironmentFile=/home/vagrant/shared_folder/history_service/history_service.env
+ExecStart=/home/vagrant/venv/bin/python /home/vagrant/shared_folder/history_service/history_service.py
+User=vagrant
+WorkingDirectory=/home/vagrant/shared_folder/history_service
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

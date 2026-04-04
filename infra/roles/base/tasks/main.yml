@@ -1,0 +1,30 @@
+---
+# tasks file for base
+- name: Ensure systemd-resolved drop-in directory exists
+  file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    mode: "0755"
+
+- name: Use public DNS (VMware/NAT-provided resolver often breaks lookups)
+  copy:
+    dest: /etc/systemd/resolved.conf.d/99-coinops-dns.conf
+    content: |
+      [Resolve]
+      DNS=8.8.8.8 1.1.1.1
+    mode: "0644"
+  notify: Restart systemd-resolved
+
+- name: Apply DNS before tasks that need the network
+  meta: flush_handlers
+
+- name: Base servers setup
+  apt:
+    name:
+      - iputils-ping
+      - vim
+      - curl
+      - ufw
+      - acl
+    state: present
+    update_cache: yes

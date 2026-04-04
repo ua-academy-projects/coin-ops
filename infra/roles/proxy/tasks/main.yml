@@ -1,0 +1,29 @@
+---
+# tasks file for proxy
+- name: Install proxy packages
+  apt:
+    name:
+      - golang
+    state: present
+    update_cache: yes
+
+- name: Build proxy binary
+  command: go build -o proxy.bin .
+  args:
+    chdir: /home/vagrant/shared_folder/proxy
+  notify: Restart Proxy
+
+- name: Copy proxy systemd unit file to remote host
+  copy:
+    src: proxy.service
+    dest: /etc/systemd/system/proxy.service
+    mode: '0644'
+  notify: Restart Proxy
+
+- name: Setup systemd proxy service
+  systemd:
+    name: proxy
+    enabled: yes
+    state: started
+    daemon_reload: yes
+    

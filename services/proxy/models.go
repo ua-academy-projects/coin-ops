@@ -6,7 +6,7 @@ package main
 import "time"
 
 // Rate is a single normalized exchange-rate row returned by GET /api/v1/rates
-// and stored by the worker in PostgreSQL.
+// and stored by the history service in PostgreSQL.
 type Rate struct {
 	// AssetSymbol is the short ticker (e.g. USD, EUR, BTC).
 	AssetSymbol string `json:"asset_symbol"`

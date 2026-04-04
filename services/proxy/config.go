@@ -17,7 +17,7 @@ const (
 )
 
 // Config holds all runtime settings for the proxy service, loaded once at startup.
-// Mirrors the HistoryConfig / AppConfig pattern used by worker and frontend.
+// Mirrors the HistoryConfig / AppConfig pattern used by history_service and frontend.
 type Config struct {
 	Listen          string
 	CacheTTL        time.Duration
@@ -56,7 +56,7 @@ func envString(key, fallback string) string {
 	return fallback
 }
 
-// envBool parses a boolean-like env var. Consistent with worker's _env_bool.
+// envBool parses a boolean-like env var. Consistent with history_service's _env_bool.
 func envBool(key string, fallback bool) bool {
 	v := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
 	if v == "" {
