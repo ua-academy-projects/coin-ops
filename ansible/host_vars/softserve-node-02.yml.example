@@ -1,0 +1,10 @@
+# Copy this pattern for each host in host_vars/.
+# Files named *.yml here are gitignored (machine-specific paths).
+# Only *.yml.example files are committed.
+#
+# WSL path pattern:
+#   /mnt/<drive>/<project-path>/.vagrant/machines/<vm-name>/hyperv/private_key
+#
+# Find VM names: ls /mnt/f/univ/softserv-internship/.vagrant/machines/
+
+ansible_ssh_private_key_file: /mnt/f/univ/softserv-internship/.vagrant/machines/node-2/hyperv/private_key
