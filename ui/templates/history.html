@@ -17,35 +17,109 @@
         </div>
     </div>
 
-    <div class="card" style="padding: 24px;">
-        <div class="label" style="margin-bottom: 16px;">Price History</div>
+    <div class="card history-card">
+        <div class="history-header">
+            <div>
+                <div class="label">Price History</div>
+                <h2 class="history-title">Recorded market data</h2>
+            </div>
+        </div>
+
+        <form method="get" action="/history" class="history-filters" id="historyFilters">
+            <label class="filter-field modern-field">
+                <span class="label">Coin</span>
+                <span class="select-shell">
+                    <select name="coin" class="filter-control filter-select">
+                        <option value="">All coins</option>
+                        {% for coin in coins %}
+                            <option value="{{ coin }}" {% if coin == selected_coin %}selected{% endif %}>{{ coin }}</option>
+                        {% endfor %}
+                    </select>
+                </span>
+            </label>
+
+            <label class="filter-field modern-field">
+                <span class="label">Date</span>
+                <input type="date" name="date" value="{{ selected_date }}" class="filter-control">
+            </label>
+
+            <label class="filter-field modern-field">
+                <span class="label">Sort</span>
+                <span class="select-shell">
+                    <select name="sort" class="filter-control filter-select">
+                        <option value="newest" {% if selected_sort == 'newest' %}selected{% endif %}>Newest first</option>
+                        <option value="oldest" {% if selected_sort == 'oldest' %}selected{% endif %}>Oldest first</option>
+                        <option value="highest" {% if selected_sort == 'highest' %}selected{% endif %}>Highest price</option>
+                        <option value="lowest" {% if selected_sort == 'lowest' %}selected{% endif %}>Lowest price</option>
+                    </select>
+                </span>
+            </label>
+
+            <label class="filter-field modern-field">
+                <span class="label">Limit</span>
+                <span class="select-shell">
+                    <select name="limit" class="filter-control filter-select">
+                        <option value="25" {% if selected_limit == '25' %}selected{% endif %}>25</option>
+                        <option value="50" {% if selected_limit == '50' %}selected{% endif %}>50</option>
+                        <option value="100" {% if selected_limit == '100' %}selected{% endif %}>100</option>
+                        <option value="250" {% if selected_limit == '250' %}selected{% endif %}>250</option>
+                    </select>
+                </span>
+            </label>
+
+            <div class="filter-actions">
+                <button type="submit" class="btn btn-primary">Apply Filters</button>
+                <a href="/history" class="btn btn-ghost">Reset</a>
+            </div>
+        </form>
 
         {% if data %}
-            <table style="width: 100%; border-collapse: collapse;">
+            <div class="table-wrap">
+            <table class="history-table">
                 <thead>
                     <tr>
-                        <th style="text-align: left; padding: 10px 16px; color: var(--muted); font-weight: 400; font-size: 13px; border-bottom: 1px solid var(--border);">Coin</th>
-                        <th style="text-align: left; padding: 10px 16px; color: var(--muted); font-weight: 400; font-size: 13px; border-bottom: 1px solid var(--border);">Price (USD)</th>
-                        <th style="text-align: left; padding: 10px 16px; color: var(--muted); font-weight: 400; font-size: 13px; border-bottom: 1px solid var(--border);">Time</th>
+                        <th>Coin</th>
+                        <th>Price (USD)</th>
+                        <th>Time</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for row in data %}
-                    <tr style="border-bottom: 1px solid var(--border);">
-                        <td style="padding: 12px 16px;">
+                    <tr>
+                        <td>
                             <span class="badge">{{ row.coin }}</span>
                         </td>
-                        <td style="padding: 12px 16px; font-weight: 600;">${{ row.price }}</td>
-                        <td style="padding: 12px 16px; color: var(--muted); font-size: 13px;">{{ row.recorded_at }}</td>
+                        <td class="history-price">${{ row.price }}</td>
+                        <td class="history-time">{{ row.recorded_at }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
+            </div>
         {% else %}
             <p style="color: var(--muted);">No data recorded</p>
         {% endif %}
     </div>
 
 </div>
+<script>
+const historyFilters = document.getElementById("historyFilters");
+
+historyFilters.addEventListener("submit", (event) => {
+    event.preventDefault();
+
+    const formData = new FormData(historyFilters);
+    const params = new URLSearchParams();
+
+    for (const [key, value] of formData.entries()) {
+        if (String(value).trim() !== "") {
+            params.set(key, value);
+        }
+    }
+
+    const target = params.toString() ? `/history?${params.toString()}` : "/history";
+    window.location.href = target;
+});
+</script>
 </body>
 </html>
