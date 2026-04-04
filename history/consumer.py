@@ -31,6 +31,14 @@ INSERT_SQL = """
     ON CONFLICT (slug, fetched_at) DO NOTHING
 """
 
+INSERT_PRICE_SQL = """
+    INSERT INTO price_snapshots
+        (coin, price_usd, change_24h, fetched_at)
+    VALUES
+        (%(coin)s, %(price_usd)s, %(change_24h)s, %(fetched_at)s)
+    ON CONFLICT (coin, fetched_at) DO NOTHING
+"""
+
 
 def connect_postgres() -> psycopg2.extensions.connection:
     while True:
@@ -69,22 +77,37 @@ def make_callback(db: psycopg2.extensions.connection):
     def callback(ch, method, properties, body):
         try:
             data = json.loads(body)
-            # Map wire field names to DB column names
-            row = {
-                "question":   data.get("question"),
-                "slug":       data.get("slug"),
-                "yes_price":  data.get("yes_price"),
-                "no_price":   data.get("no_price"),
-                "volume_24h": data.get("volume_24h"),
-                "category":   data.get("category"),
-                "end_date":   data.get("end_date") or None,
-                "fetched_at": data.get("fetched_at"),
-            }
-            with db.cursor() as cur:
-                cur.execute(INSERT_SQL, row)
-            db.commit()
-            ch.basic_ack(delivery_tag=method.delivery_tag)
-            log.info("Stored snapshot: %s", data.get("slug"))
+            msg_type = data.get("type", "market")
+
+            if msg_type == "price":
+                row = {
+                    "coin":       data.get("coin"),
+                    "price_usd":  data.get("price_usd"),
+                    "change_24h": data.get("change_24h"),
+                    "fetched_at": data.get("fetched_at"),
+                }
+                with db.cursor() as cur:
+                    cur.execute(INSERT_PRICE_SQL, row)
+                db.commit()
+                ch.basic_ack(delivery_tag=method.delivery_tag)
+                log.info("Stored price: %s $%.2f", data.get("coin"), data.get("price_usd", 0))
+            else:
+                # Default: treat as market snapshot (backwards compatible)
+                row = {
+                    "question":   data.get("question"),
+                    "slug":       data.get("slug"),
+                    "yes_price":  data.get("yes_price"),
+                    "no_price":   data.get("no_price"),
+                    "volume_24h": data.get("volume_24h"),
+                    "category":   data.get("category"),
+                    "end_date":   data.get("end_date") or None,
+                    "fetched_at": data.get("fetched_at"),
+                }
+                with db.cursor() as cur:
+                    cur.execute(INSERT_SQL, row)
+                db.commit()
+                ch.basic_ack(delivery_tag=method.delivery_tag)
+                log.info("Stored snapshot: %s", data.get("slug"))
         except Exception as exc:
             log.error("Failed to process message: %s", exc)
             try:

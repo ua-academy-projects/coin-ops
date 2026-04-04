@@ -86,6 +86,33 @@ def get_market_history(
         conn.close()
 
 
+@app.get("/prices/history/{coin}")
+def get_price_history(
+    coin: str,
+    limit: int = Query(default=500, ge=1, le=2000),
+):
+    """Return time-series price history for a coin (bitcoin, ethereum, usd_uah)."""
+    conn = get_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT fetched_at, coin, price_usd, change_24h
+                FROM price_snapshots
+                WHERE coin = %s
+                ORDER BY fetched_at DESC
+                LIMIT %s
+                """,
+                (coin, limit),
+            )
+            rows = cur.fetchall()
+        if not rows:
+            raise HTTPException(status_code=404, detail="No price data for this coin")
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
