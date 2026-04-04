@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"io"
 	"log"
 	"net/http"
@@ -23,6 +24,9 @@ const (
 )
 
 var httpClient = &http.Client{Timeout: 10 * time.Second}
+
+// validSID accepts alphanumeric, hyphens, underscores: 8–128 chars (UUID format).
+var validSID = regexp.MustCompile(`^[a-zA-Z0-9_-]{8,128}$`)
 
 // ---- Gamma API raw types ----
 
@@ -301,6 +305,19 @@ func (s *Server) fetchAndUpdateCache() {
 func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next(w, r)
+	}
+}
+
+func corsMiddlewareWithPost(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		if r.Method == http.MethodOptions {
@@ -352,12 +369,18 @@ func (s *Server) handleGetState(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing sid parameter", http.StatusBadRequest)
 		return
 	}
+	if !validSID.MatchString(sid) {
+		http.Error(w, "invalid sid", http.StatusBadRequest)
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 
 	val, err := s.rdb.Get(ctx, "session:"+sid).Result()
 	if err == redis.Nil {
+		// No state stored yet for this session — return empty object so
+		// callers don't need to special-case 404 vs. empty state.
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte("{}"))
 		return
@@ -377,10 +400,19 @@ func (s *Server) handlePostState(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing sid parameter", http.StatusBadRequest)
 		return
 	}
+	if !validSID.MatchString(sid) {
+		http.Error(w, "invalid sid", http.StatusBadRequest)
+		return
+	}
 
 	body, err := io.ReadAll(io.LimitReader(r.Body, 4096))
 	if err != nil {
 		http.Error(w, "read body failed", http.StatusBadRequest)
+		return
+	}
+
+	if !json.Valid(body) {
+		http.Error(w, "body must be valid JSON", http.StatusBadRequest)
 		return
 	}
 
@@ -391,8 +423,6 @@ func (s *Server) handlePostState(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "state unavailable", http.StatusServiceUnavailable)
 		return
 	}
-
-	w.WriteHeader(http.StatusOK)
 }
 
 func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
@@ -466,7 +496,7 @@ func main() {
 	mux.HandleFunc("/health", corsMiddleware(srv.handleHealth))
 	mux.HandleFunc("/current", corsMiddleware(srv.handleCurrent))
 	mux.HandleFunc("/whales", corsMiddleware(srv.handleWhales))
-	mux.HandleFunc("/state", corsMiddleware(srv.handleState))
+	mux.HandleFunc("/state", corsMiddlewareWithPost(srv.handleState))
 
 	log.Printf("Proxy service listening on :%s", port)
 	if err := http.ListenAndServe(":"+port, mux); err != nil {
