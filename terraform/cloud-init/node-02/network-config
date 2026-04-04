@@ -1,0 +1,11 @@
+version: 2
+ethernets:
+  eth0:
+    dhcp4: false
+    addresses:
+      - 172.31.1.11/24
+    gateway4: 172.31.1.1
+    nameservers:
+      addresses:
+        - 8.8.8.8
+        - 1.1.1.1
