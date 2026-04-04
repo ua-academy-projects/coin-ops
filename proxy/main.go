@@ -23,6 +23,11 @@ const (
 	queueName    = "market_events"
 )
 
+const (
+	coingeckoURL = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true"
+	nbuURL       = "https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?valcode=USD&json"
+)
+
 var httpClient = &http.Client{Timeout: 10 * time.Second}
 
 // validSID accepts alphanumeric, hyphens, underscores: 8–128 chars (UUID format).
@@ -89,8 +94,38 @@ type Whale struct {
 	Positions []WhalePosition `json:"positions"`
 }
 
-// Prices holds cached crypto prices. Populated by Task 4.
-type Prices struct{}
+// ---- Price API raw types ----
+
+type cgPriceEntry struct {
+	Usd          float64 `json:"usd"`
+	Usd24hChange float64 `json:"usd_24h_change"`
+}
+
+type cgPriceResponse map[string]cgPriceEntry
+
+type nbuEntry struct {
+	Rate float64 `json:"rate"`
+}
+
+// ---- Prices wire type ----
+
+type Prices struct {
+	BtcUsd       float64   `json:"btc_usd"`
+	EthUsd       float64   `json:"eth_usd"`
+	Btc24hChange float64   `json:"btc_24h_change"`
+	Eth24hChange float64   `json:"eth_24h_change"`
+	UsdUah       float64   `json:"usd_uah"`
+	FetchedAt    time.Time `json:"fetched_at"`
+}
+
+// PriceEvent is the message published to market_events for each coin.
+type PriceEvent struct {
+	Type      string  `json:"type"`
+	Coin      string  `json:"coin"`
+	PriceUsd  float64 `json:"price_usd"`
+	Change24h float64 `json:"change_24h"`
+	FetchedAt string  `json:"fetched_at"`
+}
 
 // ---- Server ----
 
@@ -117,6 +152,27 @@ func connectRabbitMQ(url string) *amqp.Connection {
 		log.Printf("RabbitMQ unavailable: %v — retrying in 5s", err)
 		time.Sleep(5 * time.Second)
 	}
+}
+
+func (s *Server) publishPriceEvent(coin string, priceUsd, change24h float64, fetchedAt time.Time) error {
+	evt := PriceEvent{
+		Type:      "price",
+		Coin:      coin,
+		PriceUsd:  priceUsd,
+		Change24h: change24h,
+		FetchedAt: fetchedAt.Format(time.RFC3339),
+	}
+	body, err := json.Marshal(evt)
+	if err != nil {
+		return err
+	}
+	s.chMu.Lock()
+	defer s.chMu.Unlock()
+	return s.ch.Publish("", queueName, false, false, amqp.Publishing{
+		DeliveryMode: amqp.Persistent,
+		ContentType:  "application/json",
+		Body:         body,
+	})
 }
 
 func (s *Server) publish(snap MarketSnapshot) error {
@@ -268,6 +324,24 @@ func fetchPositions(address string) ([]WhalePosition, error) {
 	return positions, nil
 }
 
+// ---- Price APIs ----
+
+func fetchCoinGecko() (cgPriceResponse, error) {
+	var resp cgPriceResponse
+	return resp, fetchJSON(coingeckoURL, &resp)
+}
+
+func fetchNBU() (float64, error) {
+	var entries []nbuEntry
+	if err := fetchJSON(nbuURL, &entries); err != nil {
+		return 0, err
+	}
+	if len(entries) == 0 {
+		return 0, fmt.Errorf("NBU returned empty response")
+	}
+	return entries[0].Rate, nil
+}
+
 // ---- Whale cache refresh ----
 
 func (s *Server) fetchAndUpdateCache() {
@@ -298,6 +372,53 @@ func (s *Server) fetchAndUpdateCache() {
 	s.cache.whales = whales
 	s.cache.Unlock()
 	log.Printf("Whale cache updated: %d whales", len(whales))
+}
+
+func (s *Server) fetchAndUpdatePrices() {
+	now := time.Now().UTC()
+
+	cg, err := fetchCoinGecko()
+	if err != nil {
+		log.Printf("Price update: CoinGecko fetch failed: %v", err)
+		return
+	}
+
+	uah, err := fetchNBU()
+	if err != nil {
+		log.Printf("Price update: NBU fetch failed: %v", err)
+		// Continue — crypto prices are still valid even if NBU is down
+	}
+
+	btc := cg["bitcoin"]
+	eth := cg["ethereum"]
+
+	prices := Prices{
+		BtcUsd:       btc.Usd,
+		EthUsd:       eth.Usd,
+		Btc24hChange: btc.Usd24hChange,
+		Eth24hChange: eth.Usd24hChange,
+		UsdUah:       uah,
+		FetchedAt:    now,
+	}
+
+	s.cache.Lock()
+	s.cache.prices = prices
+	s.cache.Unlock()
+
+	// Publish price events to queue for persistence in PostgreSQL
+	if err := s.publishPriceEvent("bitcoin", btc.Usd, btc.Usd24hChange, now); err != nil {
+		log.Printf("Price publish failed (bitcoin): %v", err)
+	}
+	if err := s.publishPriceEvent("ethereum", eth.Usd, eth.Usd24hChange, now); err != nil {
+		log.Printf("Price publish failed (ethereum): %v", err)
+	}
+	if uah > 0 {
+		if err := s.publishPriceEvent("usd_uah", uah, 0, now); err != nil {
+			log.Printf("Price publish failed (usd_uah): %v", err)
+		}
+	}
+
+	log.Printf("Price cache updated: BTC=$%.0f ETH=$%.0f UAH=%.2f", btc.Usd, eth.Usd, uah)
 }
 
 // ---- HTTP handlers ----
@@ -361,6 +482,15 @@ func (s *Server) handleWhales(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(whales)
+}
+
+func (s *Server) handlePrices(w http.ResponseWriter, r *http.Request) {
+	s.cache.RLock()
+	prices := s.cache.prices
+	s.cache.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(prices)
 }
 
 func (s *Server) handleGetState(w http.ResponseWriter, r *http.Request) {
@@ -492,10 +622,21 @@ func main() {
 		}
 	}()
 
+	// Populate price cache immediately, then refresh every 60 seconds.
+	go func() {
+		srv.fetchAndUpdatePrices()
+		ticker := time.NewTicker(60 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			srv.fetchAndUpdatePrices()
+		}
+	}()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", corsMiddleware(srv.handleHealth))
 	mux.HandleFunc("/current", corsMiddleware(srv.handleCurrent))
 	mux.HandleFunc("/whales", corsMiddleware(srv.handleWhales))
+	mux.HandleFunc("/prices", corsMiddleware(srv.handlePrices))
 	mux.HandleFunc("/state", corsMiddlewareWithPost(srv.handleState))
 
 	log.Printf("Proxy service listening on :%s", port)
