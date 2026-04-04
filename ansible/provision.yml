@@ -14,11 +14,6 @@
   hosts: history
   become: yes
   tasks:
-    - name: Install acl (required for become_user with unprivileged users)
-      apt:
-        name: acl
-        state: present
-
     - name: Install PostgreSQL
       apt:
         name:
