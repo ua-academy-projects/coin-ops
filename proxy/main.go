@@ -102,7 +102,7 @@ func fetchNBU() []Rate {
 }
 
 func fetchCryptoRates() []Rate {
-	resp, err := http.Get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,binancecoin,cardano,ripple,dogecoin,polkadot,avalanche-2,chainlink&vs_currencies=uah")
+	resp, err := http.Get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,binancecoin,cardano,ripple,dogecoin,polkadot,avalanche-2,chainlink&vs_currencies=usd")
 	if err != nil {
 		log.Printf("Помилка CoinGecko: %s", err)
 		return nil
@@ -122,7 +122,7 @@ func fetchCryptoRates() []Rate {
 		result = append(result, Rate{
 			CC:   cryptoCodes[id],
 			Txt:  cryptoNames[id],
-			Rate: data["uah"],
+			Rate: data["usd"],
 		})
 	}
 	return result
