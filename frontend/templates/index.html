@@ -180,7 +180,7 @@
                 <div class="tc-header"><span class="tc-code green">BTC</span><span class="chg-up">Крипто</span></div>
                 <div class="tc-name">Bitcoin</div>
                 <div class="tc-rate">{{ "{:,.0f}".format(r.rate|float) }}</div>
-                <div class="tc-sub">UAH</div>
+                <div class="tc-sub">USD</div>
             </div>
             {% endif %}
             {% if r.cc == 'ETH' %}
@@ -188,7 +188,7 @@
                 <div class="tc-header"><span class="tc-code green">ETH</span><span class="chg-up">Крипто</span></div>
                 <div class="tc-name">Ethereum</div>
                 <div class="tc-rate">{{ "{:,.0f}".format(r.rate|float) }}</div>
-                <div class="tc-sub">UAH</div>
+                <div class="tc-sub">USD</div>
             </div>
             {% endif %}
         {% endfor %}

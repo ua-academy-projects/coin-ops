@@ -383,11 +383,16 @@
                 <div class="ctrl-group">
                     <div class="ctrl-label">Період</div>
                     <div class="period-btns">
-                        <button class="period-btn" onclick="setPeriod(6,this)">6г</button>
-                        <button class="period-btn active" onclick="setPeriod(24,this)">День</button>
-                        <button class="period-btn" onclick="setPeriod(168,this)">Тиждень</button>
-                        <button class="period-btn" onclick="setPeriod(720,this)">Місяць</button>
-                        <button class="period-btn" onclick="setPeriod(0,this)">Все</button>
+                        <button class="period-btn{% if current_hours == 6 %} active{% endif %}"
+                            onclick="setPeriod(6,this)">6г</button>
+                        <button class="period-btn{% if current_hours == 24 %} active{% endif %}"
+                            onclick="setPeriod(24,this)">День</button>
+                        <button class="period-btn{% if current_hours == 168 %} active{% endif %}"
+                            onclick="setPeriod(168,this)">Тиждень</button>
+                        <button class="period-btn{% if current_hours == 720 %} active{% endif %}"
+                            onclick="setPeriod(720,this)">Місяць</button>
+                        <button class="period-btn{% if current_hours == 0 %} active{% endif %}"
+                            onclick="setPeriod(0,this)">Все</button>
                     </div>
                 </div>
             </div>
@@ -419,7 +424,7 @@
                         <tr>
                             <th>Валюта</th>
                             <th>Назва</th>
-                            <th>Курс (UAH)</th>
+                            <th>Курс</th>
                             <th>Час</th>
                         </tr>
                     </thead>
@@ -436,7 +441,7 @@
         const allRecords = {{ records | tojson }};
 
         let currentType = 'all';
-        let currentHours = 24;
+        let currentHours = {{ current_hours }};
         let activeCurrencies = new Set();
         let chart = null;
 
@@ -535,7 +540,11 @@
                             titleColor: '#888',
                             bodyColor: '#fff',
                             callbacks: {
-                                label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} UAH`
+                                label: ctx => {
+                                    const code = ctx.dataset.label;
+                                    const cur = CRYPTO_CODES.has(code) ? 'USD' : 'UAH';
+                                    return ` ${code}: ${ctx.parsed.y.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${cur}`;
+                                }
                             }
                         }
                     },
@@ -599,8 +608,8 @@
         }
 
         function setPeriod(hours, btn) {
-    window.location.href = '/history?hours=' + hours;
-}
+            window.location.href = '/history?hours=' + hours;
+        }
 
         render();
     </script>
