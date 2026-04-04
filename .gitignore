@@ -6,10 +6,13 @@ ansible/group_vars/all/secrets.yml
 # Ansible host-specific variables — machine-specific paths
 ansible/host_vars/*.yml
 
-
 # Worktrees created by agent runs
 .claude/worktrees/
 
-docs/superpowers/plans/2026-04-03-revert-and-reinstate.md
+# Superpowers generated plans/specs — internal tooling, not for the repo
+docs/superpowers/
+
+# Compiled binary
+proxy/proxy
 
 scripts
