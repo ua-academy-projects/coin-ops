@@ -8,6 +8,7 @@ ansible/host_vars/*.yml
 
 # Worktrees created by agent runs
 .claude/worktrees/
+.worktrees/
 
 # Superpowers generated plans/specs — internal tooling, not for the repo
 docs/superpowers/
