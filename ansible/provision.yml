@@ -4,15 +4,16 @@
 #
 #   ansible-playbook -i ansible/inventory ansible/provision.yml
 
+- name: Common setup — all nodes
+  hosts: all
+  become: yes
+  roles:
+    - common
+
 - name: Provision history node — PostgreSQL + RabbitMQ + Python
   hosts: history
   become: yes
   tasks:
-    - name: Update apt cache
-      apt:
-        update_cache: yes
-        cache_valid_time: 3600
-
     - name: Install acl (required for become_user with unprivileged users)
       apt:
         name: acl
@@ -82,29 +83,30 @@
         owner: "{{ db_user }}"
         state: present
 
-- name: Provision proxy node — Go
+- name: Provision proxy node — Go + Redis
   hosts: proxy
   become: yes
   tasks:
-    - name: Update apt cache
-      apt:
-        update_cache: yes
-        cache_valid_time: 3600
-
     - name: Install Go
       apt:
         name: golang-go
         state: present
 
+    - name: Install Redis
+      apt:
+        name: redis-server
+        state: present
+
+    - name: Enable and start Redis
+      systemd:
+        name: redis-server
+        enabled: yes
+        state: started
+
 - name: Provision UI node — nginx
   hosts: ui
   become: yes
   tasks:
-    - name: Update apt cache
-      apt:
-        update_cache: yes
-        cache_valid_time: 3600
-
     - name: Install nginx
       apt:
         name: nginx

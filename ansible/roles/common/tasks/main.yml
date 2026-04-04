@@ -1,0 +1,58 @@
+---
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Upgrade all packages
+  apt:
+    upgrade: safe
+
+- name: Install base packages
+  apt:
+    name:
+      - curl
+      - htop
+      - jq
+      - acl
+      - unattended-upgrades
+    state: present
+
+- name: Set timezone to UTC
+  timezone:
+    name: UTC
+
+- name: Ensure systemd-timesyncd is running
+  systemd:
+    name: systemd-timesyncd
+    enabled: yes
+    state: started
+
+- name: Install UFW
+  apt:
+    name: ufw
+    state: present
+
+- name: Set UFW default deny incoming
+  community.general.ufw:
+    direction: incoming
+    policy: deny
+  notify: Reload UFW
+
+- name: Set UFW default allow outgoing
+  community.general.ufw:
+    direction: outgoing
+    policy: allow
+  notify: Reload UFW
+
+- name: Allow configured ports through UFW
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop: "{{ common_allowed_ports }}"
+  notify: Reload UFW
+
+- name: Enable UFW
+  community.general.ufw:
+    state: enabled
