@@ -66,6 +66,9 @@
       <span class="text-accent text-xl font-bold tracking-tight">⬡ coin-ops</span>
       <span class="text-muted text-xs">Polymarket Intelligence</span>
     </div>
+    <div id="ticker-strip" class="flex items-center gap-4 text-xs font-mono">
+      <!-- Populated by JS -->
+    </div>
     <div class="flex items-center gap-4">
       <span id="last-updated" class="text-muted text-xs">–</span>
       <span id="status-dot" class="w-2 h-2 rounded-full bg-muted"></span>
@@ -143,8 +146,11 @@
     const PROXY_URL  = 'http://172.31.1.11:8080';
     const HISTORY_URL = 'http://172.31.1.10:8000';
     const REFRESH_MS  = 30_000; // auto-refresh live data every 30s
+    const PRICES_REFRESH_MS = 60_000; // refresh prices every 60s
 
     let refreshTimer = null;
+    let pricesTimer = null;
+    let sessionId = null;
 
     // ── Tab switching ─────────────────────────────────────────
     function switchTab(name) {
@@ -155,6 +161,7 @@
         'py-3 text-sm font-medium transition-colors ' + (isLive ? 'tab-active' : 'tab-inactive');
       document.getElementById('tab-history-btn').className =
         'py-3 text-sm font-medium transition-colors ' + (!isLive ? 'tab-active' : 'tab-inactive');
+      saveState();
     }
 
     // ── Utilities ─────────────────────────────────────────────
@@ -428,6 +435,65 @@
       return res.json();
     }
 
+    async function fetchPrices() {
+      const res = await fetch(PROXY_URL + '/prices');
+      if (!res.ok) throw new Error('prices ' + res.status);
+      return res.json();
+    }
+
+    function renderTicker(prices) {
+      const strip = document.getElementById('ticker-strip');
+      if (!prices || !prices.btc_usd) {
+        strip.innerHTML = '<span class="text-muted">Prices loading…</span>';
+        return;
+      }
+
+      function fmtPrice(v) {
+        if (v >= 1000) return '$' + v.toLocaleString(undefined, {maximumFractionDigits: 0});
+        return '$' + v.toFixed(2);
+      }
+
+      function fmtChange(v) {
+        if (v == null) return '';
+        const sign = v >= 0 ? '+' : '';
+        const color = v >= 0 ? 'text-yes' : 'text-no';
+        return `<span class="${color}">${sign}${v.toFixed(1)}%</span>`;
+      }
+
+      const coins = [
+        { label: 'BTC', price: prices.btc_usd, change: prices.btc_24h_change, coin: 'bitcoin' },
+        { label: 'ETH', price: prices.eth_usd, change: prices.eth_24h_change, coin: 'ethereum' },
+      ];
+
+      let html = coins.map(c =>
+        `<span class="cursor-pointer hover:text-accent transition-colors"
+               onclick="showPriceHistory('${c.coin}', '${c.label}')"
+               title="Click for price history">
+          ${c.label} <span class="text-gray-300">${fmtPrice(c.price)}</span> ${fmtChange(c.change)}
+        </span>`
+      ).join('<span class="text-border">|</span>');
+
+      if (prices.usd_uah > 0) {
+        html += `<span class="text-border">|</span>
+          <span class="cursor-pointer hover:text-accent transition-colors"
+                onclick="showPriceHistory('usd_uah', 'USD/UAH')"
+                title="Click for rate history">
+            USD/UAH <span class="text-gray-300">${prices.usd_uah.toFixed(2)}</span>
+          </span>`;
+      }
+
+      strip.innerHTML = html;
+    }
+
+    async function refreshPrices() {
+      try {
+        const prices = await fetchPrices();
+        renderTicker(prices);
+      } catch (err) {
+        console.error('Prices refresh failed:', err);
+      }
+    }
+
     async function fetchHistory(slug) {
       const url = slug
         ? HISTORY_URL + '/history/' + encodeURIComponent(slug) + '?limit=500'
@@ -463,6 +529,151 @@
       }
     }
 
+    async function fetchPriceHistory(coin) {
+      const url = HISTORY_URL + '/prices/history/' + encodeURIComponent(coin) + '?limit=500';
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('price history ' + res.status);
+      return res.json();
+    }
+
+    function renderPriceHistory(rows, label) {
+      const empty = document.getElementById('history-empty');
+      const wrap  = document.getElementById('history-chart-wrap');
+
+      if (!rows || rows.length === 0) {
+        empty.textContent = 'No price history yet. Data accumulates over time.';
+        empty.classList.remove('hidden');
+        wrap.classList.add('hidden');
+        return;
+      }
+
+      empty.classList.add('hidden');
+      wrap.classList.remove('hidden');
+
+      const sorted = [...rows].reverse();
+      const labels  = sorted.map(r => fmtDateTime(r.fetched_at));
+      const prices  = sorted.map(r => +parseFloat(r.price_usd).toFixed(2));
+
+      if (historyChart) {
+        historyChart.destroy();
+        historyChart = null;
+      }
+
+      const ctx = document.getElementById('history-chart').getContext('2d');
+      historyChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: label + ' (USD)',
+            data: prices,
+            borderColor: '#6366f1',
+            backgroundColor: 'rgba(99,102,241,0.08)',
+            borderWidth: 2,
+            pointRadius: rows.length > 100 ? 0 : 3,
+            pointHoverRadius: 5,
+            tension: 0.3,
+            fill: true,
+          }],
+        },
+        options: {
+          responsive: true,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: {
+              labels: { color: '#9ca3af', font: { family: 'monospace', size: 11 } }
+            },
+            tooltip: {
+              backgroundColor: '#141720',
+              borderColor: '#1e2433',
+              borderWidth: 1,
+              titleColor: '#9ca3af',
+              bodyColor: '#e5e7eb',
+              callbacks: {
+                label: ctx => ` ${ctx.dataset.label}: $${ctx.parsed.y.toLocaleString()}`
+              }
+            },
+          },
+          scales: {
+            x: {
+              ticks: {
+                color: '#4a5168',
+                font: { family: 'monospace', size: 10 },
+                maxTicksLimit: 8,
+                maxRotation: 0,
+              },
+              grid: { color: '#1e2433' },
+            },
+            y: {
+              ticks: {
+                color: '#4a5168',
+                font: { family: 'monospace', size: 10 },
+                callback: v => '$' + v.toLocaleString(),
+              },
+              grid: { color: '#1e2433' },
+            },
+          },
+        },
+      });
+    }
+
+    async function showPriceHistory(coin, label) {
+      document.getElementById('history-market-label').textContent = label + ' Price History';
+      switchTab('history');
+      document.getElementById('history-chart-wrap').classList.add('hidden');
+      document.getElementById('history-empty').classList.add('hidden');
+      try {
+        const rows = await fetchPriceHistory(coin);
+        renderPriceHistory(rows, label);
+      } catch (err) {
+        console.error('Price history load failed:', err);
+        const empty = document.getElementById('history-empty');
+        empty.textContent = 'Failed to load price history.';
+        empty.classList.remove('hidden');
+      }
+    }
+
+    // ── Session state (Redis via /state) ─────────────────────
+    function getSessionId() {
+      let sid = document.cookie.match(/coinops_sid=([^;]+)/)?.[1];
+      if (!sid) {
+        sid = crypto.randomUUID();
+        document.cookie = 'coinops_sid=' + sid + '; path=/; max-age=86400; SameSite=Lax';
+      }
+      return sid;
+    }
+
+    async function saveState() {
+      if (!sessionId) return;
+      const state = {
+        active_tab: document.getElementById('tab-live').classList.contains('hidden') ? 'history' : 'live',
+        history_label: document.getElementById('history-market-label').textContent,
+      };
+      try {
+        await fetch(PROXY_URL + '/state?sid=' + sessionId, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(state),
+        });
+      } catch (err) {
+        // Silent fail — state is nice-to-have
+      }
+    }
+
+    async function restoreState() {
+      if (!sessionId) return;
+      try {
+        const res = await fetch(PROXY_URL + '/state?sid=' + sessionId);
+        if (!res.ok) return;
+        const state = await res.json();
+        if (state.active_tab === 'history') {
+          switchTab('history');
+        }
+      } catch (err) {
+        // Silent fail
+      }
+    }
+
     function showMarketHistory(slug, question) {
       document.getElementById('history-market-label').textContent = question;
       switchTab('history');
@@ -477,8 +688,17 @@
       refreshTimer = setInterval(refreshAll, REFRESH_MS);
     }
 
+    function startPriceRefresh() {
+      clearInterval(pricesTimer);
+      pricesTimer = setInterval(refreshPrices, PRICES_REFRESH_MS);
+    }
+
+    sessionId = getSessionId();
     refreshAll();
+    refreshPrices();
+    restoreState();
     startAutoRefresh();
+    startPriceRefresh();
   </script>
 </body>
 </html>
