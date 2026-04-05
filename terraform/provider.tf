@@ -9,6 +9,9 @@ terraform {
   }
 }
 
+# NOTE: WinRM runs over unencrypted HTTP (port 5985).
+# This is acceptable for WSL-to-localhost connections only.
+# If connecting to a remote Hyper-V host, switch to HTTPS (https = true, port = 5986).
 provider "hyperv" {
   user     = var.winrm_user
   password = var.winrm_password

@@ -4,7 +4,9 @@ ethernets:
     dhcp4: false
     addresses:
       - 172.31.1.10/24
-    gateway4: 172.31.1.1
+    routes:
+      - to: default
+        via: 172.31.1.1
     nameservers:
       addresses:
         - 8.8.8.8

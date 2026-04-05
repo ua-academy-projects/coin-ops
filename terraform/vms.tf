@@ -15,16 +15,17 @@ resource "null_resource" "clone_node01" {
 resource "null_resource" "seed_node01" {
   provisioner "local-exec" {
     command = <<-EOT
-      mkdir -p ${var.seed_staging_wsl_path}/node-01
-      cp ${path.module}/cloud-init/node-01/user-data  ${var.seed_staging_wsl_path}/node-01/
-      cp ${path.module}/cloud-init/node-01/meta-data  ${var.seed_staging_wsl_path}/node-01/
-      cp ${path.module}/cloud-init/node-01/network-config ${var.seed_staging_wsl_path}/node-01/
-      sed -i "s|REPLACE_WITH_SSH_KEY|${var.ssh_public_key}|g" ${var.seed_staging_wsl_path}/node-01/user-data
-      genisoimage -output ${var.seed_staging_wsl_path}/node-01-seed.iso \
+      set -euo pipefail
+      mkdir -p "${var.seed_staging_wsl_path}/node-01"
+      cp "${path.module}/cloud-init/node-01/user-data"  "${var.seed_staging_wsl_path}/node-01/"
+      cp "${path.module}/cloud-init/node-01/meta-data"  "${var.seed_staging_wsl_path}/node-01/"
+      cp "${path.module}/cloud-init/node-01/network-config" "${var.seed_staging_wsl_path}/node-01/"
+      sed -i "s|REPLACE_WITH_SSH_KEY|${var.ssh_public_key}|g" "${var.seed_staging_wsl_path}/node-01/user-data"
+      genisoimage -output "${var.seed_staging_wsl_path}/node-01-seed.iso" \
         -volid cidata -joliet -rock \
-        ${var.seed_staging_wsl_path}/node-01/user-data \
-        ${var.seed_staging_wsl_path}/node-01/meta-data \
-        ${var.seed_staging_wsl_path}/node-01/network-config
+        "${var.seed_staging_wsl_path}/node-01/user-data" \
+        "${var.seed_staging_wsl_path}/node-01/meta-data" \
+        "${var.seed_staging_wsl_path}/node-01/network-config"
     EOT
     interpreter = ["bash", "-c"]
   }
@@ -49,12 +50,10 @@ resource "hyperv_machine_instance" "node_history" {
     controller_location = 0
   }
 
-  hard_disk_drives {
+  dvd_drives {
     path                = "${var.seed_staging_windows_path}\\node-01-seed.iso"
-    controller_type     = "Scsi"
     controller_number   = 0
     controller_location = 1
-    resource_pool_name  = "Primordial"
   }
 
   depends_on = [
@@ -63,7 +62,7 @@ resource "hyperv_machine_instance" "node_history" {
   ]
 }
 
-# ── Node 02: Proxy (Nginx reverse proxy) ──────────────────────────────────────
+# ── Node 02: Proxy (Go proxy + Redis) ────────────────────────────────────────
 
 resource "null_resource" "clone_node02" {
   provisioner "local-exec" {
@@ -80,16 +79,17 @@ resource "null_resource" "clone_node02" {
 resource "null_resource" "seed_node02" {
   provisioner "local-exec" {
     command = <<-EOT
-      mkdir -p ${var.seed_staging_wsl_path}/node-02
-      cp ${path.module}/cloud-init/node-02/user-data  ${var.seed_staging_wsl_path}/node-02/
-      cp ${path.module}/cloud-init/node-02/meta-data  ${var.seed_staging_wsl_path}/node-02/
-      cp ${path.module}/cloud-init/node-02/network-config ${var.seed_staging_wsl_path}/node-02/
-      sed -i "s|REPLACE_WITH_SSH_KEY|${var.ssh_public_key}|g" ${var.seed_staging_wsl_path}/node-02/user-data
-      genisoimage -output ${var.seed_staging_wsl_path}/node-02-seed.iso \
+      set -euo pipefail
+      mkdir -p "${var.seed_staging_wsl_path}/node-02"
+      cp "${path.module}/cloud-init/node-02/user-data"  "${var.seed_staging_wsl_path}/node-02/"
+      cp "${path.module}/cloud-init/node-02/meta-data"  "${var.seed_staging_wsl_path}/node-02/"
+      cp "${path.module}/cloud-init/node-02/network-config" "${var.seed_staging_wsl_path}/node-02/"
+      sed -i "s|REPLACE_WITH_SSH_KEY|${var.ssh_public_key}|g" "${var.seed_staging_wsl_path}/node-02/user-data"
+      genisoimage -output "${var.seed_staging_wsl_path}/node-02-seed.iso" \
         -volid cidata -joliet -rock \
-        ${var.seed_staging_wsl_path}/node-02/user-data \
-        ${var.seed_staging_wsl_path}/node-02/meta-data \
-        ${var.seed_staging_wsl_path}/node-02/network-config
+        "${var.seed_staging_wsl_path}/node-02/user-data" \
+        "${var.seed_staging_wsl_path}/node-02/meta-data" \
+        "${var.seed_staging_wsl_path}/node-02/network-config"
     EOT
     interpreter = ["bash", "-c"]
   }
@@ -114,12 +114,10 @@ resource "hyperv_machine_instance" "node_proxy" {
     controller_location = 0
   }
 
-  hard_disk_drives {
+  dvd_drives {
     path                = "${var.seed_staging_windows_path}\\node-02-seed.iso"
-    controller_type     = "Scsi"
     controller_number   = 0
     controller_location = 1
-    resource_pool_name  = "Primordial"
   }
 
   depends_on = [
@@ -145,16 +143,17 @@ resource "null_resource" "clone_node03" {
 resource "null_resource" "seed_node03" {
   provisioner "local-exec" {
     command = <<-EOT
-      mkdir -p ${var.seed_staging_wsl_path}/node-03
-      cp ${path.module}/cloud-init/node-03/user-data  ${var.seed_staging_wsl_path}/node-03/
-      cp ${path.module}/cloud-init/node-03/meta-data  ${var.seed_staging_wsl_path}/node-03/
-      cp ${path.module}/cloud-init/node-03/network-config ${var.seed_staging_wsl_path}/node-03/
-      sed -i "s|REPLACE_WITH_SSH_KEY|${var.ssh_public_key}|g" ${var.seed_staging_wsl_path}/node-03/user-data
-      genisoimage -output ${var.seed_staging_wsl_path}/node-03-seed.iso \
+      set -euo pipefail
+      mkdir -p "${var.seed_staging_wsl_path}/node-03"
+      cp "${path.module}/cloud-init/node-03/user-data"  "${var.seed_staging_wsl_path}/node-03/"
+      cp "${path.module}/cloud-init/node-03/meta-data"  "${var.seed_staging_wsl_path}/node-03/"
+      cp "${path.module}/cloud-init/node-03/network-config" "${var.seed_staging_wsl_path}/node-03/"
+      sed -i "s|REPLACE_WITH_SSH_KEY|${var.ssh_public_key}|g" "${var.seed_staging_wsl_path}/node-03/user-data"
+      genisoimage -output "${var.seed_staging_wsl_path}/node-03-seed.iso" \
         -volid cidata -joliet -rock \
-        ${var.seed_staging_wsl_path}/node-03/user-data \
-        ${var.seed_staging_wsl_path}/node-03/meta-data \
-        ${var.seed_staging_wsl_path}/node-03/network-config
+        "${var.seed_staging_wsl_path}/node-03/user-data" \
+        "${var.seed_staging_wsl_path}/node-03/meta-data" \
+        "${var.seed_staging_wsl_path}/node-03/network-config"
     EOT
     interpreter = ["bash", "-c"]
   }
@@ -179,12 +178,10 @@ resource "hyperv_machine_instance" "node_ui" {
     controller_location = 0
   }
 
-  hard_disk_drives {
+  dvd_drives {
     path                = "${var.seed_staging_windows_path}\\node-03-seed.iso"
-    controller_type     = "Scsi"
     controller_number   = 0
     controller_location = 1
-    resource_pool_name  = "Primordial"
   }
 
   depends_on = [
