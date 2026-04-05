@@ -3,7 +3,8 @@ import json
 import psycopg2
 import threading
 import time
-from flask import Flask, jsonify
+import redis
+from flask import Flask, jsonify, request
 from psycopg2.extras import RealDictCursor
 
 app = Flask(__name__)
@@ -16,6 +17,7 @@ DB_CONFIG = {
 }
 
 RABBITMQ_HOST = '192.168.56.104'
+redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
 
 def get_db():
     return psycopg2.connect(**DB_CONFIG)
@@ -85,6 +87,23 @@ def get_history():
     cur.close()
     conn.close()
     return jsonify([dict(r) for r in rows])
+
+@app.route('/favorites', methods=['GET'])
+def get_favorites():
+    # Читаємо список улюблених валют з Redis
+    favorites = redis_client.smembers('favorites')
+    return jsonify(list(favorites))
+
+@app.route('/favorites', methods=['POST'])
+def set_favorites():
+    # Зберігаємо список улюблених валют в Redis
+    data = request.get_json()
+    codes = data.get('codes', [])
+    # Очищаємо старий список і записуємо новий
+    redis_client.delete('favorites')
+    if codes:
+        redis_client.sadd('favorites', *codes)
+    return jsonify({'status': 'ok'})
 
 if __name__ == '__main__':
     t = threading.Thread(target=consume)
