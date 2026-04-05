@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   TrendingUp,
   History as HistoryIcon,
@@ -55,27 +55,32 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [prices, setPrices] = useState<Prices | null>(null);
+  const sidRef = useRef<string>('');
+  const isInitialLoad = useRef<boolean>(true);
 
   const loadData = async () => {
-    setIsLoading(true);
+    if (isInitialLoad.current) setIsLoading(true);
     try {
       const [marketsRes, whalesRes] = await Promise.all([
         fetch(PROXY_URL + '/current'),
         fetch(PROXY_URL + '/whales'),
       ]);
-      if (marketsRes.ok) setMarkets(await marketsRes.json());
-      if (whalesRes.ok) setWhales(await whalesRes.json());
+      if (marketsRes.ok) setMarkets(await marketsRes.json() as MarketSnapshot[]);
+      if (whalesRes.ok) setWhales(await whalesRes.json() as Whale[]);
     } catch {
       // backend unreachable — keep existing data
     } finally {
-      setIsLoading(false);
+      if (isInitialLoad.current) {
+        setIsLoading(false);
+        isInitialLoad.current = false;
+      }
     }
   };
 
   const loadPrices = async () => {
     try {
       const res = await fetch(PROXY_URL + '/prices');
-      if (res.ok) setPrices(await res.json());
+      if (res.ok) setPrices(await res.json() as Prices);
     } catch {
       // silent fail — prices are optional
     }
@@ -95,7 +100,7 @@ export default function App() {
     try {
       const res = await fetch(`${PROXY_URL}/state?sid=${sid}`);
       if (res.ok) {
-        const state = await res.json();
+        const state = await res.json() as { active_tab?: string };
         if (state.active_tab) setActiveTab(state.active_tab as typeof activeTab);
       }
     } catch { /* silent */ }
@@ -103,15 +108,14 @@ export default function App() {
 
   const handleTabSwitch = (tab: typeof activeTab) => {
     setActiveTab(tab);
-    const sid = getSessionId();
-    saveState(sid, tab);
+    saveState(sidRef.current, tab);
   };
 
   useEffect(() => {
-    const sid = getSessionId();
+    sidRef.current = getSessionId();
     loadData();
     loadPrices();
-    restoreState(sid);
+    restoreState(sidRef.current);
     const marketTimer = setInterval(loadData, REFRESH_MS);
     const priceTimer = setInterval(loadPrices, PRICES_REFRESH_MS);
     return () => {
@@ -132,7 +136,7 @@ export default function App() {
     handleTabSwitch('history');
     try {
       const res = await fetch(`${HISTORY_URL}/history/${market.slug}?limit=500`);
-      if (res.ok) setHistoryData(await res.json());
+      if (res.ok) setHistoryData(await res.json() as HistoryPoint[]);
     } catch {
       setHistoryData([]);
     }
@@ -596,7 +600,6 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, labe
 }
 
 interface MarketCardProps {
-  key?: string;
   market: MarketSnapshot;
   onClick: () => void;
 }
@@ -658,7 +661,6 @@ function MarketCard({ market, onClick }: MarketCardProps) {
 }
 
 interface WhaleRowProps {
-  key?: string;
   whale: Whale;
 }
 
