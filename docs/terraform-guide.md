@@ -88,7 +88,7 @@ Don't check it in. Don't share it over Slack. Treat it like a credential.
 
 Every Terraform workflow is some combination of three commands:
 
-**`terraform init`** — Downloads the providers listed in `required_providers`. Run this once after cloning the repo, and again whenever `provider.tf` changes. It creates `.terraform/` and `terraform.lock.hf` (the lock file for provider versions — commit this one).
+**`terraform init`** — Downloads the providers listed in `required_providers`. Run this once after cloning the repo, and again whenever `provider.tf` changes. It creates `.terraform/` and `terraform.lock.hcl` (the lock file for provider versions — commit this one).
 
 **`terraform plan`** — Reads your `.tf` files, compares against the state file, and prints a diff: `+` for things to create, `-` for things to destroy, `~` for things to modify. Nothing changes when you run plan. This is your review step. Never skip it.
 
@@ -98,7 +98,7 @@ Every Terraform workflow is some combination of three commands:
 
 Running `terraform apply` twice on a system that's already in the desired state does nothing. Resources in state that match the configuration are left alone. Only differences trigger changes. This is what makes Terraform safe to re-run: if something fails halfway through, fix it and re-run — Terraform picks up where things diverged.
 
-The `null_resource` blocks (like `null_resource.clone_node01`) are a partial exception: they run their `local-exec` provisioner every time the resource is created. But once they're in state, they don't re-run unless you `taint` them explicitly.
+The `null_resource` blocks (like `null_resource.clone_node01`) are a partial exception: they run their `local-exec` provisioner every time the resource is created. But once they're in state, they don't re-run unless you force-replace them with `terraform apply -replace=null_resource.seed_node01`.
 
 ---
 
@@ -121,6 +121,8 @@ ip route show default | awk '{print $3}'
 ```
 
 This prints the gateway address — which, from inside WSL, is always the Windows host. Do not use `127.0.0.1` or `localhost` in `terraform.tfvars` unless you're running Terraform directly on Windows (not in WSL).
+
+> **Note:** `variables.tf` sets `default = "127.0.0.1"` — this default is only correct if you run Terraform natively on Windows (not from WSL). WSL users must always set `winrm_host` explicitly in `terraform.tfvars`.
 
 ### The `taliesins/hyperv` Provider
 
@@ -301,8 +303,8 @@ Step 2: terraform plan
 Step 3: terraform apply
 Step 4: cloud-init runs on all three VMs (automatic, no command)
 Step 5: wait ~2 minutes
-Step 6: ansible-playbook provision.yml
-Step 7: ansible-playbook deploy.yml
+Step 6: ansible-playbook -i ansible/inventory ansible/provision.yml
+Step 7: ansible-playbook -i ansible/inventory ansible/deploy.yml
 Step 8: open browser at http://172.31.1.12
 ```
 
@@ -339,11 +341,11 @@ ssh vagrant@172.31.1.10
 
 If SSH connects and you get a prompt, cloud-init is done. If connection is refused, wait 30 more seconds and retry.
 
-**Step 6 — `ansible-playbook provision.yml`**
+**Step 6 — `ansible-playbook -i ansible/inventory ansible/provision.yml`**
 
 Ansible SSHes into all three VMs using the `vagrant` user (key-based auth, no password). It installs system packages: PostgreSQL and RabbitMQ on node-01, Go and Redis on node-02, nginx on node-03. It also creates the `cognitor` database user, the RabbitMQ user, and the database. This step is slow — apt downloads packages. Re-running it is safe (idempotent).
 
-**Step 7 — `ansible-playbook deploy.yml`**
+**Step 7 — `ansible-playbook -i ansible/inventory ansible/deploy.yml`**
 
 This playbook has four plays:
 1. Deploy the Go proxy service to node-02.
@@ -621,7 +623,7 @@ terraform import hyperv_machine_instance.node_proxy softserve-node-02
 terraform import hyperv_machine_instance.node_ui softserve-node-03
 ```
 
-This is tedious and doesn't cover `null_resource` blocks (which can't be imported). After importing, you'll still need to `taint` the null_resources if you want them to re-run.
+This is tedious and doesn't cover `null_resource` blocks (which can't be imported). After importing, you'll still need to force-replace the null_resources if you want them to re-run — use `terraform apply -replace=<resource>` for each one. Note: `terraform taint` was removed in Terraform 1.0+ — the modern equivalent is `terraform apply -replace=<resource>`.
 
 **Option B — Destroy manually and re-apply.** Delete the VMs in Hyper-V Manager, delete the VHD directories from Windows Explorer, delete the ISOs, then run `terraform apply` fresh. This is the clean path when Option A is too painful.
 
