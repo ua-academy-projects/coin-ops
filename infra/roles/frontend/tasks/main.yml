@@ -23,6 +23,14 @@
     enabled: yes
     state: started
 
+- name: Generate frontend environment file
+  template:
+    src: frontend.env.j2
+    dest: /home/vagrant/shared_folder/frontend/frontend.env
+    owner: vagrant
+    mode: "0600"
+  notify: Restart Frontend
+
 - name: Copy frontend systemd unit file to remote host
   copy:
     src: frontend.service

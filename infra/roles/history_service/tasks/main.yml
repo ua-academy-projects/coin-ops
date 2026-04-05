@@ -16,6 +16,14 @@
     virtualenv: /home/vagrant/venv
     virtualenv_command: /usr/bin/python3 -m venv
 
+- name: Generate history_service environment file
+  template:
+    src: history_service.env.j2
+    dest: /home/vagrant/shared_folder/history_service/history_service.env
+    owner: vagrant
+    mode: "0600"
+  notify: Restart History Service
+
 - name: Copy history_service systemd unit file to remote host
   copy:
     src: history_service.service

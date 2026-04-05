@@ -1,4 +1,5 @@
 .vagrant/
+.vault_pass
 
 __pycache__/
 venv/

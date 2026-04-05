@@ -4,9 +4,9 @@
   apt:
     name:
       - postgresql
+      - python3-psycopg2
     state: present
     update_cache: yes
-  become: yes
 
 - name: Allow PostgreSQL to listen on all interfaces
   lineinfile:
@@ -28,40 +28,35 @@
 - name: Apply PostgreSQL config before local init
   meta: flush_handlers
 
-# LEGACY
-- name: Copy database init files to tmp
-  copy:
-    src: "/home/vagrant/shared_folder/database/{{ item }}"
-    dest: "/tmp/{{ item }}"
-    mode: "0644"
-    remote_src: yes
-  loop:
-    - database.env
-    - init.sql
-
-# database.env містить PGHOST для клієнтів; для init треба сокет postgres, інакше psql йде на TCP і отримує connection refused
-- name: Initialize database
-  shell: |
-    set -e
-    PGUSER_APP=$(grep -E '^[[:space:]]*PGUSER=' /tmp/database.env | head -1 | cut -d= -f2- | tr -d '"\r' | xargs)
-    PGPASS_APP=$(grep -E '^[[:space:]]*PGPASSWORD=' /tmp/database.env | head -1 | cut -d= -f2- | tr -d '"\r' | xargs)
-    unset PGHOST PGPORT PGDATABASE PGUSER PGPASSWORD
-    psql -d postgres \
-      -v user_name="$PGUSER_APP" \
-      -v user_password="'$PGPASS_APP'" \
-      -f /tmp/init.sql
-  args:
-    executable: /bin/bash
+- name: Create database user
+  postgresql_user:
+    name: "{{ pg_user }}"
+    password: "{{ pg_password }}"
+    state: present
   become: yes
   become_user: postgres
 
-- name: Clean up temporary database files
-  file:
-    path: "/tmp/{{ item }}"
-    state: absent
-  loop:
-    - database.env
-    - init.sql
+- name: Create database
+  postgresql_db:
+    name: "{{ pg_database }}"
+    owner: "{{ pg_user }}"
+    state: present
+  become: yes
+  become_user: postgres
+
+- name: Generate database initialization SQL from template
+  template:
+    src: init.sql.j2
+    dest: /tmp/init.sql
+    owner: postgres
+    mode: "0600"
+  become: yes
+  become_user: postgres
+
+- name: Apply database schema and tables
+  command: psql -d {{ pg_database }} -f /tmp/init.sql
+  become: yes
+  become_user: postgres
 
 - name: Start PostgreSQL service
   systemd:

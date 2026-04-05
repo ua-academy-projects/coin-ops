@@ -24,6 +24,7 @@ Vagrant.configure("2") do |config|
         ansible.playbook = "infra/playbook.yml"
         ansible.galaxy_role_file = "infra/requirements.yml"
         ansible.galaxy_command = "ansible-galaxy collection install -r %{role_file}"
+        ansible.vault_password_file = ".vault_pass"
       end
     end
   end

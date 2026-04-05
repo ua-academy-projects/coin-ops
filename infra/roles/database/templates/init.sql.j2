@@ -2,12 +2,7 @@
 -- Run on the database VM (VM5) as superuser, e.g.: sudo -u postgres psql -v ... -f init.sql
 -- Use a strong password in production (see database.env / secrets, not committed defaults).
 
-CREATE USER :user_name WITH PASSWORD :user_password;
-CREATE DATABASE coinops_db OWNER :user_name;
-GRANT ALL PRIVILEGES ON DATABASE coinops_db TO :user_name;
-
--- The following meta-commands require psql (not plain libpq batch without psql).
-\c coinops_db
+GRANT ALL PRIVILEGES ON DATABASE coinops_db TO {{ pg_user }};
 
 -- Historical snapshots written by the history service from the proxy JSON.
 -- snapshot_event_id matches envelope event_id (proxy publisher); UNIQUE enables idempotent replays.
@@ -33,8 +28,8 @@ CREATE INDEX IF NOT EXISTS idx_exchange_rates_symbol_created
 CREATE INDEX IF NOT EXISTS idx_exchange_rates_symbol_type_created_desc
   ON exchange_rates (asset_symbol, asset_type, created_at DESC);
 
-GRANT USAGE ON SCHEMA public TO :user_name;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO :user_name;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO :user_name;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO :user_name;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO :user_name;
+GRANT USAGE ON SCHEMA public TO {{ pg_user }};
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {{ pg_user }};
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO {{ pg_user }};
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {{ pg_user }};
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO {{ pg_user }};
