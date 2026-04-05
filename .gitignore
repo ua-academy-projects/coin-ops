@@ -17,3 +17,19 @@ docs/superpowers/
 proxy/proxy
 
 scripts
+
+# Terraform
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/terraform.tfvars
+terraform/keys/
+
+# React build output
+ui-react/dist/
+ui-react/node_modules/
+ui-react/.env
+
+# Source zip
+coin-ops-intelligence.zip

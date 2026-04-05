@@ -1,0 +1,21 @@
+# Copy to terraform.tfvars and fill in your values
+# NEVER commit terraform.tfvars — it contains your Windows password
+
+winrm_user     = "YourWindowsUsername"
+winrm_password = "YourWindowsPassword"
+
+# Windows host IP from WSL — run: ip route show default | awk '{print $3}'
+winrm_host     = "172.20.0.1"
+
+# Download from: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.vhd
+base_vhd_path  = "C:\\HyperV\\images\\ubuntu-24.04-cloud.vhd"
+
+vm_storage_path            = "C:\\HyperV\\vms"
+seed_staging_windows_path  = "C:\\HyperV\\seed"
+seed_staging_wsl_path      = "/mnt/c/HyperV/seed"
+
+# Paste your public key (cat ~/.ssh/id_rsa.pub)
+ssh_public_key = "ssh-rsa AAAA..."
+
+vm_memory_mb   = 2048
+vm_processors  = 2

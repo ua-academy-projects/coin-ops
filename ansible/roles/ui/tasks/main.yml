@@ -7,13 +7,13 @@
     group: www-data
     mode: '0755'
 
-- name: Deploy index.html
-  copy:
-    src: "{{ playbook_dir }}/../ui/index.html"
-    dest: /var/www/coin-ops/index.html
-    owner: www-data
-    group: www-data
-    mode: '0644'
+- name: Sync React dist/ to web root
+  synchronize:
+    src: "{{ playbook_dir }}/../ui-react/dist/"
+    dest: /var/www/coin-ops/
+    delete: yes
+    recursive: yes
+  delegate_to: localhost
   notify: Reload nginx
 
 - name: Deploy nginx site config

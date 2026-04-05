@@ -1,0 +1,17 @@
+#cloud-config
+users:
+  - name: vagrant
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    lock_passwd: true
+    ssh_authorized_keys:
+      - REPLACE_WITH_SSH_KEY
+
+package_update: true
+packages:
+  - openssh-server
+  - python3
+
+runcmd:
+  - systemctl enable ssh
+  - systemctl start ssh
