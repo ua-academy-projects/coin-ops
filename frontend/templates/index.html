@@ -300,6 +300,34 @@
 <script>
     document.getElementById('update-time').textContent = '⟳ ' + new Date().toLocaleTimeString('uk-UA');
 
+    // Список улюблених валют з Redis (передав Flask)
+    const favorites = {{ favorites | tojson }};
+
+    // При завантаженні сторінки — відмічаємо чекбокси які збережені в Redis
+    document.querySelectorAll('.fav-check').forEach(cb => {
+        if (favorites.includes(cb.dataset.code)) {
+            cb.checked = true;
+        }
+    });
+
+    // При кліку на будь-який чекбокс — зберігаємо весь список в Redis
+    document.querySelectorAll('.fav-check').forEach(cb => {
+        cb.addEventListener('change', () => {
+            // Збираємо всі відмічені чекбокси
+            const selected = [];
+            document.querySelectorAll('.fav-check:checked').forEach(c => {
+                selected.push(c.dataset.code);
+            });
+
+            // Відправляємо в Flask → consumer → Redis
+            fetch('/api/favorites', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({codes: selected})
+            });
+        });
+    });
+
     function convert() {
         const amount = parseFloat(document.getElementById('conv-amount').value);
         const rate = parseFloat(document.getElementById('conv-currency').value);

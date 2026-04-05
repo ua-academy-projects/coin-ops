@@ -442,7 +442,8 @@
 
         let currentType = 'all';
         let currentHours = {{ current_hours }};
-        let activeCurrencies = new Set();
+        const savedFavorites = {{ favorites | tojson }};
+        let activeCurrencies = new Set(savedFavorites);
         let chart = null;
 
         function isCrypto(cc) { return CRYPTO_CODES.has(cc); }
@@ -476,6 +477,11 @@
             if (activeCurrencies.size === 0 && codes.length > 0) {
                 const defaults = codes.slice(0, 3);
                 defaults.forEach(c => activeCurrencies.add(c));
+            } else {
+                // Прибираємо валюти яких немає в поточних даних
+                activeCurrencies.forEach(c => {
+                    if (!codes.includes(c)) activeCurrencies.delete(c);
+                });
             }
             codes.forEach((code, i) => {
                 const color = COLORS[i % COLORS.length];
