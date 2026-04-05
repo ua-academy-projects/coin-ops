@@ -16,6 +16,23 @@
   roles:
     - history
 
+- name: Build React UI (local)
+  hosts: localhost
+  connection: local
+  tasks:
+    - name: Install npm dependencies
+      command: npm ci
+      args:
+        chdir: "{{ playbook_dir }}/../ui-react"
+
+    - name: Build React app
+      command: npm run build
+      args:
+        chdir: "{{ playbook_dir }}/../ui-react"
+      environment:
+        VITE_PROXY_URL: "http://172.31.1.11:8080"
+        VITE_HISTORY_URL: "http://172.31.1.10:8000"
+
 - name: Deploy Web UI (node-03)
   hosts: ui
   become: yes
