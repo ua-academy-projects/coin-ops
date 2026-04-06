@@ -82,10 +82,37 @@
   hosts: proxy
   become: yes
   tasks:
-    - name: Install Go
+    - name: Remove apt-installed Go (too old for go-redis v9)
       apt:
-        name: golang-go
-        state: present
+        name:
+          - golang-go
+          - golang-src
+        state: absent
+        purge: yes
+      ignore_errors: yes
+
+    - name: Download Go 1.22 binary
+      get_url:
+        url: https://go.dev/dl/go1.22.1.linux-amd64.tar.gz
+        dest: /tmp/go.tar.gz
+        checksum: sha256:aab8e15785c997ae20f9c88422fe35e4be9a4184c4b8c703860c8f37bbefb847
+
+    - name: Remove old Go installation
+      file:
+        path: /usr/local/go
+        state: absent
+
+    - name: Extract Go to /usr/local
+      unarchive:
+        src: /tmp/go.tar.gz
+        dest: /usr/local
+        remote_src: yes
+
+    - name: Add Go to system PATH
+      copy:
+        dest: /etc/profile.d/go.sh
+        content: 'export PATH=$PATH:/usr/local/go/bin'
+        mode: '0755'
 
     - name: Install Redis
       apt:

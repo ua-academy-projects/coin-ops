@@ -33,21 +33,23 @@
       - "--exclude=*.exe"
 
 - name: Download Go module dependencies
-  command: go mod download
+  command: /usr/local/go/bin/go mod download
   args:
     chdir: /opt/cognitor/proxy
   environment:
     HOME: /root
     GOPATH: /root/go
+    PATH: /usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
   changed_when: false
 
 - name: Build proxy binary
-  command: go build -mod=mod -o /opt/cognitor/proxy/proxy .
+  command: /usr/local/go/bin/go build -mod=mod -o /opt/cognitor/proxy/proxy .
   args:
     chdir: /opt/cognitor/proxy
   environment:
     HOME: /root
     GOPATH: /root/go
+    PATH: /usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
   notify: Reload and restart proxy
 
 - name: Set binary owner and permissions

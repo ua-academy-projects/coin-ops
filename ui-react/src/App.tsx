@@ -55,6 +55,8 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [prices, setPrices] = useState<Prices | null>(null);
+  const [priceHistoryData, setPriceHistoryData] = useState<PriceHistory[]>([]);
+  const [activePriceCoin, setActivePriceCoin] = useState<string | null>(null);
   const sidRef = useRef<string>('');
   const isInitialLoad = useRef<boolean>(true);
 
@@ -84,6 +86,15 @@ export default function App() {
     } catch {
       // silent fail — prices are optional
     }
+  };
+
+  const openPriceChart = async (coin: string) => {
+    setActivePriceCoin(coin);
+    setPriceHistoryData([]);
+    try {
+      const res = await fetch(`${HISTORY_URL}/prices/history/${coin}?limit=200`);
+      if (res.ok) setPriceHistoryData(await res.json() as PriceHistory[]);
+    } catch { /* silent */ }
   };
 
   const saveState = async (sid: string, tab: string) => {
@@ -144,6 +155,13 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-transparent overflow-hidden relative">
+      {activePriceCoin && (
+        <PriceChartModal
+          coin={activePriceCoin}
+          data={priceHistoryData}
+          onClose={() => setActivePriceCoin(null)}
+        />
+      )}
       {/* Decorative Background Elements */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-accent/20 rounded-full blur-[120px] -z-10 animate-pulse" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-500/10 rounded-full blur-[120px] -z-10" />
@@ -220,21 +238,30 @@ export default function App() {
 
           {prices && (
             <div className="hidden md:flex items-center gap-4 text-xs font-mono">
-              <span className="text-zinc-400">
+              <button
+                className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                onClick={() => openPriceChart('bitcoin')}
+              >
                 BTC <span className="text-white font-bold">${prices.btc_usd.toLocaleString()}</span>
                 <span className={prices.btc_24h_change >= 0 ? 'text-yes ml-1' : 'text-no ml-1'}>
                   {prices.btc_24h_change >= 0 ? '+' : ''}{prices.btc_24h_change.toFixed(2)}%
                 </span>
-              </span>
-              <span className="text-zinc-400">
+              </button>
+              <button
+                className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                onClick={() => openPriceChart('ethereum')}
+              >
                 ETH <span className="text-white font-bold">${prices.eth_usd.toLocaleString()}</span>
                 <span className={prices.eth_24h_change >= 0 ? 'text-yes ml-1' : 'text-no ml-1'}>
                   {prices.eth_24h_change >= 0 ? '+' : ''}{prices.eth_24h_change.toFixed(2)}%
                 </span>
-              </span>
-              <span className="text-zinc-400">
+              </button>
+              <button
+                className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                onClick={() => openPriceChart('usd_uah')}
+              >
                 UAH <span className="text-white font-bold">&#8372;{prices.usd_uah.toFixed(2)}</span>
-              </span>
+              </button>
             </div>
           )}
 
@@ -747,6 +774,78 @@ function Badge({ label, variant }: { label: string, variant: 'accent' | 'surface
     )}>
       {label}
     </span>
+  );
+}
+
+const COIN_LABELS: Record<string, string> = {
+  bitcoin: 'Bitcoin (BTC)',
+  ethereum: 'Ethereum (ETH)',
+  usd_uah: 'USD / UAH',
+};
+
+function PriceChartModal({ coin, data, onClose }: {
+  coin: string;
+  data: PriceHistory[];
+  onClose: () => void;
+}) {
+  const label = COIN_LABELS[coin] ?? coin;
+  const isUAH = coin === 'usd_uah';
+  const chartData = data.map(p => ({
+    time: new Date(p.fetched_at).toLocaleDateString(),
+    price: p.price_usd,
+  }));
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="glass rounded-2xl p-6 w-full max-w-2xl mx-4"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-bold">{label} — Price History</h2>
+          <button
+            className="text-muted hover:text-white transition-colors text-lg leading-none"
+            onClick={onClose}
+          >
+            ✕
+          </button>
+        </div>
+
+        {data.length === 0 ? (
+          <div className="h-48 flex items-center justify-center text-muted text-sm">
+            Loading chart data…
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={260}>
+            <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+              <defs>
+                <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <XAxis dataKey="time" tick={{ fontSize: 10, fill: '#71717a' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+              <YAxis
+                tick={{ fontSize: 10, fill: '#71717a' }}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={v => isUAH ? `₴${v.toFixed(1)}` : `$${v.toLocaleString()}`}
+                width={isUAH ? 50 : 70}
+              />
+              <Tooltip
+                contentStyle={{ background: '#0f0f0f', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
+                formatter={(v: number) => [isUAH ? `₴${v.toFixed(2)}` : `$${v.toLocaleString()}`, 'Price']}
+              />
+              <Area type="monotone" dataKey="price" stroke="#6366f1" strokeWidth={2} fill="url(#priceGrad)" dot={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </div>
   );
 }
 

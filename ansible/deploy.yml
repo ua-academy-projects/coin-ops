@@ -19,19 +19,37 @@
 - name: Build React UI (local)
   hosts: localhost
   connection: local
+  vars:
+    proxy_ip: "{{ hostvars[groups['proxy'][0]]['ansible_host'] | default('172.31.1.11') }}"
+    history_ip: "{{ hostvars[groups['history'][0]]['ansible_host'] | default('172.31.1.10') }}"
   tasks:
-    - name: Install npm dependencies
+    - name: Write .env from inventory
+      copy:
+        content: |
+          VITE_PROXY_URL=http://{{ proxy_ip }}:{{ proxy_port }}
+          VITE_HISTORY_URL=http://{{ history_ip }}:{{ history_port }}
+        dest: "{{ playbook_dir }}/../ui-react/.env"
+
+    - name: Check node_modules freshness
+      stat:
+        path: "{{ playbook_dir }}/../ui-react/node_modules/.package-lock.json"
+      register: nm_lock
+
+    - name: Check package-lock.json mtime
+      stat:
+        path: "{{ playbook_dir }}/../ui-react/package-lock.json"
+      register: pkg_lock
+
+    - name: Install npm dependencies (only when package-lock.json changed)
       command: npm ci
       args:
         chdir: "{{ playbook_dir }}/../ui-react"
+      when: not nm_lock.stat.exists or pkg_lock.stat.mtime > nm_lock.stat.mtime
 
     - name: Build React app
       command: npm run build
       args:
         chdir: "{{ playbook_dir }}/../ui-react"
-      environment:
-        VITE_PROXY_URL: "http://172.31.1.11:8080"
-        VITE_HISTORY_URL: "http://172.31.1.10:8000"
 
 - name: Deploy Web UI (node-03)
   hosts: ui

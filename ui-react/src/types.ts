@@ -44,6 +44,7 @@ export interface Prices {
 }
 
 export interface PriceHistory {
-  price_usd: string;
+  price_usd: number;
+  change_24h: number | null;
   fetched_at: string;
 }
