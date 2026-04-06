@@ -295,6 +295,11 @@ Error: [ERROR][hyperv][create] Either dynamic or static must be selected
 ```hcl
 static_memory = true   # not dynamic_memory = false
 
+vm_firmware {
+  enable_secure_boot   = "On"    # not true — provider expects "On"/"Off" strings
+  secure_boot_template = "MicrosoftUEFICertificateAuthority"
+}
+
 network_adaptors {
   name                = "eth0"
   switch_name         = hyperv_network_switch.internal.name

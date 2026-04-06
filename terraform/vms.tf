@@ -53,7 +53,7 @@ resource "hyperv_machine_instance" "node" {
   static_memory        = true
 
   vm_firmware {
-    enable_secure_boot   = true
+    enable_secure_boot   = "On"
     secure_boot_template = "MicrosoftUEFICertificateAuthority"
   }
 
