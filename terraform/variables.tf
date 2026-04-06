@@ -23,19 +23,19 @@ variable "base_vhd_path" {
 variable "vm_storage_path" {
   description = "Windows path where VM VHDs will be created"
   type        = string
-  default     = "C:\\HyperV\\vms"
+  default     = "F:\\univ\\softserv-internship\\hyper-v\\vms"
 }
 
 variable "seed_staging_windows_path" {
-  description = "Windows path (accessible via /mnt) where cloud-init ISOs will be staged before attaching to VMs. E.g. C:\\HyperV\\seed maps to /mnt/c/HyperV/seed in WSL"
+  description = "Windows path where cloud-init ISOs are staged (same location as seed_staging_wsl_path but Windows notation)"
   type        = string
-  default     = "C:\\HyperV\\seed"
+  default     = "F:\\univ\\softserv-internship\\hyper-v\\seed"
 }
 
 variable "seed_staging_wsl_path" {
-  description = "The same path as seed_staging_windows_path but in WSL notation. E.g. /mnt/c/HyperV/seed"
+  description = "WSL path to the same seed staging directory (e.g. /mnt/f/univ/softserv-internship/hyper-v/seed)"
   type        = string
-  default     = "/mnt/c/HyperV/seed"
+  default     = "/mnt/f/univ/softserv-internship/hyper-v/seed"
 }
 
 variable "ssh_public_key" {
