@@ -1,0 +1,14 @@
+# React
+coin-rates-ui/node_modules/
+coin-rates-ui/dist/
+
+# Go binary
+history_service/history_service
+
+# Python
+__pycache__/
+*.pyc
+ui_env/
+
+# Ansible files folder (code is already in service folders)
+ansible/files/

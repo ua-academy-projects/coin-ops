@@ -1,0 +1,32 @@
+---
+- name: Setup RabbitMQ Message Queue
+  hosts: queue
+  become: true
+
+  tasks:
+    - name: Install RabbitMQ
+      apt:
+        name: rabbitmq-server
+        state: present
+        update_cache: yes
+
+    - name: Ensure RabbitMQ is running
+      service:
+        name: rabbitmq-server
+        state: started
+        enabled: yes
+
+    - name: Create proxy_user
+      shell: sudo rabbitmqctl add_user proxy_user proxy_password || true
+
+    - name: Create history_user
+      shell: sudo rabbitmqctl add_user history_user history_password || true
+
+    - name: Set proxy_user permissions
+      shell: sudo rabbitmqctl set_permissions -p / proxy_user ".*" ".*" ""
+
+    - name: Set history_user permissions
+      shell: sudo rabbitmqctl set_permissions -p / history_user ".*" "" ".*"
+
+    - name: Delete guest user
+      shell: sudo rabbitmqctl delete_user guest || true

@@ -1,0 +1,63 @@
+---
+- name: Setup UI Service
+  hosts: ui
+  become: true
+
+  tasks:
+    - name: Install Python3 and pip
+      apt:
+        name:
+          - python3
+          - python3-pip
+          - python3-venv
+        state: present
+        update_cache: yes
+
+    - name: Install Python dependencies in virtualenv
+      pip:
+        name:
+          - flask
+          - psycopg2-binary
+        state: present
+        virtualenv: /home/penina/ui_env
+        virtualenv_command: python3 -m venv
+
+    - name: Create ui_service directory
+      file:
+        path: /home/penina/ui_service
+        state: directory
+        owner: penina
+        group: penina
+
+    - name: Copy UI app.py
+      copy:
+        src: ../files/ui/app.py
+        dest: /home/penina/ui_service/app.py
+        owner: penina
+        group: penina
+
+    - name: Create systemd service file
+      copy:
+        dest: /etc/systemd/system/ui-service.service
+        content: |
+          [Unit]
+          Description=UI Service
+          After=network.target
+
+          [Service]
+          Type=simple
+          User=penina
+          WorkingDirectory=/home/penina/ui_service
+          ExecStart=/home/penina/ui_env/bin/python3 /home/penina/ui_service/app.py
+          Restart=always
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Enable and start UI service
+      systemd:
+        name: ui-service
+        enabled: yes
+        state: started
+        daemon_reload: yes

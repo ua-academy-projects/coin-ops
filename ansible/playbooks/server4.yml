@@ -1,0 +1,73 @@
+---
+- name: Setup History Service
+  hosts: history
+  become: true
+
+  tasks:
+    - name: Install Go
+      apt:
+        name: golang
+        state: present
+        update_cache: yes
+
+    - name: Create history_service directory
+      file:
+        path: /home/penina/history_service
+        state: directory
+        owner: penina
+        group: penina
+
+    - name: Copy main.go
+      copy:
+        src: ../files/history/main.go
+        dest: /home/penina/history_service/main.go
+        owner: penina
+        group: penina
+
+    - name: Copy go.mod
+      copy:
+        src: ../files/history/go.mod
+        dest: /home/penina/history_service/go.mod
+        owner: penina
+        group: penina
+
+    - name: Copy go.sum
+      copy:
+        src: ../files/history/go.sum
+        dest: /home/penina/history_service/go.sum
+        owner: penina
+        group: penina
+
+    - name: Download Go dependencies
+      shell: cd /home/penina/history_service && go mod download
+      become_user: penina
+
+    - name: Build history service
+      shell: cd /home/penina/history_service && go build -o history_service main.go
+      become_user: penina
+
+    - name: Create systemd service file
+      copy:
+        dest: /etc/systemd/system/history-service.service
+        content: |
+          [Unit]
+          Description=History Service
+          After=network.target
+
+          [Service]
+          Type=simple
+          User=penina
+          WorkingDirectory=/home/penina/history_service
+          ExecStart=/home/penina/history_service/history_service
+          Restart=always
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Enable and start history service
+      systemd:
+        name: history-service
+        enabled: yes
+        state: started
+        daemon_reload: yes

@@ -1,0 +1,25 @@
+---
+- name: Setup PostgreSQL Database Server
+  hosts: database
+  become: true
+
+  tasks:
+    - name: Install PostgreSQL
+      apt:
+        name: postgresql
+        state: present
+        update_cache: yes
+
+    - name: Ensure PostgreSQL is running
+      service:
+        name: postgresql
+        state: started
+        enabled: yes
+
+    - name: Create history_user and database
+      shell: |
+        sudo -u postgres psql -c "CREATE USER history_user WITH PASSWORD 'history_password';" || true
+        sudo -u postgres psql -c "CREATE DATABASE coin_rates OWNER postgres;" || true
+        sudo -u postgres psql -c "GRANT CONNECT ON DATABASE coin_rates TO history_user;" || true
+      args:
+        executable: /bin/bash

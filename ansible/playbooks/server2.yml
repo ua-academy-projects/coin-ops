@@ -1,0 +1,63 @@
+---
+- name: Setup Proxy Service
+  hosts: proxy
+  become: true
+
+  tasks:
+    - name: Install Python3 and pip
+      apt:
+        name:
+          - python3
+          - python3-pip
+        state: present
+        update_cache: yes
+
+    - name: Install Python dependencies
+      pip:
+        name:
+          - flask
+          - flask-cors
+          - requests
+          - pika
+        state: present
+        executable: pip3
+
+    - name: Create proxy_service directory
+      file:
+        path: /home/vagrant/proxy_service
+        state: directory
+        owner: vagrant
+        group: vagrant
+
+    - name: Copy proxy app.py
+      copy:
+        src: ../files/proxy/app.py
+        dest: /home/vagrant/proxy_service/app.py
+        owner: vagrant
+        group: vagrant
+
+    - name: Create systemd service file
+      copy:
+        dest: /etc/systemd/system/proxy-service.service
+        content: |
+          [Unit]
+          Description=Proxy Service
+          After=network.target
+
+          [Service]
+          Type=simple
+          User=vagrant
+          WorkingDirectory=/home/vagrant/proxy_service
+          ExecStart=/usr/bin/python3 /home/vagrant/proxy_service/app.py
+          Restart=always
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Enable and start proxy service
+      systemd:
+        name: proxy-service
+        enabled: yes
+        state: started
+        daemon_reload: yes
