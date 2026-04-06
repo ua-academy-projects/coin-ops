@@ -17,6 +17,11 @@ build/
 .mypy_cache/
 .ruff_cache/
 api-proxy/.venv/
+ui/.venv/
+
+# ── Go binaries ──────────────────────────────
+api-proxy/api-proxy
+history-service/history-service
 
 # ── Node / UI ────────────────────────────────
 ui/node_modules/

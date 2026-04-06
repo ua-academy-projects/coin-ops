@@ -15,13 +15,13 @@
       padding: 2rem 1rem;
     }
 
-    .app { max-width: 860px; margin: 0 auto; }
+    .app { max-width: 960px; margin: 0 auto; }
 
     .header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 2rem;
+      margin-bottom: 1.5rem;
     }
 
     h1 { font-size: 1.6rem; font-weight: 700; }
@@ -44,10 +44,54 @@
       border-radius: 50%;
     }
 
+    /* --- tabs --- */
+    .tabs {
+      display: flex;
+      gap: 0.25rem;
+      margin-bottom: 1.5rem;
+      border-bottom: 1px solid #2d3748;
+    }
+
+    .tab {
+      padding: 0.55rem 1.2rem;
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: #64748b;
+      text-decoration: none;
+      border-radius: 6px 6px 0 0;
+      border: 1px solid transparent;
+      border-bottom: none;
+      margin-bottom: -1px;
+    }
+
+    .tab:hover { color: #cbd5e1; }
+
+    .tab.active {
+      color: #e2e8f0;
+      background: #1e2330;
+      border-color: #2d3748;
+    }
+
+    /* --- controls --- */
     .controls {
       display: flex;
+      flex-wrap: wrap;
       gap: 0.75rem;
       margin-bottom: 1.5rem;
+      align-items: flex-end;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .control-group label {
+      font-size: 0.75rem;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
 
     select, button {
@@ -60,6 +104,16 @@
       cursor: pointer;
     }
 
+    select[multiple] {
+      height: auto;
+      min-height: 2.4rem;
+      padding: 0.3rem 0.5rem;
+    }
+
+    select[multiple] option {
+      padding: 0.2rem 0.4rem;
+    }
+
     button {
       background: #3b82f6;
       border-color: #3b82f6;
@@ -68,6 +122,14 @@
 
     button:hover { background: #2563eb; }
 
+    .hint {
+      font-size: 0.78rem;
+      color: #475569;
+      align-self: flex-end;
+      padding-bottom: 0.5rem;
+    }
+
+    /* --- feedback states --- */
     .error-box {
       background: #2d1a1a;
       border: 1px solid #7f1d1d;
@@ -85,6 +147,7 @@
 
     .empty-icon { font-size: 3rem; margin-bottom: 0.75rem; }
 
+    /* --- table --- */
     .table-card {
       background: #1e2330;
       border: 1px solid #2d3748;
@@ -141,54 +204,138 @@
       </span>
     </div>
 
-    <form method="get" class="controls">
-      <select name="cc">
-        <option value="" {% if not cc %}selected{% endif %}>All currencies</option>
-        {% for code in ["USD","EUR","GBP","PLN","CHF","JPY","CNY","CAD"] %}
-          <option value="{{ code }}" {% if cc == code %}selected{% endif %}>{{ code }}</option>
-        {% endfor %}
-      </select>
-      <button type="submit">Fetch Rates</button>
-    </form>
+    <div class="tabs">
+      <a href="/" class="tab {% if view == 'rates' %}active{% endif %}">Current Rates</a>
+      <a href="/history" class="tab {% if view == 'history' %}active{% endif %}">History</a>
+    </div>
 
-    {% if error %}
-      <div class="error-box">⚠ {{ error }}</div>
-    {% endif %}
+    {% if view == "rates" %}
 
-    {% if not rates and not error %}
-      <div class="empty-state">
-        <div class="empty-icon">₴</div>
-        <p>Select a currency filter and click Fetch Rates</p>
-      </div>
-    {% endif %}
-
-    {% if rates %}
-      <div class="table-card">
-        <div class="table-meta">
-          <strong>{{ rates|length }} {{ "currency" if rates|length == 1 else "currencies" }}</strong>
-          <span>as of {{ rates[0].date }}</span>
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Code</th>
-              <th>Currency</th>
-              <th>Rate (UAH)</th>
-              <th>Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for r in rates %}
-            <tr>
-              <td><span class="td-code">{{ r.code }}</span></td>
-              <td>{{ r.name }}</td>
-              <td><span class="td-rate">{{ r.rate }}</span></td>
-              <td><span class="td-date">{{ r.date }}</span></td>
-            </tr>
+      <form method="get" action="/" class="controls">
+        <div class="control-group">
+          <label>Currency</label>
+          <select name="cc">
+            <option value="" {% if not cc %}selected{% endif %}>All currencies</option>
+            {% for code in currencies %}
+              <option value="{{ code }}" {% if cc == code %}selected{% endif %}>{{ code }}</option>
             {% endfor %}
-          </tbody>
-        </table>
-      </div>
+          </select>
+        </div>
+        <button type="submit">Fetch Rates</button>
+      </form>
+
+      {% if error %}
+        <div class="error-box">⚠ {{ error }}</div>
+      {% endif %}
+
+      {% if not rates and not error %}
+        <div class="empty-state">
+          <div class="empty-icon">₴</div>
+          <p>Select a currency filter and click Fetch Rates</p>
+        </div>
+      {% endif %}
+
+      {% if rates %}
+        <div class="table-card">
+          <div class="table-meta">
+            <strong>{{ rates|length }} {{ "currency" if rates|length == 1 else "currencies" }}</strong>
+            <span>as of {{ rates[0].date }}</span>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Currency</th>
+                <th>Rate (UAH)</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in rates %}
+              <tr>
+                <td><span class="td-code">{{ r.code }}</span></td>
+                <td>{{ r.name }}</td>
+                <td><span class="td-rate">{{ r.rate }}</span></td>
+                <td><span class="td-date">{{ r.date }}</span></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
+
+    {% else %}
+
+      <form method="get" action="/history" class="controls">
+        <div class="control-group">
+          <label>Currencies (hold Ctrl/Cmd to pick multiple)</label>
+          <select name="cc" multiple size="4">
+            {% for code in currencies %}
+              <option value="{{ code }}" {% if code in selected %}selected{% endif %}>{{ code }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="control-group">
+          <label>Time range</label>
+          <select name="range">
+            {% for r, label in [("7d","7 days"),("30d","30 days"),("90d","90 days"),("6m","6 months"),("1y","1 year"),("all","All time")] %}
+              <option value="{{ r }}" {% if time_range == r %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit">Load History</button>
+        {% if not selected %}
+          <span class="hint">Select at least one currency</span>
+        {% endif %}
+      </form>
+
+      {% if error %}
+        <div class="error-box">⚠ {{ error }}</div>
+      {% endif %}
+
+      {% if not selected and not error %}
+        <div class="empty-state">
+          <div class="empty-icon">₴</div>
+          <p>Select currencies and click Load History</p>
+        </div>
+      {% elif selected and not records and not error %}
+        <div class="empty-state">
+          <div class="empty-icon">₴</div>
+          <p>No history found for the selected filters</p>
+        </div>
+      {% endif %}
+
+      {% if records %}
+        <div class="table-card">
+          <div class="table-meta">
+            <strong>{{ records|length }} record{{ "s" if records|length != 1 else "" }}</strong>
+            <span>{{ selected | join(", ") }} · {{ time_range }}</span>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Fetched At</th>
+                <th>Code</th>
+                <th>Currency</th>
+                <th>Rate (UAH)</th>
+                <th>Rate Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in records %}
+              <tr>
+                <td><span class="td-date">{{ r.fetched_at }}</span></td>
+                <td><span class="td-code">{{ r.code }}</span></td>
+                <td>{{ r.name }}</td>
+                <td><span class="td-rate">{{ r.rate }}</span></td>
+                <td><span class="td-date">{{ r.rate_date }}</span></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
+
     {% endif %}
   </div>
 </body>
