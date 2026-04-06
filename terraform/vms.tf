@@ -50,7 +50,7 @@ resource "hyperv_machine_instance" "node" {
   generation           = 2
   memory_startup_bytes = var.vm_memory_mb * 1024 * 1024
   processor_count      = var.vm_processors
-  dynamic_memory       = false
+  static_memory        = true
 
   vm_firmware {
     enable_secure_boot   = true
@@ -60,7 +60,8 @@ resource "hyperv_machine_instance" "node" {
   network_adaptors {
     name               = "eth0"
     switch_name        = hyperv_network_switch.internal.name
-    static_mac_address = each.value.mac
+    static_mac_address  = each.value.mac
+    dynamic_mac_address = false
   }
 
   hard_disk_drives {

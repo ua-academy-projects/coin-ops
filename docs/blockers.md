@@ -291,15 +291,18 @@ Error: [ERROR][hyperv][create] Either dynamic or static must be selected
 
 **Root cause:** The `taliesins/hyperv` provider requires an explicit MAC address policy on every `network_adaptors` block. Leaving both `dynamic_mac_address` and `static_mac_address` absent (not just omitted — even setting `dynamic_mac_address = true` or `static_mac_address = ""` alone does not satisfy the validator) causes the provider to fail at create time with this non-obvious error.
 
-**Fix:** Assign static MACs using Microsoft's reserved Hyper-V OUI prefix (`00:15:5D`):
+**Fix:** Both fields must be present simultaneously — set static MAC and explicitly set `dynamic_mac_address = false`. Also replace `dynamic_memory = false` with `static_memory = true` (same provider quirk — the boolean must be affirmed, not negated):
 ```hcl
+static_memory = true   # not dynamic_memory = false
+
 network_adaptors {
-  name               = "eth0"
-  switch_name        = hyperv_network_switch.internal.name
-  static_mac_address = each.value.mac   # e.g. "00:15:5D:01:00:01"
+  name                = "eth0"
+  switch_name         = hyperv_network_switch.internal.name
+  static_mac_address  = each.value.mac   # e.g. "00:15:5D:01:00:01"
+  dynamic_mac_address = false            # must be explicit, not absent
 }
 ```
-The `locals.nodes` map now includes a `mac` field per node. Static MACs are stable across `terraform destroy && apply` cycles — the VM always gets the same address.
+The `locals.nodes` map includes a `mac` field per node. Static MACs are stable across `terraform destroy && apply` cycles.
 
 ---
 
