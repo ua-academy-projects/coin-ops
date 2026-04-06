@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, render_template, request, session
+from flask import Flask, jsonify, render_template, request, session, redirect
 from flask_session import Session
 import redis
 import requests
@@ -40,8 +40,6 @@ def get_chart_data(coin="BTC", selected_date=None, selected_range="7D"):
             "points": [],
         }
 
-
-
 @app.route("/")
 def index():
     # request.args = ?... (localhost:5000?coin=ETH)
@@ -80,6 +78,15 @@ def index():
 
 @app.route("/history")
 def history():
+
+    if request.args.get("reset") == "1":
+        session.pop("history_coin", None)
+        session.pop("history_date", None)
+        session.pop("history_sort", None)
+        session.pop("history_limit", None)
+        return redirect("/history")
+
+
     coin = request.args.get("coin")
     if coin is None:
         coin = session.get("history_coin", "")
@@ -104,9 +111,13 @@ def history():
     if limit_value not in {"25", "50", "100", "250"}:
         limit_value = "50"
 
+        
+    session["history_coin"] = coin
     session["history_date"] = selected_date
     session["history_sort"] = sort_value
     session["history_limit"] = limit_value
+
+
 
     try:
         params = {
@@ -123,6 +134,7 @@ def history():
     except Exception as e:
         print(f"History error: {e}")
         data = []
+        
     return render_template(
         "history.html",
         data=data,
@@ -132,6 +144,8 @@ def history():
         selected_sort=sort_value,
         selected_limit=limit_value,
     )
+
+    
 
 
 @app.route("/api/chart-data")
