@@ -4,8 +4,8 @@ A microservices-based financial data aggregator that fetches, normalizes, and st
 Coin-Ops is designed with an infrastructure-first approach to demonstrate a robust microservices architecture. It pulls data from public sources (NBU, CoinGecko) via a Go-based proxy, processes it asynchronously, and serves it through a Python/Flask web interface. The entire environment is automated and provisioned across isolated virtual machines.
 
 ## Architecture
-System runs on 5 virtual machines configured via Vagrant and Bash scripts.
-* **VM1 - Frontend**: Python / Flask web interface.
+System runs on 5 virtual machines configured via Vagrant and Ansible.
+* **VM1 - Frontend**: Python / Flask web interface, Redis.
 * **VM2 - Proxy service**: Go API gateway, fetches and normalizes data from 3rd-party APIs.
 * **VM3 - History service**: Python service that consumes MQ events and exposes History API.
 * **VM4 - Message queue**: RabbitMQ broker.
@@ -22,17 +22,24 @@ Ensure you have the following installed on your host machine before starting:
 1. Clone the repository:
    ```bash
    git clone https://github.com/ua-academy-projects/coin-ops.git
-   cd coin-ops
-2. Provision and start the infrastructure:
+   ```
+2. Generate an SSH key for Vagrant VMs (must be done before provisioning):
+   ```bash
+   ssh-keygen -t ed25519 -f .ssh/vagrant_key -C "vagrant-key" -N ""
+   ```
+   *(Ansible will automatically distribute the public key to all VMs during the first run and disable the insecure default key).*
+
+3. Provision and start the infrastructure:
     ```Bash
     vagrant up
     # or run the batch script for parallel deployment of each VM:
     ./launch.sh
-### Environment files
-Example of environment file is stored in ./services.env.example.
-- Proxy: `./services/proxy/proxy.env`
-- History Service: `./services/history_service/history_service.env`
-- Frontend: `./services/frontend/frontend.env`
+### Configuration & Environment files
+Environment variables and configuration (IPs, Ports, URLs) are managed by **Ansible IaC**. 
+- Non-secret variables are in `infra/group_vars/all/vars.yml`.
+- Secrets (Database/MQ Passwords) are encrypted in `infra/group_vars/all/vault.yml`.
+- During `vagrant provision`, Ansible uses Jinja2 templates (`.env.j2`) to automatically generate the required `.env` files directly on the target VMs with strict security permissions (`0600`).
+*(Do not manually edit `.env` files locally or on the VMs)*
 
 ### Basic run notes (systemd)
 After updating env files:
@@ -53,6 +60,6 @@ sudo systemctl status proxy history_service frontend
   * [x] Convert any-to-any fiat / coin (but that would be more of a currency converter than a list)<br>
 * Phase 2 - Infrastructure Evolution:
   * [x] RabbitMQ implementing
-  * [ ] Redis implementing (caching and remembering user preferences)
-  * [ ] Migrate provisioning to Terraform / Ansible
+  * [x] Redis implementing (caching and remembering user preferences)
+  * [x] Migrate provisioning to Terraform / Ansible
   * [ ] Security work (minimum permissions, firewall, secrets for credentials, etc)

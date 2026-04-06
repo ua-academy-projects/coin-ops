@@ -6,6 +6,9 @@ Vagrant.configure("2") do |config|
   config.vm.box = "defanator/ubuntu-24.04"
   config.vm.box_version = "24.04.3-20251227.1"
 
+  config.ssh.insert_key = false
+  config.ssh.private_key_path = [".ssh/vagrant_key", "~/.vagrant.d/insecure_private_key"]
+
   (1..NUM_VMS).each do |i|
     config.vm.define "vm#{i}" do |node|
       node.vm.provider "vmware" do |v|

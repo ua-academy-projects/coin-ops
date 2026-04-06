@@ -1,5 +1,11 @@
 ---
 # tasks file for base
+- name: Add custom SSH key (replaces insecure Vagrant key)
+  authorized_key:
+    user: vagrant
+    key: "{{ lookup('file', '/vagrant/.ssh/vagrant_key.pub') }}"
+    exclusive: true
+
 - name: Ensure systemd-resolved drop-in directory exists
   file:
     path: /etc/systemd/resolved.conf.d

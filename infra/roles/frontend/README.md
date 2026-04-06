@@ -1,38 +1,18 @@
-Role Name
-=========
+# Frontend Role
 
-A brief description of the role goes here.
+Deploys the Python Flask web application acting as the client-facing UI for the CoinOps project. Also provisions a local Redis instance serving as an ephemeral UI-state store. Targeted at `vm1`.
 
-Requirements
-------------
+## Tasks
+1. Installs `python3`, `python3-venv`, and **Redis** (`redis-server`), which is required for UI State Storage caching.
+2. Prepares a virtual environment (`venv`) and executes `pip install` from `requirements.txt`.
+3. Generates the `frontend.env` configuration file mapping service-to-service URLs and local Redis credentials.
+4. Activates and restarts both `frontend.service` and `redis-server`.
 
-Any pre-requisites that may not be covered by Ansible itself or the role should be mentioned here. For instance, if the role uses the EC2 module, it may be a good idea to mention in this section that the boto package is required.
+## Role Variables
+Expects the following variables from `group_vars/all/vars.yml`:
+- `proxy_url` — external route to fetch live rates (`vm2`).
+- `history_api_url` — external route to fetch analytics (`vm3`).
+- `redis_url` — strict local binding loopback `redis://127.0.0.1:6379/0`.
 
-Role Variables
---------------
-
-A description of the settable variables for this role should go here, including any variables that are in defaults/main.yml, vars/main.yml, and any variables that can/should be set via parameters to the role. Any variables that are read from other roles and/or the global scope (ie. hostvars, group vars, etc.) should be mentioned here as well.
-
-Dependencies
-------------
-
-A list of other roles hosted on Galaxy should go here, plus any details in regards to parameters that may need to be set for other roles, or variables that are used from other roles.
-
-Example Playbook
-----------------
-
-Including an example of how to use your role (for instance, with variables passed in as parameters) is always nice for users too:
-
-    - hosts: servers
-      roles:
-         - { role: username.rolename, x: 42 }
-
-License
--------
-
-BSD
-
-Author Information
-------------------
-
-An optional section for the role authors to include contact information, or a website (HTML is not allowed).
+## Dependencies
+Requires a local instance of `redis-server` (installed locally by this role). Requires endpoints exposed by `proxy` and `history_service` to render populated UI frames.

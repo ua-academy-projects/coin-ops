@@ -45,7 +45,7 @@ Typical order to avoid dependency issues:
 4. `vm3`: `sudo systemctl restart history_service`
 5. `vm1`: `sudo systemctl restart redis-server` then `sudo systemctl restart frontend`
 
-After env changes on a VM:
+After env changes (**DO NOT edit `.env` manually on the VM - edit `infra/group_vars/all/vars.yml` and run `vagrant provision`**):
 - `sudo systemctl daemon-reload`
 - `sudo systemctl restart <service>`
 

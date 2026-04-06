@@ -1,38 +1,18 @@
-Role Name
-=========
+# Proxy Role
 
-A brief description of the role goes here.
+Deploys the Go microservice acting as an API gateway between the Frontend and the external world. Targeted at `vm2`.
 
-Requirements
-------------
+## Tasks
+1. Installs `golang` from the default repositories.
+2. Compiles the Golang source code, dropping the built binary (`proxy.bin`) directly into the `shared_folder`.
+3. Generates `proxy.env` dynamically via Jinja2 templating (assigning AMQP credentials and routing details).
+4. Copies, enables, and restarts the `proxy.service` (Systemd).
 
-Any pre-requisites that may not be covered by Ansible itself or the role should be mentioned here. For instance, if the role uses the EC2 module, it may be a good idea to mention in this section that the boto package is required.
+## Role Variables
+Expects the following variables from `group_vars/all`:
+- `proxy_listen`
+- `mq_enabled`
+- `rabbitmq_url`, `rabbitmq_exchange`, `rabbitmq_routing_key`
 
-Role Variables
---------------
-
-A description of the settable variables for this role should go here, including any variables that are in defaults/main.yml, vars/main.yml, and any variables that can/should be set via parameters to the role. Any variables that are read from other roles and/or the global scope (ie. hostvars, group vars, etc.) should be mentioned here as well.
-
-Dependencies
-------------
-
-A list of other roles hosted on Galaxy should go here, plus any details in regards to parameters that may need to be set for other roles, or variables that are used from other roles.
-
-Example Playbook
-----------------
-
-Including an example of how to use your role (for instance, with variables passed in as parameters) is always nice for users too:
-
-    - hosts: servers
-      roles:
-         - { role: username.rolename, x: 42 }
-
-License
--------
-
-BSD
-
-Author Information
-------------------
-
-An optional section for the role authors to include contact information, or a website (HTML is not allowed).
+## Dependencies
+The `message_queue` role must be successfully provisioned and running for the Proxy to open AMQP connections.

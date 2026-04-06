@@ -30,3 +30,11 @@
   - `sudo systemctl daemon-reload`
   - `sudo systemctl restart <service>`
   - Validate with `systemctl show <service> --property=Environment`
+
+## 5) Hardcoded Secrets in Environment Files
+- **Symptom**: Storing plaintext passwords inside shared `.env` files is a security risk and breaks true IaC portability.
+- **Workaround**:
+  - Migrated configuration management to **Ansible Vault**.
+  - Passwords (e.g., PostgreSQL, RabbitMQ) are encrypted in `vault.yml`.
+  - Non-secret variables are kept in plaintext `vars.yml`.
+  - Services use Jinja2 dynamically rendered templates (`.env.j2`) deployed with secure `0600` permissions on the guest VMs.
