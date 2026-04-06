@@ -25,22 +25,23 @@ from helpers import fetch_live_rates
 
 LOG = logging.getLogger("coinops.frontend")
 
-_DEFAULT_PROXY = "http://10.10.1.3:8080"
-_DEFAULT_HISTORY_API = "http://10.10.1.4:8090/api/v1/history"
-
 
 def history_base_url_from_environ() -> str:
     """
     Base URL of the History Service (scheme + host[:port]), without path.
 
     Supports either:
-    - HISTORY_BASE_URL=http://10.10.1.4:8090
-    - HISTORY_API_URL=http://10.10.1.4:8090/api/v1/history (legacy full path — suffix stripped)
+    - HISTORY_BASE_URL=http://host:8090
+    - HISTORY_API_URL=http://host:8090/api/v1/history (legacy full path — suffix stripped)
+
+    Raises ValueError if neither is set (fail-fast).
     """
     explicit = os.environ.get("HISTORY_BASE_URL", "").strip()
     if explicit:
         return explicit.rstrip("/")
-    raw = os.environ.get("HISTORY_API_URL", _DEFAULT_HISTORY_API).strip().rstrip("/")
+    raw = os.environ.get("HISTORY_API_URL", "").strip().rstrip("/")
+    if not raw:
+        raise ValueError("HISTORY_BASE_URL or HISTORY_API_URL environment variable is required but not set")
     for suffix in ("/api/v1/history", "/v1/history"):
         if raw.endswith(suffix):
             return raw[: -len(suffix)].rstrip("/")
@@ -70,7 +71,9 @@ class AppConfig:
 
     @classmethod
     def from_environ(cls) -> "AppConfig":
-        proxy = os.environ.get("PROXY_URL", _DEFAULT_PROXY).rstrip("/")
+        proxy = os.environ.get("PROXY_URL", "").strip().rstrip("/")
+        if not proxy:
+            raise ValueError("PROXY_URL environment variable is required but not set")
         path = os.environ.get("COINOPS_RATES_PATH", "/api/v1/rates")
         if not path.startswith("/"):
             path = "/" + path

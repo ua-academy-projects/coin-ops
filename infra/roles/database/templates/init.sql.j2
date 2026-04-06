@@ -1,6 +1,6 @@
 -- CoinOps PostgreSQL bootstrap.
 -- Run on the database VM (VM5) as superuser, e.g.: sudo -u postgres psql -v ... -f init.sql
--- Use a strong password in production (see database.env / secrets, not committed defaults).
+-- Use strong credentials sourced from Ansible Vault and rendered env templates at provision time.
 
 GRANT ALL PRIVILEGES ON DATABASE coinops_db TO {{ pg_user }};
 

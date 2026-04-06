@@ -41,13 +41,9 @@ Environment variables and configuration (IPs, Ports, URLs) are managed by **Ansi
 - During `vagrant provision`, Ansible uses Jinja2 templates (`.env.j2`) to automatically generate the required `.env` files directly on the target VMs with strict security permissions (`0600`).
 *(Do not manually edit `.env` files locally or on the VMs)*
 
-### Basic run notes (systemd)
-After updating env files:
-```bash
-sudo systemctl daemon-reload
-sudo systemctl restart proxy history_service frontend
-sudo systemctl status proxy history_service frontend
-```
+### Documentation & Troubleshooting
+For operational details, network matrices, and manual systemd testing or restarts, please refer to the **[Runbook](docs/runbook.md)**.
+If you encounter any issues during development or deployment, check the **[Blockers and Workarounds](docs/blockers.md)** guide.
 
 ## To-Do List
 * Phase 1 - Usability:

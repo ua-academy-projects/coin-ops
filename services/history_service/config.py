@@ -7,11 +7,7 @@ from dataclasses import dataclass
 from typing import MutableMapping, Optional
 from urllib.parse import unquote, urlparse
 
-_DEFAULT_PG_HOST = "10.10.1.6"
-_DEFAULT_PG_PORT = "5432"
-_DEFAULT_PG_USER = "coinops"
-_DEFAULT_PG_DB = "coinops_db"
-_DEFAULT_MQ_URL = "amqp://coinops:coinops@10.10.1.5:5672/"
+# Behavioral defaults (application-level conventions, not secrets/infrastructure).
 _DEFAULT_MQ_EXCHANGE = "coinops.rates"
 _DEFAULT_MQ_QUEUE = "coinops.history"
 _DEFAULT_MQ_ROUTING_KEY = "rates.snapshot"
@@ -52,13 +48,11 @@ class HistoryConfig:
         if db_url:
             host, port, user, password, database = _parse_database_url(db_url)
         else:
-            host = env.get("PGHOST", _DEFAULT_PG_HOST)
-            port = int(env.get("PGPORT", _DEFAULT_PG_PORT))
-            user = env.get("PGUSER", _DEFAULT_PG_USER)
-            password = env.get("PGPASSWORD", "")
-            database = env.get("PGDATABASE", _DEFAULT_PG_DB)
-        if not password:
-            raise ValueError("PGPASSWORD or DATABASE_URL with password is required")
+            host = _env_required(env, "PGHOST")
+            port = int(_env_required(env, "PGPORT"))
+            user = _env_required(env, "PGUSER")
+            password = _env_required(env, "PGPASSWORD")
+            database = _env_required(env, "PGDATABASE")
         prefetch = _env_positive_int(env.get("MQ_PREFETCH_COUNT"), _DEFAULT_MQ_PREFETCH, upper=500)
         bo_init = _env_positive_float(env.get("MQ_RECONNECT_BACKOFF_INITIAL"), _DEFAULT_MQ_BACKOFF_INITIAL)
         bo_max = _env_positive_float(env.get("MQ_RECONNECT_BACKOFF_MAX"), _DEFAULT_MQ_BACKOFF_MAX)
@@ -71,7 +65,7 @@ class HistoryConfig:
             pg_user=user,
             pg_password=password,
             pg_database=database,
-            rabbitmq_url=env.get("RABBITMQ_URL", _DEFAULT_MQ_URL),
+            rabbitmq_url=_env_required(env, "RABBITMQ_URL"),
             rabbitmq_exchange=env.get("RABBITMQ_EXCHANGE", _DEFAULT_MQ_EXCHANGE),
             rabbitmq_queue=env.get("RABBITMQ_QUEUE", _DEFAULT_MQ_QUEUE),
             rabbitmq_routing_key=env.get("RABBITMQ_ROUTING_KEY", _DEFAULT_MQ_ROUTING_KEY),
@@ -84,6 +78,14 @@ class HistoryConfig:
             mq_backoff_max=bo_max,
             history_cors_allow_origin=cors,
         )
+
+
+def _env_required(env: MutableMapping[str, str], key: str) -> str:
+    """Return env var value or raise ValueError if missing/empty."""
+    value = env.get(key, "").strip()
+    if not value:
+        raise ValueError(f"{key} environment variable is required but not set")
+    return value
 
 
 def _env_bool(value: Optional[str], default: bool) -> bool:
