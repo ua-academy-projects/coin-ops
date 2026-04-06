@@ -281,6 +281,67 @@ go: github.com/rabbitmq/amqp091-go@v1.10.0: dial tcp: connection refused
 
 ---
 
+## 13. Terraform Hyper-V provider: "Either dynamic or static must be selected"
+
+**Symptom:** `terraform apply` fails for all three VM resources:
+```
+Error: [ERROR][hyperv][create] Either dynamic or static must be selected
+  with hyperv_machine_instance.node["node-01"]
+```
+
+**Root cause:** The `taliesins/hyperv` provider requires an explicit MAC address policy on every `network_adaptors` block. Leaving both `dynamic_mac_address` and `static_mac_address` absent (not just omitted — even setting `dynamic_mac_address = true` or `static_mac_address = ""` alone does not satisfy the validator) causes the provider to fail at create time with this non-obvious error.
+
+**Fix:** Assign static MACs using Microsoft's reserved Hyper-V OUI prefix (`00:15:5D`):
+```hcl
+network_adaptors {
+  name               = "eth0"
+  switch_name        = hyperv_network_switch.internal.name
+  static_mac_address = each.value.mac   # e.g. "00:15:5D:01:00:01"
+}
+```
+The `locals.nodes` map now includes a `mac` field per node. Static MACs are stable across `terraform destroy && apply` cycles — the VM always gets the same address.
+
+---
+
+## 14. VM fails to boot: "The signed image's hash is not allowed (DB)"
+
+**Symptom:** Hyper-V Virtual Machine Connection shows the UEFI Boot Summary:
+```
+3. SCSI Disk (0,0)  The signed image's hash is not allowed (DB)
+No operating system was loaded.
+```
+
+**Root cause:** Hyper-V Generation 2 VMs have Secure Boot enabled with the default `MicrosoftWindows` template. This template only trusts Microsoft-signed bootloaders. Ubuntu uses Canonical's UEFI signing certificate, which is not in the `MicrosoftWindows` template's DB (allowed signatures database).
+
+**Fix:** Switch the Secure Boot template to `MicrosoftUEFICertificateAuthority` in `vms.tf`. This template includes both Microsoft's and Canonical's signing certs:
+```hcl
+vm_firmware {
+  enable_secure_boot   = true
+  secure_boot_template = "MicrosoftUEFICertificateAuthority"
+}
+```
+Disabling Secure Boot entirely (`enable_secure_boot = false`) also works but is less correct for a production-like setup.
+
+---
+
+## 15. cloud-init network: wrong subnet mask and gateway
+
+**Symptom:** VMs boot but cannot reach the Windows host or internet. WSL cannot SSH to VMs. The VMs have correct IPs (`172.31.1.x`) but routing fails.
+
+**Root cause:** cloud-init `network-config` files used `/24` mask and `via: 172.31.1.1` (no machine exists at this address). The Windows host's virtual NIC on the Internal switch is at `172.31.0.1` on a `/20` network. With a `/24` mask the VMs are on `172.31.1.0/24` and the host is on `172.31.0.0/24` — different subnets, no route between them.
+
+**Fix:** Use `/20` mask and the correct gateway in all three `network-config` files:
+```yaml
+addresses:
+  - 172.31.1.10/20     # was /24
+routes:
+  - to: default
+    via: 172.31.0.1    # was 172.31.1.1 — host's vNIC address
+```
+With `/20` all addresses `172.31.0.0`–`172.31.15.255` are on the same subnet, so VMs can reach the host at `172.31.0.1` without a separate route.
+
+---
+
 ## 12. Ansible SSH fails with "UNPROTECTED PRIVATE KEY FILE" on WSL
 
 **Symptom:** `ansible all -m ping` fails with "Warning: Unprotected private key file" and UNREACHABLE.

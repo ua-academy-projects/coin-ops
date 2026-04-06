@@ -52,6 +52,11 @@ resource "hyperv_machine_instance" "node" {
   processor_count      = var.vm_processors
   dynamic_memory       = false
 
+  vm_firmware {
+    enable_secure_boot   = true
+    secure_boot_template = "MicrosoftUEFICertificateAuthority"
+  }
+
   network_adaptors {
     name               = "eth0"
     switch_name        = hyperv_network_switch.internal.name

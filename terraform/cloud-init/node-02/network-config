@@ -3,10 +3,10 @@ ethernets:
   eth0:
     dhcp4: false
     addresses:
-      - 172.31.1.11/24
+      - 172.31.1.11/20
     routes:
       - to: default
-        via: 172.31.1.1
+        via: 172.31.0.1
     nameservers:
       addresses:
         - 8.8.8.8
