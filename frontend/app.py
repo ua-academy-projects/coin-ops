@@ -8,6 +8,7 @@ def index():
     rates = []
     crypto = []
     favorites = []
+    history = []
 
     try:
         rates = requests.get('http://192.168.56.102:8080/rates', timeout=5).json()
@@ -19,15 +20,19 @@ def index():
     except Exception as e:
         print(f"Помилка CoinGecko: {e}")
 
-    # Читаємо улюблені валюти з Redis (через consumer)
     try:
         favorites = requests.get('http://192.168.56.103:5001/favorites', timeout=5).json()
     except Exception as e:
         print(f"Помилка favorites: {e}")
 
-    return render_template('index.html', rates=rates, crypto=crypto, favorites=favorites)
+    # Отримуємо історію за останні 24 години для міні-графіків і зміни за день
+    try:
+        history = requests.get('http://192.168.56.103:5001/history?hours=24', timeout=10).json()
+    except Exception as e:
+        print(f"Помилка history: {e}")
 
-# Цей маршрут приймає запити від JavaScript і пересилає в consumer
+    return render_template('index.html', rates=rates, crypto=crypto, favorites=favorites, history=history)
+
 @app.route('/api/favorites', methods=['POST'])
 def save_favorites():
     try:

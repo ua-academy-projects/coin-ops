@@ -1,367 +1,927 @@
 <!DOCTYPE html>
 <html lang="uk">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CoinOps — Курси валют</title>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: #0f1117; color: #e0e0e0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
 
-        /* Тікер */
-        .ticker-wrap { background: #13151f; border-bottom: 0.5px solid #2a2d3a; overflow: hidden; padding: 8px 0; }
-        .ticker { display: flex; gap: 32px; animation: ticker 30s linear infinite; white-space: nowrap; }
-        .ticker:hover { animation-play-state: paused; }
-        @keyframes ticker { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
-        .ticker-item { display: flex; align-items: center; gap: 8px; font-size: 12px; }
-        .ticker-code { color: #888; font-weight: 500; }
-        .ticker-rate { color: #fff; font-weight: 500; }
-        .ticker-sep { color: #2a2d3a; }
+        body {
+            background: #0f1117;
+            color: #e0e0e0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
 
-        /* Навбар */
-        .nav { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; background: #1a1d27; border-bottom: 0.5px solid #2a2d3a; }
-        .logo { font-size: 20px; font-weight: 600; color: #fff; }
-        .logo span { color: #378ADD; }
-        .nav-links { display: flex; gap: 4px; }
-        .nav-link { padding: 7px 16px; border-radius: 8px; font-size: 14px; color: #888; text-decoration: none; }
-        .nav-link.active, .nav-link:hover { background: #1e2a3a; color: #378ADD; }
-        .nav-right { display: flex; align-items: center; gap: 10px; }
-        .update-badge { font-size: 12px; color: #555; background: #13151f; border: 0.5px solid #2a2d3a; padding: 5px 10px; border-radius: 6px; }
-        .refresh-btn { width: 30px; height: 30px; border-radius: 6px; background: #1e2a3a; border: 0.5px solid #2a2d3a; color: #378ADD; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-        .refresh-btn:hover { background: #253545; }
+        .ticker-wrap {
+            background: #13151f;
+            border-bottom: 0.5px solid #2a2d3a;
+            overflow: hidden;
+            padding: 8px 0;
+        }
 
-        /* Контейнер */
-        .container { max-width: 1200px; margin: 0 auto; padding: 20px 24px; }
+        .ticker {
+            display: flex;
+            gap: 32px;
+            animation: ticker 30s linear infinite;
+            white-space: nowrap;
+        }
 
-        /* Топ картки */
-        .top-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
-        .top-card { background: #1a1d27; border-radius: 12px; border: 0.5px solid #2a2d3a; padding: 14px 16px; cursor: default; }
-        .top-card:hover { border-color: #378ADD44; }
-        .tc-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-        .tc-code { font-size: 13px; font-weight: 600; color: #378ADD; }
-        .tc-code.green { color: #3bb554; }
-        .tc-name { font-size: 11px; color: #555; margin-bottom: 8px; }
-        .tc-rate { font-size: 22px; font-weight: 600; color: #fff; font-variant-numeric: tabular-nums; }
-        .tc-sub { font-size: 11px; color: #555; margin-top: 2px; }
-        .chg-up { font-size: 11px; padding: 2px 6px; border-radius: 4px; background: #1a2a1a; color: #3bb554; }
-        .chg-dn { font-size: 11px; padding: 2px 6px; border-radius: 4px; background: #2a1a1a; color: #e24b4a; }
+        .ticker:hover {
+            animation-play-state: paused;
+        }
 
-        /* Грід таблиць */
-        .main-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
-        .card { background: #1a1d27; border-radius: 12px; border: 0.5px solid #2a2d3a; overflow: hidden; }
-        .card-header { padding: 12px 16px; border-bottom: 0.5px solid #2a2d3a; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-        .card-title { font-size: 14px; font-weight: 500; color: #e0e0e0; }
-        .badge { font-size: 11px; padding: 3px 8px; border-radius: 6px; }
-        .badge-blue { background: #1e2a3a; color: #378ADD; }
-        .badge-green { background: #1a2a1a; color: #3bb554; }
-        .search-input { padding: 5px 10px; background: #0f1117; border: 0.5px solid #2a2d3a; border-radius: 6px; color: #ccc; font-size: 12px; width: 130px; outline: none; }
-        .search-input:focus { border-color: #378ADD; }
-        .table-wrap { max-height: 300px; overflow-y: auto; }
-        .table-wrap::-webkit-scrollbar { width: 3px; }
-        .table-wrap::-webkit-scrollbar-thumb { background: #2a2d3a; border-radius: 2px; }
-        table { width: 100%; border-collapse: collapse; }
-        th { font-size: 11px; color: #555; font-weight: 400; padding: 8px 16px; text-align: left; border-bottom: 0.5px solid #2a2d3a; background: #1a1d27; cursor: pointer; user-select: none; position: sticky; top: 0; }
-        th:hover { color: #888; }
-        td { font-size: 13px; color: #ccc; padding: 8px 16px; border-bottom: 0.5px solid #15171f; }
-        tr:last-child td { border-bottom: none; }
-        tr:hover td { background: #1e2130; }
-        .code-blue { color: #378ADD; font-size: 12px; font-weight: 500; }
-        .code-green { color: #3bb554; font-size: 12px; font-weight: 500; }
-        .rate-val { color: #fff; font-weight: 500; font-variant-numeric: tabular-nums; }
-        .fav-check { width: 14px; height: 14px; accent-color: #378ADD; cursor: pointer; }
+        @keyframes ticker {
+            0% {
+                transform: translateX(0);
+            }
 
-        /* Конвертер */
-        .converter { background: #1a1d27; border-radius: 12px; border: 0.5px solid #2a2d3a; padding: 18px 20px; margin-bottom: 16px; }
-        .conv-title { font-size: 14px; font-weight: 500; margin-bottom: 14px; color: #e0e0e0; }
-        .conv-row { display: grid; grid-template-columns: 1fr 36px 1fr 36px 110px; gap: 10px; align-items: end; }
-        .conv-field label { font-size: 11px; color: #555; margin-bottom: 5px; display: block; }
-        .conv-field input, .conv-field select { width: 100%; padding: 8px 12px; background: #0f1117; border: 0.5px solid #2a2d3a; border-radius: 8px; color: #fff; font-size: 13px; outline: none; }
-        .conv-field input:focus, .conv-field select:focus { border-color: #378ADD; }
-        .conv-field select option { background: #1a1d27; }
-        .conv-arrow { font-size: 18px; color: #555; text-align: center; padding-bottom: 8px; }
-        .conv-btn { padding: 9px 16px; background: #378ADD; border: none; border-radius: 8px; color: #fff; font-size: 13px; cursor: pointer; width: 100%; }
-        .conv-btn:hover { background: #185FA5; }
-        .conv-result { background: #0f1117; border-radius: 8px; padding: 12px 16px; margin-top: 12px; display: flex; align-items: baseline; gap: 10px; border: 0.5px solid #2a2d3a; }
-        .conv-result-label { font-size: 12px; color: #555; }
-        .conv-result-val { font-size: 24px; font-weight: 600; color: #378ADD; }
+            100% {
+                transform: translateX(-50%);
+            }
+        }
 
-        /* Футер */
-        .footer-row { display: flex; align-items: center; justify-content: space-between; }
-        .history-link { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; background: #1a1d27; border-radius: 8px; color: #378ADD; font-size: 13px; border: 0.5px solid #2a2d3a; text-decoration: none; }
-        .history-link:hover { background: #1e2a3a; }
-        .fav-hint { font-size: 11px; color: #444; }
+        .ticker-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+        }
+
+        .ticker-code {
+            color: #888;
+            font-weight: 500;
+        }
+
+        .ticker-code.crypto {
+            color: #3bb554;
+        }
+
+        .ticker-rate {
+            color: #fff;
+            font-weight: 500;
+        }
+
+        .ticker-sep {
+            color: #2a2d3a;
+        }
+
+        .nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 24px;
+            background: #1a1d27;
+            border-bottom: 0.5px solid #2a2d3a;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .logo span {
+            color: #378ADD;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 4px;
+        }
+
+        .nav-link {
+            padding: 7px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #888;
+            text-decoration: none;
+            transition: all .15s;
+        }
+
+        .nav-link.active,
+        .nav-link:hover {
+            background: #1e2a3a;
+            color: #378ADD;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .update-badge {
+            font-size: 12px;
+            color: #555;
+            background: #13151f;
+            border: 0.5px solid #2a2d3a;
+            padding: 5px 10px;
+            border-radius: 6px;
+        }
+
+        .refresh-btn {
+            width: 30px;
+            height: 30px;
+            border-radius: 6px;
+            background: #1e2a3a;
+            border: 0.5px solid #2a2d3a;
+            color: #378ADD;
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all .15s;
+        }
+
+        .refresh-btn:hover {
+            background: #253545;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px 24px;
+        }
+
+        .clocks-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .clock-card {
+            flex: 1;
+            background: #1a1d27;
+            border-radius: 10px;
+            border: 0.5px solid #2a2d3a;
+            padding: 12px 14px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .clock-icon {
+            font-size: 20px;
+        }
+
+        .clock-info {
+            flex: 1;
+        }
+
+        .clock-city {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 2px;
+        }
+
+        .clock-time {
+            font-size: 16px;
+            font-weight: 600;
+            color: #fff;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .clock-status {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        .clock-status.open {
+            background: #1a2a1a;
+            color: #3bb554;
+        }
+
+        .clock-status.closed {
+            background: #2a1a1a;
+            color: #e24b4a;
+        }
+
+        .top-cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .top-card {
+            background: #1a1d27;
+            border-radius: 12px;
+            border: 0.5px solid #2a2d3a;
+            padding: 14px 16px;
+            cursor: default;
+            transition: border-color .15s;
+        }
+
+        .top-card:hover {
+            border-color: #378ADD44;
+        }
+
+        .tc-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        .tc-code {
+            font-size: 13px;
+            font-weight: 600;
+            color: #378ADD;
+        }
+
+        .tc-code.green {
+            color: #3bb554;
+        }
+
+        .tc-name {
+            font-size: 11px;
+            color: #555;
+            margin-bottom: 6px;
+        }
+
+        .tc-rate {
+            font-size: 22px;
+            font-weight: 600;
+            color: #fff;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .tc-bottom {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 4px;
+        }
+
+        .tc-sub {
+            font-size: 11px;
+            color: #555;
+        }
+
+        .tc-change {
+            font-size: 11px;
+            font-weight: 500;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .tc-change.up {
+            background: #1a2a1a;
+            color: #3bb554;
+        }
+
+        .tc-change.down {
+            background: #2a1a1a;
+            color: #e24b4a;
+        }
+
+        .badge-sm {
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 6px;
+        }
+
+        .badge-blue {
+            background: #1e2a3a;
+            color: #378ADD;
+        }
+
+        .badge-green {
+            background: #1a2a1a;
+            color: #3bb554;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .card {
+            background: #1a1d27;
+            border-radius: 12px;
+            border: 0.5px solid #2a2d3a;
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 12px 16px;
+            border-bottom: 0.5px solid #2a2d3a;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .card-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: #e0e0e0;
+        }
+
+        .search-input {
+            padding: 5px 10px;
+            background: #0f1117;
+            border: 0.5px solid #2a2d3a;
+            border-radius: 6px;
+            color: #ccc;
+            font-size: 12px;
+            width: 120px;
+            outline: none;
+            transition: border-color .15s;
+        }
+
+        .search-input:focus {
+            border-color: #378ADD;
+        }
+
+        .badge {
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 6px;
+        }
+
+        .table-wrap {
+            max-height: 340px;
+            overflow-y: auto;
+        }
+
+        .table-wrap::-webkit-scrollbar {
+            width: 3px;
+        }
+
+        .table-wrap::-webkit-scrollbar-thumb {
+            background: #2a2d3a;
+            border-radius: 2px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            font-size: 11px;
+            color: #555;
+            font-weight: 400;
+            padding: 8px 12px;
+            text-align: left;
+            border-bottom: 0.5px solid #2a2d3a;
+            background: #1a1d27;
+            cursor: pointer;
+            user-select: none;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+        th:hover {
+            color: #888;
+        }
+
+        td {
+            font-size: 13px;
+            color: #ccc;
+            padding: 7px 12px;
+            border-bottom: 0.5px solid #15171f;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background: #1e2130;
+        }
+
+        .code-blue {
+            color: #378ADD;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .code-green {
+            color: #3bb554;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .rate-val {
+            color: #fff;
+            font-weight: 500;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .fav-star {
+            cursor: pointer;
+            font-size: 16px;
+            color: #333;
+            transition: all .15s;
+            user-select: none;
+        }
+
+        .fav-star:hover {
+            color: #EF9F27;
+        }
+
+        .fav-star.active {
+            color: #EF9F27;
+        }
+
+        .change-cell {
+            font-size: 11px;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        .change-cell.up {
+            color: #3bb554;
+        }
+
+        .change-cell.down {
+            color: #e24b4a;
+        }
+
+        .change-cell.neutral {
+            color: #555;
+        }
+
+        .sparkline-cell {
+            width: 60px;
+        }
+
+        .sparkline-cell svg {
+            display: block;
+        }
+
+        .converter {
+            background: #1a1d27;
+            border-radius: 12px;
+            border: 0.5px solid #2a2d3a;
+            padding: 14px 16px;
+            margin-bottom: 16px;
+        }
+
+        .conv-row {
+            display: flex;
+            gap: 10px;
+            align-items: end;
+        }
+
+        .conv-field {
+            flex: 1;
+        }
+
+        .conv-field label {
+            font-size: 11px;
+            color: #555;
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        .conv-field input,
+        .conv-field select {
+            width: 100%;
+            padding: 7px 10px;
+            background: #0f1117;
+            border: 0.5px solid #2a2d3a;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 13px;
+            outline: none;
+        }
+
+        .conv-field input:focus,
+        .conv-field select:focus {
+            border-color: #378ADD;
+        }
+
+        .conv-field select option {
+            background: #1a1d27;
+        }
+
+        .conv-arrow {
+            font-size: 16px;
+            color: #555;
+            padding-bottom: 8px;
+        }
+
+        .conv-btn {
+            padding: 7px 14px;
+            background: #378ADD;
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 13px;
+            cursor: pointer;
+            white-space: nowrap;
+            align-self: end;
+        }
+
+        .conv-btn:hover {
+            background: #185FA5;
+        }
+
+        .conv-result-inline {
+            padding-bottom: 7px;
+            font-size: 18px;
+            font-weight: 600;
+            color: #378ADD;
+            font-variant-numeric: tabular-nums;
+            min-width: 120px;
+            text-align: right;
+            align-self: end;
+        }
+
+        .footer-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .history-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 9px 16px;
+            background: #1a1d27;
+            border-radius: 8px;
+            color: #378ADD;
+            font-size: 13px;
+            border: 0.5px solid #2a2d3a;
+            text-decoration: none;
+            transition: all .15s;
+        }
+
+        .history-link:hover {
+            background: #1e2a3a;
+        }
+
+        .footer-info {
+            font-size: 11px;
+            color: #444;
+        }
 
         @media (max-width: 900px) {
-            .main-grid { grid-template-columns: 1fr; }
-            .top-cards { grid-template-columns: repeat(2, 1fr); }
-            .conv-row { grid-template-columns: 1fr 1fr; }
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .top-cards {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .clocks-row {
+                flex-wrap: wrap;
+            }
+
+            .clocks-row .clock-card {
+                min-width: calc(50% - 6px);
+            }
+
+            .conv-row {
+                flex-wrap: wrap;
+            }
         }
     </style>
 </head>
+
 <body>
 
-<!-- Тікер -->
-<div class="ticker-wrap">
-    <div class="ticker" id="ticker">
-        {% for r in rates %}
-        {% if r.cc in ['USD','EUR','GBP','PLN','CHF','CAD','JPY','CNY'] %}
-        <span class="ticker-item">
-            <span class="ticker-code">{{ r.cc }}</span>
-            <span class="ticker-rate">{{ "%.2f"|format(r.rate|float) }}</span>
-            <span class="ticker-sep">|</span>
-        </span>
-        {% endif %}
-        {% endfor %}
-        {% for r in crypto %}
-        <span class="ticker-item">
-            <span class="ticker-code" style="color:#3bb554">{{ r.cc }}</span>
-            <span class="ticker-rate">{{ "%.0f"|format(r.rate|float) if r.rate|float > 100 else "%.2f"|format(r.rate|float) }}</span>
-            <span class="ticker-sep">|</span>
-        </span>
-        {% endfor %}
-        {% for r in rates %}
-        {% if r.cc in ['USD','EUR','GBP','PLN','CHF','CAD','JPY','CNY'] %}
-        <span class="ticker-item">
-            <span class="ticker-code">{{ r.cc }}</span>
-            <span class="ticker-rate">{{ "%.2f"|format(r.rate|float) }}</span>
-            <span class="ticker-sep">|</span>
-        </span>
-        {% endif %}
-        {% endfor %}
-        {% for r in crypto %}
-        <span class="ticker-item">
-            <span class="ticker-code" style="color:#3bb554">{{ r.cc }}</span>
-            <span class="ticker-rate">{{ "%.0f"|format(r.rate|float) if r.rate|float > 100 else "%.2f"|format(r.rate|float) }}</span>
-            <span class="ticker-sep">|</span>
-        </span>
-        {% endfor %}
+    <div class="ticker-wrap">
+        <div class="ticker" id="ticker">
+            {% for r in rates %}{% if r.cc in ['USD','EUR','GBP','PLN','CHF','CAD','JPY','CNY'] %}<span
+                class="ticker-item"><span class="ticker-code">{{ r.cc }}</span><span class="ticker-rate">{{
+                    "%.2f"|format(r.rate|float) }}</span><span class="ticker-sep">|</span></span>{% endif %}{% endfor
+            %}{% for r in crypto %}<span class="ticker-item"><span class="ticker-code crypto">{{ r.cc }}</span><span
+                    class="ticker-rate">{{ "%.0f"|format(r.rate|float) if r.rate|float > 100 else
+                    "%.2f"|format(r.rate|float) }}</span><span class="ticker-sep">|</span></span>{% endfor %}{% for r in
+            rates %}{% if r.cc in ['USD','EUR','GBP','PLN','CHF','CAD','JPY','CNY'] %}<span class="ticker-item"><span
+                    class="ticker-code">{{ r.cc }}</span><span class="ticker-rate">{{ "%.2f"|format(r.rate|float)
+                    }}</span><span class="ticker-sep">|</span></span>{% endif %}{% endfor %}{% for r in crypto %}<span
+                class="ticker-item"><span class="ticker-code crypto">{{ r.cc }}</span><span class="ticker-rate">{{
+                    "%.0f"|format(r.rate|float) if r.rate|float > 100 else "%.2f"|format(r.rate|float) }}</span><span
+                    class="ticker-sep">|</span></span>{% endfor %}
+        </div>
     </div>
-</div>
 
-<!-- Навбар -->
-<nav class="nav">
-    <div class="logo">coin<span>ops</span></div>
-    <div class="nav-links">
-        <a href="/" class="nav-link active">Курси</a>
-        <a href="/history" class="nav-link">Історія</a>
-    </div>
-    <div class="nav-right">
-        <div class="update-badge" id="update-time">⟳ --:--:--</div>
-        <button class="refresh-btn" onclick="location.reload()">↻</button>
-    </div>
-</nav>
+    <nav class="nav">
+        <div class="logo">coin<span>ops</span></div>
+        <div class="nav-links">
+            <a href="/" class="nav-link active">Курси</a>
+            <a href="/history" class="nav-link">Історія</a>
+        </div>
+        <div class="nav-right">
+            <div class="update-badge" id="update-time">⟳ --:--:--</div>
+            <button class="refresh-btn" onclick="location.reload()">↻</button>
+        </div>
+    </nav>
 
-<div class="container">
+    <div class="container">
 
-    <!-- Топ картки -->
-    <div class="top-cards">
-        {% set top = {'USD': None, 'EUR': None, 'GBP': None} %}
-        {% for r in rates %}
+        <div class="clocks-row">
+            <div class="clock-card">
+                <div class="clock-icon">🇺🇦</div>
+                <div class="clock-info">
+                    <div class="clock-city">Київ</div>
+                    <div class="clock-time" id="clock-kyiv">--:--:--</div>
+                </div>
+                <div class="clock-status" id="status-kyiv">—</div>
+            </div>
+            <div class="clock-card">
+                <div class="clock-icon">🇺🇸</div>
+                <div class="clock-info">
+                    <div class="clock-city">Нью-Йорк</div>
+                    <div class="clock-time" id="clock-ny">--:--:--</div>
+                </div>
+                <div class="clock-status" id="status-ny">—</div>
+            </div>
+            <div class="clock-card">
+                <div class="clock-icon">🇬🇧</div>
+                <div class="clock-info">
+                    <div class="clock-city">Лондон</div>
+                    <div class="clock-time" id="clock-london">--:--:--</div>
+                </div>
+                <div class="clock-status" id="status-london">—</div>
+            </div>
+            <div class="clock-card">
+                <div class="clock-icon">🇯🇵</div>
+                <div class="clock-info">
+                    <div class="clock-city">Токіо</div>
+                    <div class="clock-time" id="clock-tokyo">--:--:--</div>
+                </div>
+                <div class="clock-status" id="status-tokyo">—</div>
+            </div>
+        </div>
+
+        <div class="top-cards">
+            {% for r in rates %}
             {% if r.cc == 'USD' %}
             <div class="top-card">
-                <div class="tc-header"><span class="tc-code">USD</span><span class="chg-up">НБУ</span></div>
+                <div class="tc-header"><span class="tc-code">USD</span><span class="badge-sm badge-blue">НБУ</span>
+                </div>
                 <div class="tc-name">Долар США</div>
                 <div class="tc-rate">{{ "%.2f"|format(r.rate|float) }}</div>
-                <div class="tc-sub">UAH</div>
+                <div class="tc-bottom">
+                    <div class="tc-sub">UAH</div>
+                    <div class="tc-change" id="chg-USD"></div>
+                </div>
             </div>
             {% endif %}
             {% if r.cc == 'EUR' %}
             <div class="top-card">
-                <div class="tc-header"><span class="tc-code">EUR</span><span class="chg-up">НБУ</span></div>
+                <div class="tc-header"><span class="tc-code">EUR</span><span class="badge-sm badge-blue">НБУ</span>
+                </div>
                 <div class="tc-name">Євро</div>
                 <div class="tc-rate">{{ "%.2f"|format(r.rate|float) }}</div>
-                <div class="tc-sub">UAH</div>
+                <div class="tc-bottom">
+                    <div class="tc-sub">UAH</div>
+                    <div class="tc-change" id="chg-EUR"></div>
+                </div>
             </div>
             {% endif %}
-        {% endfor %}
-        {% for r in crypto %}
-            {% if r.cc == 'BTC' %}
-            <div class="top-card">
-                <div class="tc-header"><span class="tc-code green">BTC</span><span class="chg-up">Крипто</span></div>
-                <div class="tc-name">Bitcoin</div>
-                <div class="tc-rate">{{ "{:,.0f}".format(r.rate|float) }}</div>
-                <div class="tc-sub">USD</div>
-            </div>
-            {% endif %}
+            {% endfor %}
+            {% for r in crypto %}
             {% if r.cc == 'ETH' %}
             <div class="top-card">
-                <div class="tc-header"><span class="tc-code green">ETH</span><span class="chg-up">Крипто</span></div>
+                <div class="tc-header"><span class="tc-code green">ETH</span><span
+                        class="badge-sm badge-green">Крипто</span></div>
                 <div class="tc-name">Ethereum</div>
                 <div class="tc-rate">{{ "{:,.0f}".format(r.rate|float) }}</div>
-                <div class="tc-sub">USD</div>
+                <div class="tc-bottom">
+                    <div class="tc-sub">USD</div>
+                    <div class="tc-change" id="chg-ETH"></div>
+                </div>
             </div>
             {% endif %}
-        {% endfor %}
-    </div>
-
-    <!-- Таблиці -->
-    <div class="main-grid">
-        <div class="card">
-            <div class="card-header">
-                <div class="card-title">Валюти НБУ</div>
-                <div style="display:flex;gap:8px;align-items:center">
-                    <input class="search-input" id="search-nbu" placeholder="Пошук..." oninput="filterTable('nbu-body', this.value)">
-                    <div class="badge badge-blue">НБУ</div>
+            {% if r.cc == 'BTC' %}
+            <div class="top-card">
+                <div class="tc-header"><span class="tc-code green">BTC</span><span
+                        class="badge-sm badge-green">Крипто</span></div>
+                <div class="tc-name">Bitcoin</div>
+                <div class="tc-rate">{{ "{:,.0f}".format(r.rate|float) }}</div>
+                <div class="tc-bottom">
+                    <div class="tc-sub">USD</div>
+                    <div class="tc-change" id="chg-BTC"></div>
                 </div>
             </div>
-            <div class="table-wrap">
-                <table>
-                    <thead><tr>
-                        <th style="width:32px"></th>
-                        <th onclick="sortTable('nbu-body',1)">Код ↕</th>
-                        <th>Назва</th>
-                        <th onclick="sortTable('nbu-body',3)">Курс ↕</th>
-                    </tr></thead>
-                    <tbody id="nbu-body">
-                        {% for r in rates %}
-                        <tr>
-                            <td><input type="checkbox" class="fav-check" data-code="{{ r.cc }}"></td>
-                            <td><span class="code-blue">{{ r.cc }}</span></td>
-                            <td>{{ r.txt }}</td>
-                            <td class="rate-val">{{ "%.2f"|format(r.rate|float) }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+            {% endif %}
+            {% endfor %}
         </div>
 
-        <div class="card">
-            <div class="card-header">
-                <div class="card-title">Криптовалюти</div>
-                <div style="display:flex;gap:8px;align-items:center">
-                    <input class="search-input" id="search-crypto" placeholder="Пошук..." oninput="filterTable('crypto-body', this.value)">
-                    <div class="badge badge-green">CoinGecko</div>
+        <div class="main-grid">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">Валюти НБУ</div>
+                    <div style="display:flex;gap:8px;align-items:center"><input class="search-input"
+                            placeholder="Пошук..." oninput="filterTable('nbu-body', this.value)">
+                        <div class="badge badge-blue">НБУ</div>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width:28px"></th>
+                                <th onclick="sortTable('nbu-body',1)">Код ↕</th>
+                                <th>Назва</th>
+                                <th onclick="sortTable('nbu-body',3)">Курс ↕</th>
+                                <th>24г</th>
+                                <th style="width:60px">Тренд</th>
+                            </tr>
+                        </thead>
+                        <tbody id="nbu-body">{% for r in rates %}<tr>
+                                <td><span class="fav-star" data-code="{{ r.cc }}">☆</span></td>
+                                <td><span class="code-blue">{{ r.cc }}</span></td>
+                                <td>{{ r.txt }}</td>
+                                <td class="rate-val">{{ "%.2f"|format(r.rate|float) }}</td>
+                                <td class="change-cell neutral" data-code="{{ r.cc }}">—</td>
+                                <td class="sparkline-cell" data-code="{{ r.cc }}"></td>
+                            </tr>{% endfor %}</tbody>
+                    </table>
                 </div>
             </div>
-            <div class="table-wrap">
-                <table>
-                    <thead><tr>
-                        <th style="width:32px"></th>
-                        <th onclick="sortTable('crypto-body',1)">Код ↕</th>
-                        <th>Назва</th>
-                        <th onclick="sortTable('crypto-body',3)">Курс ↕</th>
-                    </tr></thead>
-                    <tbody id="crypto-body">
-                        {% for r in crypto %}
-                        <tr>
-                            <td><input type="checkbox" class="fav-check" data-code="{{ r.cc }}"></td>
-                            <td><span class="code-green">{{ r.cc }}</span></td>
-                            <td>{{ r.txt }}</td>
-                            <td class="rate-val">{{ "%.2f"|format(r.rate|float) }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">Криптовалюти</div>
+                    <div style="display:flex;gap:8px;align-items:center"><input class="search-input"
+                            placeholder="Пошук..." oninput="filterTable('crypto-body', this.value)">
+                        <div class="badge badge-green">CoinGecko</div>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width:28px"></th>
+                                <th onclick="sortTable('crypto-body',1)">Код ↕</th>
+                                <th>Назва</th>
+                                <th onclick="sortTable('crypto-body',3)">Курс ↕</th>
+                                <th>24г</th>
+                                <th style="width:60px">Тренд</th>
+                            </tr>
+                        </thead>
+                        <tbody id="crypto-body">{% for r in crypto %}<tr>
+                                <td><span class="fav-star" data-code="{{ r.cc }}">☆</span></td>
+                                <td><span class="code-green">{{ r.cc }}</span></td>
+                                <td>{{ r.txt }}</td>
+                                <td class="rate-val">{{ "%.2f"|format(r.rate|float) }}</td>
+                                <td class="change-cell neutral" data-code="{{ r.cc }}">—</td>
+                                <td class="sparkline-cell" data-code="{{ r.cc }}"></td>
+                            </tr>{% endfor %}</tbody>
+                    </table>
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- Конвертер -->
-    <div class="converter">
-        <div class="conv-title">Конвертер валют</div>
-        <div class="conv-row">
-            <div class="conv-field">
-                <label>Сума</label>
-                <input type="number" id="conv-amount" value="100" min="0" oninput="convert()">
-            </div>
-            <div class="conv-arrow">→</div>
-            <div class="conv-field">
-                <label>Валюта</label>
-                <select id="conv-currency" onchange="convert()">
-                    {% for r in rates %}
-                    <option value="{{ r.rate }}">{{ r.cc }} → UAH</option>
-                    {% endfor %}
-                    {% for r in crypto %}
-                    <option value="{{ r.rate }}">{{ r.cc }} → UAH</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="conv-arrow"></div>
-            <div class="conv-field">
-                <label>&nbsp;</label>
-                <button class="conv-btn" onclick="convert()">Конвертувати</button>
+        <div class="converter">
+            <div class="conv-row">
+                <div class="conv-field" style="max-width:140px"><label>Сума</label><input type="number" id="conv-amount"
+                        value="100" min="0" oninput="convert()"></div>
+                <div class="conv-arrow">→</div>
+                <div class="conv-field" style="max-width:220px"><label>Валюта</label><select id="conv-currency"
+                        onchange="convert()">{% for r in rates %}<option value="{{ r.rate }}" data-type="fiat">{{ r.cc
+                            }} → UAH</option>{% endfor %}{% for r in crypto %}<option value="{{ r.rate }}"
+                            data-type="crypto">{{ r.cc }} → USD</option>{% endfor %}</select></div>
+                <div class="conv-btn" onclick="convert()">Конвертувати</div>
+                <div class="conv-result-inline" id="conv-result">—</div>
             </div>
         </div>
-        <div class="conv-result">
-            <div class="conv-result-label">Результат:</div>
-            <div class="conv-result-val" id="conv-result">—</div>
+
+        <div class="footer-row">
+            <a href="/history" class="history-link">Переглянути історію →</a>
+            <div class="footer-info">Дані: НБУ + CoinGecko · Оновлення кожні 5 хв · Redis ✓</div>
         </div>
+
     </div>
 
-    <!-- Футер -->
-    <div class="footer-row">
-        <a href="/history" class="history-link">Переглянути історію →</a>
-        <div class="fav-hint">☆ Відмічені валюти будуть збережені (Redis — незабаром)</div>
-    </div>
+    <script>
+        const favorites = {{ favorites | tojson }};
+        const historyData = {{ history | tojson }};
+        const CRYPTO_CODES = new Set(['BTC', 'ETH', 'SOL', 'BNB', 'ADA', 'XRP', 'DOGE', 'DOT', 'AVAX', 'LINK']);
 
-</div>
+        document.getElementById('update-time').textContent = '⟳ ' + new Date().toLocaleTimeString('uk-UA');
 
-<script>
-    document.getElementById('update-time').textContent = '⟳ ' + new Date().toLocaleTimeString('uk-UA');
-
-    // Список улюблених валют з Redis (передав Flask)
-    const favorites = {{ favorites | tojson }};
-
-    // При завантаженні сторінки — відмічаємо чекбокси які збережені в Redis
-    document.querySelectorAll('.fav-check').forEach(cb => {
-        if (favorites.includes(cb.dataset.code)) {
-            cb.checked = true;
+        function updateClocks() {
+            const zones = [
+                { id: 'kyiv', tz: 'Europe/Kyiv', openH: 10, closeH: 18 },
+                { id: 'ny', tz: 'America/New_York', openH: 9, closeH: 16 },
+                { id: 'london', tz: 'Europe/London', openH: 8, closeH: 16 },
+                { id: 'tokyo', tz: 'Asia/Tokyo', openH: 9, closeH: 15 },
+            ];
+            zones.forEach(z => {
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString('uk-UA', { timeZone: z.tz, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                document.getElementById('clock-' + z.id).textContent = timeStr;
+                const h = parseInt(now.toLocaleString('en-US', { timeZone: z.tz, hour: 'numeric', hour12: false }));
+                const day = now.toLocaleString('en-US', { timeZone: z.tz, weekday: 'short' });
+                const isWeekend = (day === 'Sat' || day === 'Sun');
+                const isOpen = !isWeekend && h >= z.openH && h < z.closeH;
+                const statusEl = document.getElementById('status-' + z.id);
+                if (z.id === 'kyiv') {
+                    statusEl.textContent = '24/7 Крипто';
+                    statusEl.className = 'clock-status open';
+                } else {
+                    statusEl.textContent = isOpen ? 'Відкрито' : 'Закрито';
+                    statusEl.className = 'clock-status ' + (isOpen ? 'open' : 'closed');
+                }
+            });
         }
-    });
+        updateClocks();
+        setInterval(updateClocks, 1000);
 
-    // При кліку на будь-який чекбокс — зберігаємо весь список в Redis
-    document.querySelectorAll('.fav-check').forEach(cb => {
-        cb.addEventListener('change', () => {
-            // Збираємо всі відмічені чекбокси
-            const selected = [];
-            document.querySelectorAll('.fav-check:checked').forEach(c => {
-                selected.push(c.dataset.code);
-            });
-
-            // Відправляємо в Flask → consumer → Redis
-            fetch('/api/favorites', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({codes: selected})
+        document.querySelectorAll('.fav-star').forEach(star => {
+            if (favorites.includes(star.dataset.code)) { star.textContent = '★'; star.classList.add('active'); }
+            star.addEventListener('click', () => {
+                const isActive = star.classList.toggle('active');
+                star.textContent = isActive ? '★' : '☆';
+                const selected = [];
+                document.querySelectorAll('.fav-star.active').forEach(s => selected.push(s.dataset.code));
+                fetch('/api/favorites', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codes: selected }) });
             });
         });
-    });
 
-    function convert() {
-        const amount = parseFloat(document.getElementById('conv-amount').value);
-        const rate = parseFloat(document.getElementById('conv-currency').value);
-        if (!amount || !rate) return;
-        const result = (amount * rate).toLocaleString('uk-UA', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        document.getElementById('conv-result').textContent = result + ' UAH';
-    }
+        function calcChanges() {
+            if (!historyData || historyData.length === 0) return;
+            const byCode = {};
+            historyData.forEach(r => { if (!byCode[r.currency]) byCode[r.currency] = []; byCode[r.currency].push({ rate: parseFloat(r.rate), time: new Date(r.created_at) }); });
+            Object.keys(byCode).forEach(code => {
+                const records = byCode[code].sort((a, b) => a.time - b.time);
+                if (records.length < 2) return;
+                const oldest = records[0].rate, newest = records[records.length - 1].rate;
+                if (oldest === 0) return;
+                const change = ((newest - oldest) / oldest * 100);
+                const sign = change >= 0 ? '▲' : '▼';
+                const cls = change > 0 ? 'up' : change < 0 ? 'down' : 'neutral';
+                document.querySelectorAll(`.change-cell[data-code="${code}"]`).forEach(cell => { cell.textContent = `${sign} ${Math.abs(change).toFixed(2)}%`; cell.className = `change-cell ${cls}`; });
+                const topEl = document.getElementById('chg-' + code);
+                if (topEl) { topEl.textContent = `${sign} ${Math.abs(change).toFixed(2)}%`; topEl.className = `tc-change ${cls}`; }
+            });
+        }
+        calcChanges();
 
-    function filterTable(bodyId, query) {
-        const rows = document.getElementById(bodyId).querySelectorAll('tr');
-        rows.forEach(row => {
-            const text = row.textContent.toLowerCase();
-            row.style.display = text.includes(query.toLowerCase()) ? '' : 'none';
-        });
-    }
+        function drawSparklines() {
+            if (!historyData || historyData.length === 0) return;
+            const byCode = {};
+            historyData.forEach(r => { if (!byCode[r.currency]) byCode[r.currency] = []; byCode[r.currency].push({ rate: parseFloat(r.rate), time: new Date(r.created_at) }); });
+            document.querySelectorAll('.sparkline-cell[data-code]').forEach(cell => {
+                const code = cell.dataset.code, records = byCode[code];
+                if (!records || records.length < 2) return;
+                const sorted = records.sort((a, b) => a.time - b.time);
+                const rates = sorted.map(r => r.rate);
+                const min = Math.min(...rates), max = Math.max(...rates), range = max - min || 1;
+                const w = 56, h = 20, step = w / (rates.length - 1);
+                const points = rates.map((v, i) => `${(i * step).toFixed(1)},${(h - ((v - min) / range) * (h - 2) - 1).toFixed(1)}`).join(' ');
+                const color = rates[rates.length - 1] >= rates[0] ? '#3bb554' : '#e24b4a';
+                cell.innerHTML = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+            });
+        }
+        drawSparklines();
 
-    function sortTable(bodyId, colIndex) {
-        const tbody = document.getElementById(bodyId);
-        const rows = Array.from(tbody.querySelectorAll('tr'));
-        const asc = tbody.dataset.sort !== colIndex + 'asc';
-        rows.sort((a, b) => {
-            const aVal = a.cells[colIndex].textContent.trim();
-            const bVal = b.cells[colIndex].textContent.trim();
-            const aNum = parseFloat(aVal.replace(/,/g, ''));
-            const bNum = parseFloat(bVal.replace(/,/g, ''));
-            if (!isNaN(aNum) && !isNaN(bNum)) return asc ? aNum - bNum : bNum - aNum;
-            return asc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-        });
-        tbody.dataset.sort = asc ? colIndex + 'asc' : colIndex + 'desc';
-        rows.forEach(r => tbody.appendChild(r));
-    }
+        function convert() {
+            const amount = parseFloat(document.getElementById('conv-amount').value);
+            const sel = document.getElementById('conv-currency');
+            const rate = parseFloat(sel.value);
+            if (!amount || !rate) return;
+            const type = sel.options[sel.selectedIndex].getAttribute('data-type');
+            const cur = type === 'crypto' ? 'USD' : 'UAH';
+            const result = (amount * rate).toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            document.getElementById('conv-result').textContent = result + ' ' + cur;
+        }
 
-    convert();
-</script>
+        function filterTable(bodyId, query) {
+            document.getElementById(bodyId).querySelectorAll('tr').forEach(row => {
+                row.style.display = row.textContent.toLowerCase().includes(query.toLowerCase()) ? '' : 'none';
+            });
+        }
 
+        function sortTable(bodyId, colIndex) {
+            const tbody = document.getElementById(bodyId);
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const asc = tbody.dataset.sort !== colIndex + 'asc';
+            rows.sort((a, b) => {
+                const aVal = a.cells[colIndex].textContent.trim(), bVal = b.cells[colIndex].textContent.trim();
+                const aNum = parseFloat(aVal.replace(/,/g, '')), bNum = parseFloat(bVal.replace(/,/g, ''));
+                if (!isNaN(aNum) && !isNaN(bNum)) return asc ? aNum - bNum : bNum - aNum;
+                return asc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+            });
+            tbody.dataset.sort = asc ? colIndex + 'asc' : colIndex + 'desc';
+            rows.forEach(r => tbody.appendChild(r));
+        }
+
+        convert();
+    </script>
 </body>
+
 </html>
