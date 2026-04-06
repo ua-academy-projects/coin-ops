@@ -22,6 +22,7 @@ terraform/*.tfstate
 terraform/*.tfstate.backup
 terraform/terraform.tfvars
 terraform/keys/
+terraform/keys/
 
 # React build output
 ui-react/dist/
