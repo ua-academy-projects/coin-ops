@@ -354,3 +354,123 @@ chmod 600 /mnt/f/univ/softserv-internship/.vagrant/machines/*/hyperv/private_key
 ```
 
 Must be re-run after each `vagrant up` since Vagrant regenerates keys with open permissions.
+
+---
+
+## 16. Go apt package too old for go-redis v9 (`maps`/`slices` not in GOROOT)
+
+**Symptom:** Proxy build on node-02 fails during `ansible-playbook deploy.yml`:
+```
+/root/go/pkg/mod/github.com/redis/go-redis/v9@v9.18.0/command.go:7:2:
+  package maps is not in GOROOT (/usr/lib/go-1.18/src/maps)
+/root/go/pkg/mod/github.com/redis/go-redis/v9@v9.18.0/maintnotifications/hooks.go:5:2:
+  package slices is not in GOROOT (/usr/lib/go-1.18/src/slices)
+```
+
+**Root cause:** `apt install golang-go` on Ubuntu 22.04 installs Go 1.18. The `go-redis/v9` library requires Go 1.21+ because it imports the `maps` and `slices` packages from the standard library, which were only added in Go 1.21. `go.mod` declares `go 1.21` but the provision playbook was installing from apt without checking the version.
+
+**Fix:** Install Go 1.22 by downloading the official binary tarball directly instead of using apt:
+```yaml
+- name: Download Go 1.22 binary
+  get_url:
+    url: https://go.dev/dl/go1.22.1.linux-amd64.tar.gz
+    dest: /tmp/go.tar.gz
+
+- name: Remove old Go installation
+  file:
+    path: /usr/local/go
+    state: absent
+
+- name: Extract Go to /usr/local
+  unarchive:
+    src: /tmp/go.tar.gz
+    dest: /usr/local
+    remote_src: yes
+```
+
+**Lesson:** Never rely on distro package managers for language runtimes in production-like setups. Always pin the exact version and install from upstream.
+
+---
+
+## 17. Ansible `go build` fails: binary not found in non-login shell PATH
+
+**Symptom:** Even after installing Go 1.22 to `/usr/local/go`, the deploy playbook fails:
+```
+fatal: [softserve-node-02]: FAILED! => {"cmd": ["go", "build", ...], "rc": 2,
+  "msg": "No such file or directory"}
+```
+
+**Root cause:** Ansible connects via SSH without a login shell. `/etc/profile.d/go.sh` (which adds `/usr/local/go/bin` to `PATH`) is only sourced in interactive login shells. The `command: go build` task runs in a minimal environment where `$PATH` does not include `/usr/local/go/bin`.
+
+**Fix:** Either use the absolute binary path, or explicitly set PATH in the task's `environment` block:
+```yaml
+- name: Build proxy binary
+  command: /usr/local/go/bin/go build -mod=mod -o /opt/cognitor/proxy/proxy .
+  environment:
+    PATH: /usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    HOME: /root
+    GOPATH: /root/go
+```
+
+---
+
+## 18. Ansible `synchronize` + `delegate_to: localhost` inherits `become: yes`
+
+**Symptom:** The UI deploy task fails:
+```
+fatal: [softserve-node-03 -> localhost]: FAILED! =>
+  {"module_stderr": "sudo: a password is required\n"}
+```
+
+**Root cause:** The `synchronize` module is delegated to `localhost` to push the local `dist/` folder to the remote VM. But the play has `become: yes` at the top level, which the task inherits. Ansible then tries to run `sudo rsync` on localhost — where there is no passwordless sudo configured.
+
+**Fix:** Add `become: false` explicitly to the synchronize task to override the play-level setting:
+```yaml
+- name: Sync React dist/ to web root
+  synchronize:
+    src: "{{ playbook_dir }}/../ui-react/dist/"
+    dest: /var/www/coin-ops/
+  delegate_to: localhost
+  become: false          # ← required: overrides play-level become: yes
+```
+
+---
+
+## 19. React app contained unused AI/server dependencies from template
+
+**Symptom:** `npm ci` installs `@google/genai`, `express`, `dotenv`, `tsx`, `@types/express` — none of which are imported anywhere in the application code. Build time is inflated and `npm audit` reports unnecessary attack surface.
+
+**Root cause:** The UI was scaffolded from an AI Studio template that included a local Express server (for proxying Gemini API calls) and Gemini client libraries. When the app was rewired to use the real backend APIs, the template dependencies were not removed.
+
+**Fix:** Remove from `package.json`:
+```diff
+- "@google/genai": "^1.29.0",
+- "express": "^4.21.2",
+- "dotenv": "^17.2.3",
+```
+```diff
+devDependencies:
+- "@types/express": "^4.17.21",
+- "tsx": "^4.21.0",
+```
+
+**How to catch this earlier:** Run `npx depcheck` before committing UI changes. It reports any package listed in `package.json` that is not imported in the source code.
+
+---
+
+## 20. Terraform cloud-init ISO attached as hard disk instead of DVD drive
+
+**Symptom:** VMs boot but cloud-init never runs. The hostname, SSH key, and static IP are not applied. The VM gets a random DHCP address and the default `ubuntu` hostname.
+
+**Root cause:** The initial Terraform config attached the seed ISO using a `hard_disk_drives` block. Hyper-V Generation 2 enforces a strict distinction: ISOs can only be mounted as optical media via `dvd_drives`. Attaching an ISO as a hard disk causes Hyper-V to silently ignore it at boot — no error, but cloud-init never sees the `cidata` volume.
+
+**Fix:** Use `dvd_drives` block for the seed ISO, not `hard_disk_drives`:
+```hcl
+dvd_drives {
+  path                = "${var.seed_staging_windows_path}\\${each.key}-seed.iso"
+  controller_number   = 0
+  controller_location = 1   # location 0 = OS disk, location 1 = DVD
+}
+```
+
+**Why silent:** Hyper-V does not error on attaching an ISO as a hard disk — it just fails to present the volume to the guest. Cloud-init waits for the `cidata` label and times out, falling back to DHCP.
