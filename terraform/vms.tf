@@ -1,8 +1,8 @@
 locals {
   nodes = {
-    "node-01" = "history"
-    "node-02" = "proxy"
-    "node-03" = "ui"
+    "node-01" = { role = "history", mac = "00:15:5D:01:00:01" }
+    "node-02" = { role = "proxy",   mac = "00:15:5D:01:00:02" }
+    "node-03" = { role = "ui",      mac = "00:15:5D:01:00:03" }
   }
 }
 
@@ -53,8 +53,9 @@ resource "hyperv_machine_instance" "node" {
   dynamic_memory       = false
 
   network_adaptors {
-    name        = "eth0"
-    switch_name = hyperv_network_switch.internal.name
+    name               = "eth0"
+    switch_name        = hyperv_network_switch.internal.name
+    static_mac_address = each.value.mac
   }
 
   hard_disk_drives {
