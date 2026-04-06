@@ -1,11 +1,15 @@
-# Non-secret variables — safe to commit.
-# Secrets (passwords) live in group_vars/secrets.yml which is gitignored.
+# All variables — safe to commit.
+# Secrets and local paths come from environment variables.
+# Run `source .env` before any ansible-playbook command.
 
 # ── SSH ───────────────────────────────────────────────────────
-# SSH key paths are set per-host in ansible/host_vars/<hostname>.yml (gitignored).
-# Copy ansible/host_vars/softserve-node-01.yml.example for each host and fill in paths.
 ansible_user: vagrant
 ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+ansible_ssh_private_key_file: "{{ lookup('env', 'SSH_KEY_PATH') }}"
+
+# ── Passwords (loaded from .env) ──────────────────────────────
+rabbitmq_password: "{{ lookup('env', 'RABBITMQ_PASSWORD') }}"
+db_password: "{{ lookup('env', 'DB_PASSWORD') }}"
 
 # ── Service accounts ──────────────────────────────────────────
 rabbitmq_user: cognitor
@@ -17,7 +21,6 @@ proxy_port: 8080
 history_port: 8000
 
 # ── Derived connection strings ────────────────────────────────
-# rabbitmq_password and db_password come from secrets.yml
 rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@172.31.1.10:5672/"
 database_url: "postgresql://{{ db_user }}:{{ db_password }}@localhost:5432/{{ db_name }}"
 redis_url: "redis://127.0.0.1:6379/0"

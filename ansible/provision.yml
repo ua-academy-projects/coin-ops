@@ -2,7 +2,23 @@
 # provision.yml — install system packages on all VMs.
 # Run once (or re-run: idempotent).
 #
+#   source .env
 #   ansible-playbook -i ansible/inventory ansible/provision.yml
+
+- name: Validate required environment variables
+  hosts: localhost
+  connection: local
+  tasks:
+    - name: Check .env vars are exported
+      assert:
+        that:
+          - lookup('env', 'RABBITMQ_PASSWORD') != ''
+          - lookup('env', 'DB_PASSWORD') != ''
+          - lookup('env', 'SSH_KEY_PATH') != ''
+        fail_msg: |
+          Required environment variables are not set.
+          Run:  source .env
+          Then retry: ansible-playbook -i ansible/inventory ansible/provision.yml
 
 - name: Common setup — all nodes
   hosts: all
