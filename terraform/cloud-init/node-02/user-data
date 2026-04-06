@@ -3,9 +3,14 @@ users:
   - name: vagrant
     sudo: ALL=(ALL) NOPASSWD:ALL
     shell: /bin/bash
-    lock_passwd: true
+    lock_passwd: false
     ssh_authorized_keys:
       - REPLACE_WITH_SSH_KEY
+
+chpasswd:
+  list: |
+    vagrant:vagrant
+  expire: false
 
 package_update: true
 packages:
