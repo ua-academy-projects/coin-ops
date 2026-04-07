@@ -482,3 +482,88 @@ dvd_drives {
 ```
 
 **Why silent:** Hyper-V does not error on attaching an ISO as a hard disk — it just fails to present the volume to the guest. Cloud-init waits for the `cidata` label and times out, falling back to DHCP.
+
+---
+
+## 21. Insufficient host RAM — node-03 fails to start (0x800705AA)
+
+**Symptom:** `terraform apply` creates node-01 and node-02 successfully but fails on node-03:
+```
+Start-VM : 'softserve-node-03' failed to start.
+Unable to allocate 2048 MB of RAM: Insufficient system resources exist to
+complete the requested service. (0x800705AA)
+```
+
+**Root cause:** Static memory allocation reserves the full `vm_memory_mb` (2048 MB) for each VM at startup — even if the guest isn't using it. Two VMs already consumed 4 GB, leaving less than 2 GB free on a 16 GB host that also runs Windows, WSL, and other processes.
+
+**Fix:** Switch to dynamic memory. The provider requires exactly one of the two fields — not both, not neither:
+```hcl
+dynamic_memory       = true   # use only this — do NOT also set static_memory
+memory_startup_bytes = 1024 * 1024 * 1024   # 1 GB startup
+memory_minimum_bytes = 512  * 1024 * 1024   # 512 MB floor
+memory_maximum_bytes = var.vm_memory_mb * 1024 * 1024
+```
+
+**Provider quirk:** Setting `static_memory = false` alongside `dynamic_memory = true` throws:
+```
+"dynamic_memory": only one of `dynamic_memory,static_memory` can be specified
+```
+Remove `static_memory` entirely when using dynamic memory.
+
+---
+
+## 22. "Unable to remove resource pool from dvd drive" on terraform apply
+
+**Symptom:** `terraform apply` (updating already-running VMs) fails on all three nodes:
+```
+Unable to remove resource pool from dvd drive [...node-01-seed.iso...]
+```
+
+**Root cause:** The Hyper-V provider tries to detach and re-attach the DVD drive when updating any VM setting. While a VM is running, Hyper-V holds a lock on the mounted ISO. The provider's PowerShell script cannot remove the resource pool association on a live drive.
+
+**Fix:** Stop all VMs before running `terraform apply` when changes touch the VM hardware config:
+```powershell
+Stop-VM -Name softserve-node-01, softserve-node-02, softserve-node-03 -Force
+```
+Then re-run `terraform apply`. Terraform will restart the VMs after applying.
+
+---
+
+## 23. Internal switch has no host IP — VMs unreachable after `terraform apply`
+
+**Symptom:** VMs have their cloud-init static IPs and can ping each other, but the Windows host cannot reach them. `ipconfig` shows `169.254.x.x` (APIPA) on the `vEthernet (coin-ops-internal)` adapter.
+
+**Root cause:** Terraform creates the Hyper-V Internal switch but never assigns an IP to the host's virtual NIC on that switch. APIPA (`169.254.x.x`) is Windows auto-assigning a link-local address because no DHCP server and no static IP exists. The host is effectively disconnected from its own virtual switch.
+
+**Fix — one-time setup in PowerShell (Admin):**
+```powershell
+# Assign gateway IP to host's virtual NIC
+New-NetIPAddress -InterfaceAlias "vEthernet (coin-ops-internal)" `
+                 -IPAddress 172.31.0.1 -PrefixLength 20
+
+# NAT for internet access from VMs
+New-NetNat -Name "CoinOpsNAT" -InternalIPInterfaceAddressPrefix "172.31.0.0/20"
+```
+
+This must be re-run once after each `terraform destroy && apply` that recreates the switch, because destroying the switch also removes the host IP assignment.
+
+---
+
+## 24. SSH "host key has changed" after VM recreation
+
+**Symptom:** After destroying and recreating VMs, SSH fails:
+```
+WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!
+Offending ECDSA key in /home/user/.ssh/known_hosts:3
+  remove with: ssh-keygen -f '~/.ssh/known_hosts' -R '172.31.1.10'
+```
+
+**Root cause:** Each new VM generates a fresh host key on first boot. The old key for the same IP is still in `~/.ssh/known_hosts` from the previous VM. SSH treats this as a potential MITM attack and refuses the connection.
+
+**Fix:**
+```bash
+ssh-keygen -R 172.31.1.10
+ssh-keygen -R 172.31.1.11
+ssh-keygen -R 172.31.1.12
+```
+Run these after every `terraform destroy && apply` before attempting SSH or Ansible.
