@@ -6,7 +6,7 @@
 # may not be strictly required — consider setting it to false in user-data if
 # internet access is not available.
 resource "hyperv_network_switch" "internal" {
-  name                = "coin-ops-internal"
+  name                = "CoinOpsSwitch"
   switch_type         = "Internal"
   allow_management_os = true
   notes               = "Internal switch for coin-ops 3-node cluster (172.31.1.0/24)"

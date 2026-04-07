@@ -48,9 +48,11 @@ resource "hyperv_machine_instance" "node" {
 
   name                 = "softserve-${each.key}"
   generation           = 2
-  memory_startup_bytes = var.vm_memory_mb * 1024 * 1024
+  memory_startup_bytes = 1024 * 1024 * 1024 # 1024 MB startup
+  memory_minimum_bytes = 512 * 1024 * 1024  # 512 MB minimum
+  memory_maximum_bytes = var.vm_memory_mb * 1024 * 1024 # 2048 MB maximum (from variable)
   processor_count      = var.vm_processors
-  static_memory        = true
+  dynamic_memory       = true
 
   vm_firmware {
     enable_secure_boot   = "On"
