@@ -34,6 +34,7 @@ resource "null_resource" "seed" {
       mkdir -p "$dst"
       cp "$src/user-data" "$src/meta-data" "$src/network-config" "$dst/"
       sed -i "s|REPLACE_WITH_SSH_KEY|${var.ssh_public_key}|g" "$dst/user-data"
+      sed -i "s|REPLACE_WITH_CONSOLE_PASSWORD|${var.vm_console_password}|g" "$dst/user-data"
       genisoimage \
         -output "${var.seed_staging_wsl_path}/${each.key}-seed.iso" \
         -volid cidata -joliet -rock \

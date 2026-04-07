@@ -43,6 +43,12 @@ variable "ssh_public_key" {
   type        = string
 }
 
+variable "vm_console_password" {
+  description = "Emergency console password for the vagrant user (fallback when SSH key auth is unavailable)"
+  type        = string
+  sensitive   = true
+}
+
 variable "vm_memory_mb" {
   description = "RAM per VM in megabytes"
   type        = number

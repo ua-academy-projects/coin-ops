@@ -9,7 +9,7 @@ users:
 
 chpasswd:
   list: |
-    vagrant:vagrant
+    vagrant:REPLACE_WITH_CONSOLE_PASSWORD
   expire: false
 
 package_update: true
