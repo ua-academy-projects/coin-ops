@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: coinops_redis
+    restart: unless-stopped
+    # Порт 6379 відкритий всередині мережі Docker, назовні не прокидаємо
+    expose:
+      - "6379"
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: coinops_mq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    ports:
+      # 15672 для доступу до Web UI RabbitMQ через браузер (з localhost)
+      - "15672:15672"
+    expose:
+      # 5672 для AMQP з'єднань між контейнерами (внутрішній)
+      - "5672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  proxy:
+    build:
+      context: ../services/proxy
+    container_name: coinops_proxy
+    restart: unless-stopped
+    depends_on:
+      - rabbitmq
+    ports:
+      - "8081:8080"
+    environment:
+      - COINOPS_LISTEN=:8080
+      - MQ_ENABLED=TRUE
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      - RABBITMQ_EXCHANGE=coinops.rates
+      - RABBITMQ_ROUTING_KEY=rates.snapshot
+      - NBU_API_URL=${NBU_API_URL}
+      - COINGECKO_API_URL=${COINGECKO_API_URL}
+      - COINGECKO_IDS=${COINGECKO_IDS}
+
+  history_service:
+    build:
+      context: ../services/history_service
+    container_name: coinops_history
+    restart: unless-stopped
+    depends_on:
+      - rabbitmq
+    ports:
+      - "8090:8090"
+    environment:
+      # Змінні для підключення до VM database
+      - PGHOST=${PGHOST}
+      - PGPORT=${PGPORT}
+      - PGUSER=${PGUSER}
+      - PGPASSWORD=${PGPASSWORD}
+      - PGDATABASE=${PGDATABASE}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      - RABBITMQ_EXCHANGE=coinops.rates
+      - RABBITMQ_QUEUE=coinops.history
+      - RABBITMQ_ROUTING_KEY=rates.snapshot
+      - MQ_CONSUMER_ENABLED=true
+      - HTTP_API_ENABLED=true
+      - HISTORY_LISTEN=0.0.0.0
+      - HISTORY_PORT=8090
+    volumes:
+      - ../services/history_service:/app
+
+  frontend:
+    build:
+      context: ../services/frontend
+    container_name: coinops_frontend
+    restart: unless-stopped
+    depends_on:
+      - proxy
+      - history_service
+      - redis
+    ports:
+      - "5000:5000"
+    environment:
+      - PROXY_URL=http://proxy:8080
+      - HISTORY_API_URL=http://history_service:8090/api/v1/history
+      - REDIS_URL=redis://redis:6379/0
+      - FLASK_DEBUG=1
+    volumes:
+      - ../services/frontend:/app
+
+volumes:
+  rabbitmq_data:

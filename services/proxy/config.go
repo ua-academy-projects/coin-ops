@@ -14,6 +14,9 @@ const (
 	defaultPollInterval = 10 * time.Minute
 	defaultMQExchange   = "coinops.rates"
 	defaultMQRoutingKey = "rates.snapshot"
+	defaultNbuURL       = "https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json"
+	defaultCoinGeckoURL = "https://api.coingecko.com/api/v3/simple/price?ids=%s&vs_currencies=usd"
+	defaultCoinGeckoIDs = "bitcoin,ethereum,cardano,solana,ripple"
 )
 
 // Config holds all runtime settings for the proxy service, loaded once at startup.
@@ -28,6 +31,9 @@ type Config struct {
 	MQExchange      string
 	MQRoutingKey    string
 	CORSAllowOrigin string
+	NBUURL          string
+	CoinGeckoURL    string
+	CoinGeckoIDs    string
 }
 
 // LoadConfig reads environment variables and returns a validated Config.
@@ -42,6 +48,9 @@ func LoadConfig() (*Config, error) {
 		MQExchange:      envString("RABBITMQ_EXCHANGE", defaultMQExchange),
 		MQRoutingKey:    envString("RABBITMQ_ROUTING_KEY", defaultMQRoutingKey),
 		CORSAllowOrigin: strings.TrimSpace(os.Getenv("COINOPS_CORS_ALLOW_ORIGIN")),
+		NBUURL:          envString("NBU_API_URL", defaultNbuURL),
+		CoinGeckoURL:    envString("COINGECKO_API_URL", defaultCoinGeckoURL),
+		CoinGeckoIDs:    envString("COINGECKO_IDS", defaultCoinGeckoIDs),
 	}
 	if cfg.MQEnabled && cfg.MQURL == "" {
 		return nil, fmt.Errorf("MQ_ENABLED=true but RABBITMQ_URL is empty")

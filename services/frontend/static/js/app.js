@@ -324,4 +324,15 @@ initTooltips();
 startRelativeTimeTicker();
 startAutoRefresh();
 
+/* ---- Pause heavy animations while page hidden ---- */
+document.addEventListener('visibilitychange', function () {
+  if (document.hidden) {
+    document.body.classList.add('page-hidden');
+    if (relativeTimeId) { clearInterval(relativeTimeId); relativeTimeId = null; }
+  } else {
+    document.body.classList.remove('page-hidden');
+    startRelativeTimeTicker();
+  }
+});
+
 } // end else (live-tbody present)

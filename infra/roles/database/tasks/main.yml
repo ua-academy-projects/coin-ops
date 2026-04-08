@@ -10,19 +10,17 @@
 
 - name: Allow PostgreSQL to listen on all interfaces
   lineinfile:
-    path: /etc/postgresql/16/main/postgresql.conf
+    path: "/etc/postgresql/{{ pg_version | default('16') }}/main/postgresql.conf"
     regexp: '^#listen_addresses'
     line: "listen_addresses = '*'"
   notify: Restart PostgreSQL
 
 - name: Allow PostgreSQL to accept remote connections
   lineinfile:
-    path: /etc/postgresql/16/main/pg_hba.conf
-    line: "{{ item }}"
+    path: "/etc/postgresql/{{ pg_version | default('16') }}/main/pg_hba.conf"
+    line: "host    all             all             {{ item }}            scram-sha-256"
     state: present
-  loop:
-    - "host    all             all             10.10.1.0/24            scram-sha-256"
-    - "host    all             all             10.10.2.0/24            scram-sha-256"
+  loop: "{{ pg_allowed_networks | default(['10.10.1.0/24']) }}"
   notify: Restart PostgreSQL
 
 - name: Apply PostgreSQL config before local init

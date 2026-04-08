@@ -1,7 +1,0 @@
----
-# handlers file for proxy
-- name: Restart Proxy
-  systemd:
-    name: proxy
-    state: restarted
-    daemon_reload: yes

@@ -28,6 +28,7 @@ func main() {
 
 	agg := &rateAggregator{
 		client:    newHTTPClient(),
+		cfg:       cfg,
 		cacheTTL:  cfg.CacheTTL,
 		publisher: publisher,
 	}

@@ -18,6 +18,7 @@ type cachedEntry struct {
 
 type rateAggregator struct {
 	client    *http.Client
+	cfg       *Config
 	mu        sync.RWMutex
 	cache     *cachedEntry
 	cacheTTL  time.Duration
@@ -30,7 +31,7 @@ func (a *rateAggregator) buildResponse(ctx context.Context) *RatesResponse {
 
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
-		r, err := FetchNBU(gctx, a.client)
+		r, err := FetchNBU(gctx, a.client, a.cfg.NBUURL)
 		if err != nil {
 			nbuErr = err
 			return nil
@@ -39,7 +40,7 @@ func (a *rateAggregator) buildResponse(ctx context.Context) *RatesResponse {
 		return nil
 	})
 	g.Go(func() error {
-		r, err := FetchCoinGecko(gctx, a.client)
+		r, err := FetchCoinGecko(gctx, a.client, a.cfg.CoinGeckoURL, a.cfg.CoinGeckoIDs)
 		if err != nil {
 			coingeckoErr = err
 			return nil

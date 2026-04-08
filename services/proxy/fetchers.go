@@ -12,10 +12,8 @@ import (
 )
 
 const (
-	nbuURL       = "https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json"
-	coinGeckoURL = "https://api.coingecko.com/api/v3/simple/price?ids=%s&vs_currencies=usd"
 	// coinGeckoIDs lists public CoinGecko asset ids for the MVP (order preserved for stable output).
-	coinGeckoIDs = "bitcoin,ethereum,cardano,solana,ripple"
+	// Default: "bitcoin,ethereum,cardano,solana,ripple"
 )
 
 // coingeckoSymbol maps CoinGecko id to display symbol (uppercase ticker).
@@ -30,8 +28,8 @@ var coingeckoSymbol = map[string]string{
 // FetchNBU downloads NBU official exchange JSON and maps each row to Rate.
 // Business rule: NBU "rate" is UAH per 1 unit of currency (cc). We derive price_usd
 // using the USD row: for any currency C, price_usd(C) = rate(C) / rate(USD); for USD, price_usd = 1.
-func FetchNBU(ctx context.Context, client *http.Client) ([]Rate, error) {
-	body, err := fetchURL(ctx, client, nbuURL)
+func FetchNBU(ctx context.Context, client *http.Client, url string) ([]Rate, error) {
+	body, err := fetchURL(ctx, client, url)
 	if err != nil {
 		return nil, fmt.Errorf("nbu: %w", err)
 	}
@@ -73,8 +71,8 @@ func FetchNBU(ctx context.Context, client *http.Client) ([]Rate, error) {
 }
 
 // FetchCoinGecko downloads simple USD prices for configured crypto ids.
-func FetchCoinGecko(ctx context.Context, client *http.Client) ([]Rate, error) {
-	url := fmt.Sprintf(coinGeckoURL, coinGeckoIDs)
+func FetchCoinGecko(ctx context.Context, client *http.Client, urlTemplate string, ids string) ([]Rate, error) {
+	url := fmt.Sprintf(urlTemplate, ids)
 	body, err := fetchURL(ctx, client, url)
 	if err != nil {
 		return nil, fmt.Errorf("coingecko: %w", err)

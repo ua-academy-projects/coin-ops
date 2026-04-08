@@ -3,14 +3,15 @@
   --co-bg: #080b14;
   --co-text: #e8eaef;
   --co-muted: rgba(232, 234, 239, 0.55);
-  --co-glass-bg: rgba(255, 255, 255, 0.04);
+  --co-glass-use-blur: 0;
+  --co-glass-bg: rgba(14, 18, 30, 0.72);
   --co-glass-border: rgba(255, 255, 255, 0.1);
   --co-glass-hover: rgba(255, 255, 255, 0.07);
   --co-input-bg: rgba(255, 255, 255, 0.06);
   --co-input-border: rgba(255, 255, 255, 0.14);
   --co-grid: rgba(255, 255, 255, 0.08);
-  --co-glass-blur: 26px;
-  --co-glass-saturate: 1.4;
+  --co-glass-blur: 16px;
+  --co-glass-saturate: 1.2;
   --co-glass-refraction: linear-gradient(174deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.03) 28%, transparent 55%);
   --co-glass-border-top: rgba(255, 255, 255, 0.22);
   --co-glass-border-right: rgba(255, 255, 255, 0.08);
@@ -42,14 +43,14 @@ html[data-theme="light"] {
   --co-bg: #e8ecf4;
   --co-text: #111318;
   --co-muted: rgba(17, 19, 24, 0.62);
-  --co-glass-bg: rgba(255, 255, 255, 0.42);
+  --co-glass-bg: rgba(220, 235, 228, 0.78);
   --co-glass-border: rgba(255, 255, 255, 0.55);
   --co-glass-hover: rgba(255, 255, 255, 0.52);
   --co-input-bg: rgba(255, 255, 255, 0.58);
   --co-input-border: rgba(255, 255, 255, 0.60);
   --co-grid: rgba(0, 0, 0, 0.06);
-  --co-glass-blur: 28px;
-  --co-glass-saturate: 1.3;
+  --co-glass-blur: 16px;
+  --co-glass-saturate: 1.2;
   --co-glass-refraction: linear-gradient(174deg, rgba(255,255,255,0.65) 0%, rgba(255,255,255,0.25) 30%, rgba(255,255,255,0.08) 55%);
   --co-glass-border-top: rgba(255, 255, 255, 0.80);
   --co-glass-border-right: rgba(255, 255, 255, 0.40);
@@ -94,9 +95,13 @@ body.coinops-app {
 .bg-orbs .orb {
   position: absolute;
   border-radius: 50%;
-  filter: blur(110px);
   opacity: 0.45;
+  will-change: transform;
+  contain: strict;
   animation: orb-drift 22s ease-in-out infinite alternate;
+}
+.page-hidden .bg-orbs .orb {
+  animation-play-state: paused;
 }
 @keyframes orb-drift {
   0%   { transform: translate(0, 0) scale(1); }
@@ -104,26 +109,26 @@ body.coinops-app {
   100% { transform: translate(-6px, 10px) scale(0.97); }
 }
 .bg-orbs .orb-a {
-  width: 44vw;
-  height: 44vw;
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.55) 0%, transparent 70%);
+  width: 50vw;
+  height: 50vw;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.45) 0%, rgba(16, 185, 129, 0.12) 35%, transparent 55%);
   top: -14%;
   left: -14%;
   animation-duration: 22s;
 }
 .bg-orbs .orb-b {
-  width: 42vw;
-  height: 42vw;
-  background: radial-gradient(circle, rgba(20, 184, 166, 0.45) 0%, transparent 70%);
+  width: 48vw;
+  height: 48vw;
+  background: radial-gradient(circle, rgba(20, 184, 166, 0.38) 0%, rgba(20, 184, 166, 0.10) 35%, transparent 55%);
   bottom: -18%;
   right: -12%;
   animation-duration: 28s;
   animation-delay: -6s;
 }
 .bg-orbs .orb-c {
-  width: 32vw;
-  height: 32vw;
-  background: radial-gradient(circle, rgba(52, 211, 153, 0.35) 0%, transparent 70%);
+  width: 38vw;
+  height: 38vw;
+  background: radial-gradient(circle, rgba(52, 211, 153, 0.28) 0%, rgba(52, 211, 153, 0.08) 35%, transparent 55%);
   top: 36%;
   right: 16%;
   animation-duration: 25s;
@@ -135,8 +140,6 @@ body.coinops-app {
 .glass {
   position: relative;
   background: var(--co-glass-refraction), var(--co-glass-bg);
-  backdrop-filter: blur(var(--co-glass-blur)) saturate(var(--co-glass-saturate));
-  -webkit-backdrop-filter: blur(var(--co-glass-blur)) saturate(var(--co-glass-saturate));
   border: 1px solid;
   border-color:
     var(--co-glass-border-top)
@@ -155,9 +158,7 @@ body.coinops-app {
   box-shadow: var(--co-glass-shadow-hover), var(--co-glass-inner-glow);
 }
 .navbar-glass {
-  background: var(--co-glass-refraction), rgba(255, 255, 255, 0.04) !important;
-  backdrop-filter: blur(30px) saturate(1.5);
-  -webkit-backdrop-filter: blur(30px) saturate(1.5);
+  background: var(--co-glass-refraction), var(--co-glass-bg) !important;
   border-bottom: 1px solid;
   border-image: linear-gradient(90deg, transparent 5%, var(--co-glass-border-top) 50%, transparent 95%) 1;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08), var(--co-glass-inner-glow);
@@ -331,8 +332,6 @@ body.coinops-app {
   color: var(--co-text);
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   transition: all var(--co-transition);
 }
 .btn-glass-outline:hover {
@@ -347,8 +346,6 @@ body.coinops-app {
   font-weight: 600;
   border: 1px solid var(--co-glass-border-top);
   background: var(--co-glass-refraction), rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(14px) saturate(1.3);
-  -webkit-backdrop-filter: blur(14px) saturate(1.3);
   box-shadow: var(--co-glass-shadow), var(--co-glass-inner-glow);
   transition: all var(--co-transition);
 }
@@ -404,9 +401,7 @@ body.coinops-app {
   overflow-y: auto;
   margin-top: 0.3rem !important;
   padding: 0.35rem 0;
-  background: rgba(14, 18, 30, 0.92) !important;
-  backdrop-filter: blur(28px) saturate(1.4);
-  -webkit-backdrop-filter: blur(28px) saturate(1.4);
+  background: rgba(14, 18, 30, 0.95) !important;
   border: 1px solid rgba(255, 255, 255, 0.12) !important;
   border-radius: 14px !important;
   box-shadow:
@@ -485,16 +480,12 @@ body.coinops-app {
 .conv-result-col { min-width: 0; }
 .coinops-app .alert-warning {
   background: var(--co-alert-warn-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--co-alert-warn-border);
   border-radius: 14px;
   color: var(--co-alert-warn-color);
 }
 .coinops-app .alert-danger {
   background: var(--co-alert-danger-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--co-alert-danger-border);
   border-radius: 14px;
   color: var(--co-alert-danger-color);
@@ -540,13 +531,13 @@ html[data-theme="light"] .navbar-glass {
 }
 html[data-theme="light"] .bg-orbs .orb { opacity: 0.50; }
 html[data-theme="light"] .bg-orbs .orb-a {
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.42) 0%, transparent 68%);
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.35) 0%, rgba(16, 185, 129, 0.1) 35%, transparent 55%);
 }
 html[data-theme="light"] .bg-orbs .orb-b {
-  background: radial-gradient(circle, rgba(20, 184, 166, 0.38) 0%, transparent 68%);
+  background: radial-gradient(circle, rgba(20, 184, 166, 0.30) 0%, rgba(20, 184, 166, 0.08) 35%, transparent 55%);
 }
 html[data-theme="light"] .bg-orbs .orb-c {
-  background: radial-gradient(circle, rgba(52, 211, 153, 0.32) 0%, transparent 68%);
+  background: radial-gradient(circle, rgba(52, 211, 153, 0.25) 0%, rgba(52, 211, 153, 0.05) 35%, transparent 55%);
 }
 html[data-theme="light"] .nav-tabs-glass { border-bottom-color: rgba(255, 255, 255, 0.50); }
 html[data-theme="light"] .nav-tabs-glass .nav-link { color: var(--co-muted); }
@@ -573,9 +564,7 @@ html[data-theme="light"] .co-select-dd-toggle.show {
   box-shadow: 0 2px 8px rgba(16, 185, 129, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.65);
 }
 html[data-theme="light"] .co-select-dd-menu {
-  background: rgba(255, 255, 255, 0.65) !important;
-  backdrop-filter: blur(30px) saturate(1.3) !important;
-  -webkit-backdrop-filter: blur(30px) saturate(1.3) !important;
+  background: rgba(255, 255, 255, 0.92) !important;
   border-color: rgba(255, 255, 255, 0.55) !important;
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.65) !important;
 }
@@ -625,8 +614,6 @@ html[data-theme="light"] .kpi-card .co-label { color: rgba(17, 19, 24, 0.65); }
 html[data-theme="light"] .co-footnote { color: rgba(17, 19, 24, 0.55); }
 html[data-theme="light"] .coinops-app .btn-co-accent {
   background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(0, 0, 0, 0.10);
   color: #2d5a4a;
   font-weight: 600;
@@ -727,9 +714,7 @@ html[data-theme="light"] .coinops-app .toast-glass {
 
 /* ---------- Toasts (Liquid Glass) ---------- */
 .coinops-app .toast-glass {
-  background: var(--co-glass-refraction), rgba(14, 18, 30, 0.82);
-  backdrop-filter: blur(28px) saturate(1.4);
-  -webkit-backdrop-filter: blur(28px) saturate(1.4);
+  background: var(--co-glass-refraction), rgba(14, 18, 30, 0.92);
   border: 1px solid;
   border-color: var(--co-glass-border-top) var(--co-glass-border-right) var(--co-glass-border-bottom) var(--co-glass-border-left);
   border-radius: 14px;

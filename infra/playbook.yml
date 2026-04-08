@@ -2,28 +2,4 @@
   become: true
   roles:
   - base
-
-- hosts: vm1
-  become: true
-  roles:
-  - frontend
-
-- hosts: vm2
-  become: true
-  roles:
-  - proxy
-
-- hosts: vm3
-  become: true
-  roles:
-  - history_service
-
-- hosts: vm4
-  become: true
-  roles:
-  - message_queue
-
-- hosts: vm5
-  become: true
-  roles:
   - database
