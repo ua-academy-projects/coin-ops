@@ -1,4 +1,5 @@
 import os
+from collections import defaultdict
 from datetime import datetime
 
 import requests
@@ -89,6 +90,58 @@ def history():
     return render_template("index.html", records=records, error=error,
                            selected=selected, time_range=time_range,
                            view="history", currencies=CURRENCIES)
+
+
+def build_chart_data(records):
+    by_code = defaultdict(dict)
+    all_dates = set()
+
+    for r in records:
+        raw = r.get("rate_date", "")
+        try:
+            dt = datetime.strptime(raw, "%d.%m.%Y")
+        except ValueError:
+            continue
+        date_key = dt.strftime("%Y-%m-%d")
+        by_code[r["code"]][date_key] = r["rate"]
+        all_dates.add(date_key)
+
+    sorted_dates = sorted(all_dates)
+    labels = [datetime.strptime(d, "%Y-%m-%d").strftime("%d %b") for d in sorted_dates]
+
+    datasets = []
+    for code in sorted(by_code.keys()):
+        rates = [by_code[code].get(d) for d in sorted_dates]
+        datasets.append({"code": code, "rates": rates})
+
+    return {"labels": labels, "datasets": datasets}
+
+
+@app.route("/charts")
+def charts():
+    selected = request.args.getlist("cc")
+    if not selected:
+        selected = ["USD"]
+    time_range = request.args.get("range", "30d")
+    chart_data = {"labels": [], "datasets": []}
+    error = None
+
+    url = f"{HISTORY_SERVICE_URL}/history?cc={','.join(c.upper() for c in selected)}&range={time_range}&limit=5000"
+    try:
+        resp = requests.get(url, timeout=5)
+        resp.raise_for_status()
+        records = resp.json()
+        chart_data = build_chart_data(records)
+    except requests.exceptions.ConnectionError:
+        error = "Could not connect to the history service."
+    except requests.exceptions.HTTPError as e:
+        error = f"History service returned an error: {e}"
+    except Exception as e:
+        error = str(e)
+
+    return render_template("index.html", chart_data=chart_data, error=error,
+                           selected=selected, time_range=time_range,
+                           view="charts", currencies=CURRENCIES)
 
 
 if __name__ == "__main__":

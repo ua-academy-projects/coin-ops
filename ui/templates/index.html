@@ -254,6 +254,14 @@
       font-weight: 600;
       color: #e2e8f0;
     }
+
+    /* --- chart card --- */
+    .chart-card {
+      background: #1e2330;
+      border: 1px solid #2d3748;
+      border-radius: 10px;
+      padding: 1.5rem;
+    }
   </style>
 </head>
 <body>
@@ -269,6 +277,7 @@
     <div class="tabs">
       <a href="/" class="tab {% if view == 'rates' %}active{% endif %}">Current Rates</a>
       <a href="/history" class="tab {% if view == 'history' %}active{% endif %}">History</a>
+      <a href="/charts" class="tab {% if view == 'charts' %}active{% endif %}">Charts</a>
     </div>
 
     {% if view == "rates" %}
@@ -328,7 +337,7 @@
         </div>
       {% endif %}
 
-    {% else %}
+    {% elif view == "history" %}
 
       <form method="get" action="/history" class="controls history-form">
         <div class="control-group">
@@ -399,6 +408,50 @@
         </div>
       {% endif %}
 
+    {% elif view == "charts" %}
+
+      <form method="get" action="/charts" class="controls charts-form">
+        <div class="control-group">
+          <label>Currencies</label>
+          <div class="pill-group">
+            {% for code in currencies %}
+              <label class="pill {% if code in selected %}selected{% endif %}">
+                <input type="checkbox" name="cc" value="{{ code }}"
+                       {% if code in selected %}checked{% endif %}>
+                {{ code }}
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="control-group">
+          <label>Time range</label>
+          <div class="range-pills">
+            {% for r, lbl in [("7d","7 days"),("30d","30 days"),("90d","90 days"),("6m","6 months"),("1y","1 year"),("all","All time")] %}
+              <label class="range-pill {% if time_range == r %}selected{% endif %}">
+                <input type="radio" name="range" value="{{ r }}"
+                       {% if time_range == r %}checked{% endif %}>
+                {{ lbl }}
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+      </form>
+
+      {% if error %}
+        <div class="error-box">⚠ {{ error }}</div>
+      {% endif %}
+
+      {% if chart_data.datasets %}
+        <div class="chart-card">
+          <canvas id="rateChart"></canvas>
+        </div>
+      {% elif not error %}
+        <div class="empty-state">
+          <div class="empty-icon">₴</div>
+          <p>No chart data available for the selected filters</p>
+        </div>
+      {% endif %}
+
     {% endif %}
   </div>
   <script>
@@ -429,6 +482,58 @@
         this.form.submit();
       });
     });
+
+    // Charts: currency checkboxes — toggle selected + auto-submit
+    document.querySelectorAll('.charts-form .pill input[type="checkbox"]').forEach(function(cb) {
+      cb.addEventListener('change', function() {
+        this.parentElement.classList.toggle('selected', this.checked);
+        this.form.submit();
+      });
+    });
+
+    // Charts: range radios — toggle selected + auto-submit
+    document.querySelectorAll('.charts-form .range-pill input[type="radio"]').forEach(function(rb) {
+      rb.addEventListener('change', function() {
+        document.querySelectorAll('.charts-form .range-pill').forEach(function(p) {
+          p.classList.toggle('selected', p.querySelector('input').checked);
+        });
+        this.form.submit();
+      });
+    });
   </script>
+  {% if view == "charts" and chart_data.datasets %}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <script>
+    var chartData = {{ chart_data | tojson }};
+    var colors = ['#3b82f6','#22c55e','#f59e0b','#ef4444','#8b5cf6','#ec4899','#06b6d4','#f97316'];
+    var datasets = chartData.datasets.map(function(ds, i) {
+      return {
+        label: ds.code,
+        data: ds.rates,
+        borderColor: colors[i % colors.length],
+        backgroundColor: colors[i % colors.length] + '20',
+        borderWidth: 2,
+        pointRadius: 3,
+        tension: 0.3,
+        spanGaps: true,
+        fill: false
+      };
+    });
+    new Chart(document.getElementById('rateChart'), {
+      type: 'line',
+      data: { labels: chartData.labels, datasets: datasets },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { labels: { color: '#e2e8f0' } }
+        },
+        scales: {
+          x: { ticks: { color: '#64748b' }, grid: { color: '#2d3748' } },
+          y: { ticks: { color: '#64748b' }, grid: { color: '#2d3748' } }
+        }
+      }
+    });
+  </script>
+  {% endif %}
 </body>
 </html>
