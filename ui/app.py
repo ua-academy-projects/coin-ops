@@ -1,8 +1,38 @@
 import os
+from datetime import datetime
+
 import requests
 from flask import Flask, render_template, request
 
 app = Flask(__name__)
+
+
+@app.template_filter("pretty_date")
+def pretty_date_filter(value):
+    """Format a date string into '08 Apr 2026'."""
+    if not value:
+        return value
+    for fmt in ("%d.%m.%Y", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+        try:
+            dt = datetime.strptime(str(value)[:19], fmt)
+            return dt.strftime("%d %b %Y")
+        except ValueError:
+            continue
+    return value
+
+
+@app.template_filter("pretty_datetime")
+def pretty_datetime_filter(value):
+    """Format a datetime string into '08 Apr 2026, 14:30'."""
+    if not value:
+        return value
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"):
+        try:
+            dt = datetime.strptime(str(value)[:19], fmt)
+            return dt.strftime("%d %b %Y, %H:%M")
+        except ValueError:
+            continue
+    return value
 
 API_PROXY_URL = os.environ.get("API_PROXY_URL", "http://localhost:8000")
 HISTORY_SERVICE_URL = os.environ.get("HISTORY_SERVICE_URL", "http://localhost:8001")

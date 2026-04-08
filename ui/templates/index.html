@@ -192,6 +192,59 @@
 
     .td-rate { color: #34d399; font-weight: 600; }
     .td-date { color: #64748b; font-size: 0.82rem; }
+
+    /* --- refresh button --- */
+    .btn-refresh {
+      background: transparent;
+      border: 1px solid #2d3748;
+      color: #94a3b8;
+      padding: 0.5rem 0.6rem;
+      font-size: 1rem;
+      line-height: 1;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+    }
+    .btn-refresh:hover { color: #e2e8f0; border-color: #475569; }
+
+    /* --- controls row --- */
+    .controls-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+
+    /* --- pill chips --- */
+    .pill-group, .range-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .pill, .range-pill {
+      display: inline-block;
+      padding: 0.4rem 0.85rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      border-radius: 999px;
+      border: 1px solid #2d3748;
+      background: #1e2330;
+      color: #94a3b8;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+    .pill:hover, .range-pill:hover { border-color: #475569; color: #cbd5e1; }
+    .pill.selected, .range-pill.selected {
+      background: #1e3a5f;
+      border-color: #3b82f6;
+      color: #60a5fa;
+    }
+
+    .pill input[type="checkbox"],
+    .range-pill input[type="radio"] { display: none; }
   </style>
 </head>
 <body>
@@ -211,17 +264,18 @@
 
     {% if view == "rates" %}
 
-      <form method="get" action="/" class="controls">
+      <form method="get" action="/" class="controls-row">
         <div class="control-group">
-          <label>Currency</label>
-          <select name="cc">
+          <label>Filter by currency</label>
+          <select name="cc" onchange="this.form.submit()">
             <option value="" {% if not cc %}selected{% endif %}>All currencies</option>
             {% for code in currencies %}
               <option value="{{ code }}" {% if cc == code %}selected{% endif %}>{{ code }}</option>
             {% endfor %}
           </select>
         </div>
-        <button type="submit">Fetch Rates</button>
+        <button type="button" class="btn-refresh" onclick="window.location.reload()" title="Refresh rates">&#x21bb;</button>
+        <noscript><button type="submit">Apply</button></noscript>
       </form>
 
       {% if error %}
@@ -231,7 +285,7 @@
       {% if not rates and not error %}
         <div class="empty-state">
           <div class="empty-icon">₴</div>
-          <p>Select a currency filter and click Fetch Rates</p>
+          <p>No exchange rates available right now</p>
         </div>
       {% endif %}
 
@@ -239,7 +293,7 @@
         <div class="table-card">
           <div class="table-meta">
             <strong>{{ rates|length }} {{ "currency" if rates|length == 1 else "currencies" }}</strong>
-            <span>as of {{ rates[0].date }}</span>
+            <span>as of {{ rates[0].date | pretty_date }}</span>
           </div>
           <table>
             <thead>
@@ -256,7 +310,7 @@
                 <td><span class="td-code">{{ r.code }}</span></td>
                 <td>{{ r.name }}</td>
                 <td><span class="td-rate">{{ r.rate }}</span></td>
-                <td><span class="td-date">{{ r.date }}</span></td>
+                <td><span class="td-date">{{ r.date | pretty_date }}</span></td>
               </tr>
               {% endfor %}
             </tbody>
@@ -268,25 +322,30 @@
 
       <form method="get" action="/history" class="controls">
         <div class="control-group">
-          <label>Currencies (hold Ctrl/Cmd to pick multiple)</label>
-          <select name="cc" multiple size="4">
+          <label>Currencies</label>
+          <div class="pill-group">
             {% for code in currencies %}
-              <option value="{{ code }}" {% if code in selected %}selected{% endif %}>{{ code }}</option>
+              <label class="pill {% if code in selected %}selected{% endif %}">
+                <input type="checkbox" name="cc" value="{{ code }}"
+                       {% if code in selected %}checked{% endif %}>
+                {{ code }}
+              </label>
             {% endfor %}
-          </select>
+          </div>
         </div>
         <div class="control-group">
           <label>Time range</label>
-          <select name="range">
-            {% for r, label in [("7d","7 days"),("30d","30 days"),("90d","90 days"),("6m","6 months"),("1y","1 year"),("all","All time")] %}
-              <option value="{{ r }}" {% if time_range == r %}selected{% endif %}>{{ label }}</option>
+          <div class="range-pills">
+            {% for r, lbl in [("7d","7 days"),("30d","30 days"),("90d","90 days"),("6m","6 months"),("1y","1 year"),("all","All time")] %}
+              <label class="range-pill {% if time_range == r %}selected{% endif %}">
+                <input type="radio" name="range" value="{{ r }}"
+                       {% if time_range == r %}checked{% endif %}>
+                {{ lbl }}
+              </label>
             {% endfor %}
-          </select>
+          </div>
         </div>
         <button type="submit">Load History</button>
-        {% if not selected %}
-          <span class="hint">Select at least one currency</span>
-        {% endif %}
       </form>
 
       {% if error %}
@@ -296,7 +355,7 @@
       {% if not selected and not error %}
         <div class="empty-state">
           <div class="empty-icon">₴</div>
-          <p>Select currencies and click Load History</p>
+          <p>Pick one or more currencies above, then load history</p>
         </div>
       {% elif selected and not records and not error %}
         <div class="empty-state">
@@ -324,11 +383,11 @@
             <tbody>
               {% for r in records %}
               <tr>
-                <td><span class="td-date">{{ r.fetched_at }}</span></td>
+                <td><span class="td-date">{{ r.fetched_at | pretty_datetime }}</span></td>
                 <td><span class="td-code">{{ r.code }}</span></td>
                 <td>{{ r.name }}</td>
                 <td><span class="td-rate">{{ r.rate }}</span></td>
-                <td><span class="td-date">{{ r.rate_date }}</span></td>
+                <td><span class="td-date">{{ r.rate_date | pretty_date }}</span></td>
               </tr>
               {% endfor %}
             </tbody>
@@ -338,5 +397,19 @@
 
     {% endif %}
   </div>
+  <script>
+    document.querySelectorAll('.pill input[type="checkbox"]').forEach(function(cb) {
+      cb.addEventListener('change', function() {
+        this.parentElement.classList.toggle('selected', this.checked);
+      });
+    });
+    document.querySelectorAll('.range-pill input[type="radio"]').forEach(function(rb) {
+      rb.addEventListener('change', function() {
+        document.querySelectorAll('.range-pill').forEach(function(p) {
+          p.classList.toggle('selected', p.querySelector('input').checked);
+        });
+      });
+    });
+  </script>
 </body>
 </html>
