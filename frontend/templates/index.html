@@ -544,6 +544,23 @@
             align-self: end;
         }
 
+        .conv-swap-btn {
+            padding: 8px 12px;
+            background: #1e2a3a;
+            border: 0.5px solid #2a2d3a;
+            border-radius: 8px;
+            color: #378ADD;
+            font-size: 16px;
+            cursor: pointer;
+            align-self: end;
+            margin-bottom: 0;
+        }
+
+        .conv-swap-btn:hover {
+            background: #253545;
+            border-color: #378ADD;
+        }
+
         .footer-row {
             display: flex;
             align-items: center;
@@ -785,16 +802,40 @@
             </div>
         </div>
 
+        <!-- Конвертер -->
         <div class="converter">
             <div class="conv-row">
-                <div class="conv-field" style="max-width:140px"><label>Сума</label><input type="number" id="conv-amount"
-                        value="100" min="0" oninput="convert()"></div>
-                <div class="conv-arrow">→</div>
-                <div class="conv-field" style="max-width:220px"><label>Валюта</label><select id="conv-currency"
-                        onchange="convert()">{% for r in rates %}<option value="{{ r.rate }}" data-type="fiat">{{ r.cc
-                            }} → UAH</option>{% endfor %}{% for r in crypto %}<option value="{{ r.rate }}"
-                            data-type="crypto">{{ r.cc }} → USD</option>{% endfor %}</select></div>
-                <div class="conv-btn" onclick="convert()">Конвертувати</div>
+                <div class="conv-field" style="max-width:130px">
+                    <label>Сума</label>
+                    <input type="number" id="conv-amount" value="100" min="0" step="any" oninput="convert()">
+                </div>
+                <div class="conv-field" style="max-width:170px">
+                    <label>З валюти</label>
+                    <select id="conv-from" onchange="convert()">
+                        <option value="UAH|fiat|1">UAH — Гривня</option>
+                        {% for r in rates %}
+                        <option value="{{ r.cc }}|fiat|{{ r.rate }}">{{ r.cc }} — {{ r.txt }}</option>
+                        {% endfor %}
+                        {% for r in crypto %}
+                        <option value="{{ r.cc }}|crypto|{{ r.rate }}">{{ r.cc }} — {{ r.txt }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="conv-arrow">&#8594;</div>
+                <div class="conv-field" style="max-width:170px">
+                    <label>В валюту</label>
+                    <select id="conv-to" onchange="convert()">
+                        <option value="UAH|fiat|1">UAH — Гривня</option>
+                        {% for r in rates %}
+                        <option value="{{ r.cc }}|fiat|{{ r.rate }}" {% if r.cc=='USD' %} selected{% endif %}>{{ r.cc }}
+                            — {{ r.txt }}</option>
+                        {% endfor %}
+                        {% for r in crypto %}
+                        <option value="{{ r.cc }}|crypto|{{ r.rate }}">{{ r.cc }} — {{ r.txt }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button class="conv-swap-btn" onclick="swapConv()" title="Поміняти місцями">&#8646;</button>
                 <div class="conv-result-inline" id="conv-result">—</div>
             </div>
         </div>
@@ -891,13 +932,73 @@
 
         function convert() {
             const amount = parseFloat(document.getElementById('conv-amount').value);
-            const sel = document.getElementById('conv-currency');
-            const rate = parseFloat(sel.value);
-            if (!amount || !rate) return;
-            const type = sel.options[sel.selectedIndex].getAttribute('data-type');
-            const cur = type === 'crypto' ? 'USD' : 'UAH';
-            const result = (amount * rate).toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            document.getElementById('conv-result').textContent = result + ' ' + cur;
+            if (!amount || amount <= 0) {
+                document.getElementById('conv-result').textContent = '—';
+                return;
+            }
+
+            const fromVal = document.getElementById('conv-from').value;
+            const toVal = document.getElementById('conv-to').value;
+            const [fromCode, fromType, fromRate] = fromVal.split('|');
+            const [toCode, toType, toRate] = toVal.split('|');
+
+            // Знаходимо курс USD→UAH (потрібен для конвертації крипти в гривні)
+            let usdToUah = null;
+            document.querySelectorAll('#conv-from option').forEach(opt => {
+                const [code, type, rate] = opt.value.split('|');
+                if (code === 'USD' && type === 'fiat') usdToUah = parseFloat(rate);
+            });
+
+            // Конвертуємо суму в UAH (проміжна валюта)
+            let inUah;
+            if (fromCode === 'UAH') {
+                inUah = amount;
+            } else if (fromType === 'fiat') {
+                // Фіат → UAH: множимо на курс НБУ
+                inUah = amount * parseFloat(fromRate);
+            } else {
+                // Крипта → UAH: ціна в USD × курс USD→UAH
+                if (!usdToUah) {
+                    document.getElementById('conv-result').textContent = 'USD курс недоступний';
+                    return;
+                }
+                inUah = amount * parseFloat(fromRate) * usdToUah;
+            }
+
+            // Конвертуємо з UAH у цільову валюту
+            let result;
+            if (toCode === 'UAH') {
+                result = inUah;
+            } else if (toType === 'fiat') {
+                // UAH → фіат: ділимо на курс НБУ
+                result = inUah / parseFloat(toRate);
+            } else {
+                // UAH → крипта: переводимо в USD, потім ділимо на ціну крипти
+                if (!usdToUah) {
+                    document.getElementById('conv-result').textContent = 'USD курс недоступний';
+                    return;
+                }
+                const inUsd = inUah / usdToUah;
+                result = inUsd / parseFloat(toRate);
+            }
+
+            // Форматуємо результат — для крипти більше знаків після коми
+            const isSmall = result < 1;
+            const decimals = toType === 'crypto' || isSmall ? 6 : 2;
+            const formatted = result.toLocaleString('uk-UA', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: decimals
+            });
+            document.getElementById('conv-result').textContent = formatted + ' ' + toCode;
+        }
+
+        function swapConv() {
+            const fromSel = document.getElementById('conv-from');
+            const toSel = document.getElementById('conv-to');
+            const tmp = fromSel.value;
+            fromSel.value = toSel.value;
+            toSel.value = tmp;
+            convert();
         }
 
         function filterTable(bodyId, query) {
