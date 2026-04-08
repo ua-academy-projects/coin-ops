@@ -57,6 +57,7 @@ export default function App() {
   const [prices, setPrices] = useState<Prices | null>(null);
   const [priceHistoryData, setPriceHistoryData] = useState<PriceHistory[]>([]);
   const [activePriceCoin, setActivePriceCoin] = useState<string | null>(null);
+  const [historyLimit, setHistoryLimit] = useState(100);
   const sidRef = useRef<string>('');
   const isInitialLoad = useRef<boolean>(true);
 
@@ -88,21 +89,39 @@ export default function App() {
     }
   };
 
+  const fetchMarketHistory = async (slug: string, limit: number) => {
+    try {
+      const res = await fetch(`${HISTORY_URL}/history/${slug}?limit=${limit}`);
+      if (res.ok) {
+        const data = await res.json() as HistoryPoint[];
+        setHistoryData(data.reverse());
+      }
+    } catch {
+      setHistoryData([]);
+    }
+  };
+
   const openPriceChart = async (coin: string) => {
+    if (coin !== activePriceCoin) {
+      setPriceHistoryData([]);
+      saveState(sidRef.current, activeTab, coin);
+    }
     setActivePriceCoin(coin);
-    setPriceHistoryData([]);
     try {
       const res = await fetch(`${HISTORY_URL}/prices/history/${coin}?limit=200`);
-      if (res.ok) setPriceHistoryData(await res.json() as PriceHistory[]);
+      if (res.ok) {
+        const data = await res.json() as PriceHistory[];
+        setPriceHistoryData(data.reverse());
+      }
     } catch { /* silent */ }
   };
 
-  const saveState = async (sid: string, tab: string) => {
+  const saveState = async (sid: string, tab: string, coin: string | null = activePriceCoin) => {
     try {
       await fetch(`${PROXY_URL}/state?sid=${sid}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ active_tab: tab }),
+        body: JSON.stringify({ active_tab: tab, active_price_coin: coin }),
       });
     } catch { /* silent */ }
   };
@@ -111,8 +130,9 @@ export default function App() {
     try {
       const res = await fetch(`${PROXY_URL}/state?sid=${sid}`);
       if (res.ok) {
-        const state = await res.json() as { active_tab?: string };
+        const state = await res.json() as { active_tab?: string, active_price_coin?: string };
         if (state.active_tab) setActiveTab(state.active_tab as typeof activeTab);
+        if (state.active_price_coin) openPriceChart(state.active_price_coin);
       }
     } catch { /* silent */ }
   };
@@ -135,6 +155,12 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (activeTab === 'history' && selectedMarket) {
+      fetchMarketHistory(selectedMarket.slug, historyLimit);
+    }
+  }, [historyLimit, activeTab, selectedMarket]);
+
   const filteredMarkets = useMemo(() => {
     return markets.filter(m =>
       m.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -145,12 +171,7 @@ export default function App() {
   const handleMarketClick = async (market: MarketSnapshot) => {
     setSelectedMarket(market);
     handleTabSwitch('history');
-    try {
-      const res = await fetch(`${HISTORY_URL}/history/${market.slug}?limit=500`);
-      if (res.ok) setHistoryData(await res.json() as HistoryPoint[]);
-    } catch {
-      setHistoryData([]);
-    }
+    fetchMarketHistory(market.slug, historyLimit);
   };
 
   return (
@@ -159,7 +180,10 @@ export default function App() {
         <PriceChartModal
           coin={activePriceCoin}
           data={priceHistoryData}
-          onClose={() => setActivePriceCoin(null)}
+          onClose={() => {
+            setActivePriceCoin(null);
+            saveState(sidRef.current, activeTab, null);
+          }}
         />
       )}
       {/* Decorative Background Elements */}
@@ -274,6 +298,8 @@ export default function App() {
               onClick={() => {
                 loadData();
                 loadPrices();
+                if (activePriceCoin) openPriceChart(activePriceCoin);
+                if (selectedMarket && activeTab === 'history') fetchMarketHistory(selectedMarket.slug, historyLimit);
               }}
             >
               <RefreshCw size={16} className={cn(isLoading && "animate-spin")} />
@@ -485,14 +511,32 @@ export default function App() {
                       {selectedMarket ? selectedMarket.question : "Select a market to view historical trends"}
                     </p>
                   </div>
-                  {selectedMarket && (
-                    <button
-                      onClick={() => handleTabSwitch('live')}
-                      className="text-accent text-sm font-medium hover:underline flex items-center gap-1"
-                    >
-                      Back to Markets <ChevronRight size={16} />
-                    </button>
-                  )}
+                  <div className="flex items-center gap-4">
+                    {selectedMarket && (
+                      <div className="flex bg-white/5 rounded-lg p-1 border border-white/10">
+                        {[50, 100, 500].map((l) => (
+                          <button
+                            key={l}
+                            onClick={() => setHistoryLimit(l)}
+                            className={cn(
+                              "px-3 py-1 text-[10px] font-bold rounded-md transition-all",
+                              historyLimit === l ? "bg-accent text-white shadow-sm" : "text-muted hover:text-white"
+                            )}
+                          >
+                            {l}pts
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {selectedMarket && (
+                      <button
+                        onClick={() => handleTabSwitch('live')}
+                        className="text-accent text-sm font-medium hover:underline flex items-center gap-1"
+                      >
+                        Back to Markets <ChevronRight size={16} />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {selectedMarket ? (

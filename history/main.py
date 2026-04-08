@@ -38,21 +38,37 @@ def health():
 
 
 @app.get("/history")
-def get_history(limit: int = Query(default=50, ge=1, le=200)):
+def get_history(
+    limit: int = Query(default=50, ge=1, le=200),
+    category: Optional[str] = Query(default=None),
+):
     """Return the most recent market snapshots across all markets."""
     conn = get_db()
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id, fetched_at, question, slug,
-                       yes_price, no_price, volume_24h, category, end_date
-                FROM market_snapshots
-                ORDER BY fetched_at DESC
-                LIMIT %s
-                """,
-                (limit,),
-            )
+            if category:
+                cur.execute(
+                    """
+                    SELECT id, fetched_at, question, slug,
+                           yes_price, no_price, volume_24h, category, end_date
+                    FROM market_snapshots
+                    WHERE category ILIKE %s
+                    ORDER BY fetched_at DESC
+                    LIMIT %s
+                    """,
+                    (f"%{category}%", limit),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT id, fetched_at, question, slug,
+                           yes_price, no_price, volume_24h, category, end_date
+                    FROM market_snapshots
+                    ORDER BY fetched_at DESC
+                    LIMIT %s
+                    """,
+                    (limit,),
+                )
             rows = cur.fetchall()
         return [dict(r) for r in rows]
     finally:

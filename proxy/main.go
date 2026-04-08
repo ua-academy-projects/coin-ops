@@ -135,8 +135,9 @@ type Server struct {
 	rdb   *redis.Client
 	cache struct {
 		sync.RWMutex
-		whales []Whale
-		prices Prices
+		whales   []Whale
+		prices   Prices
+		lastNBU  time.Time
 	}
 }
 
@@ -240,6 +241,11 @@ func fetchJSON(url string, out interface{}) error {
 		return fmt.Errorf("GET %s: %w", url, err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("HTTP error %d from %s", resp.StatusCode, url)
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("read body %s: %w", url, err)
@@ -377,20 +383,39 @@ func (s *Server) fetchAndUpdateCache() {
 func (s *Server) fetchAndUpdatePrices() {
 	now := time.Now().UTC()
 
-	cg, err := fetchCoinGecko()
-	if err != nil {
-		log.Printf("Price update: CoinGecko fetch failed: %v", err)
-		return
+	s.cache.RLock()
+	oldPrices := s.cache.prices
+	lastNBU := s.cache.lastNBU
+	s.cache.RUnlock()
+
+	uah := oldPrices.UsdUah
+
+	// Fetch NBU only if uah is 0 or it's been more than an hour
+	if uah == 0 || now.Sub(lastNBU) > time.Hour {
+		newUAH, err := fetchNBU()
+		if err != nil {
+			log.Printf("Price update: NBU fetch failed: %v", err)
+			lastNBU = now // Prevent retrying every 10 seconds on failure
+		} else if newUAH > 0 {
+			uah = newUAH
+			lastNBU = now
+		}
 	}
 
-	uah, err := fetchNBU()
-	if err != nil {
-		log.Printf("Price update: NBU fetch failed: %v", err)
-		// Continue — crypto prices are still valid even if NBU is down
-	}
+	var btc, eth cgPriceEntry
+	cg, errCG := fetchCoinGecko()
+	btcData, btcOk := cg["bitcoin"]
+	ethData, ethOk := cg["ethereum"]
 
-	btc := cg["bitcoin"]
-	eth := cg["ethereum"]
+	if errCG != nil || !btcOk || !ethOk || btcData.Usd <= 0 || ethData.Usd <= 0 {
+		log.Printf("Price update: CoinGecko fetch failed or returned invalid data: %v", errCG)
+		btc = cgPriceEntry{Usd: oldPrices.BtcUsd, Usd24hChange: oldPrices.Btc24hChange}
+		eth = cgPriceEntry{Usd: oldPrices.EthUsd, Usd24hChange: oldPrices.Eth24hChange}
+		errCG = fmt.Errorf("invalid or missing CoinGecko data") // Ensure errCG is non-nil so we don't publish bad prices
+	} else {
+		btc = btcData
+		eth = ethData
+	}
 
 	prices := Prices{
 		BtcUsd:       btc.Usd,
@@ -403,16 +428,19 @@ func (s *Server) fetchAndUpdatePrices() {
 
 	s.cache.Lock()
 	s.cache.prices = prices
+	s.cache.lastNBU = lastNBU
 	s.cache.Unlock()
 
 	// Publish price events to queue for persistence in PostgreSQL
-	if err := s.publishPriceEvent("bitcoin", btc.Usd, btc.Usd24hChange, now); err != nil {
-		log.Printf("Price publish failed (bitcoin): %v", err)
+	if errCG == nil {
+		if err := s.publishPriceEvent("bitcoin", btc.Usd, btc.Usd24hChange, now); err != nil {
+			log.Printf("Price publish failed (bitcoin): %v", err)
+		}
+		if err := s.publishPriceEvent("ethereum", eth.Usd, eth.Usd24hChange, now); err != nil {
+			log.Printf("Price publish failed (ethereum): %v", err)
+		}
 	}
-	if err := s.publishPriceEvent("ethereum", eth.Usd, eth.Usd24hChange, now); err != nil {
-		log.Printf("Price publish failed (ethereum): %v", err)
-	}
-	if uah > 0 {
+	if uah > 0 && lastNBU == now { // Only publish NBU when it is actually fetched/updated
 		if err := s.publishPriceEvent("usd_uah", uah, 0, now); err != nil {
 			log.Printf("Price publish failed (usd_uah): %v", err)
 		}
@@ -622,10 +650,10 @@ func main() {
 		}
 	}()
 
-	// Populate price cache immediately, then refresh every 60 seconds.
+	// Populate price cache immediately, then refresh every 10 seconds.
 	go func() {
 		srv.fetchAndUpdatePrices()
-		ticker := time.NewTicker(60 * time.Second)
+		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
 			srv.fetchAndUpdatePrices()
