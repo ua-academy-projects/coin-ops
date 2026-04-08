@@ -60,3 +60,9 @@ variable "vm_processors" {
   type        = number
   default     = 2
 }
+
+variable "vm_disk_gb" {
+  description = "Root disk size per VM in gigabytes (VHDX is resized after clone)"
+  type        = number
+  default     = 20
+}

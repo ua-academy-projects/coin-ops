@@ -17,6 +17,8 @@ resource "null_resource" "clone" {
       Copy-Item -Path "${var.base_vhd_path}" `
                 -Destination "${var.vm_storage_path}\${each.key}\os.vhdx" `
                 -Force
+      Resize-VHD -Path "${var.vm_storage_path}\${each.key}\os.vhdx" `
+                 -SizeBytes ${var.vm_disk_gb * 1024 * 1024 * 1024}
     EOT
   }
 }
