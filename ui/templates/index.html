@@ -205,6 +205,7 @@
       cursor: pointer;
       display: inline-flex;
       align-items: center;
+      margin-left: auto;
     }
     .btn-refresh:hover { color: #e2e8f0; border-color: #475569; }
 
@@ -244,7 +245,15 @@
     }
 
     .pill input[type="checkbox"],
+    .pill input[type="radio"],
     .range-pill input[type="radio"] { display: none; }
+
+    /* --- prominent rate date --- */
+    .rate-date-badge {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #e2e8f0;
+    }
   </style>
 </head>
 <body>
@@ -264,18 +273,21 @@
 
     {% if view == "rates" %}
 
-      <form method="get" action="/" class="controls-row">
+      <form method="get" action="/" class="controls-row rates-form">
         <div class="control-group">
-          <label>Filter by currency</label>
-          <select name="cc" onchange="this.form.submit()">
-            <option value="" {% if not cc %}selected{% endif %}>All currencies</option>
+          <label>Currency</label>
+          <div class="pill-group">
+            <label class="pill {% if not cc %}selected{% endif %}">
+              <input type="radio" name="cc" value="" {% if not cc %}checked{% endif %}>All
+            </label>
             {% for code in currencies %}
-              <option value="{{ code }}" {% if cc == code %}selected{% endif %}>{{ code }}</option>
+              <label class="pill {% if cc == code %}selected{% endif %}">
+                <input type="radio" name="cc" value="{{ code }}" {% if cc == code %}checked{% endif %}>{{ code }}
+              </label>
             {% endfor %}
-          </select>
+          </div>
         </div>
         <button type="button" class="btn-refresh" onclick="window.location.reload()" title="Refresh rates">&#x21bb;</button>
-        <noscript><button type="submit">Apply</button></noscript>
       </form>
 
       {% if error %}
@@ -293,7 +305,7 @@
         <div class="table-card">
           <div class="table-meta">
             <strong>{{ rates|length }} {{ "currency" if rates|length == 1 else "currencies" }}</strong>
-            <span>as of {{ rates[0].date | pretty_date }}</span>
+            <span class="rate-date-badge">{{ rates[0].date | pretty_date }}</span>
           </div>
           <table>
             <thead>
@@ -301,7 +313,6 @@
                 <th>Code</th>
                 <th>Currency</th>
                 <th>Rate (UAH)</th>
-                <th>Date</th>
               </tr>
             </thead>
             <tbody>
@@ -310,7 +321,6 @@
                 <td><span class="td-code">{{ r.code }}</span></td>
                 <td>{{ r.name }}</td>
                 <td><span class="td-rate">{{ r.rate }}</span></td>
-                <td><span class="td-date">{{ r.date | pretty_date }}</span></td>
               </tr>
               {% endfor %}
             </tbody>
@@ -320,7 +330,7 @@
 
     {% else %}
 
-      <form method="get" action="/history" class="controls">
+      <form method="get" action="/history" class="controls history-form">
         <div class="control-group">
           <label>Currencies</label>
           <div class="pill-group">
@@ -345,19 +355,13 @@
             {% endfor %}
           </div>
         </div>
-        <button type="submit">Load History</button>
       </form>
 
       {% if error %}
         <div class="error-box">⚠ {{ error }}</div>
       {% endif %}
 
-      {% if not selected and not error %}
-        <div class="empty-state">
-          <div class="empty-icon">₴</div>
-          <p>Pick one or more currencies above, then load history</p>
-        </div>
-      {% elif selected and not records and not error %}
+      {% if selected and not records and not error %}
         <div class="empty-state">
           <div class="empty-icon">₴</div>
           <p>No history found for the selected filters</p>
@@ -398,16 +402,31 @@
     {% endif %}
   </div>
   <script>
-    document.querySelectorAll('.pill input[type="checkbox"]').forEach(function(cb) {
-      cb.addEventListener('change', function() {
-        this.parentElement.classList.toggle('selected', this.checked);
-      });
-    });
-    document.querySelectorAll('.range-pill input[type="radio"]').forEach(function(rb) {
+    // Rates: radio pills — toggle selected + auto-submit
+    document.querySelectorAll('.rates-form .pill input[type="radio"]').forEach(function(rb) {
       rb.addEventListener('change', function() {
-        document.querySelectorAll('.range-pill').forEach(function(p) {
+        document.querySelectorAll('.rates-form .pill').forEach(function(p) {
           p.classList.toggle('selected', p.querySelector('input').checked);
         });
+        this.form.submit();
+      });
+    });
+
+    // History: currency checkboxes — toggle selected + auto-submit
+    document.querySelectorAll('.history-form .pill input[type="checkbox"]').forEach(function(cb) {
+      cb.addEventListener('change', function() {
+        this.parentElement.classList.toggle('selected', this.checked);
+        this.form.submit();
+      });
+    });
+
+    // History: range radios — toggle selected + auto-submit
+    document.querySelectorAll('.history-form .range-pill input[type="radio"]').forEach(function(rb) {
+      rb.addEventListener('change', function() {
+        document.querySelectorAll('.history-form .range-pill').forEach(function(p) {
+          p.classList.toggle('selected', p.querySelector('input').checked);
+        });
+        this.form.submit();
       });
     });
   </script>

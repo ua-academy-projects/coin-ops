@@ -68,22 +68,23 @@ def index():
 @app.route("/history")
 def history():
     selected = request.args.getlist("cc")  # multi-select: ?cc=USD&cc=EUR
-    time_range = request.args.get("range", "30d")
+    if not selected:
+        selected = ["USD"]
+    time_range = request.args.get("range", "7d")
     records = []
     error = None
 
-    if selected:
-        url = f"{HISTORY_SERVICE_URL}/history?cc={','.join(c.upper() for c in selected)}&range={time_range}"
-        try:
-            resp = requests.get(url, timeout=5)
-            resp.raise_for_status()
-            records = resp.json()
-        except requests.exceptions.ConnectionError:
-            error = "Could not connect to the history service."
-        except requests.exceptions.HTTPError as e:
-            error = f"History service returned an error: {e}"
-        except Exception as e:
-            error = str(e)
+    url = f"{HISTORY_SERVICE_URL}/history?cc={','.join(c.upper() for c in selected)}&range={time_range}"
+    try:
+        resp = requests.get(url, timeout=5)
+        resp.raise_for_status()
+        records = resp.json()
+    except requests.exceptions.ConnectionError:
+        error = "Could not connect to the history service."
+    except requests.exceptions.HTTPError as e:
+        error = f"History service returned an error: {e}"
+    except Exception as e:
+        error = str(e)
 
     return render_template("index.html", records=records, error=error,
                            selected=selected, time_range=time_range,
