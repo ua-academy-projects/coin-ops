@@ -13,6 +13,7 @@
     dest: /var/www/coin-ops/
     delete: yes
     recursive: yes
+    rsync_path: "sudo rsync"
   delegate_to: localhost
   become: false
   notify: Reload nginx
