@@ -87,7 +87,10 @@ func startConsumer(mqURL string, db *sql.DB) {
 		failed := false
 		for _, r := range event.Rates {
 			_, err := tx.Exec(
-				`INSERT INTO rate_history (code, name, rate, rate_date, fetched_at) VALUES ($1, $2, $3, $4, $5)`,
+				`INSERT INTO rate_history (code, name, rate, rate_date, fetched_at)
+				 VALUES ($1, $2, $3, $4, $5)
+				 ON CONFLICT (code, rate_date) DO UPDATE
+				 SET rate = EXCLUDED.rate, name = EXCLUDED.name, fetched_at = EXCLUDED.fetched_at`,
 				r.Code, r.Name, r.Rate, r.Date, fetchedAt,
 			)
 			if err != nil {

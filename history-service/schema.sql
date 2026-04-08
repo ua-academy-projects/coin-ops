@@ -9,3 +9,4 @@ CREATE TABLE IF NOT EXISTS rate_history (
 
 CREATE INDEX IF NOT EXISTS idx_rate_history_code       ON rate_history (code);
 CREATE INDEX IF NOT EXISTS idx_rate_history_fetched_at ON rate_history (fetched_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_rate_history_code_date ON rate_history (code, rate_date);

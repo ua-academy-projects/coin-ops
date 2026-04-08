@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -36,6 +37,15 @@ type rateEvent struct {
 }
 
 var mqChannel *amqp.Channel
+
+type rateCache struct {
+	mu       sync.RWMutex
+	rates    []Rate
+	rateDate string
+	cachedAt time.Time
+}
+
+var cache rateCache
 
 func connectRabbitMQ(url string) {
 	conn, err := amqp.Dial(url)
@@ -114,12 +124,22 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func ratesHandler(w http.ResponseWriter, r *http.Request) {
-	url := nbuURL
-	if cc := r.URL.Query().Get("cc"); cc != "" {
-		url += "&valcode=" + strings.ToUpper(cc)
-	}
+	ccFilter := strings.ToUpper(r.URL.Query().Get("cc"))
 
-	resp, err := http.Get(url)
+	// serve from cache if data is fresh (TTL: 1 hour)
+	cache.mu.RLock()
+	if cache.rateDate != "" && time.Since(cache.cachedAt) < time.Hour {
+		rates := filterRates(cache.rates, ccFilter)
+		cache.mu.RUnlock()
+		log.Println("cache: serving cached rates")
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(rates)
+		return
+	}
+	cache.mu.RUnlock()
+
+	// fetch full list from NBU (no valcode filter — we cache all currencies)
+	resp, err := http.Get(nbuURL)
 	if err != nil {
 		http.Error(w, "failed to fetch NBU data", http.StatusBadGateway)
 		return
@@ -138,9 +158,9 @@ func ratesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rates := make([]Rate, len(raw))
+	allRates := make([]Rate, len(raw))
 	for i, item := range raw {
-		rates[i] = Rate{
+		allRates[i] = Rate{
 			Code: item.CC,
 			Name: item.Txt,
 			Rate: item.Rate,
@@ -148,10 +168,41 @@ func ratesHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(rates)
+	// update cache and conditionally publish
+	var newDate string
+	if len(raw) > 0 {
+		newDate = raw[0].ExchangeDate
+	}
 
-	go publishRates(rates)
+	cache.mu.Lock()
+	isNewDate := newDate != cache.rateDate
+	cache.rates = allRates
+	cache.rateDate = newDate
+	cache.cachedAt = time.Now()
+	cache.mu.Unlock()
+
+	if isNewDate {
+		log.Printf("cache: new rate date %s — publishing to queue", newDate)
+		go publishRates(allRates)
+	} else {
+		log.Printf("cache: refreshed TTL for date %s — skipping publish", newDate)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(filterRates(allRates, ccFilter))
+}
+
+func filterRates(rates []Rate, cc string) []Rate {
+	if cc == "" {
+		return rates
+	}
+	filtered := make([]Rate, 0)
+	for _, r := range rates {
+		if r.Code == cc {
+			filtered = append(filtered, r)
+		}
+	}
+	return filtered
 }
 
 func main() {
