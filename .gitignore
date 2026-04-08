@@ -20,6 +20,7 @@ terraform/.terraform/
 terraform/.terraform.lock.hcl
 terraform/*.tfstate
 terraform/*.tfstate.backup
+terraform/terraform.tfstate.*.backup
 terraform/terraform.tfvars
 terraform/keys/
 terraform/keys/
@@ -31,3 +32,9 @@ ui-react/.env
 
 # Source zip
 coin-ops-intelligence.zip
+
+# Local docs and infrastructure artifacts
+hyper-v/
+terraform-guide.pdf
+ansible/group_vars/all/*.backup
+ansible/group_vars/all/secrets.yml

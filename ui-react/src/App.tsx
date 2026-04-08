@@ -196,7 +196,38 @@ export default function App() {
   }, [restoredMarketSlug, markets, selectedMarket]);
 
   const chartHistoryData = useMemo(() => {
-    if (!historyData.length) return [];
+    if (!historyData.length) {
+      if (!selectedMarket) return [];
+
+      const now = Date.now();
+      let windowHours = 4;
+      if (timeFilter === '1H') windowHours = 1;
+      if (timeFilter === '24H') windowHours = 24;
+
+      const start = now - (windowHours * 60 * 60 * 1000);
+      const midpoint = start + ((now - start) / 2);
+
+      return [
+        {
+          fetched_at: new Date(start).toISOString(),
+          yes_price: selectedMarket.yes_price,
+          no_price: selectedMarket.no_price,
+          volume_24h: selectedMarket.volume_24h,
+        },
+        {
+          fetched_at: new Date(midpoint).toISOString(),
+          yes_price: selectedMarket.yes_price,
+          no_price: selectedMarket.no_price,
+          volume_24h: selectedMarket.volume_24h,
+        },
+        {
+          fetched_at: new Date(now).toISOString(),
+          yes_price: selectedMarket.yes_price,
+          no_price: selectedMarket.no_price,
+          volume_24h: selectedMarket.volume_24h,
+        },
+      ];
+    }
 
     const latestPointTime = new Date(historyData[historyData.length - 1].fetched_at).getTime();
     let cutoffHours = 4;
@@ -207,7 +238,7 @@ export default function App() {
     const filteredData = historyData.filter(p => new Date(p.fetched_at).getTime() >= cutoffTime);
 
     return filteredData.length > 1 ? filteredData : historyData;
-  }, [historyData, timeFilter]);
+  }, [historyData, selectedMarket, timeFilter]);
 
   const filteredMarkets = useMemo(() => {
     return markets.filter(m => {
@@ -767,6 +798,11 @@ export default function App() {
 
                     <div className="glass rounded-2xl p-6 h-[400px]">
                       <h3 className="text-sm font-semibold text-muted mb-6 uppercase tracking-wider">Price Probability Trend</h3>
+                      {historyData.length === 0 && selectedMarket ? (
+                        <p className="text-xs text-muted mb-4">
+                          History API has no stored points for this market yet. Showing the current snapshot as a flat fallback line.
+                        </p>
+                      ) : null}
                       {chartHistoryData.length === 0 ? (
                         <div className="h-full flex items-center justify-center text-sm text-muted">
                           No history points available for this market yet.
