@@ -41,7 +41,7 @@ function getSessionId(): string {
   const name = 'coinops_sid=';
   const cookie = document.cookie.split(';').find(c => c.trim().startsWith(name));
   if (cookie) return cookie.trim().slice(name.length);
-  const id = crypto.randomUUID();
+  const id = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36);
   document.cookie = `coinops_sid=${id}; max-age=86400; path=/`;
   return id;
 }
