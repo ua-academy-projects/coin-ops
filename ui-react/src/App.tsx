@@ -46,6 +46,42 @@ function getSessionId(): string {
   return id;
 }
 
+function getMarketCategoryLabel(market: MarketSnapshot): string {
+  const explicitCategory = market.category?.trim();
+  if (explicitCategory) return explicitCategory;
+
+  const source = `${market.question} ${market.slug}`.toLowerCase();
+
+  if (/(bitcoin|btc|ethereum|eth|solana|sol|crypto|doge|xrp|token|coin|polymarket)/.test(source)) {
+    return 'Crypto';
+  }
+  if (/(trump|biden|election|president|senate|house|democrat|republican|vote|politic)/.test(source)) {
+    return 'Politics';
+  }
+  if (/(iran|israel|russia|ukraine|war|ceasefire|conflict|china|taiwan|nato|us conflict)/.test(source)) {
+    return 'Geopolitics';
+  }
+  if (/(fed|inflation|cpi|rate cut|recession|economy|gdp|tariff)/.test(source)) {
+    return 'Macro';
+  }
+  if (/(nba|nfl|mlb|nhl|soccer|football|tennis|f1|formula 1|playoff|championship)/.test(source)) {
+    return 'Sports';
+  }
+
+  return 'Uncategorized';
+}
+
+function normalizeHistoryPoint(point: HistoryPoint) {
+  const yesPrice = Math.max(0, Math.min(1, point.yes_price));
+  const noPrice = Math.max(0, Math.min(1, 1 - yesPrice));
+
+  return {
+    ...point,
+    yes_price: yesPrice,
+    no_price: noPrice,
+  };
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<'home' | 'live' | 'history' | 'whales' | 'insights'>('home');
   const [markets, setMarkets] = useState<MarketSnapshot[]>([]);
@@ -111,10 +147,12 @@ export default function App() {
 
   const fetchMarketHistory = async (slug: string) => {
     try {
-      const res = await fetch(`${HISTORY_URL}/history/${slug}?limit=2000`);
+      const res = await fetch(`${HISTORY_URL}/history/${slug}?limit=500`);
       if (res.ok) {
         const data = await res.json() as HistoryPoint[];
         setHistoryData(data.reverse());
+      } else {
+        setHistoryData([]);
       }
     } catch {
       setHistoryData([]);
@@ -211,22 +249,22 @@ export default function App() {
         {
           fetched_at: new Date(start).toISOString(),
           yes_price: selectedMarket.yes_price,
-          no_price: selectedMarket.no_price,
+          no_price: 1 - selectedMarket.yes_price,
           volume_24h: selectedMarket.volume_24h,
         },
         {
           fetched_at: new Date(midpoint).toISOString(),
           yes_price: selectedMarket.yes_price,
-          no_price: selectedMarket.no_price,
+          no_price: 1 - selectedMarket.yes_price,
           volume_24h: selectedMarket.volume_24h,
         },
         {
           fetched_at: new Date(now).toISOString(),
           yes_price: selectedMarket.yes_price,
-          no_price: selectedMarket.no_price,
+          no_price: 1 - selectedMarket.yes_price,
           volume_24h: selectedMarket.volume_24h,
         },
-      ];
+      ].map(normalizeHistoryPoint);
     }
 
     const latestPointTime = new Date(historyData[historyData.length - 1].fetched_at).getTime();
@@ -237,19 +275,22 @@ export default function App() {
     const cutoffTime = latestPointTime - (cutoffHours * 60 * 60 * 1000);
     const filteredData = historyData.filter(p => new Date(p.fetched_at).getTime() >= cutoffTime);
 
-    return filteredData.length > 1 ? filteredData : historyData;
+    return (filteredData.length > 1 ? filteredData : historyData).map(normalizeHistoryPoint);
   }, [historyData, selectedMarket, timeFilter]);
 
   const filteredMarkets = useMemo(() => {
     return markets.filter(m => {
-      const matchesSearch = m.question.toLowerCase().includes(searchQuery.toLowerCase()) || m.category.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCategory = selectedCategory ? (m.category || "Uncategorized") === selectedCategory : true;
+      const normalizedCategory = getMarketCategoryLabel(m);
+      const matchesSearch =
+        m.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        normalizedCategory.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = selectedCategory ? normalizedCategory === selectedCategory : true;
       return matchesSearch && matchesCategory;
     });
   }, [markets, searchQuery, selectedCategory]);
 
   const categories = useMemo(() => {
-    const cats = Array.from(new Set(markets.map(m => m.category || "Uncategorized")));
+    const cats = Array.from(new Set(markets.map(getMarketCategoryLabel)));
     return cats.sort();
   }, [markets]);
 
@@ -796,7 +837,7 @@ export default function App() {
                       />
                     </div>
 
-                    <div className="glass rounded-2xl p-6 h-[400px]">
+                    <div className="glass rounded-2xl p-6">
                       <h3 className="text-sm font-semibold text-muted mb-6 uppercase tracking-wider">Price Probability Trend</h3>
                       {historyData.length === 0 && selectedMarket ? (
                         <p className="text-xs text-muted mb-4">
@@ -804,27 +845,24 @@ export default function App() {
                         </p>
                       ) : null}
                       {chartHistoryData.length === 0 ? (
-                        <div className="h-full flex items-center justify-center text-sm text-muted">
+                        <div className="h-[320px] flex items-center justify-center text-sm text-muted">
                           No history points available for this market yet.
                         </div>
                       ) : (
+                        <div className="h-[320px] pt-2">
                         <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={chartHistoryData} margin={{ top: 10, right: 10, bottom: 20, left: 0 }}>
+                          <AreaChart data={chartHistoryData} margin={{ top: 12, right: 12, bottom: 8, left: 8 }}>
                             <defs>
                               <linearGradient id="colorYes" x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
                                 <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
-                              </linearGradient>
-                              <linearGradient id="colorNo" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#ef4444" stopOpacity={0.1}/>
-                                <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
                               </linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                             <XAxis
                               dataKey="fetched_at"
                               minTickGap={30}
-                              tickMargin={10}
+                              tickMargin={8}
                               tickFormatter={(str) => new Date(str).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               stroke="#52525b"
                               fontSize={12}
@@ -836,8 +874,10 @@ export default function App() {
                               fontSize={12}
                               tickLine={false}
                               axisLine={false}
-                              domain={[-0.05, 1.05]}
-                              tickFormatter={(val) => `${(Math.max(0, Math.min(1, val)) * 100).toFixed(0)}%`}
+                              domain={[0, 1]}
+                              ticks={[0, 0.25, 0.5, 0.75, 1]}
+                              tickFormatter={(val) => `${(val * 100).toFixed(0)}%`}
+                              width={40}
                             />
                             <Tooltip
                               isAnimationActive={false}
@@ -857,19 +897,9 @@ export default function App() {
                               fill="url(#colorYes)"
                               name="YES Price"
                             />
-                            <Area
-                              isAnimationActive={false}
-                              activeDot={{ r: 4 }}
-                              type="monotone"
-                              dataKey="no_price"
-                              stroke="#ef4444"
-                              strokeWidth={2}
-                              fillOpacity={1}
-                              fill="url(#colorNo)"
-                              name="NO Price"
-                            />
                           </AreaChart>
                         </ResponsiveContainer>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -931,6 +961,7 @@ interface MarketCardProps {
 }
 
 function MarketCard({ market, onClick }: MarketCardProps) {
+  const categoryLabel = getMarketCategoryLabel(market);
   const yesPct = (market.yes_price * 100).toFixed(1);
   const noPct = (market.no_price * 100).toFixed(1);
 
@@ -942,7 +973,7 @@ function MarketCard({ market, onClick }: MarketCardProps) {
     >
       <div className="flex items-start justify-between mb-4">
         <span className="text-[10px] font-bold uppercase tracking-widest text-accent bg-accent/10 px-2 py-0.5 rounded">
-          {market.category}
+          {categoryLabel}
         </span>
         <div className="flex items-center gap-1 text-muted text-[10px]">
           <Activity size={12} />
