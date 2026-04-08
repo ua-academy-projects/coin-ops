@@ -27,11 +27,6 @@ resource "null_resource" "seed" {
 
   provisioner "local-exec" {
     interpreter = ["bash", "-c"]
-    command     = "qemu-img resize '${var.vm_storage_wsl_path}/${each.key}/os.vhdx' ${var.vm_disk_gb}G"
-  }
-
-  provisioner "local-exec" {
-    interpreter = ["bash", "-c"]
     command     = <<-EOT
       set -euo pipefail
       src="${path.module}/cloud-init/${each.key}"
