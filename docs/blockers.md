@@ -549,6 +549,42 @@ This must be re-run once after each `terraform destroy && apply` that recreates 
 
 ---
 
+## 25. Ansible ignores `group_vars` key path — leftover Vagrant `host_vars` takes precedence
+
+**Symptom:** `ansible-playbook provision.yml` fails with `Permission denied (publickey)` even though `$SSH_KEY_PATH` is correct and manual `ssh -i $SSH_KEY_PATH vagrant@172.31.1.10` works fine. Running `ansible -m debug -a "msg={{ ansible_ssh_private_key_file }}"` reveals Ansible is using `~/.ssh/vagrant_keys/node-1_key` — a path that doesn't exist.
+
+**Root cause:** During the Vagrant era, `host_vars/softserve-node-0{1,2,3}` files were created locally with per-host `ansible_ssh_private_key_file` values pointing to Vagrant-generated keys. `host_vars` has higher precedence than `group_vars`, so the per-host override silently wins even though `group_vars/all/main.yml` correctly uses `lookup('env', 'SSH_KEY_PATH')`. The `host_vars/` directory was never committed to git (empty in repo), so the stale files persisted invisibly on the local machine.
+
+**Fix:** Delete the leftover host_vars files:
+```bash
+rm -rf ansible/host_vars/softserve-node-01 ansible/host_vars/softserve-node-02 ansible/host_vars/softserve-node-03
+```
+
+**Lesson:** After migrating from Vagrant to Terraform, clean up all Vagrant-generated local state. Ansible variable precedence silently ignores `group_vars` when a more specific scope (host_vars) exists — even with a path that doesn't exist, it will try the path and fail rather than fall back.
+
+---
+
+## 26. WSL `chmod` silently ignored on NTFS mounts — SSH rejects key
+
+**Symptom:** `chmod 600 terraform/keys/softserve_rsa` runs without error but `ls -la` still shows `-rwxrwxrwx`. SSH and Ansible both reject the key with `Permission denied (publickey)` — SSH refuses private keys with world-readable permissions as a security measure.
+
+**Root cause:** WSL2 mounts Windows NTFS drives (`/mnt/c/`, `/mnt/f/`, etc.) without Unix metadata support by default. NTFS has no concept of Unix permission bits, so `chmod` calls are silently no-ops. The file appears to change modes but the filesystem does not persist the bits.
+
+**Fix:** Enable metadata support in `/etc/wsl.conf`:
+```ini
+[automount]
+options = "metadata"
+```
+Then restart WSL from PowerShell Admin: `wsl --shutdown`. After restart, `chmod 600` works correctly on NTFS mounts.
+
+**Alternative (without restart):** Copy the key to the Linux filesystem where permissions work natively:
+```bash
+cp terraform/keys/softserve_rsa ~/.ssh/softserve_rsa
+chmod 600 ~/.ssh/softserve_rsa
+```
+
+---
+
 ## 24. SSH "host key has changed" after VM recreation
 
 **Symptom:** After destroying and recreating VMs, SSH fails:
