@@ -26,6 +26,12 @@ variable "vm_storage_path" {
   default     = "F:\\univ\\softserv-internship\\hyper-v\\vms"
 }
 
+variable "vm_storage_wsl_path" {
+  description = "WSL path to the same VM storage directory (e.g. /mnt/f/univ/softserv-internship/hyper-v/vms)"
+  type        = string
+  default     = "/mnt/f/univ/softserv-internship/hyper-v/vms"
+}
+
 variable "seed_staging_windows_path" {
   description = "Windows path where cloud-init ISOs are staged (same location as seed_staging_wsl_path but Windows notation)"
   type        = string

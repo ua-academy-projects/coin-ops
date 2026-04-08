@@ -17,8 +17,6 @@ resource "null_resource" "clone" {
       Copy-Item -Path "${var.base_vhd_path}" `
                 -Destination "${var.vm_storage_path}\${each.key}\os.vhdx" `
                 -Force
-      Resize-VHD -Path "${var.vm_storage_path}\${each.key}\os.vhdx" `
-                 -SizeBytes ${var.vm_disk_gb * 1024 * 1024 * 1024}
     EOT
   }
 }
@@ -26,6 +24,11 @@ resource "null_resource" "clone" {
 # Build cloud-init seed ISO for each node (runs in WSL)
 resource "null_resource" "seed" {
   for_each = local.nodes
+
+  provisioner "local-exec" {
+    interpreter = ["bash", "-c"]
+    command     = "qemu-img resize '${var.vm_storage_wsl_path}/${each.key}/os.vhdx' ${var.vm_disk_gb}G"
+  }
 
   provisioner "local-exec" {
     interpreter = ["bash", "-c"]
