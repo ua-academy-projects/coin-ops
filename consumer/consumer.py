@@ -1,3 +1,4 @@
+import os
 import pika
 import json
 import psycopg2
@@ -10,14 +11,20 @@ from psycopg2.extras import RealDictCursor
 app = Flask(__name__)
 
 DB_CONFIG = {
-    'host': 'localhost',
-    'database': 'coinops',
-    'user': 'coinops',
-    'password': 'coinops123'
+    'host': os.getenv('DB_HOST', 'localhost'),
+    'port': int(os.getenv('DB_PORT', '5432')),
+    'database': os.getenv('DB_NAME', 'coinops'),
+    'user': os.getenv('DB_USER', 'coinops'),
+    'password': os.getenv('DB_PASSWORD', 'coinops123')
 }
 
-RABBITMQ_HOST = '192.168.56.104'
-redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
+RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', '192.168.56.104')
+RABBITMQ_USER = os.getenv('RABBITMQ_USER', 'coinops')
+RABBITMQ_PASSWORD = os.getenv('RABBITMQ_PASSWORD', 'coinops123')
+
+REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
+REDIS_PORT = int(os.getenv('REDIS_PORT', '6379'))
+redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
 def get_db():
     return psycopg2.connect(**DB_CONFIG)
@@ -39,7 +46,7 @@ def consume():
     # чекаємо 5 секунд і пробуємо знову
     while True:
         try:
-            credentials = pika.PlainCredentials('coinops', 'coinops123')
+            credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD)
             connection = pika.BlockingConnection(
                 pika.ConnectionParameters(
                     host=RABBITMQ_HOST,
@@ -109,4 +116,5 @@ if __name__ == '__main__':
     t = threading.Thread(target=consume)
     t.daemon = True
     t.start()
-    app.run(host='0.0.0.0', port=5001, debug=False)
+    port = int(os.getenv('PORT', '5001'))
+    app.run(host='0.0.0.0', port=port, debug=False)

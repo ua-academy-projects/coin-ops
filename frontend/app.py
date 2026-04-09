@@ -1,7 +1,12 @@
+import os
 from flask import Flask, render_template, request, jsonify
 import requests
 
 app = Flask(__name__)
+
+# URL'и до бекенд сервісів — читаються з env або дефолти для VM
+PROXY_URL = os.getenv('PROXY_URL', 'http://192.168.56.102:8080')
+CONSUMER_URL = os.getenv('CONSUMER_URL', 'http://192.168.56.103:5001')
 
 @app.route('/')
 def index():
@@ -11,23 +16,22 @@ def index():
     history = []
 
     try:
-        rates = requests.get('http://192.168.56.102:8080/rates', timeout=5).json()
+        rates = requests.get(f'{PROXY_URL}/rates', timeout=5).json()
     except Exception as e:
         print(f"Помилка НБУ: {e}")
 
     try:
-        crypto = requests.get('http://192.168.56.102:8080/crypto', timeout=5).json()
+        crypto = requests.get(f'{PROXY_URL}/crypto', timeout=5).json()
     except Exception as e:
         print(f"Помилка CoinGecko: {e}")
 
     try:
-        favorites = requests.get('http://192.168.56.103:5001/favorites', timeout=5).json()
+        favorites = requests.get(f'{CONSUMER_URL}/favorites', timeout=5).json()
     except Exception as e:
         print(f"Помилка favorites: {e}")
 
-    # Отримуємо історію за останні 24 години для міні-графіків і зміни за день
     try:
-        history = requests.get('http://192.168.56.103:5001/history?hours=24', timeout=10).json()
+        history = requests.get(f'{CONSUMER_URL}/history?hours=24', timeout=10).json()
     except Exception as e:
         print(f"Помилка history: {e}")
 
@@ -38,7 +42,7 @@ def save_favorites():
     try:
         data = request.get_json()
         response = requests.post(
-            'http://192.168.56.103:5001/favorites',
+            f'{CONSUMER_URL}/favorites',
             json=data,
             timeout=5
         )
@@ -55,7 +59,7 @@ def history():
 
     try:
         response = requests.get(
-            f'http://192.168.56.103:5001/history?hours={hours}',
+            f'{CONSUMER_URL}/history?hours={hours}',
             timeout=10
         )
         records = response.json()
@@ -63,11 +67,13 @@ def history():
         print(f"Помилка history: {e}")
 
     try:
-        favorites = requests.get('http://192.168.56.103:5001/favorites', timeout=5).json()
+        favorites = requests.get(f'{CONSUMER_URL}/favorites', timeout=5).json()
     except Exception as e:
         print(f"Помилка favorites: {e}")
 
     return render_template('history.html', records=records, current_hours=hours, favorites=favorites)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    port = int(os.getenv('PORT', '5000'))
+    debug = os.getenv('DEBUG', 'false').lower() == 'true'
+    app.run(host='0.0.0.0', port=port, debug=debug)

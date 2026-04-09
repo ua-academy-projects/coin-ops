@@ -6,10 +6,20 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
+
+
+
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
 
 type Rate struct {
 	CC   string  `json:"cc"`
@@ -45,7 +55,8 @@ var cryptoCodes = map[string]string{
 
 func connectRabbitMQ() {
 	for {
-		conn, err := amqp.Dial("amqp://coinops:coinops123@192.168.56.104:5672/")
+		rabbitURL := getEnv("RABBITMQ_URL", "amqp://coinops:coinops123@192.168.56.104:5672/")
+        conn, err := amqp.Dial(rabbitURL)
 		if err != nil {
 			log.Printf("RabbitMQ не підключений, спробую знову через 5 секунд...")
 			time.Sleep(5 * time.Second)
@@ -206,12 +217,12 @@ func getCrypto(w http.ResponseWriter, r *http.Request) {
 func main() {
 	go connectRabbitMQ()
 
-	// Запускаємо автооновлення кожні 5 хвилин
 	go autoRefresh()
 
 	http.HandleFunc("/rates", getRates)
 	http.HandleFunc("/crypto", getCrypto)
 
-	fmt.Println("Проксі сервіс запущено на порту 8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	port := getEnv("PORT", "8080")
+	fmt.Printf("Проксі сервіс запущено на порту %s\n", port)
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
