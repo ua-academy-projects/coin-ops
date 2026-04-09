@@ -1,0 +1,36 @@
+# ===== Builder stage =====
+FROM golang:1.23-alpine AS builder
+
+WORKDIR /build
+
+# Спочатку копіюємо тільки go.mod та go.sum
+# Це для кешування — якщо залежності не змінились, Docker
+# візьме завантажені модулі з кешу і не буде качати знову
+COPY proxy/go.mod proxy/go.sum ./
+RUN go mod download
+
+# Тепер копіюємо весь код
+COPY proxy/ ./
+
+# Компілюємо бінарник
+# CGO_ENABLED=0 — вимикаємо C-залежності, бінарник буде повністю статичний
+# -ldflags="-s -w" — прибираємо debug символи, бінарник стає менший
+# -o proxy — назва вихідного файлу
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o proxy main.go
+
+# ===== Runtime stage =====
+FROM alpine:3.20
+
+# Додаємо ca-certificates щоб HTTPS запити до НБУ і CoinGecko працювали
+RUN apk add --no-cache ca-certificates
+
+WORKDIR /app
+
+# Копіюємо бінарник з builder stage
+COPY --from=builder /build/proxy /app/proxy
+
+# Відкриваємо порт 8080
+EXPOSE 8080
+
+# Запускаємо бінарник
+CMD ["/app/proxy"]

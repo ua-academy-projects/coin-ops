@@ -1,0 +1,40 @@
+# ===== Builder stage =====
+FROM python:3.12-alpine AS builder
+
+WORKDIR /build
+
+# Створюємо venv в окремому місці
+RUN python -m venv /opt/venv
+
+# Активуємо venv через PATH (це працює надійніше ніж source)
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Спочатку копіюємо тільки requirements.txt — для кешування
+COPY frontend/requirements.txt ./
+
+# Встановлюємо залежності в venv
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ===== Runtime stage =====
+FROM python:3.12-alpine
+
+WORKDIR /app
+
+# Копіюємо готовий venv з builder stage
+COPY --from=builder /opt/venv /opt/venv
+
+# Активуємо venv через PATH
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Вимикаємо буферизацію Python — щоб логи з'являлись одразу в docker logs
+ENV PYTHONUNBUFFERED=1
+
+# Копіюємо код Flask додатку
+COPY frontend/app.py ./
+COPY frontend/templates ./templates
+
+# Відкриваємо порт 5000
+EXPOSE 5000
+
+# Запускаємо Flask
+CMD ["python", "app.py"]

@@ -1,0 +1,123 @@
+services:
+
+  # ===== RabbitMQ =====
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: coinops-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: coinops
+      RABBITMQ_DEFAULT_PASS: coinops123
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - coinops-net
+
+  # ===== PostgreSQL =====
+  postgres:
+    image: postgres:16-alpine
+    container_name: coinops-postgres
+    environment:
+      POSTGRES_USER: coinops
+      POSTGRES_PASSWORD: coinops123
+      POSTGRES_DB: coinops
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U coinops"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - coinops-net
+
+  # ===== Redis =====
+  redis:
+    image: redis:7-alpine
+    container_name: coinops-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - coinops-net
+
+  # ===== Go Proxy =====
+  proxy:
+    image: coinops-proxy:latest
+    container_name: coinops-proxy
+    environment:
+      RABBITMQ_URL: amqp://coinops:coinops123@rabbitmq:5672/
+      PORT: "8080"
+    ports:
+      - "8080:8080"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - coinops-net
+
+  # ===== Python Consumer =====
+  consumer:
+    image: coinops-consumer:latest
+    container_name: coinops-consumer
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: coinops
+      DB_USER: coinops
+      DB_PASSWORD: coinops123
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: coinops
+      RABBITMQ_PASSWORD: coinops123
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      PORT: "5001"
+    ports:
+      - "5001:5001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - coinops-net
+
+  # ===== Flask UI =====
+  frontend:
+    image: coinops-frontend:latest
+    container_name: coinops-frontend
+    environment:
+      PROXY_URL: http://proxy:8080
+      CONSUMER_URL: http://consumer:5001
+      PORT: "5000"
+      DEBUG: "false"
+    ports:
+      - "5000:5000"
+    depends_on:
+      - proxy
+      - consumer
+    networks:
+      - coinops-net
+
+# ===== Networks =====
+networks:
+  coinops-net:
+    driver: bridge
+
+# ===== Volumes =====
+volumes:
+  postgres-data:
