@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 """
-CoinOps Flask UI (VM1).
+CoinOps Flask UI.
 
 Serves a single page with two tabs:
 - live rates from the Go proxy

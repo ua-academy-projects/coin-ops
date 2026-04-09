@@ -5,7 +5,7 @@ services:
     image: redis:7-alpine
     container_name: coinops_redis
     restart: unless-stopped
-    # Порт 6379 відкритий всередині мережі Docker, назовні не прокидаємо
+    # Порт 6379 відкритий всередині мережі Docker
     expose:
       - "6379"
 

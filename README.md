@@ -1,61 +1,67 @@
 # Coin-Ops
 
 A microservices-based financial data aggregator that fetches, normalizes, and stores real-time exchange rates for Fiat and Cryptocurrencies.<br><br>
-Coin-Ops is designed with an infrastructure-first approach to demonstrate a robust microservices architecture. It pulls data from public sources (NBU, CoinGecko) via a Go-based proxy, processes it asynchronously, and serves it through a Python/Flask web interface. The entire environment is automated and provisioned across isolated virtual machines.
+Coin-Ops is designed with an infrastructure-first approach to demonstrate a modern hybrid architecture. It pulls data from public sources (NBU, CoinGecko) via a Go-based proxy, processes it asynchronously, and serves it through a Python/Flask web interface.
 
 ## Architecture
-System runs on 5 virtual machines configured via Vagrant and Ansible.
-* **VM1 - Frontend**: Python / Flask web interface, Redis.
-* **VM2 - Proxy service**: Go API gateway, fetches and normalizes data from 3rd-party APIs.
-* **VM3 - History service**: Python service that consumes MQ events and exposes History API.
-* **VM4 - Message queue**: RabbitMQ broker.
-* **VM5 - Database**: PostgreSQL instance storing historical exchange rates.
+The system uses a **Hybrid Infrastructure** model:
+*   **Docker Compose (Local/WSL)**: Applications (Frontend, Proxy, History Service) and Infrastructure (RabbitMQ, Redis) run in lightweight containers.
+*   **Vagrant & Ansible (VM)**: The PostgreSQL database remains on a dedicated, secure virtual machine for stateful persistence.
+
+### Components:
+*   **Frontend**: Python / Flask web interface with Redis caching.
+*   **Proxy service**: Go-based gateway that fetches and normalizes data from 3rd-party APIs.
+*   **History service**: Python consumer that handles MQ events and exposes the History API.
+*   **Message queue**: RabbitMQ broker for asynchronous updates.
+*   **Database**: PostgreSQL instance on a managed Vagrant VM.
 
 ## How to use?
+
 ### Prerequisites
-Ensure you have the following installed on your host machine before starting:
-* [Vagrant](https://developer.hashicorp.com/vagrant)
-* VMware Workstation (or VirtualBox, but you need to specify compatible Vagrant box)
+*   [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+*   [Vagrant](https://developer.hashicorp.com/vagrant)
+*   VMware Workstation or VirtualBox
 
-### Installation & Run
+### Quick Start (Infrastructure First)
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/ua-academy-projects/coin-ops.git
-   ```
-2. Generate an SSH key for Vagrant VMs (must be done before provisioning):
-   ```bash
-   ssh-keygen -t ed25519 -f .ssh/vagrant_key -C "vagrant-key" -N ""
-   ```
-   *(Ansible will automatically distribute the public key to all VMs during the first run and disable the insecure default key).*
+1.  **Clone the repository**:
+    ```bash
+    git clone https://github.com/ua-academy-projects/coin-ops.git
+    cd coin-ops
+    ```
 
-3. Provision and start the infrastructure:
-    ```Bash
+2.  **Setup Configuration**:
+    Create your local environment file from the template in the `infra/` folder.
+    ```bash
+    cp infra/.env.example infra/.env
+    # Edit infra/.env and fill in the database password
+    ```
+
+3.  **Deploy Database VM**:
+    ```bash
+    cd infra
     vagrant up
-    # or run the batch script for parallel deployment of each VM:
-    ./launch.sh
-### Configuration & Environment files
-Environment variables and configuration (IPs, Ports, URLs) are managed by **Ansible IaC**. 
-- Non-secret variables are in `infra/group_vars/all/vars.yml`.
-- Secrets (Database/MQ Passwords) are encrypted in `infra/group_vars/all/vault.yml`.
-- During `vagrant provision`, Ansible uses Jinja2 templates (`.env.j2`) to automatically generate the required `.env` files directly on the target VMs with strict security permissions (`0600`).
-*(Do not manually edit `.env` files locally or on the VMs)*
+    ```
 
-### Documentation & Troubleshooting
-For operational details, network matrices, and manual systemd testing or restarts, please refer to the **[Runbook](docs/runbook.md)**.
-If you encounter any issues during development or deployment, check the **[Blockers and Workarounds](docs/blockers.md)** guide.
+4.  **Launch Docker Stack**:
+    ```bash
+    docker compose up -d
+    ```
 
-## To-Do List
-* Phase 1 - Usability:
-  * [x] Better UI
-    * [x] Convert currency to a human-readable format
-    * [x] Convert time to a human-readable format
-  * [x] Show only the most popular fiats / coins
-  * [x] Search by code (UAH / USD / BTC / etc) or name if possible (Долар США / Євро / Etherum / etc) - need to fetch list of coin names / codes
-  * [x] Convert coins to UAH for general list
-  * [x] Convert any-to-any fiat / coin (but that would be more of a currency converter than a list)<br>
-* Phase 2 - Infrastructure Evolution:
-  * [x] RabbitMQ implementing
-  * [x] Redis implementing (caching and remembering user preferences)
-  * [x] Migrate provisioning to Terraform / Ansible
-  * [ ] Security work (minimum permissions, firewall, secrets for credentials, etc)
+## Configuration & Secrets
+We strictly follow the **"No Hardcode"** policy:
+-   **Local Development**: Managed via `infra/.env` (using `.env.example` as a template).
+-   **Secrets**: Database/MQ passwords are encrypted using **Ansible Vault** for VM provisioning.
+-   **Infrastructure Info**: All IPs, Ports, and API URLs are extracted into variables and can be modified without changing the source code.
+
+## Documentation
+*   **[Runbook](docs/runbook.md)**: Operational guides, port matrices, and health check commands.
+*   **[Blockers & Workarounds](docs/blockers.md)**: Troubleshooting history and known issues during Docker migration.
+
+---
+
+## Progress & Roadmap
+*   **Phase 1 — Usability**: ✅ Improved UI, human-readable formats, search by code/name.
+*   **Phase 2 — Infrastructure Evolution**: ✅ RabbitMQ integration, Redis implementation, Ansible migration.
+*   **Phase 3 — Containerization**: ✅ Docker migration, Decoupling configuration, Multi-stage builds.
+*   **Phase 4 — Security**: ⏳ Firewall hardening, automated TLS, advanced secrets management.

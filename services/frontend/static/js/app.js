@@ -194,8 +194,10 @@ function startRelativeTimeTicker() {
   if (relativeTimeId) clearInterval(relativeTimeId);
   relativeTimeId = setInterval(function () {
     if (!store.lastFetchedDate || !el.kpiTime) return;
-    el.kpiTime.textContent = formatRelativeTime(store.lastFetchedDate);
-    el.kpiTime.title = formatLocalDateTime(store.liveMeta.fetched_at);
+    const newText = formatRelativeTime(store.lastFetchedDate);
+    if (el.kpiTime.textContent !== newText) el.kpiTime.textContent = newText;
+    const newTitle = formatLocalDateTime(store.liveMeta.fetched_at);
+    if (el.kpiTime.title !== newTitle) el.kpiTime.title = newTitle;
   }, 1000);
 }
 

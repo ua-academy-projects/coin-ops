@@ -172,7 +172,7 @@ function renderSparkline(canvasId, points, trendPct) {
       }]
     },
     options: {
-      responsive: true, maintainAspectRatio: false, animation: false,
+      responsive: false, maintainAspectRatio: false, animation: false,
       layout: { padding: 0 }, events: [],
       plugins: { legend: { display: false }, tooltip: { enabled: false } },
       scales: {
@@ -312,7 +312,7 @@ export function renderLive() {
       `<td class="text-end">${uahEsc}</td>` +
       `<td class="text-end">${usdEsc}</td>` +
       `<td class="text-end ${tc}">${pctEsc}</td>` +
-      `<td><div class="spark-wrap"><canvas id="${canvasId}" height="36"></canvas></div></td>`
+      `<td><div class="spark-wrap"><canvas id="${canvasId}" width="100" height="36"></canvas></div></td>`
     );
   });
 
