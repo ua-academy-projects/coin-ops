@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+	"math"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -250,13 +251,24 @@ func fetchNBUData(ctx context.Context, client *http.Client, apiURL string) ([]NB
 	return items, nil
 }
 
+
+
+
+func roundTo2(val float64) float64 {
+	return math.Round(val*100) / 100
+}
+
+
+
+
+
 func enrichItems(items []NBUItem, collectedAt time.Time) []EnrichedNBUItem {
 	result := make([]EnrichedNBUItem, 0, len(items))
 	for _, item := range items {
 		result = append(result, EnrichedNBUItem{
 			R030:         item.R030,
 			TXT:          item.TXT,
-			Rate:         item.Rate,
+			Rate:         roundTo2(item.Rate),
 			CC:           item.CC,
 			ExchangeDate: item.ExchangeDate,
 			CollectedAt:  collectedAt,

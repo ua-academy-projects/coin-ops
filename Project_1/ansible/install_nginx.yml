@@ -1,47 +1,184 @@
-- name: Install and configure nginx
+- name: Deploy Django rates dashboard
   hosts: webserver
   become: yes
+
+  vars:
+    app_dir: /opt/rates-dashboard
+    venv_dir: /opt/rates-dashboard/.venv
+    app_user: www-data
+    gunicorn_port: 8000
+    postgres_host: 192.168.56.11
+    postgres_port: 5432
+    postgres_db: app_db
+    postgres_user: app_user
+    postgres_password: "StrongPassword123!"
+    redis_host: 127.0.0.1
+    redis_port: 6379
+    redis_cache_ttl: 60
 
   tasks:
     - name: Update apt cache
       apt:
         update_cache: yes
 
-    - name: Install nginx
+    - name: Install runtime packages
       apt:
-        name: nginx
+        name:
+          - nginx
+          - redis-server
+          - python3
+          - python3-pip
+          - python3-venv
         state: present
+
+    - name: Ensure Redis is running
+      service:
+        name: redis-server
+        state: started
+        enabled: yes
+
+    - name: Ensure application directory exists
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: "0755"
+
+    - name: Copy Django application
+      copy:
+        src: ./webapp/
+        dest: "{{ app_dir }}"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+
+    - name: Create Python virtual environment
+      command: python3 -m venv "{{ venv_dir }}"
+      args:
+        creates: "{{ venv_dir }}/bin/python"
+
+    - name: Install Python dependencies
+      pip:
+        requirements: "{{ app_dir }}/requirements.txt"
+        virtualenv: "{{ venv_dir }}"
+        state: present
+
+    - name: Create Django environment file
+      copy:
+        dest: /etc/rates-dashboard.env
+        mode: "0644"
+        content: |
+          DJANGO_SECRET_KEY=replace-me-for-production
+          DJANGO_ALLOWED_HOSTS=127.0.0.1,localhost,192.168.56.12
+          POSTGRES_HOST={{ postgres_host }}
+          POSTGRES_PORT={{ postgres_port }}
+          POSTGRES_DB={{ postgres_db }}
+          POSTGRES_USER={{ postgres_user }}
+          POSTGRES_PASSWORD={{ postgres_password }}
+          REDIS_HOST={{ redis_host }}
+          REDIS_PORT={{ redis_port }}
+          REDIS_CACHE_TTL={{ redis_cache_ttl }}
+      notify: restart gunicorn
+
+    - name: Run Django system check
+      command: "{{ venv_dir }}/bin/python manage.py check"
+      args:
+        chdir: "{{ app_dir }}"
+      environment:
+        DJANGO_SECRET_KEY: replace-me-for-production
+        DJANGO_ALLOWED_HOSTS: "127.0.0.1,localhost,192.168.56.12"
+        POSTGRES_HOST: "{{ postgres_host }}"
+        POSTGRES_PORT: "{{ postgres_port }}"
+        POSTGRES_DB: "{{ postgres_db }}"
+        POSTGRES_USER: "{{ postgres_user }}"
+        POSTGRES_PASSWORD: "{{ postgres_password }}"
+        REDIS_HOST: "{{ redis_host }}"
+        REDIS_PORT: "{{ redis_port }}"
+        REDIS_CACHE_TTL: "{{ redis_cache_ttl }}"
+
+    - name: Create gunicorn systemd service
+      copy:
+        dest: /etc/systemd/system/rates-dashboard.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Gunicorn for Django rates dashboard
+          After=network.target redis-server.service
+
+          [Service]
+          Type=simple
+          User={{ app_user }}
+          Group={{ app_user }}
+          WorkingDirectory={{ app_dir }}
+          EnvironmentFile=/etc/rates-dashboard.env
+          ExecStart={{ venv_dir }}/bin/gunicorn --workers 2 --bind 127.0.0.1:{{ gunicorn_port }} rates_site.wsgi:application
+          Restart=always
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+      notify: restart gunicorn
+
+    - name: Configure nginx site
+      copy:
+        dest: /etc/nginx/sites-available/rates-dashboard
+        mode: "0644"
+        content: |
+          server {
+              listen 80 default_server;
+              listen [::]:80 default_server;
+              server_name _;
+
+              location /static/ {
+                  alias {{ app_dir }}/staticfiles/;
+              }
+
+              location / {
+                  proxy_pass http://127.0.0.1:{{ gunicorn_port }};
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+              }
+          }
       notify: restart nginx
+
+    - name: Enable nginx site
+      file:
+        src: /etc/nginx/sites-available/rates-dashboard
+        dest: /etc/nginx/sites-enabled/rates-dashboard
+        state: link
+      notify: restart nginx
+
+    - name: Disable default nginx site
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: restart nginx
+
+    - name: Reload systemd
+      systemd:
+        daemon_reload: true
+
+    - name: Enable and start gunicorn
+      systemd:
+        name: rates-dashboard
+        enabled: true
+        state: restarted
 
     - name: Ensure nginx is running
       service:
         name: nginx
         state: started
         enabled: yes
-    - name: Create simple index.html
-      copy:
-        src: index.html
-        dest: /var/www/html/index.html
-      notify: restart nginx
 
   handlers:
     - name: restart nginx
       service:
         name: nginx
         state: restarted
-- name: Install Redis
-  hosts: webserver
-  become: yes
 
-  tasks:
-    - name: Install Redis
-      apt:
-        name: redis-server
-        state: present
-        update_cache: yes
-
-    - name: Start and enable Redis
-      service:
-        name: redis-server
-        state: started
-        enabled: yes
+    - name: restart gunicorn
+      systemd:
+        name: rates-dashboard
+        state: restarted
