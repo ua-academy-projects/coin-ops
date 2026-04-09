@@ -90,8 +90,8 @@ This split is intentional. It avoids tightly coupling UI requests with DB writes
 
 - Terraform
 - Ansible
-- systemd
-- nginx
+- Docker & Docker Compose
+- nginx (in container)
 - Hyper-V VMs
 
 ## Why It Is Built This Way
@@ -374,6 +374,12 @@ That explanation is short, concrete, and defensible.
 The project is already strong enough to be a CV/demo project if:
 
 - the main flows work reliably
+- the README is clear
+- deployment is reproducible
+- the repo stays clean and intentional
+
+At this stage, more value comes from clarity and reliability than from endless UI polishing.
+the main flows work reliably
 - the README is clear
 - deployment is reproducible
 - the repo stays clean and intentional

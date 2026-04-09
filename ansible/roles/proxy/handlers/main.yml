@@ -1,6 +1,0 @@
----
-- name: Reload and restart proxy
-  systemd:
-    name: cognitor-proxy
-    daemon_reload: yes
-    state: restarted

@@ -1,0 +1,56 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:
+      - /etc/cognitor/history.env
+    volumes:
+      - /var/lib/coin-ops/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    restart: unless-stopped
+    env_file:
+      - /etc/cognitor/history.env
+    ports:
+      - "5672:5672"
+    volumes:
+      - /var/lib/coin-ops/rabbitmq:/var/lib/rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  history-consumer:
+    build:
+      context: ./history
+      dockerfile: Dockerfile.consumer
+    restart: unless-stopped
+    env_file:
+      - /etc/cognitor/history.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  history-api:
+    build:
+      context: ./history
+      dockerfile: Dockerfile.api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - /etc/cognitor/history.env
+    depends_on:
+      postgres:
+        condition: service_healthy

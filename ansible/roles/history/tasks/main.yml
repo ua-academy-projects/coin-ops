@@ -1,10 +1,15 @@
 ---
-- name: Create cognitor-history system user
-  user:
-    name: cognitor-history
-    system: yes
-    shell: /usr/sbin/nologin
-    create_home: no
+- name: Stop and disable legacy host services
+  service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: no
+  loop:
+    - postgresql
+    - rabbitmq-server
+    - cognitor-history-consumer
+    - cognitor-history-api
+  failed_when: false
 
 - name: Create secrets directory
   file:
@@ -14,89 +19,41 @@
     group: root
     mode: '0750'
 
+- name: Write history environment file
+  template:
+    src: history.env.j2
+    dest: /etc/cognitor/history.env
+    owner: root
+    group: root
+    mode: '0640'
+
 - name: Create history deploy directory
   file:
     path: /opt/cognitor/history
     state: directory
-    owner: cognitor-history
-    group: cognitor-history
+    owner: root
+    group: root
     mode: '0755'
 
 - name: Sync history source files
   synchronize:
     src: "{{ playbook_dir }}/../history/"
-    dest: /opt/cognitor/history/
-    delete: no
+    dest: /opt/cognitor/history/history/
+    delete: yes
 
-- name: Set ownership of source files
-  file:
-    path: /opt/cognitor/history
-    state: directory
-    owner: cognitor-history
-    group: cognitor-history
-    recurse: yes
+- name: Sync compose file
+  copy:
+    src: "{{ playbook_dir }}/../deploy/compose/node-01.compose.yaml"
+    dest: /opt/cognitor/history/compose.yaml
 
-- name: Create Python virtualenv and install dependencies
-  pip:
-    requirements: /opt/cognitor/history/requirements.txt
-    virtualenv: /opt/cognitor/history/venv
-    virtualenv_command: python3 -m venv
-
-- name: Set venv ownership
-  file:
-    path: /opt/cognitor/history/venv
-    state: directory
-    owner: cognitor-history
-    group: cognitor-history
-    recurse: yes
-
-- name: Write history environment file
-  template:
-    src: history.env.j2
-    dest: /etc/cognitor/history.env
-    owner: cognitor-history
-    group: cognitor-history
-    mode: '0640'
-  notify:
-    - Reload and restart history consumer
-    - Reload and restart history api
-
-- name: Write history-consumer systemd unit
-  template:
-    src: history-consumer.service.j2
-    dest: /etc/systemd/system/cognitor-history-consumer.service
-    owner: root
-    group: root
-    mode: '0644'
-  notify: Reload and restart history consumer
-
-- name: Write history-api systemd unit
-  template:
-    src: history-api.service.j2
-    dest: /etc/systemd/system/cognitor-history-api.service
-    owner: root
-    group: root
-    mode: '0644'
-  notify: Reload and restart history api
-
-- name: Flush handlers
-  meta: flush_handlers
-
-- name: Ensure history-consumer is enabled and running
-  systemd:
-    name: cognitor-history-consumer
-    enabled: yes
-    state: started
-
-- name: Ensure history-api is enabled and running
-  systemd:
-    name: cognitor-history-api
-    enabled: yes
-    state: started
+- name: Run Docker Compose
+  command: docker compose -f /opt/cognitor/history/compose.yaml up -d --build --remove-orphans
+  args:
+    chdir: /opt/cognitor/history
 
 - name: Wait for history-api health endpoint
   uri:
-    url: "http://localhost:{{ history_port }}/health"
+    url: "http://localhost:8000/health"
     method: GET
     status_code: 200
   retries: 12

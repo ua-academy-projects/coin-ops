@@ -1,0 +1,12 @@
+version: "3.8"
+
+services:
+  ui:
+    build:
+      context: ./ui-react
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    env_file:
+      - /etc/cognitor/ui.env

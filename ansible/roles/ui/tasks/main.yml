@@ -1,49 +1,59 @@
 ---
-- name: Create web root directory
+- name: Stop and disable legacy host nginx
+  service:
+    name: nginx
+    state: stopped
+    enabled: no
+  failed_when: false
+
+- name: Create secrets directory
   file:
-    path: /var/www/coin-ops
+    path: /etc/cognitor
     state: directory
-    owner: www-data
-    group: www-data
-    mode: '0755'
-
-- name: Sync React dist/ to web root
-  synchronize:
-    src: "{{ playbook_dir }}/../ui-react/dist/"
-    dest: /var/www/coin-ops/
-    delete: yes
-    recursive: yes
-    rsync_path: "sudo rsync"
-  delegate_to: localhost
-  become: false
-  notify: Reload nginx
-
-- name: Deploy nginx site config
-  copy:
-    src: "{{ playbook_dir }}/../ui/nginx.conf"
-    dest: /etc/nginx/sites-available/coin-ops
     owner: root
     group: root
-    mode: '0644'
-  notify: Reload nginx
+    mode: '0750'
 
-- name: Enable coin-ops nginx site
+- name: Write ui environment file (if any required in future)
+  copy:
+    content: "DUMMY=var\n"
+    dest: /etc/cognitor/ui.env
+    owner: root
+    group: root
+    mode: '0640'
+
+- name: Create ui deploy directory
   file:
-    src: /etc/nginx/sites-available/coin-ops
-    dest: /etc/nginx/sites-enabled/coin-ops
-    state: link
-  notify: Reload nginx
+    path: /opt/cognitor/ui
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
 
-- name: Disable default nginx site
-  file:
-    path: /etc/nginx/sites-enabled/default
-    state: absent
-  notify: Reload nginx
+- name: Sync ui source files
+  synchronize:
+    src: "{{ playbook_dir }}/../ui-react/"
+    dest: /opt/cognitor/ui/ui-react/
+    delete: yes
+    rsync_opts:
+      - "--exclude=node_modules"
 
-- name: Flush handlers
-  meta: flush_handlers
+- name: Sync compose file
+  copy:
+    src: "{{ playbook_dir }}/../deploy/compose/node-03.compose.yaml"
+    dest: /opt/cognitor/ui/compose.yaml
 
-- name: Ensure nginx is running
-  systemd:
-    name: nginx
-    state: started
+- name: Run Docker Compose
+  command: docker compose -f /opt/cognitor/ui/compose.yaml up -d --build --remove-orphans
+  args:
+    chdir: /opt/cognitor/ui
+
+- name: Wait for nginx availability
+  uri:
+    url: "http://localhost:80/health"
+    method: GET
+    status_code: 200
+  retries: 12
+  delay: 5
+  register: result
+  until: result.status == 200

@@ -1,10 +1,13 @@
 ---
-- name: Create cognitor-proxy system user
-  user:
-    name: cognitor-proxy
-    system: yes
-    shell: /usr/sbin/nologin
-    create_home: no
+- name: Stop and disable legacy host services
+  service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: no
+  loop:
+    - redis-server
+    - cognitor-proxy
+  failed_when: false
 
 - name: Create secrets directory
   file:
@@ -13,6 +16,14 @@
     owner: root
     group: root
     mode: '0750'
+
+- name: Write proxy environment file
+  template:
+    src: proxy.env.j2
+    dest: /etc/cognitor/proxy.env
+    owner: root
+    group: root
+    mode: '0640'
 
 - name: Create proxy deploy directory
   file:
@@ -25,70 +36,24 @@
 - name: Sync proxy source files
   synchronize:
     src: "{{ playbook_dir }}/../proxy/"
-    dest: /opt/cognitor/proxy/
-    delete: no
+    dest: /opt/cognitor/proxy/proxy/
+    delete: yes
     rsync_opts:
-      - "--exclude=proxy-linux"
       - "--exclude=proxy"
-      - "--exclude=*.exe"
 
-- name: Download Go module dependencies
-  command: /usr/local/go/bin/go mod download
+- name: Sync compose file
+  copy:
+    src: "{{ playbook_dir }}/../deploy/compose/node-02.compose.yaml"
+    dest: /opt/cognitor/proxy/compose.yaml
+
+- name: Run Docker Compose
+  command: docker compose -f /opt/cognitor/proxy/compose.yaml up -d --build --remove-orphans
   args:
     chdir: /opt/cognitor/proxy
-  environment:
-    HOME: /root
-    GOPATH: /root/go
-    PATH: /usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-  changed_when: false
-
-- name: Build proxy binary
-  command: /usr/local/go/bin/go build -mod=mod -o /opt/cognitor/proxy/proxy .
-  args:
-    chdir: /opt/cognitor/proxy
-  environment:
-    HOME: /root
-    GOPATH: /root/go
-    PATH: /usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-  notify: Reload and restart proxy
-
-- name: Set binary owner and permissions
-  file:
-    path: /opt/cognitor/proxy/proxy
-    owner: cognitor-proxy
-    group: cognitor-proxy
-    mode: '0750'
-
-- name: Write proxy environment file
-  template:
-    src: proxy.env.j2
-    dest: /etc/cognitor/proxy.env
-    owner: cognitor-proxy
-    group: cognitor-proxy
-    mode: '0640'
-  notify: Reload and restart proxy
-
-- name: Write proxy systemd unit
-  template:
-    src: proxy.service.j2
-    dest: /etc/systemd/system/cognitor-proxy.service
-    owner: root
-    group: root
-    mode: '0644'
-  notify: Reload and restart proxy
-
-- name: Flush handlers
-  meta: flush_handlers
-
-- name: Ensure proxy service is enabled and running
-  systemd:
-    name: cognitor-proxy
-    enabled: yes
-    state: started
 
 - name: Wait for proxy health endpoint
   uri:
-    url: "http://localhost:{{ proxy_port }}/health"
+    url: "http://localhost:8080/health"
     method: GET
     status_code: 200
   retries: 12
