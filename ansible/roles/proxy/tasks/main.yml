@@ -33,6 +33,11 @@
     group: root
     mode: '0755'
 
+- name: Remove legacy proxy binary to make way for source directory
+  file:
+    path: /opt/cognitor/proxy/proxy
+    state: absent
+
 - name: Sync proxy source files
   synchronize:
     src: "{{ playbook_dir }}/../proxy/"

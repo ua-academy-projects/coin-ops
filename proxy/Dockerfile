@@ -8,7 +8,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o proxy .
 
-FROM gcr.io/distroless/static-debian12:latest-nonroot
+FROM gcr.io/distroless/static-debian12:nonroot
 
 WORKDIR /
 COPY --from=builder /app/proxy /proxy
