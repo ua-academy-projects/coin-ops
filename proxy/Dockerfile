@@ -1,4 +1,6 @@
-FROM golang:1.22-bookworm AS builder
+FROM golang:1.22-alpine AS builder
+
+RUN apk add --no-cache ca-certificates
 
 WORKDIR /app
 
@@ -9,8 +11,8 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build \
     -trimpath \
-    -tags "netgo osusergo" \
-    -ldflags="-s -w -extldflags=-static" \
+    -buildvcs=false \
+    -ldflags="-s -w -buildid=" \
     -o /proxy .
 
 FROM scratch

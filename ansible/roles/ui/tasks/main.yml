@@ -57,3 +57,11 @@
   delay: 5
   register: result
   until: result.status == 200
+
+- name: Remove unused Docker build cache
+  command: docker builder prune -af
+  changed_when: false
+
+- name: Remove dangling Docker images
+  command: docker image prune -f
+  changed_when: false
