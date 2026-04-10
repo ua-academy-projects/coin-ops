@@ -201,6 +201,12 @@
     th.sortable { cursor: pointer; user-select: none; }
     th.sortable:hover { color: #e2e8f0; }
     th.sortable .sort-icon { font-size: 0.7rem; opacity: 0.5; margin-left: 2px; }
+    .td-fav {
+      cursor: pointer; text-align: center; font-size: 1rem;
+      color: #475569; width: 2rem; user-select: none;
+    }
+    .td-fav.active { color: #facc15; }
+    tr.fav-row { background: rgba(250, 204, 21, 0.04); }
     .search-input {
       background: transparent; border: 1px solid #2d3748; border-radius: 6px;
       color: #e2e8f0; font-size: 0.82rem; padding: 0.25rem 0.6rem;
@@ -339,16 +345,18 @@
           <table id="ratesTable">
             <thead>
               <tr>
-                <th class="sortable" data-col="0">Code <span class="sort-icon"></span></th>
-                <th class="sortable" data-col="1">Currency <span class="sort-icon"></span></th>
-                <th class="sortable" data-col="2">Rate (UAH) <span class="sort-icon"></span></th>
-                <th class="sortable" data-col="3">Change <span class="sort-icon"></span></th>
+                <th style="width:2rem;"></th>
+                <th class="sortable" data-col="1">Code <span class="sort-icon"></span></th>
+                <th class="sortable" data-col="2">Currency <span class="sort-icon"></span></th>
+                <th class="sortable" data-col="3">Rate (UAH) <span class="sort-icon"></span></th>
+                <th class="sortable" data-col="4">Change <span class="sort-icon"></span></th>
               </tr>
             </thead>
             <tbody>
               {% for r in rates %}
               {% set p = prev_rates.get(r.code) %}
-              <tr>
+              <tr{% if r.code in favorites %} class="fav-row"{% endif %}>
+                <td class="td-fav{% if r.code in favorites %} active{% endif %}" data-code="{{ r.code }}" onclick="toggleFav(this)">{% if r.code in favorites %}★{% else %}☆{% endif %}</td>
                 <td data-sort="{{ r.code }}"><span class="td-code">{{ r.code }}</span></td>
                 <td data-sort="{{ r.name }}">{{ r.name }}</td>
                 <td data-sort="{{ r.rate }}"><span class="td-rate">{{ r.rate }}</span></td>
@@ -535,6 +543,44 @@
       });
     });
 
+    // Favourites
+    function getFavs() {
+      var m = document.cookie.match(/(?:^|; )favorites=([^;]*)/);
+      return m ? decodeURIComponent(m[1]).split(',').filter(Boolean) : [];
+    }
+    function setFavs(favs) {
+      document.cookie = 'favorites=' + encodeURIComponent(favs.join(','))
+        + ';path=/;max-age=31536000;SameSite=Lax';
+    }
+    function toggleFav(td) {
+      var code = td.dataset.code;
+      var favs = getFavs();
+      var idx = favs.indexOf(code);
+      if (idx >= 0) { favs.splice(idx, 1); } else { favs.push(code); }
+      setFavs(favs);
+      td.textContent = idx >= 0 ? '☆' : '★';
+      td.classList.toggle('active', idx < 0);
+      td.closest('tr').classList.toggle('fav-row', idx < 0);
+      pinFavourites();
+    }
+    function pinFavourites() {
+      var table = document.getElementById('ratesTable');
+      if (!table) return;
+      var tbody = table.querySelector('tbody');
+      var rows = Array.from(tbody.querySelectorAll('tr'));
+      var favs = getFavs();
+      var favRows = rows.filter(function(r) {
+        var fav = r.querySelector('.td-fav');
+        return fav && favs.indexOf(fav.dataset.code) >= 0;
+      });
+      var rest = rows.filter(function(r) {
+        var fav = r.querySelector('.td-fav');
+        return !fav || favs.indexOf(fav.dataset.code) < 0;
+      });
+      favRows.concat(rest).forEach(function(r) { tbody.appendChild(r); });
+    }
+    pinFavourites();
+
     // Rates search
     var ratesSearch = document.getElementById('ratesSearch');
     if (ratesSearch) {
@@ -576,6 +622,7 @@
             return state.asc ? cmp : -cmp;
           });
           rows.forEach(function(r) { tbody.appendChild(r); });
+          pinFavourites();
         });
       });
     });

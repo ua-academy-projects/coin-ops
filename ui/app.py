@@ -3,7 +3,7 @@ from collections import defaultdict
 from datetime import datetime
 
 import requests
-from flask import Flask, render_template, request
+from flask import Flask, make_response, render_template, request
 
 app = Flask(__name__)
 
@@ -88,16 +88,22 @@ def index():
         except Exception:
             pass
 
+    favorites = {c for c in request.cookies.get("favorites", "").split(",") if c}
+
     return render_template("index.html", rates=rates, error=error, cc=cc, view="rates",
-                           currencies=CURRENCIES, prev_rates=prev_rates)
+                           currencies=CURRENCIES, prev_rates=prev_rates, favorites=favorites)
 
 
 @app.route("/history")
 def history():
-    selected = request.args.getlist("cc")  # multi-select: ?cc=USD&cc=EUR
-    if not selected:
-        selected = ["USD"]
-    time_range = request.args.get("range", "7d")
+    if not request.args:
+        saved_cc = request.cookies.get("history_cc", "")
+        selected = [c for c in saved_cc.split(",") if c] or ["USD"]
+        time_range = request.cookies.get("history_range", "7d")
+    else:
+        selected = request.args.getlist("cc") or ["USD"]
+        time_range = request.args.get("range", "7d")
+
     records = []
     error = None
 
@@ -113,9 +119,13 @@ def history():
     except Exception as e:
         error = str(e)
 
-    return render_template("index.html", records=records, error=error,
-                           selected=selected, time_range=time_range,
-                           view="history", currencies=CURRENCIES)
+    rendered = render_template("index.html", records=records, error=error,
+                               selected=selected, time_range=time_range,
+                               view="history", currencies=CURRENCIES)
+    resp = make_response(rendered)
+    resp.set_cookie("history_cc", ",".join(selected), max_age=31536000, samesite="Lax")
+    resp.set_cookie("history_range", time_range, max_age=31536000, samesite="Lax")
+    return resp
 
 
 def build_chart_data(records):
@@ -145,10 +155,14 @@ def build_chart_data(records):
 
 @app.route("/charts")
 def charts():
-    selected = request.args.getlist("cc")
-    if not selected:
-        selected = ["USD"]
-    time_range = request.args.get("range", "30d")
+    if not request.args:
+        saved_cc = request.cookies.get("charts_cc", "")
+        selected = [c for c in saved_cc.split(",") if c] or ["USD"]
+        time_range = request.cookies.get("charts_range", "30d")
+    else:
+        selected = request.args.getlist("cc") or ["USD"]
+        time_range = request.args.get("range", "30d")
+
     chart_data = {"labels": [], "datasets": []}
     error = None
 
@@ -165,9 +179,13 @@ def charts():
     except Exception as e:
         error = str(e)
 
-    return render_template("index.html", chart_data=chart_data, error=error,
-                           selected=selected, time_range=time_range,
-                           view="charts", currencies=CURRENCIES)
+    rendered = render_template("index.html", chart_data=chart_data, error=error,
+                               selected=selected, time_range=time_range,
+                               view="charts", currencies=CURRENCIES)
+    resp = make_response(rendered)
+    resp.set_cookie("charts_cc", ",".join(selected), max_age=31536000, samesite="Lax")
+    resp.set_cookie("charts_range", time_range, max_age=31536000, samesite="Lax")
+    return resp
 
 
 if __name__ == "__main__":
