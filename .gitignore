@@ -36,6 +36,9 @@ coin-ops-intelligence.zip
 # Patch files
 *.patch
 
+# Personal notes — not for the repo
+docs/interview-notes.md
+
 # Local docs and infrastructure artifacts
 hyper-v/
 terraform-guide.pdf
