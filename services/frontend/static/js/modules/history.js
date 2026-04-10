@@ -51,6 +51,50 @@ function insertGapMarkers(items) {
   return result;
 }
 
+/* ---- Downsampling ---- */
+function downsampleItems(items, bucketMs, minTs, maxTs) {
+  if (!items || items.length === 0 || !bucketMs) return items;
+  
+  const sortedItems = items.slice().sort(function(a, b) {
+    const da = parseTimestamp(a.created_at);
+    const db = parseTimestamp(b.created_at);
+    return (da ? da.getTime() : 0) - (db ? db.getTime() : 0);
+  });
+
+  // Determine actual bounds
+  const firstDataTs = parseTimestamp(sortedItems[0].created_at).getTime();
+  const lastDataTs  = parseTimestamp(sortedItems[sortedItems.length - 1].created_at).getTime();
+  
+  const startTs = (minTs != null) ? Math.floor(minTs / bucketMs) * bucketMs : Math.floor(firstDataTs / bucketMs) * bucketMs;
+  const endTs   = (maxTs != null) ? Math.floor(maxTs / bucketMs) * bucketMs : Math.floor(lastDataTs / bucketMs) * bucketMs;
+
+  const buckets = {};
+  sortedItems.forEach(function(it) {
+    const ts = parseTimestamp(it.created_at).getTime();
+    const bStart = Math.floor(ts / bucketMs) * bucketMs;
+    // Keep the latest item in the bucket
+    buckets[bStart] = it;
+  });
+
+  const result = [];
+  for (let t = startTs; t <= endTs; t += bucketMs) {
+    if (buckets[t]) {
+      result.push(buckets[t]);
+    } else {
+      // Insert a "gap" item with null prices
+      // We use the timestamp of the bucket start
+      const gapDate = new Date(t).toISOString();
+      result.push({
+        created_at: gapDate,
+        price_uah: null, price_usd: null,
+        pct_change_from_prev: null, _gap: true
+      });
+    }
+  }
+  
+  return result;
+}
+
 /* ---- Asset select helpers ---- */
 export function getSelectedHistAssets() {
   const { el } = store;
@@ -415,12 +459,85 @@ export async function loadHistorySeries() {
       return;
     }
 
+    let xScaleMin = null;
+    let xScaleMax = Date.now();
+    if (range === '24h') {
+      xScaleMin = xScaleMax - 24 * 60 * 60 * 1000;
+    } else if (range === '7d') {
+      xScaleMin = xScaleMax - 7 * 24 * 60 * 60 * 1000;
+    } else if (range === '30d') {
+      xScaleMin = xScaleMax - 30 * 24 * 60 * 60 * 1000;
+    } else if (range === 'all') {
+      xScaleMin = null;
+      xScaleMax = null; // Let it auto bound
+    } else if (range === 'custom') {
+      const dfrom = document.getElementById('hist-date-from');
+      const dto   = document.getElementById('hist-date-to');
+      if (dfrom && dfrom.value) xScaleMin = new Date(dfrom.value).getTime();
+      else xScaleMin = null;
+      if (dto && dto.value) xScaleMax = new Date(dto.value).getTime() + 86400000 - 1;
+      else xScaleMax = null;
+    }
+
+    let durationMs = xScaleMax && xScaleMin ? (xScaleMax - xScaleMin) : null;
+    if (!durationMs && (range === 'all' || range === 'custom')) {
+      let minTs = Infinity, maxTs = -Infinity;
+      results.forEach(function(r) {
+        (r.data.items || []).forEach(function(it) {
+          const d = parseTimestamp(it.created_at);
+          if (d) {
+            const ts = d.getTime();
+            if (ts < minTs) minTs = ts;
+            if (ts > maxTs) maxTs = ts;
+          }
+        });
+      });
+      if (minTs !== Infinity && maxTs !== -Infinity) durationMs = maxTs - minTs;
+    }
+    
+    let bucketMs = null;
+    if (durationMs) {
+      if (durationMs <= 24 * 3600 * 1000) {
+        bucketMs = 30 * 60 * 1000; // 30 mins
+      } else if (durationMs <= 7 * 24 * 3600 * 1000) {
+        bucketMs = 4 * 3600 * 1000; // 4 hours
+      } else if (durationMs <= 31 * 24 * 3600 * 1000) {
+        bucketMs = 12 * 3600 * 1000; // 12 hours
+      } else if (durationMs <= 90 * 24 * 3600 * 1000) {
+        bucketMs = 24 * 3600 * 1000; // 1 day
+      } else {
+        bucketMs = 7 * 24 * 3600 * 1000; // 1 week
+      }
+    }
+
     const parsed = [];
     const allRawItems = [];
     results.forEach(function (r) {
-      const items = (r.data && r.data.items) || [];
+      let items = (r.data && r.data.items) || [];
       if (!items.length) return;
-      const metric     = (r.data && r.data.series_metric) || 'uah';
+      const metric = (r.data && r.data.series_metric) || 'uah';
+      
+      if (bucketMs) {
+        items = downsampleItems(items, bucketMs, xScaleMin, xScaleMax);
+        // Recalculate pct_change_from_prev after downsampling, skipping nulls
+        let lastValidItem = null;
+        for (let i = 0; i < items.length; i++) {
+          const curr = items[i];
+          if (curr._gap) continue;
+          
+          if (lastValidItem) {
+            const pVal = metric === 'uah' ? lastValidItem.price_uah : lastValidItem.price_usd;
+            const cVal = metric === 'uah' ? curr.price_uah : curr.price_usd;
+            if (pVal && cVal) {
+              curr.pct_change_from_prev = ((cVal - pVal) / pVal) * 100;
+            } else {
+              curr.pct_change_from_prev = null;
+            }
+          }
+          lastValidItem = curr;
+        }
+      }
+      
       const chartItems = insertGapMarkers(items);
       items.forEach(function (it) {
         allRawItems.push({
@@ -444,21 +561,27 @@ export async function loadHistorySeries() {
       return;
     }
 
-    let datasets, chartLabels, yAxisLabel;
+    let datasets = [];
+    let yAxisLabel = '';
     histAbsoluteValues = {};
 
     if (!isMulti) {
       const p  = parsed[0];
-      const ci = p.chartItems;
-      chartLabels = ci.map(function (it) { return formatChartAxisLabel(it.created_at, range); });
-      const vals = ci.map(function (it) {
-        if (it._gap) return null;
-        return p.metric === 'uah' ? it.price_uah : it.price_usd;
-      });
       yAxisLabel = p.metricLabel;
+      const dataPoints = [];
+      p.chartItems.forEach(function (it) {
+        const d = parseTimestamp(it.created_at);
+        if (!d) return;
+        if (it._gap) {
+          dataPoints.push({ x: d.getTime(), y: null });
+        } else {
+          dataPoints.push({ x: d.getTime(), y: Number(p.metric === 'uah' ? it.price_uah : it.price_usd) });
+        }
+      });
       datasets = [{
         label: p.sym + ' (' + p.metricLabel + ')',
-        data: vals, borderColor: CHART_COLORS[0], backgroundColor: CHART_COLORS[0],
+        data: dataPoints,
+        borderColor: CHART_COLORS[0], backgroundColor: CHART_COLORS[0],
         tension: 0.32, fill: false, spanGaps: false
       }];
     } else {
@@ -466,18 +589,21 @@ export async function loadHistorySeries() {
       const timeline    = buildUnifiedTimeline(allSeries);
       let toleranceMs = 15 * 60 * 1000;
       if (range === '24h') toleranceMs = 5 * 60 * 1000;
-      chartLabels = timeline.map(function (epoch) {
-        const d = new Date(epoch);
-        if (range === '24h') return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
-        return pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1) + '.' + d.getFullYear();
-      });
+      
       datasets = parsed.map(function (p, idx) {
         const aligned    = alignSeriesToTimeline(p.chartItems, timeline, p.metric, toleranceMs);
         histAbsoluteValues[p.sym] = aligned.slice();
         const normalized = normalizeToPctChange(aligned);
+        
+        const dataPoints = [];
+        timeline.forEach(function(ts, i) {
+          dataPoints.push({ x: ts, y: normalized[i] });
+        });
+
         return {
           label: p.sym + ' (' + p.metricLabel + ')',
-          data: normalized, borderColor: CHART_COLORS[idx % CHART_COLORS.length],
+          data: dataPoints,
+          borderColor: CHART_COLORS[idx % CHART_COLORS.length],
           backgroundColor: CHART_COLORS[idx % CHART_COLORS.length],
           tension: 0.32, fill: false, spanGaps: false,
           _sym: p.sym, _metricLabel: p.metricLabel
@@ -507,7 +633,7 @@ export async function loadHistorySeries() {
     destroyChartInstance(histMainChart);
     histMainChart = new Chart(ctx, {
       type: 'line',
-      data: { labels: chartLabels, datasets },
+      data: { datasets },
       options: {
         responsive: true, maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
@@ -517,12 +643,25 @@ export async function loadHistorySeries() {
             titleColor: theme.tooltipText, bodyColor: theme.tooltipText,
             backgroundColor: theme.tooltipBg, borderColor: theme.tooltipBorder,
             borderWidth: 1,
-            filter: function (item) { return item.raw != null; },
+            filter: function (item) { return item.raw && item.raw.y != null; },
             callbacks: tooltipCallbacks
           }
         },
         scales: {
-          x: { grid: { color: theme.grid }, ticks: { color: theme.tick, autoSkip: true, maxTicksLimit: 12, maxRotation: 0, minRotation: 0 } },
+          x: { 
+            type: 'time',
+            min: xScaleMin,
+            max: xScaleMax,
+            time: {
+              displayFormats: {
+                millisecond: 'HH:mm:ss', second: 'HH:mm:ss', minute: 'HH:mm', hour: 'HH:mm',
+                day: 'dd.MM.yyyy', week: 'dd.MM.yyyy', month: 'MM.yyyy', quarter: 'MM.yyyy', year: 'yyyy'
+              },
+              tooltipFormat: 'dd.MM.yyyy HH:mm'
+            },
+            grid: { color: theme.grid }, 
+            ticks: { color: theme.tick, autoSkip: true, maxTicksLimit: 12, maxRotation: 0, minRotation: 0 } 
+          },
           y: { grid: { color: theme.grid }, ticks: { color: theme.tick }, title: { display: !!yAxisLabel, text: yAxisLabel || '', color: theme.tick } }
         }
       }
