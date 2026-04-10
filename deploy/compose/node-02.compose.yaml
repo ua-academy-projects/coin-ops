@@ -16,7 +16,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "{{ proxy_port }}:{{ proxy_port }}"
     env_file:
       - /etc/cognitor/proxy.env
     depends_on:

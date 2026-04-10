@@ -13,7 +13,7 @@ services:
       retries: 5
 
   rabbitmq:
-    image: rabbitmq:3-management-alpine
+    image: rabbitmq:3-alpine
     restart: unless-stopped
     env_file:
       - /etc/cognitor/history.env
@@ -46,7 +46,7 @@ services:
       dockerfile: Dockerfile.api
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "{{ history_port }}:{{ history_port }}"
     env_file:
       - /etc/cognitor/history.env
     depends_on:

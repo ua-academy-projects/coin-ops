@@ -46,8 +46,8 @@
     rsync_opts:
       - "--exclude=proxy"
 
-- name: Sync compose file
-  copy:
+- name: Render compose file
+  template:
     src: "{{ playbook_dir }}/../deploy/compose/node-02.compose.yaml"
     dest: /opt/cognitor/proxy/compose.yaml
 
@@ -58,7 +58,7 @@
 
 - name: Wait for proxy health endpoint
   uri:
-    url: "http://localhost:8080/health"
+    url: "http://localhost:{{ proxy_port }}/health"
     method: GET
     status_code: 200
   retries: 12

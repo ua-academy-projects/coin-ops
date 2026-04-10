@@ -1,4 +1,50 @@
 ---
+- name: Check for existing containerized PostgreSQL data
+  stat:
+    path: /var/lib/coin-ops/postgres/PG_VERSION
+  register: container_postgres_pg_version
+
+- name: Check for completed host PostgreSQL migration
+  stat:
+    path: /var/lib/coin-ops/postgres/.migrated-from-host
+  register: host_postgres_migration_marker
+
+- name: Check for legacy host PostgreSQL data
+  shell: "find /var/lib/postgresql -mindepth 3 -maxdepth 3 -name PG_VERSION -print -quit 2>/dev/null"
+  register: legacy_postgres_pg_version
+  changed_when: false
+  failed_when: false
+
+- name: Create migration backup directory
+  file:
+    path: /var/backups/coin-ops
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0750'
+  when:
+    - legacy_postgres_pg_version.stdout != ''
+    - not container_postgres_pg_version.stat.exists
+    - not host_postgres_migration_marker.stat.exists
+
+- name: Ensure legacy PostgreSQL is running for one-time dump
+  service:
+    name: postgresql
+    state: started
+  when:
+    - legacy_postgres_pg_version.stdout != ''
+    - not container_postgres_pg_version.stat.exists
+    - not host_postgres_migration_marker.stat.exists
+  failed_when: false
+
+- name: Dump legacy application database before container cutover
+  become_user: postgres
+  command: "pg_dump --clean --if-exists --no-owner --no-acl -d {{ db_name }} -f /var/backups/coin-ops/pre-container-postgres.sql"
+  when:
+    - legacy_postgres_pg_version.stdout != ''
+    - not container_postgres_pg_version.stat.exists
+    - not host_postgres_migration_marker.stat.exists
+
 - name: Stop and disable legacy host services
   service:
     name: "{{ item }}"
@@ -41,10 +87,46 @@
     dest: /opt/cognitor/history/history/
     delete: yes
 
-- name: Sync compose file
-  copy:
+- name: Render compose file
+  template:
     src: "{{ playbook_dir }}/../deploy/compose/node-01.compose.yaml"
     dest: /opt/cognitor/history/compose.yaml
+
+- name: Start history dependencies first
+  command: docker compose -f /opt/cognitor/history/compose.yaml up -d --build postgres rabbitmq
+  args:
+    chdir: /opt/cognitor/history
+
+- name: Wait for containerized PostgreSQL readiness
+  command: "docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres pg_isready -U {{ db_user }} -d {{ db_name }}"
+  args:
+    chdir: /opt/cognitor/history
+  retries: 12
+  delay: 5
+  register: postgres_ready
+  until: postgres_ready.rc == 0
+
+- name: Check for legacy dump file
+  stat:
+    path: /var/backups/coin-ops/pre-container-postgres.sql
+  register: legacy_postgres_dump
+
+- name: Restore legacy PostgreSQL dump into container
+  shell: "docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres psql -U {{ db_user }} -d {{ db_name }} < /var/backups/coin-ops/pre-container-postgres.sql"
+  args:
+    chdir: /opt/cognitor/history
+  when:
+    - legacy_postgres_dump.stat.exists
+    - not host_postgres_migration_marker.stat.exists
+
+- name: Mark legacy PostgreSQL migration complete
+  file:
+    path: /var/lib/coin-ops/postgres/.migrated-from-host
+    state: touch
+    mode: '0644'
+  when:
+    - legacy_postgres_dump.stat.exists
+    - not host_postgres_migration_marker.stat.exists
 
 - name: Run Docker Compose
   command: docker compose -f /opt/cognitor/history/compose.yaml up -d --build --remove-orphans
@@ -53,7 +135,7 @@
 
 - name: Wait for history-api health endpoint
   uri:
-    url: "http://localhost:8000/health"
+    url: "http://localhost:{{ history_port }}/health"
     method: GET
     status_code: 200
   retries: 12
