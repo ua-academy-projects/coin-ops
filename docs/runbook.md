@@ -9,7 +9,7 @@ This runbook describes the hybrid infrastructure: **Docker Compose** for applica
 | **Frontend** | Docker | localhost | `5000` |
 | **Proxy** | Docker | localhost | `8081` |
 | **History Service** | Docker | localhost | `8090` |
-| **RabbitMQ** | Docker | localhost | `15672` (Admin UI) |
+| **RabbitMQ** | Docker | internal | — |
 | **Redis** | Docker | internal | — |
 | **PostgreSQL** | Vagrant VM | `10.10.1.6` | `5432` |
 
@@ -61,8 +61,7 @@ Inside the Docker network, services communicate using their container names as D
    ```bash
    curl -sS "http://localhost:8090/api/v1/history?limit=5" | jq '.count'
    ```
-4. **RabbitMQ UI**: Open [http://localhost:15672](http://localhost:15672) (User/Pass from `.env`).
-5. **Database Check** (inside VM):
+4. **Database Check** (inside VM):
    ```bash
    ssh -p 2205 vagrant@localhost  # or vagrant ssh database
    psql -h 10.10.1.6 -U coinops -d coinops_db -c "SELECT count(*) FROM exchange_rates;"
