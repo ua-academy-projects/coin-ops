@@ -198,6 +198,9 @@
     .td-change--down { color: #f87171; }
     .td-change--flat { color: #94a3b8; }
     .td-change--none { color: #475569; }
+    th.sortable { cursor: pointer; user-select: none; }
+    th.sortable:hover { color: #e2e8f0; }
+    th.sortable .sort-icon { font-size: 0.7rem; opacity: 0.5; margin-left: 2px; }
 
     /* --- refresh button --- */
     .btn-refresh {
@@ -325,29 +328,29 @@
           <table>
             <thead>
               <tr>
-                <th>Code</th>
-                <th>Currency</th>
-                <th>Rate (UAH)</th>
-                <th>Change</th>
+                <th class="sortable" data-col="0">Code <span class="sort-icon"></span></th>
+                <th class="sortable" data-col="1">Currency <span class="sort-icon"></span></th>
+                <th class="sortable" data-col="2">Rate (UAH) <span class="sort-icon"></span></th>
+                <th class="sortable" data-col="3">Change <span class="sort-icon"></span></th>
               </tr>
             </thead>
             <tbody>
               {% for r in rates %}
               {% set p = prev_rates.get(r.code) %}
               <tr>
-                <td><span class="td-code">{{ r.code }}</span></td>
-                <td>{{ r.name }}</td>
-                <td><span class="td-rate">{{ r.rate }}</span></td>
+                <td data-sort="{{ r.code }}"><span class="td-code">{{ r.code }}</span></td>
+                <td data-sort="{{ r.name }}">{{ r.name }}</td>
+                <td data-sort="{{ r.rate }}"><span class="td-rate">{{ r.rate }}</span></td>
                 {% if p %}
                   {% if p.delta > 0 %}
-                    <td class="td-change td-change--up">↑ +{{ "%.4f"|format(p.delta) }} <span>(+{{ "%.2f"|format(p.pct) }}%)</span></td>
+                    <td class="td-change td-change--up" data-sort="{{ p.delta }}">↑ +{{ "%.4f"|format(p.delta) }} <span>(+{{ "%.2f"|format(p.pct) }}%)</span></td>
                   {% elif p.delta < 0 %}
-                    <td class="td-change td-change--down">↓ {{ "%.4f"|format(p.delta) }} <span>({{ "%.2f"|format(p.pct) }}%)</span></td>
+                    <td class="td-change td-change--down" data-sort="{{ p.delta }}">↓ {{ "%.4f"|format(p.delta) }} <span>({{ "%.2f"|format(p.pct) }}%)</span></td>
                   {% else %}
-                    <td class="td-change td-change--flat">→ 0.0000 <span>(0.00%)</span></td>
+                    <td class="td-change td-change--flat" data-sort="0">→ 0.0000 <span>(0.00%)</span></td>
                   {% endif %}
                 {% else %}
-                  <td class="td-change td-change--none">—</td>
+                  <td class="td-change td-change--none" data-sort="">—</td>
                 {% endif %}
               </tr>
               {% endfor %}
@@ -405,21 +408,22 @@
           <table>
             <thead>
               <tr>
-                <th>Fetched At</th>
-                <th>Code</th>
-                <th>Currency</th>
-                <th>Rate (UAH)</th>
-                <th>Rate Date</th>
+                <th class="sortable" data-col="0">Fetched At <span class="sort-icon"></span></th>
+                <th class="sortable" data-col="1">Code <span class="sort-icon"></span></th>
+                <th class="sortable" data-col="2">Currency <span class="sort-icon"></span></th>
+                <th class="sortable" data-col="3">Rate (UAH) <span class="sort-icon"></span></th>
+                <th class="sortable" data-col="4">Rate Date <span class="sort-icon"></span></th>
               </tr>
             </thead>
             <tbody>
               {% for r in records %}
+              {% set rd = r.rate_date.split('.') %}
               <tr>
-                <td><span class="td-date">{{ r.fetched_at | pretty_datetime }}</span></td>
-                <td><span class="td-code">{{ r.code }}</span></td>
-                <td>{{ r.name }}</td>
-                <td><span class="td-rate">{{ r.rate }}</span></td>
-                <td><span class="td-date">{{ r.rate_date | pretty_date }}</span></td>
+                <td data-sort="{{ r.fetched_at }}"><span class="td-date">{{ r.fetched_at | pretty_datetime }}</span></td>
+                <td data-sort="{{ r.code }}"><span class="td-code">{{ r.code }}</span></td>
+                <td data-sort="{{ r.name }}">{{ r.name }}</td>
+                <td data-sort="{{ r.rate }}"><span class="td-rate">{{ r.rate }}</span></td>
+                <td data-sort="{{ rd[2] ~ '-' ~ rd[1] ~ '-' ~ rd[0] if rd|length == 3 else r.rate_date }}"><span class="td-date">{{ r.rate_date | pretty_date }}</span></td>
               </tr>
               {% endfor %}
             </tbody>
@@ -517,6 +521,32 @@
           p.classList.toggle('selected', p.querySelector('input').checked);
         });
         this.form.submit();
+      });
+    });
+
+    // Sortable tables
+    document.querySelectorAll('table').forEach(function(table) {
+      var state = { col: null, asc: true };
+      table.querySelectorAll('th.sortable').forEach(function(th) {
+        th.addEventListener('click', function() {
+          var col = parseInt(th.dataset.col);
+          state.asc = (state.col === col) ? !state.asc : true;
+          state.col = col;
+          table.querySelectorAll('th.sortable .sort-icon').forEach(function(ic) { ic.textContent = ''; });
+          th.querySelector('.sort-icon').textContent = state.asc ? ' ▲' : ' ▼';
+          var tbody = table.querySelector('tbody');
+          var rows = Array.from(tbody.querySelectorAll('tr'));
+          rows.sort(function(a, b) {
+            var av = (a.children[col] && a.children[col].dataset.sort != null) ? a.children[col].dataset.sort : '';
+            var bv = (b.children[col] && b.children[col].dataset.sort != null) ? b.children[col].dataset.sort : '';
+            if (av === '' && bv !== '') return 1;
+            if (bv === '' && av !== '') return -1;
+            var an = parseFloat(av), bn = parseFloat(bv);
+            var cmp = (!isNaN(an) && !isNaN(bn)) ? an - bn : av.localeCompare(bv);
+            return state.asc ? cmp : -cmp;
+          });
+          rows.forEach(function(r) { tbody.appendChild(r); });
+        });
       });
     });
   </script>
