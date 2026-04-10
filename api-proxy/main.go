@@ -121,6 +121,48 @@ type rateCache struct {
 }
 
 var cache rateCache
+var historyURL string
+
+type historyRecord struct {
+	Code     string  `json:"code"`
+	Name     string  `json:"name"`
+	Rate     float64 `json:"rate"`
+	RateDate string  `json:"rate_date"`
+}
+
+func fetchFromHistory() ([]Rate, string, bool) {
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(historyURL + "/history?range=7d&limit=50")
+	if err != nil {
+		log.Printf("history-service: unreachable: %v", err)
+		return nil, "", false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", false
+	}
+
+	var records []historyRecord
+	if err := json.NewDecoder(resp.Body).Decode(&records); err != nil || len(records) == 0 {
+		return nil, "", false
+	}
+
+	latestDate := records[0].RateDate
+	var rates []Rate
+	for _, rec := range records {
+		if rec.RateDate != latestDate {
+			break
+		}
+		rates = append(rates, Rate{
+			Code: rec.Code,
+			Name: rec.Name,
+			Rate: rec.Rate,
+			Date: rec.RateDate,
+		})
+	}
+	return rates, latestDate, true
+}
 
 func publishRates(rates []Rate) {
 	if mq == nil {
@@ -180,7 +222,21 @@ func ratesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	cache.mu.RUnlock()
 
-	// fetch full list from NBU (no valcode filter — we cache all currencies)
+	// try history-service first (data likely already in DB)
+	if rates, date, ok := fetchFromHistory(); ok {
+		log.Printf("cache: populated from history-service (date %s)", date)
+		cache.mu.Lock()
+		cache.rates = rates
+		cache.rateDate = date
+		cache.cachedAt = time.Now()
+		cache.mu.Unlock()
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(filterRates(rates, ccFilter))
+		return
+	}
+
+	// fallback: fetch full list from NBU
 	resp, err := http.Get(nbuURL)
 	if err != nil {
 		http.Error(w, "failed to fetch NBU data", http.StatusBadGateway)
@@ -258,6 +314,11 @@ func main() {
 		originsEnv = "http://localhost:5000"
 	}
 	origins := strings.Split(originsEnv, ",")
+
+	historyURL = os.Getenv("HISTORY_SERVICE_URL")
+	if historyURL == "" {
+		historyURL = "http://localhost:8001"
+	}
 
 	mqURL := os.Getenv("RABBITMQ_URL")
 	if mqURL == "" {
