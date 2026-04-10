@@ -3,10 +3,10 @@ import psycopg2
 import json
 import os
 
-app = Flask(__name__, static_folder='/home/penina/coin-rates-ui/dist', static_url_path='')
+app = Flask(__name__, static_folder='/app/dist', static_url_path='')
 
 POSTGRES = {
-    "host": "192.168.0.108",
+    "host": "192.168.56.105",
     "database": "coin_rates",
     "user": "history_user",
     "password": "history_password"

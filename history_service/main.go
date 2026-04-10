@@ -12,9 +12,9 @@ import (
 // Connection settings stored as constants
 const (
 	// RabbitMQ connection: amqp://user:password@host:port/
-	RABBITMQ_URL = "amqp://history_user:history_password@192.168.0.105:5672/"
+	RABBITMQ_URL = "amqp://history_user:history_password@rabbitmq:5672/"
 	// PostgreSQL connection details
-	POSTGRES_URL = "host=192.168.0.108 user=history_user password=history_password dbname=coin_rates sslmode=disable"
+	POSTGRES_URL = "host=192.168.56.105 user=history_user password=history_password dbname=coin_rates sslmode=disable"
 )
 
 func main() {

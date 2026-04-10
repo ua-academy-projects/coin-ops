@@ -1,0 +1,31 @@
+{
+  "users": [
+    {
+      "name": "proxy_user",
+      "password": "proxy_password",
+      "tags": "administrator"
+    },
+    {
+      "name": "history_user",
+      "password": "history_password",
+      "tags": ""
+    }
+  ],
+  "permissions": [
+    {
+      "user": "proxy_user",
+      "vhost": "/",
+      "configure": ".*",
+      "write": ".*",
+      "read": ""
+    },
+    {
+      "user": "history_user",
+      "vhost": "/",
+      "configure": ".*",
+      "write": "",
+      "read": ".*"
+    }
+  ],
+  "vhosts": [{"name": "/"}]
+}
