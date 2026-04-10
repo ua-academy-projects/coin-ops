@@ -36,7 +36,82 @@ type rateEvent struct {
 	Rates     []Rate `json:"rates"`
 }
 
-var mqChannel *amqp.Channel
+type mqClient struct {
+	mu   sync.Mutex
+	conn *amqp.Connection
+	ch   *amqp.Channel
+	url  string
+}
+
+func (c *mqClient) connect() error {
+	conn, err := amqp.Dial(c.url)
+	if err != nil {
+		return fmt.Errorf("dial: %w", err)
+	}
+
+	ch, err := conn.Channel()
+	if err != nil {
+		conn.Close()
+		return fmt.Errorf("channel: %w", err)
+	}
+
+	_, err = ch.QueueDeclare("rates.fetched", true, false, false, false, nil)
+	if err != nil {
+		ch.Close()
+		conn.Close()
+		return fmt.Errorf("queue declare: %w", err)
+	}
+
+	c.mu.Lock()
+	c.conn = conn
+	c.ch = ch
+	c.mu.Unlock()
+	return nil
+}
+
+func (c *mqClient) connectLoop() {
+	backoff := time.Second
+	for {
+		err := c.connect()
+		if err != nil {
+			log.Printf("rabbitmq: connect failed: %v, retrying in %s", err, backoff)
+			time.Sleep(backoff)
+			if backoff < 30*time.Second {
+				backoff *= 2
+			}
+			continue
+		}
+		backoff = time.Second
+		log.Println("rabbitmq: connected, queue rates.fetched ready")
+
+		closed := make(chan *amqp.Error, 1)
+		c.mu.Lock()
+		c.conn.NotifyClose(closed)
+		c.mu.Unlock()
+		<-closed
+		log.Println("rabbitmq: connection lost, reconnecting...")
+	}
+}
+
+func (c *mqClient) publish(body []byte) error {
+	c.mu.Lock()
+	ch := c.ch
+	c.mu.Unlock()
+
+	if ch == nil {
+		return fmt.Errorf("no channel available")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return ch.PublishWithContext(ctx, "", "rates.fetched", false, false, amqp.Publishing{
+		ContentType: "application/json",
+		Body:        body,
+	})
+}
+
+var mq *mqClient
 
 type rateCache struct {
 	mu       sync.RWMutex
@@ -47,34 +122,8 @@ type rateCache struct {
 
 var cache rateCache
 
-func connectRabbitMQ(url string) {
-	conn, err := amqp.Dial(url)
-	if err != nil {
-		log.Printf("rabbitmq: connection failed (running without queue): %v", err)
-		return
-	}
-
-	ch, err := conn.Channel()
-	if err != nil {
-		log.Printf("rabbitmq: channel failed: %v", err)
-		conn.Close()
-		return
-	}
-
-	_, err = ch.QueueDeclare("rates.fetched", true, false, false, false, nil)
-	if err != nil {
-		log.Printf("rabbitmq: queue declare failed: %v", err)
-		ch.Close()
-		conn.Close()
-		return
-	}
-
-	mqChannel = ch
-	log.Println("rabbitmq: connected, queue rates.fetched ready")
-}
-
 func publishRates(rates []Rate) {
-	if mqChannel == nil {
+	if mq == nil {
 		return
 	}
 
@@ -87,14 +136,7 @@ func publishRates(rates []Rate) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	err = mqChannel.PublishWithContext(ctx, "", "rates.fetched", false, false, amqp.Publishing{
-		ContentType: "application/json",
-		Body:        body,
-	})
-	if err != nil {
+	if err := mq.publish(body); err != nil {
 		log.Printf("rabbitmq: publish error: %v", err)
 	}
 }
@@ -221,7 +263,8 @@ func main() {
 	if mqURL == "" {
 		mqURL = "amqp://guest:guest@localhost:5672/"
 	}
-	connectRabbitMQ(mqURL)
+	mq = &mqClient{url: mqURL}
+	go mq.connectLoop()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", corsMiddleware(origins, healthHandler))

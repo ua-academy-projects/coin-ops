@@ -39,25 +39,27 @@ type historyRecord struct {
 
 // --- consumer ---
 
-func startConsumer(mqURL string, db *sql.DB) {
+func startConsumer(mqURL string, db *sql.DB) error {
 	conn, err := amqp.Dial(mqURL)
 	if err != nil {
-		log.Fatalf("rabbitmq: failed to connect: %v", err)
+		return fmt.Errorf("dial: %w", err)
 	}
+	defer conn.Close()
 
 	ch, err := conn.Channel()
 	if err != nil {
-		log.Fatalf("rabbitmq: failed to open channel: %v", err)
+		return fmt.Errorf("channel: %w", err)
 	}
+	defer ch.Close()
 
 	_, err = ch.QueueDeclare("rates.fetched", true, false, false, false, nil)
 	if err != nil {
-		log.Fatalf("rabbitmq: failed to declare queue: %v", err)
+		return fmt.Errorf("queue declare: %w", err)
 	}
 
 	msgs, err := ch.Consume("rates.fetched", "", false, false, false, false, nil)
 	if err != nil {
-		log.Fatalf("rabbitmq: failed to start consumer: %v", err)
+		return fmt.Errorf("consume: %w", err)
 	}
 
 	log.Println("rabbitmq: consumer started, waiting for messages")
@@ -115,6 +117,7 @@ func startConsumer(mqURL string, db *sql.DB) {
 		log.Printf("consumer: stored %d rates fetched at %s", len(event.Rates), event.FetchedAt)
 		msg.Ack(false)
 	}
+	return nil
 }
 
 // --- HTTP handlers ---
@@ -275,7 +278,21 @@ func main() {
 	}
 	log.Println("db: connected")
 
-	go startConsumer(mqURL, db)
+	go func() {
+		backoff := time.Second
+		for {
+			err := startConsumer(mqURL, db)
+			if err != nil {
+				log.Printf("rabbitmq consumer error: %v, retrying in %s", err, backoff)
+			} else {
+				log.Printf("rabbitmq consumer disconnected, reconnecting in %s", backoff)
+			}
+			time.Sleep(backoff)
+			if backoff < 30*time.Second {
+				backoff *= 2
+			}
+		}
+	}()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", corsMiddleware(origins, healthHandler))
