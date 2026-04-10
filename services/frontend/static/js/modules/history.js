@@ -582,7 +582,11 @@ export async function loadHistorySeries() {
         label: p.sym + ' (' + p.metricLabel + ')',
         data: dataPoints,
         borderColor: CHART_COLORS[0], backgroundColor: CHART_COLORS[0],
-        tension: 0.32, fill: false, spanGaps: false
+        tension: 0.32, fill: false, spanGaps: true,
+        segment: {
+          borderDash: function(ctx) { return ctx.p0DataIndex !== (ctx.p1DataIndex - 1) ? [5, 5] : undefined; },
+          borderColor: function(ctx) { return ctx.p0DataIndex !== (ctx.p1DataIndex - 1) ? 'rgba(128, 128, 128, 0.4)' : undefined; }
+        }
       }];
     } else {
       const allSeries   = parsed.map(function (p) { return p.chartItems; });

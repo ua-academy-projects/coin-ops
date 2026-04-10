@@ -27,7 +27,7 @@
   --co-accent: #10b981;
   --co-transition: 0.32s cubic-bezier(0.4, 0, 0.2, 1);
   --co-trend-na: rgba(232, 234, 239, 0.45);
-  --co-table-head-bg: rgba(255, 255, 255, 0.06);
+  --co-table-head-bg: #131722;
   --co-table-head-border: rgba(255, 255, 255, 0.10);
   --co-table-td-border: rgba(255, 255, 255, 0.04);
   --co-table-tr-up: rgba(74, 222, 128, 0.06);
@@ -64,7 +64,7 @@ html[data-theme="light"] {
     0 4px 14px rgba(0, 0, 0, 0.06);
   --co-glass-inner-glow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
   --co-trend-na: rgba(26, 29, 35, 0.4);
-  --co-table-head-bg: rgba(255, 255, 255, 0.30);
+  --co-table-head-bg: #e2ede7;
   --co-table-head-border: rgba(255, 255, 255, 0.50);
   --co-table-td-border: rgba(255, 255, 255, 0.25);
   --co-table-tr-up: rgba(34, 197, 94, 0.10);
@@ -207,6 +207,22 @@ body.coinops-app {
 }
 .kpi-updated { animation: kpi-flash 0.7s ease; }
 
+.live-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background-color: var(--co-accent, #10b981);
+  border-radius: 50%;
+  margin-right: 6px;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.8);
+  animation: co-pulse-dot 2s infinite;
+}
+@keyframes co-pulse-dot {
+  0% { transform: scale(0.95); opacity: 0.8; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6); }
+  50% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 4px rgba(16, 185, 129, 0); }
+  100% { transform: scale(0.95); opacity: 0.8; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
 .kpi-card {
   min-height: 96px;
   position: relative;
@@ -265,7 +281,62 @@ body.coinops-app {
 .trend-up { color: #4ade80; font-weight: 600; }
 .trend-down { color: #f87171; font-weight: 600; }
 .trend-na { color: var(--co-trend-na); }
-#hist-chart-wrap { position: relative; height: 320px; }
+.coinops-app .glass-table-wrap {
+  position: relative;
+  z-index: 1;
+  overflow-y: auto;
+  max-height: 500px;
+  border-radius: 18px;
+}
+/* Горизонтальні відступи в таблицях (історія та live) */
+.coinops-app .glass-table-wrap table.table thead th,
+.coinops-app .glass-table-wrap table.table tbody td {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+.co-footnote { font-size: 0.8rem; color: var(--co-muted); }
+.conv-result-col { min-width: 0; }
+.coinops-app .alert-warning {
+  background: var(--co-alert-warn-bg);
+  border: 1px solid var(--co-alert-warn-border);
+  border-radius: 14px;
+  color: var(--co-alert-warn-color);
+}
+.coinops-app .alert-danger {
+  background: var(--co-alert-danger-bg);
+  border: 1px solid var(--co-alert-danger-border);
+  border-radius: 14px;
+  color: var(--co-alert-danger-color);
+}
+
+.kpi-slot-draggable {
+  cursor: grab;
+  user-select: none;
+}
+.kpi-slot-draggable:active {
+  cursor: grabbing;
+}
+.kpi-slot-draggable.kpi-dragging {
+  opacity: 0.75;
+}
+.coinops-app .live-star-col {
+  width: 2.5rem;
+  padding-left: 0.35rem !important;
+  padding-right: 0.35rem !important;
+}
+.coinops-app .kpi-star-cell {
+  width: 2.5rem;
+  padding-left: 0.35rem !important;
+  padding-right: 0.35rem !important;
+}
+.coinops-app .kpi-star-toggle:focus {
+  box-shadow: none;
+}
+#theme-toggle {
+  padding: 0.25rem 0.5rem;
+  font-size: 1rem;
+  line-height: 1;
+}
 .table-glass {
   --bs-table-bg: transparent;
   --bs-table-striped-bg: rgba(255, 255, 255, 0.02);
@@ -280,6 +351,10 @@ body.coinops-app {
   border-bottom: 1px solid var(--co-table-head-border);
   font-size: 0.82rem;
   letter-spacing: 0.01em;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  box-shadow: 0 4px 6px -4px rgba(0, 0, 0, 0.3);
 }
 .table-glass tbody tr.tr-trend-up > td { background: var(--co-table-tr-up); }
 .table-glass tbody tr.tr-trend-down > td { background: var(--co-table-tr-down); }
@@ -466,60 +541,6 @@ body.coinops-app {
   z-index: 1080;
 }
 
-.coinops-app .glass-table-wrap {
-  position: relative;
-  z-index: 1;
-  overflow: hidden;
-  border-radius: 18px;
-}
-/* Горизонтальні відступи в таблицях (історія та live) */
-.coinops-app .glass-table-wrap table.table thead th,
-.coinops-app .glass-table-wrap table.table tbody td {
-  padding-left: 1rem;
-  padding-right: 1rem;
-}
-.co-footnote { font-size: 0.8rem; color: var(--co-muted); }
-.conv-result-col { min-width: 0; }
-.coinops-app .alert-warning {
-  background: var(--co-alert-warn-bg);
-  border: 1px solid var(--co-alert-warn-border);
-  border-radius: 14px;
-  color: var(--co-alert-warn-color);
-}
-.coinops-app .alert-danger {
-  background: var(--co-alert-danger-bg);
-  border: 1px solid var(--co-alert-danger-border);
-  border-radius: 14px;
-  color: var(--co-alert-danger-color);
-}
-
-.kpi-slot-draggable {
-  cursor: grab;
-  user-select: none;
-}
-.kpi-slot-draggable:active {
-  cursor: grabbing;
-}
-.kpi-slot-draggable.kpi-dragging {
-  opacity: 0.75;
-}
-.coinops-app .live-star-col {
-  width: 2.5rem;
-  padding-left: 0.35rem !important;
-  padding-right: 0.35rem !important;
-}
-.coinops-app .kpi-star-cell {
-  width: 2.5rem;
-  padding-left: 0.35rem !important;
-  padding-right: 0.35rem !important;
-}
-.coinops-app .kpi-star-toggle:focus {
-  box-shadow: none;
-}
-#theme-toggle {
-  padding: 0.25rem 0.5rem;
-  font-size: 1rem;
-  line-height: 1;
 }
 html[data-theme="light"] body.coinops-app {
   color-scheme: light;
