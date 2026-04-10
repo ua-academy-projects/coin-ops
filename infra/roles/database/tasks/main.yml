@@ -55,6 +55,7 @@
   command: psql -d {{ pg_database }} -f /tmp/init.sql
   become: yes
   become_user: postgres
+  changed_when: false
 
 - name: Start PostgreSQL service
   systemd:

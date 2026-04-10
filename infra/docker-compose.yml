@@ -8,6 +8,11 @@ services:
     # Порт 6379 відкритий всередині мережі Docker
     expose:
       - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   rabbitmq:
     image: rabbitmq:3-alpine
@@ -19,6 +24,11 @@ services:
     expose:
       # 5672 для AMQP з'єднань між контейнерами (внутрішній)
       - "5672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
 
@@ -28,7 +38,8 @@ services:
     container_name: coinops_proxy
     restart: unless-stopped
     depends_on:
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
     ports:
       - "8081:8080"
     environment:
@@ -47,7 +58,8 @@ services:
     container_name: coinops_history
     restart: unless-stopped
     depends_on:
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
     ports:
       - "8090:8090"
     environment:
@@ -74,9 +86,12 @@ services:
     container_name: coinops_frontend
     restart: unless-stopped
     depends_on:
-      - proxy
-      - history_service
-      - redis
+      proxy:
+        condition: service_started
+      history_service:
+        condition: service_started
+      redis:
+        condition: service_healthy
     ports:
       - "5000:5000"
     environment:
