@@ -190,8 +190,14 @@
       font-size: 0.82rem;
     }
 
-    .td-rate { color: #34d399; font-weight: 600; }
+    .td-rate { color: #e2e8f0; font-weight: 600; }
     .td-date { color: #64748b; font-size: 0.82rem; }
+    .td-change { font-size: 0.85rem; white-space: nowrap; }
+    .td-change span { opacity: 0.7; font-size: 0.78rem; }
+    .td-change--up   { color: #4ade80; }
+    .td-change--down { color: #f87171; }
+    .td-change--flat { color: #94a3b8; }
+    .td-change--none { color: #475569; }
 
     /* --- refresh button --- */
     .btn-refresh {
@@ -322,14 +328,27 @@
                 <th>Code</th>
                 <th>Currency</th>
                 <th>Rate (UAH)</th>
+                <th>Change</th>
               </tr>
             </thead>
             <tbody>
               {% for r in rates %}
+              {% set p = prev_rates.get(r.code) %}
               <tr>
                 <td><span class="td-code">{{ r.code }}</span></td>
                 <td>{{ r.name }}</td>
                 <td><span class="td-rate">{{ r.rate }}</span></td>
+                {% if p %}
+                  {% if p.delta > 0 %}
+                    <td class="td-change td-change--up">↑ +{{ "%.4f"|format(p.delta) }} <span>(+{{ "%.2f"|format(p.pct) }}%)</span></td>
+                  {% elif p.delta < 0 %}
+                    <td class="td-change td-change--down">↓ {{ "%.4f"|format(p.delta) }} <span>({{ "%.2f"|format(p.pct) }}%)</span></td>
+                  {% else %}
+                    <td class="td-change td-change--flat">→ 0.0000 <span>(0.00%)</span></td>
+                  {% endif %}
+                {% else %}
+                  <td class="td-change td-change--none">—</td>
+                {% endif %}
               </tr>
               {% endfor %}
             </tbody>

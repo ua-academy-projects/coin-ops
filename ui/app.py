@@ -62,8 +62,34 @@ def index():
     except Exception as e:
         error = str(e)
 
+    prev_rates = {}
+    if rates:
+        cc_param = cc if cc else ",".join(r["code"] for r in rates)
+        current_date = rates[0].get("date", "")
+        try:
+            hist_resp = requests.get(
+                f"{HISTORY_SERVICE_URL}/history",
+                params={"cc": cc_param, "range": "7d", "limit": 500},
+                timeout=3,
+            )
+            if hist_resp.ok:
+                by_code = defaultdict(list)
+                for rec in hist_resp.json():
+                    by_code[rec["code"]].append(rec)
+                for code, recs in by_code.items():
+                    recs.sort(key=lambda r: r["rate_date"], reverse=True)
+                    prev = next((r for r in recs if r["rate_date"] != current_date), None)
+                    if prev:
+                        curr = next((r["rate"] for r in rates if r["code"] == code), None)
+                        if curr is not None:
+                            delta = curr - prev["rate"]
+                            pct = (delta / prev["rate"] * 100) if prev["rate"] else 0
+                            prev_rates[code] = {"rate": prev["rate"], "delta": delta, "pct": pct}
+        except Exception:
+            pass
+
     return render_template("index.html", rates=rates, error=error, cc=cc, view="rates",
-                           currencies=CURRENCIES)
+                           currencies=CURRENCIES, prev_rates=prev_rates)
 
 
 @app.route("/history")
