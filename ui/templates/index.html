@@ -546,10 +546,10 @@
     // Favourites
     function getFavs() {
       var m = document.cookie.match(/(?:^|; )favorites=([^;]*)/);
-      return m ? decodeURIComponent(m[1]).split(',').filter(Boolean) : [];
+      return m ? m[1].split(',').filter(Boolean) : [];
     }
     function setFavs(favs) {
-      document.cookie = 'favorites=' + encodeURIComponent(favs.join(','))
+      document.cookie = 'favorites=' + favs.join(',')
         + ';path=/;max-age=31536000;SameSite=Lax';
     }
     function toggleFav(td) {
