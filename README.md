@@ -1,387 +1,189 @@
 # Coin-Ops
 
-Coin-Ops is a small distributed system built as a Polymarket intelligence dashboard. It combines live market data, crypto prices, whale activity, historical storage, and automated infrastructure into one project.
+A distributed Polymarket intelligence dashboard. Live market data, crypto prices, whale positions, and historical charts — built across three services and three VMs with full infrastructure automation.
 
-The point of the project is not just to show a frontend. It is meant to demonstrate:
-
-- service separation instead of a monolith
-- asynchronous ingestion through RabbitMQ
-- historical persistence in PostgreSQL
-- ephemeral session state in Redis
-- VM provisioning and deployment with Terraform and Ansible
-- a UI that consumes both live and historical data paths
-
-## What It Does
-
-The application shows:
-
-- live Polymarket market snapshots
-- BTC, ETH, and USD/UAH prices
-- whale positions from Polymarket data sources
-- historical market charts backed by PostgreSQL
-- session-aware UI state via Redis
-
-At a high level, the browser does not talk to PostgreSQL directly and it does not write business data anywhere. The Go proxy fetches and normalizes external data, publishes snapshots into RabbitMQ, and a separate Python consumer persists those events into PostgreSQL. A separate Python API exposes read-only history back to the UI.
+---
 
 ## Architecture
 
-### Main Components
+```
+                        ┌─────────────────────────────────┐
+                        │         Browser (React SPA)      │
+                        └──────┬───────────────┬───────────┘
+                               │ live data      │ history
+                               ▼                ▼
+┌──────────────────────────────────┐   ┌────────────────────────────┐
+│  node-02  ·  Go Proxy  :8080     │   │  node-01  ·  History API    │
+│                                  │   │            FastAPI  :8000   │
+│  • Fetches Polymarket markets    │   │                            │
+│  • Fetches CoinGecko + NBU       │   │  Reads from PostgreSQL     │
+│  • Caches whales (5 min)         │   └───────────┬────────────────┘
+│  • Caches prices (60 s)          │               │
+│  • Session state → Redis         │               │ SELECT
+│  • Publishes events → RabbitMQ   │               ▼
+└──────┬───────────────────────────┘   ┌────────────────────────────┐
+       │                               │  PostgreSQL                │
+       │ AMQP publish                  │  market_snapshots          │
+       ▼                               │  price_snapshots           │
+┌──────────────────────────────────┐   │  whales / positions        │
+│  node-01  ·  History Consumer    │   └────────────────────────────┘
+│                                  │
+│  Consumes market_events queue    │
+│  Routes by type field            │
+│  Inserts with ON CONFLICT        │   ┌────────────────────────────┐
+│  DO NOTHING (idempotent)         │   │  node-02  ·  Redis         │
+└──────────────────────────────────┘   │  Session state only        │
+                                       │  Non-critical — 503 if down│
+                                       └────────────────────────────┘
+```
 
-`ui-react/`
-Modern React/Vite frontend. This is the main UI.
+| VM | IP | Runs |
+|----|-----|------|
+| node-01 | 172.31.1.10 | PostgreSQL · RabbitMQ · history consumer · history API |
+| node-02 | 172.31.1.11 | Go proxy · Redis |
+| node-03 | 172.31.1.12 | nginx · React SPA |
 
-`ui/`
-Legacy static UI version.
-
-`proxy/`
-Go service that acts as the live-data gateway. It fetches current Polymarket markets, whale data, and external prices. It also manages Redis-backed UI session state.
-
-`history/consumer.py`
-Python RabbitMQ consumer that persists market and price snapshots into PostgreSQL.
-
-`history/main.py`
-Python FastAPI service that exposes historical data from PostgreSQL.
-
-`terraform/`
-Infrastructure definitions for VM/network provisioning.
-
-`ansible/`
-Provisioning and deployment automation for the application stack.
+---
 
 ## Data Flow
 
-The system has two separate paths: live path and history path.
+**Live path** — Browser → Go proxy → external APIs → JSON response  
+**Write path** — Go proxy → RabbitMQ → Python consumer → PostgreSQL  
+**History path** — Browser → FastAPI → PostgreSQL → chart data
 
-### Live Path
+The write path is intentionally async. The proxy never blocks on a DB write; RabbitMQ absorbs backpressure.
 
-1. The frontend calls the Go proxy.
-2. The proxy fetches current markets, whale positions, and prices from external APIs.
-3. The proxy returns normalized live JSON to the UI.
-
-### History Path
-
-1. The proxy publishes market and price events to RabbitMQ.
-2. The Python consumer reads those events and stores them in PostgreSQL.
-3. The history API reads PostgreSQL and returns time-series data to the UI for chart rendering.
-
-This split is intentional. It avoids tightly coupling UI requests with DB writes and makes the ingestion pipeline easier to reason about.
+---
 
 ## Tech Stack
 
-### Frontend
+| Layer | Tech |
+|-------|------|
+| Frontend | React 19, Vite, TypeScript, Tailwind, Recharts |
+| Live gateway | Go 1.22 |
+| History service | Python 3.12, FastAPI, pika |
+| Queue | RabbitMQ |
+| Database | PostgreSQL 16 |
+| Cache | Redis 7 |
+| Containers | Docker, Docker Compose (per-node) |
+| Provisioning | Terraform (`taliesins/hyperv`), Ansible |
+| Web server | nginx (inside container) |
 
-- React 19
-- Vite
-- TypeScript
-- Tailwind CSS
-- Recharts
+---
 
-### Backend
+## Containers
 
-- Go 1.21
-- Python 3
-- FastAPI
-- pika
-- RabbitMQ
-- PostgreSQL
-- Redis
+Each service has its own Dockerfile. Deployment uses one Compose file per VM, managed by Ansible.
 
-### Infra / Ops
+### Images
 
-- Terraform
-- Ansible
-- Docker & Docker Compose
-- nginx (in container)
-- Hyper-V VMs
+**`proxy/Dockerfile`** — two-stage build: `golang:1.22-bookworm` compiles the binary, then it's copied into `distroless/static` — no shell, no OS packages, non-root.
 
-## Why It Is Built This Way
+**`history/Dockerfile.api`** and **`history/Dockerfile.consumer`** — `python:3.12-slim-bookworm`, deps installed before source copy so the layer is cached. Both run as a dedicated non-root `user`.
 
-This project is intentionally split into services because each part has a different responsibility.
+**`ui-react/Dockerfile`** — two-stage: `node:22` builds the Vite bundle, output is copied into `nginx:alpine`. The nginx config is baked into the image.
 
-### Go Proxy
+### Compose layout
 
-The Go service owns fast live reads and normalization. It is a good fit for:
-
-- concurrent HTTP fetching
-- low-latency request handling
-- in-memory caching
-- publishing normalized events
-
-### Python Consumer
-
-The Python consumer owns reliable persistence. It is simpler to keep database writes and queue handling in one focused service than to mix them into the live proxy.
-
-### Python History API
-
-The history API is read-only by design. That makes the flow cleaner:
-
-- write path: queue -> consumer -> database
-- read path: history API -> database -> UI
-
-### Redis
-
-Redis stores short-lived user session state only. It is not the system of record for historical market data.
-
-### RabbitMQ
-
-RabbitMQ decouples live ingestion from persistence. If the history writer is slow or temporarily unavailable, the live proxy is not forced to become the DB writer.
-
-## Repository Layout
-
-```text
-.
-|-- ansible/      # Provisioning and deployment playbooks
-|-- docs/         # Supporting architecture and deployment notes
-|-- history/      # Python consumer + history API + schema
-|-- proxy/        # Go live-data proxy
-|-- terraform/    # Infrastructure definitions
-|-- ui/           # Legacy static UI
-`-- ui-react/     # Main React frontend
+```
+deploy/compose/
+  node-01.compose.yaml   # postgres + rabbitmq + history-consumer + history-api
+  node-02.compose.yaml   # redis + proxy
+  node-03.compose.yaml   # ui (nginx + SPA)
 ```
 
-## Services and Responsibilities
+Each Compose file reads secrets from `/etc/cognitor/*.env` on the host — written by Ansible at deploy time, never in the image. Services declare `healthcheck` + `depends_on: condition: service_healthy` so startup order is enforced.
 
-### `proxy/`
+### Build and run
 
-Responsibilities:
+```bash
+# Proxy
+docker build -t coin-ops/proxy ./proxy
 
-- fetch current Polymarket markets
-- fetch whale data
-- fetch BTC/ETH and USD/UAH prices
-- return live JSON to the UI
-- persist UI session state in Redis
-- publish market and price events to RabbitMQ
+# History API / Consumer
+docker build -t coin-ops/history-api -f history/Dockerfile.api ./history
+docker build -t coin-ops/history-consumer -f history/Dockerfile.consumer ./history
 
-This service is the live edge of the application.
+# UI
+docker build -t coin-ops/ui ./ui-react
 
-### `history/consumer.py`
+# Start a node (run on the target VM)
+docker compose -f deploy/compose/node-01.compose.yaml up -d
+```
 
-Responsibilities:
+---
 
-- consume RabbitMQ messages
-- route messages by type
-- insert snapshots into PostgreSQL
-- handle reconnects and retries
-- keep persistence idempotent
+## Deployment
 
-This service is the write path into the database.
+Prerequisites: `source .env` before any Terraform or Ansible command.
 
-### `history/main.py`
+```bash
+# 1. Provision VMs (one-time)
+terraform -chdir=terraform apply
 
-Responsibilities:
+# 2. Install OS deps + Docker on all nodes
+ansible-playbook -i ansible/inventory ansible/provision.yml
 
-- expose market history by slug
-- expose price history by coin
-- expose health endpoint
+# 3. Build images and start all services
+ansible-playbook -i ansible/inventory ansible/deploy.yml
 
-This service is the read path from PostgreSQL.
+# 4. Redeploy a single node
+ansible-playbook -i ansible/inventory ansible/deploy.yml --limit softserve-node-02,localhost
+```
 
-### `ui-react/`
+Ansible builds Docker images on each target VM, writes env files to `/etc/cognitor/`, deploys the Compose file, and runs `docker compose up -d --build`.
 
-Responsibilities:
-
-- render homepage and market views
-- fetch live data from the proxy
-- fetch chart history from the history API
-- show market and price trends
-- persist some UI state through the proxy
-
-## External Data Sources
-
-The project depends on public APIs for live inputs.
-
-- Polymarket Gamma API for live market snapshots
-- Polymarket Data API for whale-style position data
-- CoinGecko for crypto prices
-- NBU API for USD/UAH
-
-Because these are external dependencies, the project should be treated as a demo system rather than a guaranteed production-grade data platform.
+---
 
 ## Local Development
 
-There are two practical ways to work with this repo:
-
-- run services individually for focused development
-- use the VM/infrastructure path for a fuller end-to-end environment
-
 ### Frontend
-
 ```bash
 cd ui-react
 npm install
-npm run dev
-```
-
-Build check:
-
-```bash
-npm run lint
+npm run dev       # :3000
+npm run lint      # tsc --noEmit
 npm run build
 ```
 
-### Go Proxy
-
+### Go proxy
 ```bash
 cd proxy
-go run .
+make run          # go run .
+make build        # cross-compile → proxy-linux
 ```
 
-Or:
-
-```bash
-make run
-```
-
-### Python History Services
-
+### Python history
 ```bash
 cd history
-python -m venv venv
-venv\Scripts\activate
+python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-python consumer.py
-python main.py
+python consumer.py   # needs RabbitMQ + Postgres
+python main.py       # needs Postgres
 ```
 
-You will need working RabbitMQ and PostgreSQL connectivity for the history path to function.
+---
 
-## Environment and Configuration
+## External Data Sources
 
-The repo contains:
+| Source | Data |
+|--------|------|
+| `gamma-api.polymarket.com` | Live markets |
+| `data-api.polymarket.com` | Whale leaderboard + positions |
+| `api.coingecko.com` | BTC / ETH prices |
+| `bank.gov.ua` | USD / UAH rate |
 
-- `.env.example`
-- Ansible inventory and variable files
-- service-specific environment usage in deployed systemd units
+All public, no auth required.
 
-Important runtime dependencies include:
+---
 
-- RabbitMQ connection URL
-- PostgreSQL connection URL
-- Redis URL
-- proxy/history service ports
-- frontend `VITE_PROXY_URL` and `VITE_HISTORY_URL`
+## Environment
 
-Keep secrets out of Git. This project already separates deploy-time configuration from source code.
+Copy `.env.example` to `.env` and fill in values. Required before any Terraform or Ansible run:
 
-## Deployment Model
+```bash
+cp .env.example .env
+source .env
+```
 
-The deployment target is a small three-VM layout.
-
-### Node Roles
-
-`node-01`
-- PostgreSQL
-- RabbitMQ
-- history consumer
-- history API
-
-`node-02`
-- Go proxy
-- Redis
-
-`node-03`
-- nginx
-- web UI
-
-This is a pragmatic layout for a small demo environment. It is not pretending to be hyperscale; it is showing separation of concerns under realistic resource limits.
-
-## Provisioning and Deployment
-
-### Terraform
-
-Terraform defines the infrastructure side:
-
-- VM-related configuration
-- network details
-- outputs and variables
-
-### Ansible
-
-Ansible handles:
-
-- package installation
-- application sync/deploy
-- service environment files
-- systemd unit installation
-- service restart/reload
-
-This is one of the strongest parts of the project from a DevOps internship perspective, because the project is not just code sitting in folders. It has an actual provisioning and deployment story.
-
-## Health and Operations
-
-Relevant operational paths:
-
-- proxy health endpoint
-- history API health endpoint
-- systemd service management
-- queue-backed ingestion
-
-The project is still a demo system, but it already includes useful operational signals and a deployment model that is easy to explain.
-
-## What Makes This Project Good for a CV
-
-This project shows more than frontend polish.
-
-It demonstrates:
-
-- distributed system thinking
-- decoupled data ingestion
-- multiple languages used for appropriate reasons
-- infrastructure automation
-- operational awareness
-- state separation between cache, queue, and database
-
-That is stronger than a typical "single web app + Dockerfile" portfolio project.
-
-## Current Limitations
-
-The project still has normal demo-project tradeoffs:
-
-- depends on third-party APIs
-- some data quality depends on upstream sources
-- charting/history quality is bounded by what has already been ingested
-- local developer experience is not yet container-first
-
-These are acceptable tradeoffs for an internship-level systems project, especially since the architecture is explicit and understandable.
-
-## Good Next Steps
-
-If I were continuing this project for demo quality, I would prioritize:
-
-1. Containerize the services cleanly.
-2. Add a `docker-compose.yml` for local development.
-3. Add one architecture diagram to the README.
-4. Tighten the root README screenshots/demo flow.
-5. Normalize category handling on the backend instead of the UI.
-6. Add a short walkthrough script for interviews.
-
-For containers:
-
-- Go proxy: distroless or another minimal runtime image
-- Python services: `python:slim`
-- UI: nginx-based static image
-
-## How To Talk About It In Interview
-
-Short version:
-
-"Coin-Ops is a small Polymarket intelligence dashboard built as a distributed system. The Go proxy handles live aggregation and publishes market/price events into RabbitMQ. A Python consumer persists snapshots into PostgreSQL, and a separate FastAPI service exposes read-only time-series data to the React UI. I provision and deploy the stack with Terraform and Ansible across three VMs. The main thing I wanted to show was separation of concerns: live reads, async persistence, historical querying, and infra automation."
-
-That explanation is short, concrete, and defensible.
-
-## Status
-
-The project is already strong enough to be a CV/demo project if:
-
-- the main flows work reliably
-- the README is clear
-- deployment is reproducible
-- the repo stays clean and intentional
-
-At this stage, more value comes from clarity and reliability than from endless UI polishing.
-the main flows work reliably
-- the README is clear
-- deployment is reproducible
-- the repo stays clean and intentional
-
-At this stage, more value comes from clarity and reliability than from endless UI polishing.
+Key variables: `SSH_KEY_PATH`, `TF_VAR_winrm_*`, `TF_VAR_*_path`, `RABBITMQ_PASSWORD`, `DB_PASSWORD`.

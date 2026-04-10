@@ -33,6 +33,9 @@ ui-react/.env
 # Source zip
 coin-ops-intelligence.zip
 
+# Patch files
+*.patch
+
 # Local docs and infrastructure artifacts
 hyper-v/
 terraform-guide.pdf
