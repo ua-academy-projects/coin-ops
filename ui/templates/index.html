@@ -201,6 +201,13 @@
     th.sortable { cursor: pointer; user-select: none; }
     th.sortable:hover { color: #e2e8f0; }
     th.sortable .sort-icon { font-size: 0.7rem; opacity: 0.5; margin-left: 2px; }
+    .search-input {
+      background: transparent; border: 1px solid #2d3748; border-radius: 6px;
+      color: #e2e8f0; font-size: 0.82rem; padding: 0.25rem 0.6rem;
+      outline: none; width: 160px;
+    }
+    .search-input:focus { border-color: #3b82f6; }
+    .search-count { font-size: 0.78rem; color: #475569; }
 
     /* --- refresh button --- */
     .btn-refresh {
@@ -323,9 +330,13 @@
         <div class="table-card">
           <div class="table-meta">
             <strong>{{ rates|length }} {{ "currency" if rates|length == 1 else "currencies" }}</strong>
-            <span class="rate-date-badge">{{ rates[0].date | pretty_date }}</span>
+            <span style="display:flex;align-items:center;gap:0.6rem;">
+              <input class="search-input" id="ratesSearch" type="text" placeholder="Search…" autocomplete="off">
+              <span class="search-count" id="ratesCount"></span>
+              <span class="rate-date-badge">{{ rates[0].date | pretty_date }}</span>
+            </span>
           </div>
-          <table>
+          <table id="ratesTable">
             <thead>
               <tr>
                 <th class="sortable" data-col="0">Code <span class="sort-icon"></span></th>
@@ -523,6 +534,25 @@
         this.form.submit();
       });
     });
+
+    // Rates search
+    var ratesSearch = document.getElementById('ratesSearch');
+    if (ratesSearch) {
+      ratesSearch.addEventListener('input', function() {
+        var q = this.value.trim().toLowerCase();
+        var rows = document.querySelectorAll('#ratesTable tbody tr');
+        var visible = 0;
+        rows.forEach(function(row) {
+          var code = (row.children[0] && row.children[0].dataset.sort || '').toLowerCase();
+          var name = (row.children[1] && row.children[1].dataset.sort || '').toLowerCase();
+          var match = !q || code.includes(q) || name.includes(q);
+          row.style.display = match ? '' : 'none';
+          if (match) visible++;
+        });
+        var count = document.getElementById('ratesCount');
+        if (count) count.textContent = q ? visible + ' match' + (visible !== 1 ? 'es' : '') : '';
+      });
+    }
 
     // Sortable tables
     document.querySelectorAll('table').forEach(function(table) {
