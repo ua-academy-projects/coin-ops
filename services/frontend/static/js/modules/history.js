@@ -565,6 +565,8 @@ export async function loadHistorySeries() {
     let yAxisLabel = '';
     histAbsoluteValues = {};
 
+    const theme = chartTheme();
+
     if (!isMulti) {
       const p  = parsed[0];
       yAxisLabel = p.metricLabel;
@@ -584,8 +586,9 @@ export async function loadHistorySeries() {
         borderColor: CHART_COLORS[0], backgroundColor: CHART_COLORS[0],
         tension: 0.32, fill: false, spanGaps: true,
         segment: {
-          borderDash: function(ctx) { return ctx.p0DataIndex !== (ctx.p1DataIndex - 1) ? [5, 5] : undefined; },
-          borderColor: function(ctx) { return ctx.p0DataIndex !== (ctx.p1DataIndex - 1) ? 'rgba(128, 128, 128, 0.4)' : undefined; }
+          borderDash: function(ctx) { return (ctx.p0.skip || ctx.p1.skip || ctx.p0DataIndex !== (ctx.p1DataIndex - 1)) ? [4, 4] : undefined; },
+          borderColor: function(ctx) { return (ctx.p0.skip || ctx.p1.skip || ctx.p0DataIndex !== (ctx.p1DataIndex - 1)) ? theme.grid : undefined; },
+          borderWidth: function(ctx) { return (ctx.p0.skip || ctx.p1.skip || ctx.p0DataIndex !== (ctx.p1DataIndex - 1)) ? 1 : undefined; }
         }
       }];
     } else {
@@ -609,7 +612,12 @@ export async function loadHistorySeries() {
           data: dataPoints,
           borderColor: CHART_COLORS[idx % CHART_COLORS.length],
           backgroundColor: CHART_COLORS[idx % CHART_COLORS.length],
-          tension: 0.32, fill: false, spanGaps: false,
+          tension: 0.32, fill: false, spanGaps: true,
+          segment: {
+            borderDash: function(ctx) { return (ctx.p0.skip || ctx.p1.skip || ctx.p0DataIndex !== (ctx.p1DataIndex - 1)) ? [4, 4] : undefined; },
+            borderColor: function(ctx) { return (ctx.p0.skip || ctx.p1.skip || ctx.p0DataIndex !== (ctx.p1DataIndex - 1)) ? theme.grid : undefined; },
+            borderWidth: function(ctx) { return (ctx.p0.skip || ctx.p1.skip || ctx.p0DataIndex !== (ctx.p1DataIndex - 1)) ? 1 : undefined; }
+          },
           _sym: p.sym, _metricLabel: p.metricLabel
         };
       });
@@ -632,7 +640,6 @@ export async function loadHistorySeries() {
       };
     }
 
-    const theme = chartTheme();
     const ctx = document.getElementById('hist-chart');
     destroyChartInstance(histMainChart);
     histMainChart = new Chart(ctx, {
@@ -658,7 +665,7 @@ export async function loadHistorySeries() {
             max: xScaleMax,
             time: {
               displayFormats: {
-                millisecond: 'HH:mm:ss', second: 'HH:mm:ss', minute: 'HH:mm', hour: 'HH:mm',
+                millisecond: 'HH:mm:ss', second: 'HH:mm:ss', minute: 'HH:mm', hour: 'dd.MM HH:mm',
                 day: 'dd.MM.yyyy', week: 'dd.MM.yyyy', month: 'MM.yyyy', quarter: 'MM.yyyy', year: 'yyyy'
               },
               tooltipFormat: 'dd.MM.yyyy HH:mm'

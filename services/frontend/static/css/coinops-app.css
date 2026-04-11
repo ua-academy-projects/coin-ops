@@ -12,7 +12,7 @@
   --co-grid: rgba(255, 255, 255, 0.08);
   --co-glass-blur: 16px;
   --co-glass-saturate: 1.2;
-  --co-glass-refraction: linear-gradient(174deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.03) 28%, transparent 55%);
+  --co-glass-refraction: linear-gradient(174deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.03) 28%, transparent 55%);
   --co-glass-border-top: rgba(255, 255, 255, 0.22);
   --co-glass-border-right: rgba(255, 255, 255, 0.08);
   --co-glass-border-bottom: rgba(255, 255, 255, 0.04);
@@ -39,6 +39,7 @@
   --co-alert-danger-border: rgba(248, 113, 113, 0.30);
   --co-alert-danger-color: #fecaca;
 }
+
 html[data-theme="light"] {
   --co-bg: #e8ecf4;
   --co-text: #111318;
@@ -51,7 +52,7 @@ html[data-theme="light"] {
   --co-grid: rgba(0, 0, 0, 0.06);
   --co-glass-blur: 16px;
   --co-glass-saturate: 1.2;
-  --co-glass-refraction: linear-gradient(174deg, rgba(255,255,255,0.65) 0%, rgba(255,255,255,0.25) 30%, rgba(255,255,255,0.08) 55%);
+  --co-glass-refraction: linear-gradient(174deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0.25) 30%, rgba(255, 255, 255, 0.08) 55%);
   --co-glass-border-top: rgba(255, 255, 255, 0.80);
   --co-glass-border-right: rgba(255, 255, 255, 0.40);
   --co-glass-border-bottom: rgba(255, 255, 255, 0.20);
@@ -76,7 +77,11 @@ html[data-theme="light"] {
   --co-alert-danger-border: rgba(248, 113, 113, 0.25);
   --co-alert-danger-color: #991b1b;
 }
-html { scroll-behavior: smooth; }
+
+html {
+  scroll-behavior: smooth;
+}
+
 body.coinops-app {
   position: relative;
   min-height: 100vh;
@@ -85,6 +90,7 @@ body.coinops-app {
   overflow-x: hidden;
   color-scheme: dark;
 }
+
 .bg-orbs {
   position: fixed;
   inset: 0;
@@ -94,6 +100,7 @@ body.coinops-app {
   will-change: transform;
   transform: translateZ(0);
 }
+
 .bg-orbs .orb {
   position: absolute;
   border-radius: 50%;
@@ -102,14 +109,25 @@ body.coinops-app {
   contain: strict;
   animation: orb-drift 22s ease-in-out infinite alternate;
 }
+
 .page-hidden .bg-orbs .orb {
   animation-play-state: paused;
 }
+
 @keyframes orb-drift {
-  0%   { transform: translate(0, 0) scale(1); }
-  50%  { transform: translate(12px, -8px) scale(1.04); }
-  100% { transform: translate(-6px, 10px) scale(0.97); }
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate(12px, -8px) scale(1.04);
+  }
+
+  100% {
+    transform: translate(-6px, 10px) scale(0.97);
+  }
 }
+
 .bg-orbs .orb-a {
   width: 50vw;
   height: 50vw;
@@ -118,6 +136,7 @@ body.coinops-app {
   left: -14%;
   animation-duration: 22s;
 }
+
 .bg-orbs .orb-b {
   width: 48vw;
   height: 48vw;
@@ -127,6 +146,7 @@ body.coinops-app {
   animation-duration: 28s;
   animation-delay: -6s;
 }
+
 .bg-orbs .orb-c {
   width: 38vw;
   height: 38vw;
@@ -136,7 +156,11 @@ body.coinops-app {
   animation-duration: 25s;
   animation-delay: -12s;
 }
-.coinops-app > .container { position: relative; z-index: 1; }
+
+.coinops-app>.container {
+  position: relative;
+  z-index: 1;
+}
 
 /* ---------- Liquid Glass core ---------- */
 .glass {
@@ -144,10 +168,7 @@ body.coinops-app {
   background: var(--co-glass-refraction), var(--co-glass-bg);
   border: 1px solid;
   border-color:
-    var(--co-glass-border-top)
-    var(--co-glass-border-right)
-    var(--co-glass-border-bottom)
-    var(--co-glass-border-left);
+    var(--co-glass-border-top) var(--co-glass-border-right) var(--co-glass-border-bottom) var(--co-glass-border-left);
   border-radius: 18px;
   box-shadow: var(--co-glass-shadow), var(--co-glass-inner-glow);
   transition:
@@ -156,21 +177,31 @@ body.coinops-app {
     transform var(--co-transition),
     background var(--co-transition);
 }
+
 .glass:hover {
   box-shadow: var(--co-glass-shadow-hover), var(--co-glass-inner-glow);
 }
+
 .navbar-glass {
   background: var(--co-glass-refraction), var(--co-glass-bg) !important;
   border-bottom: 1px solid;
   border-image: linear-gradient(90deg, transparent 5%, var(--co-glass-border-top) 50%, transparent 95%) 1;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08), var(--co-glass-inner-glow);
 }
-.coinops-app .navbar-brand { color: var(--co-text) !important; }
-.coinops-app .navbar-text { color: var(--co-muted) !important; }
+
+.coinops-app .navbar-brand {
+  color: var(--co-text) !important;
+}
+
+.coinops-app .navbar-text {
+  color: var(--co-muted) !important;
+}
+
 .nav-tabs-glass {
   border-bottom: 1px solid rgba(255, 255, 255, 0.10);
   margin-bottom: 0;
 }
+
 .nav-tabs-glass .nav-link {
   color: var(--co-muted);
   border: none;
@@ -179,10 +210,12 @@ body.coinops-app {
   padding: 0.5rem 1.1rem;
   transition: color var(--co-transition), background var(--co-transition);
 }
+
 .nav-tabs-glass .nav-link:hover {
   color: var(--co-text);
   background: rgba(255, 255, 255, 0.04);
 }
+
 .nav-tabs-glass .nav-link.active {
   color: var(--co-text);
   background: rgba(255, 255, 255, 0.07);
@@ -190,22 +223,41 @@ body.coinops-app {
   border-color: var(--co-glass-border-top) var(--co-glass-border-right) transparent var(--co-glass-border-left);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
+
 .tab-shell {
   border-radius: 0 18px 18px 18px;
   padding: 1.25rem;
   margin-top: -1px;
   overflow: hidden;
 }
+
 .tab-shell.tab-shell--hist {
   border-radius: 18px;
 }
-.sortable { cursor: pointer; user-select: none; transition: background var(--co-transition); }
-.sortable:hover { background: rgba(255, 255, 255, 0.05); }
-@keyframes kpi-flash {
-  0%   { background-color: rgba(16, 185, 129, 0.22); }
-  100% { background-color: transparent; }
+
+.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--co-transition);
 }
-.kpi-updated { animation: kpi-flash 0.7s ease; }
+
+.sortable:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+@keyframes kpi-flash {
+  0% {
+    background-color: rgba(16, 185, 129, 0.22);
+  }
+
+  100% {
+    background-color: transparent;
+  }
+}
+
+.kpi-updated {
+  animation: kpi-flash 0.7s ease;
+}
 
 .live-indicator {
   display: inline-block;
@@ -217,10 +269,25 @@ body.coinops-app {
   box-shadow: 0 0 8px rgba(16, 185, 129, 0.8);
   animation: co-pulse-dot 2s infinite;
 }
+
 @keyframes co-pulse-dot {
-  0% { transform: scale(0.95); opacity: 0.8; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6); }
-  50% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 4px rgba(16, 185, 129, 0); }
-  100% { transform: scale(0.95); opacity: 0.8; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+  0% {
+    transform: scale(0.95);
+    opacity: 0.8;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6);
+  }
+
+  50% {
+    transform: scale(1);
+    opacity: 1;
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0);
+  }
+
+  100% {
+    transform: scale(0.95);
+    opacity: 0.8;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
 }
 
 .kpi-card {
@@ -228,9 +295,11 @@ body.coinops-app {
   position: relative;
   overflow: hidden;
 }
+
 .kpi-card:hover {
   transform: translateY(-2px);
 }
+
 .kpi-card::before {
   content: '';
   position: absolute;
@@ -241,23 +310,47 @@ body.coinops-app {
   border-radius: 18px 18px 0 0;
   z-index: 2;
 }
-.kpi-card > * { position: relative; z-index: 1; }
-.kpi-accent-usd::before { background: linear-gradient(90deg, #10b981 0%, #059669 50%, #047857 100%); }
-.kpi-accent-eur::before { background: linear-gradient(90deg, #f59e0b 0%, #f97316 50%, #ef4444 100%); }
-.kpi-accent-btc::before { background: linear-gradient(90deg, #8b5cf6 0%, #6366f1 50%, #3b82f6 100%); }
-.kpi-accent-status::before { background: linear-gradient(90deg, #64748b 0%, #94a3b8 50%, #cbd5e1 100%); }
-.kpi-card .co-label { color: var(--co-muted); font-size: 0.8rem; }
+
+.kpi-card>* {
+  position: relative;
+  z-index: 1;
+}
+
+.kpi-accent-usd::before {
+  background: linear-gradient(90deg, #10b981 0%, #059669 50%, #047857 100%);
+}
+
+.kpi-accent-eur::before {
+  background: linear-gradient(90deg, #f59e0b 0%, #f97316 50%, #ef4444 100%);
+}
+
+.kpi-accent-btc::before {
+  background: linear-gradient(90deg, #8b5cf6 0%, #6366f1 50%, #3b82f6 100%);
+}
+
+.kpi-accent-status::before {
+  background: linear-gradient(90deg, #64748b 0%, #94a3b8 50%, #cbd5e1 100%);
+}
+
+.kpi-card .co-label {
+  color: var(--co-muted);
+  font-size: 0.8rem;
+}
+
 /* Картка «Стан»: відступи між підписом, часом і кнопкою; кнопка на всю ширину з комфортним padding */
 .coinops-app .kpi-status-card {
   gap: 0.5rem;
   min-height: 108px;
 }
+
 .coinops-app .kpi-status-text {
   line-height: 1.4;
 }
+
 .coinops-app .kpi-status-actions {
   padding-top: 0.5rem;
 }
+
 .coinops-app .kpi-status-actions .btn-co-accent {
   width: 100%;
   display: inline-flex;
@@ -268,7 +361,11 @@ body.coinops-app {
   font-size: 0.875rem;
   line-height: 1.45;
 }
-#converter-result { font-variant-numeric: tabular-nums; }
+
+#converter-result {
+  font-variant-numeric: tabular-nums;
+}
+
 .spark-wrap {
   width: 100px;
   height: 36px;
@@ -277,10 +374,27 @@ body.coinops-app {
   overflow: hidden;
   background: transparent;
 }
-.spark-wrap canvas { display: block; border: none !important; outline: none; }
-.trend-up { color: #4ade80; font-weight: 600; }
-.trend-down { color: #f87171; font-weight: 600; }
-.trend-na { color: var(--co-trend-na); }
+
+.spark-wrap canvas {
+  display: block;
+  border: none !important;
+  outline: none;
+}
+
+.trend-up {
+  color: #4ade80;
+  font-weight: 600;
+}
+
+.trend-down {
+  color: #f87171;
+  font-weight: 600;
+}
+
+.trend-na {
+  color: var(--co-trend-na);
+}
+
 .coinops-app .glass-table-wrap {
   position: relative;
   z-index: 1;
@@ -288,20 +402,30 @@ body.coinops-app {
   max-height: 500px;
   border-radius: 18px;
 }
+
 /* Горизонтальні відступи в таблицях (історія та live) */
 .coinops-app .glass-table-wrap table.table thead th,
 .coinops-app .glass-table-wrap table.table tbody td {
   padding-left: 1rem;
   padding-right: 1rem;
 }
-.co-footnote { font-size: 0.8rem; color: var(--co-muted); }
-.conv-result-col { min-width: 0; }
+
+.co-footnote {
+  font-size: 0.8rem;
+  color: var(--co-muted);
+}
+
+.conv-result-col {
+  min-width: 0;
+}
+
 .coinops-app .alert-warning {
   background: var(--co-alert-warn-bg);
   border: 1px solid var(--co-alert-warn-border);
   border-radius: 14px;
   color: var(--co-alert-warn-color);
 }
+
 .coinops-app .alert-danger {
   background: var(--co-alert-danger-bg);
   border: 1px solid var(--co-alert-danger-border);
@@ -313,30 +437,37 @@ body.coinops-app {
   cursor: grab;
   user-select: none;
 }
+
 .kpi-slot-draggable:active {
   cursor: grabbing;
 }
+
 .kpi-slot-draggable.kpi-dragging {
   opacity: 0.75;
 }
+
 .coinops-app .live-star-col {
   width: 2.5rem;
   padding-left: 0.35rem !important;
   padding-right: 0.35rem !important;
 }
+
 .coinops-app .kpi-star-cell {
   width: 2.5rem;
   padding-left: 0.35rem !important;
   padding-right: 0.35rem !important;
 }
+
 .coinops-app .kpi-star-toggle:focus {
   box-shadow: none;
 }
+
 #theme-toggle {
   padding: 0.25rem 0.5rem;
   font-size: 1rem;
   line-height: 1;
 }
+
 .table-glass {
   --bs-table-bg: transparent;
   --bs-table-striped-bg: rgba(255, 255, 255, 0.02);
@@ -344,6 +475,7 @@ body.coinops-app {
   color: var(--co-text);
   margin-bottom: 0;
 }
+
 .table-glass thead th {
   background: var(--co-table-head-bg);
   color: var(--co-text);
@@ -356,17 +488,26 @@ body.coinops-app {
   z-index: 10;
   box-shadow: 0 4px 6px -4px rgba(0, 0, 0, 0.3);
 }
-.table-glass tbody tr.tr-trend-up > td { background: var(--co-table-tr-up); }
-.table-glass tbody tr.tr-trend-down > td { background: var(--co-table-tr-down); }
+
+.table-glass tbody tr.tr-trend-up>td {
+  background: var(--co-table-tr-up);
+}
+
+.table-glass tbody tr.tr-trend-down>td {
+  background: var(--co-table-tr-down);
+}
+
 .table-glass tbody td {
   border-color: var(--co-table-td-border);
   vertical-align: middle;
   color: var(--co-text);
   transition: background var(--co-transition);
 }
-.table-glass.table-striped > tbody > tr > * {
+
+.table-glass.table-striped>tbody>tr>* {
   color: var(--co-text);
 }
+
 .coinops-app .form-control,
 .coinops-app .form-select {
   background: var(--co-input-bg);
@@ -375,16 +516,22 @@ body.coinops-app {
   color: var(--co-text);
   transition: all var(--co-transition);
 }
+
 .coinops-app .form-select {
   padding-left: 0.75rem;
   padding-right: 2rem;
 }
+
 .coinops-app select.form-select option {
   background-color: #161c2c;
   color: #e8eaef;
   padding: 0.35rem 0.75rem;
 }
-.coinops-app .form-control::placeholder { color: rgba(232, 234, 239, 0.30); }
+
+.coinops-app .form-control::placeholder {
+  color: rgba(232, 234, 239, 0.30);
+}
+
 .coinops-app .form-control:focus,
 .coinops-app .form-select:focus {
   background: rgba(255, 255, 255, 0.08);
@@ -392,6 +539,7 @@ body.coinops-app {
   color: var(--co-text);
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12), 0 2px 8px rgba(16, 185, 129, 0.08);
 }
+
 .coinops-app .input-group-text {
   background: var(--co-input-bg);
   border-color: var(--co-input-border);
@@ -399,24 +547,31 @@ body.coinops-app {
   color: var(--co-muted);
   transition: border-color var(--co-transition);
 }
+
 .coinops-app .form-check-input {
   background-color: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.22);
   transition: all var(--co-transition);
 }
-.coinops-app .form-check-label { color: var(--co-muted); }
+
+.coinops-app .form-check-label {
+  color: var(--co-muted);
+}
+
 .btn-glass-outline {
   color: var(--co-text);
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(255, 255, 255, 0.05);
   transition: all var(--co-transition);
 }
+
 .btn-glass-outline:hover {
   background: rgba(255, 255, 255, 0.10);
   color: var(--co-text);
   border-color: rgba(255, 255, 255, 0.32);
   box-shadow: 0 4px 16px rgba(16, 185, 129, 0.10);
 }
+
 /* Головна дія (напр. «Завантажити» на історії) — м’який cyan→indigo, без стандартного bootstrap primary */
 .coinops-app .btn-co-accent {
   color: var(--co-text);
@@ -426,20 +581,24 @@ body.coinops-app {
   box-shadow: var(--co-glass-shadow), var(--co-glass-inner-glow);
   transition: all var(--co-transition);
 }
+
 .coinops-app .btn-co-accent:hover {
   background: var(--co-glass-refraction), rgba(255, 255, 255, 0.14);
   border-color: rgba(255, 255, 255, 0.30);
   box-shadow: var(--co-glass-shadow-hover), var(--co-glass-inner-glow);
   transform: translateY(-1px);
 }
+
 .coinops-app .btn-co-accent:focus {
   border-color: rgba(16, 185, 129, 0.45);
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
 }
+
 .coinops-app .btn-co-accent:active {
   transform: translateY(0);
   background: var(--co-glass-refraction), rgba(255, 255, 255, 0.06);
 }
+
 /* Кастомні випадаючі списки (конвертер, актив у історії) — темне меню без нативної білої рамки ОС */
 .co-select-dd-toggle {
   display: flex;
@@ -455,6 +614,7 @@ body.coinops-app {
   border-radius: 10px;
   transition: all var(--co-transition);
 }
+
 .co-select-dd-toggle:hover,
 .co-select-dd-toggle:focus,
 .co-select-dd-toggle.show {
@@ -463,6 +623,7 @@ body.coinops-app {
   color: var(--co-text) !important;
   box-shadow: 0 2px 10px rgba(16, 185, 129, 0.08);
 }
+
 .co-select-dd-toggle [data-co-select-label] {
   flex: 1 1 auto;
   min-width: 0;
@@ -471,6 +632,7 @@ body.coinops-app {
   white-space: nowrap;
   text-align: start;
 }
+
 .coinops-app .co-select-dd-menu {
   max-height: min(50vh, 280px);
   min-width: 0 !important;
@@ -486,6 +648,7 @@ body.coinops-app {
     0 2px 8px rgba(0, 0, 0, 0.20),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
+
 .coinops-app .co-select-dd-menu .dropdown-item {
   color: var(--co-text);
   font-size: 0.875rem;
@@ -495,18 +658,23 @@ body.coinops-app {
   text-overflow: ellipsis;
   transition: background var(--co-transition);
 }
+
 .coinops-app .co-select-dd-menu .dropdown-item:hover,
 .coinops-app .co-select-dd-menu .dropdown-item:focus {
   background: rgba(255, 255, 255, 0.08);
   color: var(--co-text);
 }
 
-.converter-row { gap: 0.5rem; }
+.converter-row {
+  gap: 0.5rem;
+}
+
 /* Кнопка обміну: ті самі вертикальні «сходинки», що й у селектів; трохи повітря з боків */
 .coinops-app .converter-row .conv-swap-col {
   padding-left: 0.35rem;
   padding-right: 0.35rem;
 }
+
 .coinops-app .converter-row .conv-swap-btn {
   display: inline-flex;
   align-items: center;
@@ -516,125 +684,199 @@ body.coinops-app {
   padding-left: 0.5rem;
   padding-right: 0.5rem;
 }
+
 @media (min-width: 992px) {
-  .converter-row { flex-wrap: nowrap; align-items: flex-end; gap: 0.625rem; }
-  .converter-row .conv-result-col { flex: 1 1 auto; min-width: 200px; }
+  .converter-row {
+    flex-wrap: nowrap;
+    align-items: flex-end;
+    gap: 0.625rem;
+  }
+
+  .converter-row .conv-result-col {
+    flex: 1 1 auto;
+    min-width: 200px;
+  }
 }
-.hist-info-icon { cursor: help; }
+
+.hist-info-icon {
+  cursor: help;
+}
+
 /* Конвертер вище таблиці активів — випадаючі списки не ховаються під напівпрозорими рядками */
 .coinops-app .converter-stack {
   position: relative;
   z-index: 10;
 }
+
 .coinops-app .co-select-dd {
   max-width: 100%;
   position: relative;
 }
+
 .coinops-app .co-select-dd .dropdown-menu.w-100 {
   width: 100% !important;
   min-width: 0 !important;
   left: 0 !important;
   right: 0 !important;
 }
+
 .coinops-app .co-select-dd.dropdown:has(.dropdown-menu.show) {
   position: relative;
   z-index: 1080;
 }
 
-}
 html[data-theme="light"] body.coinops-app {
   color-scheme: light;
   background: linear-gradient(145deg, #d4f0e0 0%, #e4f0ec 30%, #e8f4ee 55%, #ddf0e8 80%, #d8ece2 100%);
   background-attachment: fixed;
 }
+
 html[data-theme="light"] .navbar-glass {
   background: var(--co-glass-refraction), rgba(255, 255, 255, 0.38) !important;
   border-image: linear-gradient(90deg, transparent 5%, rgba(255, 255, 255, 0.70) 50%, transparent 95%) 1;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.70);
 }
-html[data-theme="light"] .bg-orbs .orb { opacity: 0.50; }
+
+html[data-theme="light"] .bg-orbs .orb {
+  opacity: 0.50;
+}
+
 html[data-theme="light"] .bg-orbs .orb-a {
   background: radial-gradient(circle, rgba(16, 185, 129, 0.35) 0%, rgba(16, 185, 129, 0.1) 35%, transparent 55%);
 }
+
 html[data-theme="light"] .bg-orbs .orb-b {
   background: radial-gradient(circle, rgba(20, 184, 166, 0.30) 0%, rgba(20, 184, 166, 0.08) 35%, transparent 55%);
 }
+
 html[data-theme="light"] .bg-orbs .orb-c {
   background: radial-gradient(circle, rgba(52, 211, 153, 0.25) 0%, rgba(52, 211, 153, 0.05) 35%, transparent 55%);
 }
-html[data-theme="light"] .nav-tabs-glass { border-bottom-color: rgba(255, 255, 255, 0.50); }
-html[data-theme="light"] .nav-tabs-glass .nav-link { color: var(--co-muted); }
-html[data-theme="light"] .nav-tabs-glass .nav-link:hover { background: rgba(255, 255, 255, 0.30); }
+
+html[data-theme="light"] .nav-tabs-glass {
+  border-bottom-color: rgba(255, 255, 255, 0.50);
+}
+
+html[data-theme="light"] .nav-tabs-glass .nav-link {
+  color: var(--co-muted);
+}
+
+html[data-theme="light"] .nav-tabs-glass .nav-link:hover {
+  background: rgba(255, 255, 255, 0.30);
+}
+
 html[data-theme="light"] .nav-tabs-glass .nav-link.active {
   color: var(--co-text);
   background: rgba(255, 255, 255, 0.50);
-  border-color: rgba(255,255,255,0.75) rgba(255,255,255,0.35) transparent rgba(255,255,255,0.45);
+  border-color: rgba(255, 255, 255, 0.75) rgba(255, 255, 255, 0.35) transparent rgba(255, 255, 255, 0.45);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.70);
 }
-html[data-theme="light"] .table-glass { color: var(--co-text); }
-html[data-theme="light"] .table-glass thead th { color: var(--co-text); font-weight: 700; }
-html[data-theme="light"] .table-glass tbody td { color: #1e2028; }
+
+html[data-theme="light"] .table-glass {
+  color: var(--co-text);
+}
+
+html[data-theme="light"] .table-glass thead th {
+  color: var(--co-text);
+  font-weight: 700;
+}
+
+html[data-theme="light"] .table-glass tbody td {
+  color: #1e2028;
+}
+
 html[data-theme="light"] .co-select-dd-toggle {
   background: rgba(255, 255, 255, 0.55) !important;
   border: 1px solid rgba(0, 0, 0, 0.10) !important;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.60);
   color: var(--co-text) !important;
 }
+
 html[data-theme="light"] .co-select-dd-toggle:hover,
 html[data-theme="light"] .co-select-dd-toggle.show {
   background: rgba(255, 255, 255, 0.70) !important;
   border-color: rgba(16, 185, 129, 0.30) !important;
   box-shadow: 0 2px 8px rgba(16, 185, 129, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.65);
 }
+
 html[data-theme="light"] .co-select-dd-menu {
   background: rgba(255, 255, 255, 0.92) !important;
   border-color: rgba(255, 255, 255, 0.55) !important;
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.65) !important;
 }
-html[data-theme="light"] .co-select-dd-menu .dropdown-item { color: var(--co-text); }
-html[data-theme="light"] .co-select-dd-menu .dropdown-item:hover { background: rgba(255, 255, 255, 0.40); }
+
+html[data-theme="light"] .co-select-dd-menu .dropdown-item {
+  color: var(--co-text);
+}
+
+html[data-theme="light"] .co-select-dd-menu .dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.40);
+}
+
 html[data-theme="light"] .btn-glass-outline {
   color: var(--co-text);
   border: 1px solid rgba(0, 0, 0, 0.10);
   background: rgba(255, 255, 255, 0.40);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
+
 html[data-theme="light"] .btn-glass-outline:hover {
   background: rgba(255, 255, 255, 0.60);
   color: var(--co-text);
   border-color: rgba(0, 0, 0, 0.14);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.65);
 }
+
 html[data-theme="light"] .coinops-app .form-control,
 html[data-theme="light"] .coinops-app .form-select {
   background: rgba(255, 255, 255, 0.55);
   border: 1px solid rgba(0, 0, 0, 0.10);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
 }
+
 html[data-theme="light"] .coinops-app .form-control:focus,
 html[data-theme="light"] .coinops-app .form-select:focus {
   background: rgba(255, 255, 255, 0.60);
   border-color: rgba(16, 185, 129, 0.40);
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.10), 0 2px 8px rgba(16, 185, 129, 0.06);
 }
-html[data-theme="light"] .coinops-app .form-control::placeholder { color: rgba(17, 19, 24, 0.40); }
-html[data-theme="light"] .coinops-app .form-label { color: rgba(17, 19, 24, 0.72); }
+
+html[data-theme="light"] .coinops-app .form-control::placeholder {
+  color: rgba(17, 19, 24, 0.40);
+}
+
+html[data-theme="light"] .coinops-app .form-label {
+  color: rgba(17, 19, 24, 0.72);
+}
+
 html[data-theme="light"] .coinops-app .input-group-text {
   background: rgba(255, 255, 255, 0.45);
   border: 1px solid rgba(0, 0, 0, 0.10);
   color: var(--co-muted);
 }
+
 html[data-theme="light"] .coinops-app .form-check-input {
   background-color: rgba(255, 255, 255, 0.50);
   border-color: rgba(0, 0, 0, 0.12);
 }
+
 html[data-theme="light"] .coinops-app select.form-select option {
   background-color: #f2f4f8;
   color: #1a1d23;
 }
-html[data-theme="light"] .sortable:hover { background: rgba(255, 255, 255, 0.30); }
-html[data-theme="light"] .kpi-card .co-label { color: rgba(17, 19, 24, 0.65); }
-html[data-theme="light"] .co-footnote { color: rgba(17, 19, 24, 0.55); }
+
+html[data-theme="light"] .sortable:hover {
+  background: rgba(255, 255, 255, 0.30);
+}
+
+html[data-theme="light"] .kpi-card .co-label {
+  color: rgba(17, 19, 24, 0.65);
+}
+
+html[data-theme="light"] .co-footnote {
+  color: rgba(17, 19, 24, 0.55);
+}
+
 html[data-theme="light"] .coinops-app .btn-co-accent {
   background: rgba(255, 255, 255, 0.55);
   border: 1px solid rgba(0, 0, 0, 0.10);
@@ -643,6 +885,7 @@ html[data-theme="light"] .coinops-app .btn-co-accent {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.65);
   text-shadow: none;
 }
+
 html[data-theme="light"] .coinops-app .btn-co-accent:hover {
   background: rgba(255, 255, 255, 0.72);
   border-color: rgba(16, 185, 129, 0.28);
@@ -650,22 +893,27 @@ html[data-theme="light"] .coinops-app .btn-co-accent:hover {
   box-shadow: 0 2px 10px rgba(16, 185, 129, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.75);
   transform: translateY(-1px);
 }
+
 html[data-theme="light"] .hist-asset-search-wrap {
   background: rgba(255, 255, 255, 0.75);
   border-bottom-color: rgba(255, 255, 255, 0.40);
 }
+
 html[data-theme="light"] .hist-fs-btn {
   border-color: rgba(0, 0, 0, 0.12);
   color: var(--co-muted);
 }
+
 html[data-theme="light"] .hist-stat-badge {
   background: rgba(255, 255, 255, 0.40);
   border: 1px solid rgba(255, 255, 255, 0.50);
 }
+
 html[data-theme="light"] .coinops-app .btn-co-accent:focus {
   border-color: rgba(16, 185, 129, 0.45);
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12);
 }
+
 html[data-theme="light"] .coinops-app .toast-glass {
   background: var(--co-glass-refraction), rgba(255, 255, 255, 0.60);
   border-color: rgba(255, 255, 255, 0.70) rgba(255, 255, 255, 0.35) rgba(255, 255, 255, 0.20) rgba(255, 255, 255, 0.45);
@@ -681,7 +929,11 @@ html[data-theme="light"] .coinops-app .toast-glass {
   opacity: 0.5;
   transition: opacity 0.2s;
 }
-.hist-fs-btn:hover { opacity: 1; }
+
+.hist-fs-btn:hover {
+  opacity: 1;
+}
+
 #hist-chart-wrap:fullscreen,
 #hist-chart-wrap:-webkit-full-screen {
   background: var(--co-bg, #080b14);
@@ -690,8 +942,12 @@ html[data-theme="light"] .coinops-app .toast-glass {
   justify-content: center;
   padding: 2rem !important;
 }
+
 #hist-chart-wrap:fullscreen canvas,
-#hist-chart-wrap:-webkit-full-screen canvas { width: 100% !important; height: 100% !important; }
+#hist-chart-wrap:-webkit-full-screen canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
 
 /* ---------- History stats badges ---------- */
 .hist-stat-badge {
@@ -700,6 +956,7 @@ html[data-theme="light"] .coinops-app .toast-glass {
   border-radius: 10px;
   white-space: nowrap;
 }
+
 .hist-stat-group-label {
   font-weight: 600;
   font-size: 0.8rem;
@@ -707,6 +964,7 @@ html[data-theme="light"] .coinops-app .toast-glass {
   align-items: center;
   gap: 0.35rem;
 }
+
 .hist-stat-dot {
   display: inline-block;
   width: 10px;
@@ -730,6 +988,7 @@ html[data-theme="light"] .coinops-app .toast-glass {
   margin-top: 0;
   flex-shrink: 0;
 }
+
 .coinops-app .co-select-dd-menu .dropdown-item .form-check-input:checked {
   background-color: #10b981;
   border-color: #10b981;
@@ -744,45 +1003,139 @@ html[data-theme="light"] .coinops-app .toast-glass {
   color: var(--co-text);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
-.coinops-app .toast-glass .btn-close { filter: invert(1) grayscale(1) brightness(1.5); }
-html[data-theme="light"] .coinops-app .toast-glass .btn-close { filter: none; }
-.coinops-app .toast-glass.toast-success { border-left: 4px solid #4ade80; }
-.coinops-app .toast-glass.toast-warning { border-left: 4px solid #fbbf24; }
-.coinops-app .toast-glass.toast-error   { border-left: 4px solid #f87171; }
-.coinops-app .toast-glass.toast-info    { border-left: 4px solid #60a5fa; }
+
+.coinops-app .toast-glass .btn-close {
+  filter: invert(1) grayscale(1) brightness(1.5);
+}
+
+html[data-theme="light"] .coinops-app .toast-glass .btn-close {
+  filter: none;
+}
+
+.coinops-app .toast-glass.toast-success {
+  border-left: 4px solid #4ade80;
+}
+
+.coinops-app .toast-glass.toast-warning {
+  border-left: 4px solid #fbbf24;
+}
+
+.coinops-app .toast-glass.toast-error {
+  border-left: 4px solid #f87171;
+}
+
+.coinops-app .toast-glass.toast-info {
+  border-left: 4px solid #60a5fa;
+}
 
 /* ---------- Mobile (< 576px) ---------- */
 @media (max-width: 575.98px) {
-  .glass { padding: 0.75rem; border-radius: 14px; }
-  .tab-shell { padding: 0.75rem; border-radius: 0 14px 14px 14px; }
-  .tab-shell.tab-shell--hist { border-radius: 14px; }
-  .kpi-card { min-height: 72px; }
-  .kpi-card .fs-5 { font-size: 1rem !important; }
-  .kpi-row .col-6 { padding-left: 0.25rem; padding-right: 0.25rem; }
-  .converter-row { gap: 0.35rem; }
-  .converter-row > * { flex: 1 1 100%; min-width: 0 !important; }
-  .converter-row .conv-swap-col { flex: 0 0 auto; }
-  .converter-row .conv-swap-btn { width: 100%; }
+  .glass {
+    padding: 0.75rem;
+    border-radius: 14px;
+  }
+
+  .tab-shell {
+    padding: 0.75rem;
+    border-radius: 0 14px 14px 14px;
+  }
+
+  .tab-shell.tab-shell--hist {
+    border-radius: 14px;
+  }
+
+  .kpi-card {
+    min-height: 72px;
+  }
+
+  .kpi-card .fs-5 {
+    font-size: 1rem !important;
+  }
+
+  .kpi-row .col-6 {
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+  }
+
+  .converter-row {
+    gap: 0.35rem;
+  }
+
+  .converter-row>* {
+    flex: 1 1 100%;
+    min-width: 0 !important;
+  }
+
+  .converter-row .conv-swap-col {
+    flex: 0 0 auto;
+  }
+
+  .converter-row .conv-swap-btn {
+    width: 100%;
+  }
+
   .coinops-app .glass-table-wrap table.table thead th,
   .coinops-app .glass-table-wrap table.table tbody td {
     padding-left: 0.5rem;
     padding-right: 0.5rem;
     font-size: 0.8rem;
   }
-  .spark-wrap { width: 64px; height: 28px; }
-  .co-select-dd-toggle { font-size: 0.8rem; }
+
+  .spark-wrap {
+    width: 64px;
+    height: 28px;
+  }
+
+  .co-select-dd-toggle {
+    font-size: 0.8rem;
+  }
 }
 
 /* ---------- Reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
-  .bg-orbs .orb { animation: none !important; }
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+
+  .bg-orbs .orb {
+    animation: none !important;
+  }
 }
 
 /* ---------- Scrollbar (thin, themed) ---------- */
-.coinops-app ::-webkit-scrollbar { width: 6px; height: 6px; }
-.coinops-app ::-webkit-scrollbar-track { background: transparent; }
-.coinops-app ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 3px; }
-.coinops-app ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.22); }
-html[data-theme="light"] .coinops-app ::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.12); }
-html[data-theme="light"] .coinops-app ::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.22); }
+.coinops-app ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.coinops-app ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.coinops-app ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+
+.coinops-app ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+html[data-theme="light"] .coinops-app ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+html[data-theme="light"] .coinops-app ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.22);
+}
+
+/* History Chart base dimensions */
+#hist-chart-wrap {
+  position: relative;
+  height: 450px;
+  width: 100%;
+}
