@@ -95,33 +95,20 @@ Each application service has its own Dockerfile.
 
 Official images are used for PostgreSQL, RabbitMQ, and Redis.
 
-## Current Deployment Model
+## Registry Deployment Model
 
-The current deployment builds images on the target VMs:
-
-```text
-developer machine / WSL
-  -> ansible-playbook deploy.yml
-  -> Ansible SSHs into each VM
-  -> source is synced to /opt/cognitor/<service>/
-  -> env files are written to /etc/cognitor/*.env
-  -> Compose files are copied/rendered
-  -> docker compose up -d --build starts containers
-```
-
-This is simple and works well for a local three-VM Hyper-V demo. The tradeoff is that VMs need source code during deployment because Docker builds the images there.
-
-The more production-like next step is registry-based deployment:
+Application images are built once by GitHub Actions and pushed to GitHub Container Registry:
 
 ```text
-GitHub Actions
-  -> docker build
-  -> docker push ghcr.io/<owner>/coin-ops-<service>:<commit-sha>
-  -> Ansible writes env files
-  -> Ansible runs docker compose pull && docker compose up -d
+push to Shabat
+  -> GitHub Actions builds Docker images
+  -> images are pushed to ghcr.io/ua-academy-projects/coin-ops-<service>
+  -> Ansible renders per-node Compose files
+  -> Docker Compose pulls images by tag
+  -> docker compose up -d starts containers
 ```
 
-That would remove source code from the runtime VMs and make deployments use immutable image artifacts.
+The VMs do not need application source code for deployment. They only need Docker, Compose files, runtime env files, and network access to GHCR. The default tag is `shabat-latest`; set `IMAGE_TAG=<commit-sha>` for immutable rollouts or rollback.
 
 ## Secrets and Runtime Configuration
 
@@ -154,6 +141,12 @@ Deploy application containers:
 
 ```bash
 ansible-playbook -i ansible/inventory ansible/deploy.yml
+```
+
+Deploy a specific image tag:
+
+```bash
+IMAGE_TAG=<commit-sha> ansible-playbook -i ansible/inventory ansible/deploy.yml
 ```
 
 Deploy only one node:
@@ -206,6 +199,6 @@ These are public unauthenticated APIs, so live behavior depends on upstream avai
 
 ## Operational Notes
 
-The deployment is safe to re-run. Ansible stops legacy host services, renders current Compose files, starts containers, waits for health endpoints, and removes unused Docker build cache after successful rollout.
+The deployment is safe to re-run. Ansible stops legacy host services, removes old synced source directories, renders current Compose files, pulls registry images, starts containers, waits for health endpoints, and prunes dangling images.
 
 Persistent data is stored on VM-mounted host paths under `/var/lib/coin-ops/`, not inside disposable container layers.

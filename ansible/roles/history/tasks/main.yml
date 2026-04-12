@@ -81,19 +81,23 @@
     group: root
     mode: '0755'
 
-- name: Sync history source files
-  synchronize:
-    src: "{{ playbook_dir }}/../history/"
-    dest: /opt/cognitor/history/history/
-    delete: yes
+- name: Remove legacy synced history source
+  file:
+    path: /opt/cognitor/history/history
+    state: absent
 
 - name: Render compose file
   template:
     src: "{{ playbook_dir }}/../deploy/compose/node-01.compose.yaml"
     dest: /opt/cognitor/history/compose.yaml
 
+- name: Pull history container images
+  command: docker compose -f /opt/cognitor/history/compose.yaml pull
+  args:
+    chdir: /opt/cognitor/history
+
 - name: Start history dependencies first
-  command: docker compose -f /opt/cognitor/history/compose.yaml up -d --build postgres rabbitmq
+  command: docker compose -f /opt/cognitor/history/compose.yaml up -d postgres rabbitmq
   args:
     chdir: /opt/cognitor/history
 
@@ -129,7 +133,7 @@
     - not host_postgres_migration_marker.stat.exists
 
 - name: Run Docker Compose
-  command: docker compose -f /opt/cognitor/history/compose.yaml up -d --build --remove-orphans
+  command: docker compose -f /opt/cognitor/history/compose.yaml up -d --remove-orphans
   args:
     chdir: /opt/cognitor/history
 
@@ -142,10 +146,6 @@
   delay: 5
   register: result
   until: result.status == 200
-
-- name: Remove unused Docker build cache
-  command: docker builder prune -af
-  changed_when: false
 
 - name: Remove dangling Docker images
   command: docker image prune -f

@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"sync"
 	"time"
@@ -135,9 +135,10 @@ type Server struct {
 	rdb   *redis.Client
 	cache struct {
 		sync.RWMutex
-		whales   []Whale
-		prices   Prices
-		lastNBU  time.Time
+		markets []MarketSnapshot
+		whales  []Whale
+		prices  Prices
+		lastNBU time.Time
 	}
 }
 
@@ -264,7 +265,7 @@ func fetchMarkets() ([]GammaMarket, error) {
 	return markets, fetchJSON(url, &markets)
 }
 
-func normalizeMarket(m GammaMarket) MarketSnapshot {
+func normalizeMarket(m GammaMarket, fetchedAt time.Time) MarketSnapshot {
 	yes, no := parseOutcomePrices(m.OutcomePrices)
 	return MarketSnapshot{
 		Slug:      m.Slug,
@@ -274,7 +275,7 @@ func normalizeMarket(m GammaMarket) MarketSnapshot {
 		Volume24h: toFloat(m.Volume24hr),
 		Category:  m.Category,
 		EndDate:   m.EndDateIso,
-		FetchedAt: time.Now().UTC(),
+		FetchedAt: fetchedAt,
 	}
 }
 
@@ -348,7 +349,30 @@ func fetchNBU() (float64, error) {
 	return entries[0].Rate, nil
 }
 
-// ---- Whale cache refresh ----
+// ---- Background refresh loops ----
+
+func (s *Server) fetchAndUpdateMarkets() {
+	markets, err := fetchMarkets()
+	if err != nil {
+		log.Printf("Market update: fetch failed: %v", err)
+		return
+	}
+
+	fetchedAt := time.Now().UTC()
+	snapshots := make([]MarketSnapshot, 0, len(markets))
+	for _, m := range markets {
+		snap := normalizeMarket(m, fetchedAt)
+		if err := s.publish(snap); err != nil {
+			log.Printf("Market update: publish failed for %s: %v", snap.Slug, err)
+		}
+		snapshots = append(snapshots, snap)
+	}
+
+	s.cache.Lock()
+	s.cache.markets = snapshots
+	s.cache.Unlock()
+	log.Printf("Market cache updated: %d markets", len(snapshots))
+}
 
 func (s *Server) fetchAndUpdateCache() {
 	leaderboard, err := fetchLeaderboard()
@@ -483,20 +507,19 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCurrent(w http.ResponseWriter, r *http.Request) {
-	markets, err := fetchMarkets()
-	if err != nil {
-		log.Printf("/current: fetch failed: %v", err)
-		http.Error(w, "upstream fetch failed", http.StatusBadGateway)
-		return
-	}
+	s.cache.RLock()
+	snapshots := append([]MarketSnapshot(nil), s.cache.markets...)
+	s.cache.RUnlock()
 
-	snapshots := make([]MarketSnapshot, 0, len(markets))
-	for _, m := range markets {
-		snap := normalizeMarket(m)
-		if err := s.publish(snap); err != nil {
-			log.Printf("/current: publish failed for %s: %v", snap.Slug, err)
+	if len(snapshots) == 0 {
+		s.fetchAndUpdateMarkets()
+		s.cache.RLock()
+		snapshots = append([]MarketSnapshot(nil), s.cache.markets...)
+		s.cache.RUnlock()
+		if len(snapshots) == 0 {
+			http.Error(w, "market cache unavailable", http.StatusBadGateway)
+			return
 		}
-		snapshots = append(snapshots, snap)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -639,6 +662,16 @@ func main() {
 		log.Println("Connected to Redis")
 	}
 	pingCancel()
+
+	// Populate market cache immediately, then refresh independently of UI requests.
+	go func() {
+		srv.fetchAndUpdateMarkets()
+		ticker := time.NewTicker(60 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			srv.fetchAndUpdateMarkets()
+		}
+	}()
 
 	// Populate whale cache immediately, then refresh every 5 minutes.
 	go func() {

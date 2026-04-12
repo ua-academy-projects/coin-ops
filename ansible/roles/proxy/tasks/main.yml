@@ -33,26 +33,23 @@
     group: root
     mode: '0755'
 
-- name: Remove legacy proxy binary to make way for source directory
+- name: Remove legacy synced proxy source or binary
   file:
     path: /opt/cognitor/proxy/proxy
     state: absent
-
-- name: Sync proxy source files
-  synchronize:
-    src: "{{ playbook_dir }}/../proxy/"
-    dest: /opt/cognitor/proxy/proxy/
-    delete: yes
-    rsync_opts:
-      - "--exclude=proxy"
 
 - name: Render compose file
   template:
     src: "{{ playbook_dir }}/../deploy/compose/node-02.compose.yaml"
     dest: /opt/cognitor/proxy/compose.yaml
 
+- name: Pull proxy container images
+  command: docker compose -f /opt/cognitor/proxy/compose.yaml pull
+  args:
+    chdir: /opt/cognitor/proxy
+
 - name: Run Docker Compose
-  command: docker compose -f /opt/cognitor/proxy/compose.yaml up -d --build --remove-orphans
+  command: docker compose -f /opt/cognitor/proxy/compose.yaml up -d --remove-orphans
   args:
     chdir: /opt/cognitor/proxy
 
@@ -65,10 +62,6 @@
   delay: 5
   register: result
   until: result.status == 200
-
-- name: Remove unused Docker build cache
-  command: docker builder prune -af
-  changed_when: false
 
 - name: Remove dangling Docker images
   command: docker image prune -f

@@ -14,9 +14,11 @@
     group: root
     mode: '0750'
 
-- name: Write ui environment file (if any required in future)
+- name: Write ui runtime environment file
   copy:
-    content: "DUMMY=var\n"
+    content: |
+      PROXY_URL=http://{{ hostvars[groups['proxy'][0]]['ansible_host'] | default('172.31.1.11') }}:{{ proxy_port }}
+      HISTORY_URL=http://{{ hostvars[groups['history'][0]]['ansible_host'] | default('172.31.1.10') }}:{{ history_port }}
     dest: /etc/cognitor/ui.env
     owner: root
     group: root
@@ -30,21 +32,23 @@
     group: root
     mode: '0755'
 
-- name: Sync ui source files
-  synchronize:
-    src: "{{ playbook_dir }}/../ui-react/"
-    dest: /opt/cognitor/ui/ui-react/
-    delete: yes
-    rsync_opts:
-      - "--exclude=node_modules"
+- name: Remove legacy synced ui source
+  file:
+    path: /opt/cognitor/ui/ui-react
+    state: absent
 
-- name: Sync compose file
-  copy:
+- name: Render compose file
+  template:
     src: "{{ playbook_dir }}/../deploy/compose/node-03.compose.yaml"
     dest: /opt/cognitor/ui/compose.yaml
 
+- name: Pull ui container images
+  command: docker compose -f /opt/cognitor/ui/compose.yaml pull
+  args:
+    chdir: /opt/cognitor/ui
+
 - name: Run Docker Compose
-  command: docker compose -f /opt/cognitor/ui/compose.yaml up -d --build --remove-orphans
+  command: docker compose -f /opt/cognitor/ui/compose.yaml up -d --remove-orphans
   args:
     chdir: /opt/cognitor/ui
 
@@ -57,10 +61,6 @@
   delay: 5
   register: result
   until: result.status == 200
-
-- name: Remove unused Docker build cache
-  command: docker builder prune -af
-  changed_when: false
 
 - name: Remove dangling Docker images
   command: docker image prune -f
