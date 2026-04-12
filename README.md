@@ -143,6 +143,14 @@ Deploy application containers:
 ansible-playbook -i ansible/inventory ansible/deploy.yml
 ```
 
+If GHCR packages are private, export registry credentials first. The token only needs package read access:
+
+```bash
+export GHCR_USERNAME=<github-username>
+export GHCR_TOKEN=<github-token-with-read-packages>
+ansible-playbook -i ansible/inventory ansible/deploy.yml
+```
+
 Deploy a specific image tag:
 
 ```bash

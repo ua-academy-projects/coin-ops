@@ -20,6 +20,25 @@
           Run:  source .env
           Then retry: ansible-playbook -i ansible/inventory ansible/deploy.yml
 
+- name: Authenticate Docker registry on target nodes
+  hosts: all
+  become: yes
+  tasks:
+    - name: Log in to configured container registry
+      command:
+        cmd: "docker login {{ image_registry_host }} -u {{ registry_username }} --password-stdin"
+        stdin: "{{ registry_token }}"
+      no_log: true
+      changed_when: false
+      when:
+        - registry_username | length > 0
+        - registry_token | length > 0
+
+    - name: Explain skipped registry login
+      debug:
+        msg: "GHCR_USERNAME/GHCR_TOKEN not set; assuming registry images are public."
+      when: registry_username | length == 0 or registry_token | length == 0
+
 - name: Deploy History Service (node-01)
   hosts: history
   become: yes
