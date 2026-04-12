@@ -16,11 +16,10 @@ This runbook describes the hybrid infrastructure: **Docker Compose** for applica
 ## Deployment & Operational Flow
 
 ### 1. Preparation
-Ensure you have created a local `.env` file in the `infra/` directory:
-```bash
-cp infra/.env.example infra/.env
-# Edit infra/.env and set valid database passwords
-```
+Configuration is managed centrally via Ansible Vault.
+- **Secrets**: Ensure `infra/group_vars/all/vault.yml` is populated.
+- **Auto-generation**: The `.env` file for Docker will be automatically generated in the `infra/` folder during the `vagrant up` or `vagrant provision` process.
+- **Note**: You do not need to edit `.env` manually anymore.
 
 ### 2. Start Infrastructure (VM)
 One virtual machine is required for the database.

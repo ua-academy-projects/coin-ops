@@ -3,3 +3,14 @@
   roles:
   - base
   - database
+
+- hosts: all
+  become: true
+  tasks:
+    - name: Generate .env file for Docker
+      template:
+        src: templates/.env.j2
+        dest: /vagrant/.env
+        mode: '0644'
+      tags: [config, env]
+

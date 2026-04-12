@@ -5,3 +5,8 @@ pg_database: "coinops_db"
 pg_version: "16"
 pg_allowed_networks:
   - "10.10.1.0/24"
+
+# External API Configurations
+nbu_api_url: "https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json"
+coingecko_api_url: "https://api.coingecko.com/api/v3/simple/price?ids=%s&vs_currencies=usd"
+coingecko_ids: "bitcoin,ethereum,cardano,solana,ripple"

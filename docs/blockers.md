@@ -20,6 +20,11 @@ This document tracks technical hurdles encountered during infrastructure develop
 - **Impact:** Connection timeouts.
 - **Resolution:** Configured PostgreSQL `pg_hba.conf` via Ansible to allow the Docker/WSL subnet and ensured `PGHOST` in `.env` points to the static VM IP.
 
+### 4) Manual Environment Synchronization (Win -> WSL -> Containers)
+- **Issue:** Manually maintaining `.env` files led to inconsistencies between the PostgreSQL password in the VM (managed by Ansible) and the application settings in Docker (managed manually).
+- **Impact:** Failed database connections and authentication errors after VM password rotations.
+- **Resolution:** Implemented **"Infrastructure-driven .env generation"**. Ansible (running inside the VM) now templates the `.env` file directly into the synced folder `/vagrant`. Docker in WSL immediately picks up the updated, vault-sourced variables. This ensures 100% consistency across the entire stack.
+
 ---
 
 ## Phase 1: Ansible & Vagrant (Legacy)

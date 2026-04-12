@@ -30,11 +30,12 @@ The system uses a **Hybrid Infrastructure** model:
     cd coin-ops
     ```
 
-2.  **Setup Configuration**:
-    Create your local environment file from the template in the `infra/` folder.
+2.  **Deploy Infrastructure (VM & Config)**:
+    This step will provision the database and **automatically generate** the `.env` file for Docker.
     ```bash
-    cp infra/.env.example infra/.env
-    # Edit infra/.env and fill in the database password
+    cd infra
+    # Ensure you have .vault_pass configured
+    vagrant up
     ```
 
 3.  **Deploy Database VM**:
@@ -50,9 +51,9 @@ The system uses a **Hybrid Infrastructure** model:
 
 ## Configuration & Secrets
 We strictly follow the **"No Hardcode"** policy:
--   **Local Development**: Managed via `infra/.env` (using `.env.example` as a template).
--   **Secrets**: Database/MQ passwords are encrypted using **Ansible Vault** for VM provisioning.
--   **Infrastructure Info**: All IPs, Ports, and API URLs are extracted into variables and can be modified without changing the source code.
+-   **Local Development**: Managed via an **auto-generated** `infra/.env` (created by Ansible during `vagrant up`).
+-   **Source of Truth**: Secrets are managed in `infra/group_vars/all/vault.yml` (encrypted).
+-   **Infrastructure Info**: All IPs, Ports, and API URLs are defined in Ansible `vars.yml` and injected into the environment.
 
 ## Documentation
 *   **[Runbook](docs/runbook.md)**: Operational guides, port matrices, and health check commands.
