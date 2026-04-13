@@ -1,6 +1,6 @@
 # Comparison Matrix — coin-ops tournament
 
-> **Integrity caveat:** two branches (`Shabat` and `hrenchevskyi`) contain pre-existing tournament/review artifacts in their own trees (`CLAUDE.md`, prior-review commits). Sub-agents analyzing those branches may have read and partially echoed that material. Treat the top-2 ranking as provisional until a re-run explicitly ignores in-tree review content.
+> **Integrity caveat (updated after verification):** Shabat's `CLAUDE.md` is auto-injected as a `system-reminder` whenever any file in that worktree is read. The sub-agent analyzing Shabat echoed CLAUDE.md's one-line summary of the consumer ("Idempotent writes via `ON CONFLICT DO NOTHING`") instead of reading `consumer.py` directly. A direct re-read showed Shabat actually implements manual ACK after `db.commit()`, `nack+requeue` on failure, `prefetch_count=1` flow control, mutex-guarded AMQP publishing, regex-validated session IDs, `io.LimitReader` body caps, `json.Valid` checks, and smart NBU upstream throttling — none of which the sub-agent surfaced. Shabat's scores below have been corrected upward. The hrenchevskyi-specific caveat is minor and didn't materially change its ranking.
 
 ## Numeric / ELO-style scoring
 
@@ -24,25 +24,29 @@ Weighted total range: 0–120. Mapped to an ELO-style rating via `1200 + (weight
 
 | Rank | Branch | Arch | API | Obs | 12F | Sec | VM | Docker | TF | K8s | Weighted | **ELO** |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | **Shabat** | 9 | 6 | 3 | 9 | 8 | 9 | 9 | 7 | 6 | 90.0 | **2100** |
+| 1 | **Shabat** † | 9 | 8 | 3 | 9 | 9 | 9 | 9 | 7 | 6 | 93.5 | **2135** |
 | 2 | **hrenchevskyi** | 9 | 9 | 3 | 9 | 9 | 8 | 7 | 0 | 5 | 78.5 | **1985** |
 | 3 | monero-privacy-system* | 8 | 8 | 6 | 8 | 5 | 8 | 6 | 8 | 3 | 79.0 → 64.0 | **1840** |
 | 4 | kazachuk | 6 | 5 | 3 | 6 | 3 | 6 | 9 | 0 | 5 | 57.5 | **1775** |
-| 5 | smoliakov | 6 | 8 | 3 | 6 | 3 | 6 | 0 | 4 | 3 | 50.0 | **1700** |
-| 6 | shturyn | 6 | 5 | 2 | 6 | 5 | 0 | 6 | 0 | 3 | 46.0 | **1660** |
-| 7 | penina | 5 | 5 | 2 | 3 | 2 | 5 | 7 | 0 | 3 | 42.0 | **1620** |
-| 8 | kurdupel | 6 | 3 | 2 | 6 | 3 | 9 | 0 | 0 | 2 | 39.5 | **1595** |
-| 9 | zakipnyi | 7 | 8 | 2 | 5 | 2 | 5 | 0 | 0 | 2 | 39.0 | **1590** |
-| 10 | volynets | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0.0 | **1200** |
+| 5 | **volynets** ‡ | 8 | 6 | 3 | 8 | 5 | 7 | 0 | 0 | 3 | 53.0 | **1730** |
+| 6 | smoliakov | 6 | 8 | 3 | 6 | 3 | 6 | 0 | 4 | 3 | 50.0 | **1700** |
+| 7 | shturyn | 6 | 5 | 2 | 6 | 5 | 0 | 6 | 0 | 3 | 46.0 | **1660** |
+| 8 | penina | 5 | 5 | 2 | 3 | 2 | 5 | 7 | 0 | 3 | 42.0 | **1620** |
+| 9 | kurdupel | 6 | 3 | 2 | 6 | 3 | 9 | 0 | 0 | 2 | 39.5 | **1595** |
+| 10 | zakipnyi | 7 | 8 | 2 | 5 | 2 | 5 | 0 | 0 | 2 | 39.0 | **1590** |
 
-\* `monero-privacy-system` receives a **−15 point component-completeness penalty** (no RabbitMQ, no Redis — two of seven required components absent). Raw score 79.0 would have placed it #2; post-penalty it sits at 64.0 → 1840. Without the penalty it would read 1990.
+† Shabat scores corrected upward after direct re-read of `proxy/main.go` and `history/consumer.py`: API robustness 6→8 (smart upstream throttling, conditional publishing, graceful fallback), Security 8→9 (input validation, body-size caps, JSON validity checks). Architecture would arguably deserve a bump too but the scale is already capped at 9 here.
+
+\* `monero-privacy-system` receives a **−15 point component-completeness penalty** (no RabbitMQ, no Redis — two of seven required components absent). Raw score 79.0 would have placed it near #2; post-penalty it sits at 64.0 → 1840.
+
+‡ volynets updated from "NO SUBMISSION" after new commits landed. Full implementation now present: Go proxy + Go history service + Flask UI + RabbitMQ + PostgreSQL + Ansible + Vagrant. **Redis absent** (in-process memory cache only). No Docker, no Terraform. Scores reflect actual submitted work.
 
 ### Reading the numbers
 
-- **~110-point gap between Shabat and hrenchevskyi** (≈ 60% expected-win probability in Elo terms) — close enough that the `CLAUDE.md`-injection risk above could plausibly flip them.
-- **~140-point gap between hrenchevskyi and monero-privacy-system** — wider, but monero is only 3rd because of the completeness penalty; on pure pattern quality it's genuinely close.
-- **Everyone from kazachuk down sits in a ~200-point band (1590–1775)**. That's the "everyone is mid-tier" cluster — differences between them are real but not decisive.
-- **volynets (1200)** is an empty branch; the score reflects a forfeit, not a loss.
+- **~150-point gap between Shabat and hrenchevskyi** (up from ~115 after the Shabat correction). In Elo terms that's roughly a 70% expected-win probability — Shabat is meaningfully, not marginally, ahead.
+- **~150-point gap between hrenchevskyi and monero-privacy-system** — monero is only 3rd because of the completeness penalty; on pure pattern quality it's genuinely close.
+- **Everyone from kazachuk down sits in a ~200-point band (1590–1775)** — the "everyone is mid-tier" cluster. Differences between them are real but not decisive.
+- **volynets (1730)** is no longer a forfeit — it submitted a full VM-based implementation and lands at #5, above smoliakov and the rest of the mid-tier cluster. No Docker and no Terraform keep it out of the top 4 despite solid architecture scores.
 
 ---
 
@@ -63,7 +67,7 @@ API topic is informational only. It was **not** used as a scoring factor — the
 | **penina** | NBU + CoinGecko | M — clean 5-VM split but hardcoded IPs in code | M — stale-cache fallback, 5s timeout, no retries | L — print only, health checks limited | L — passwords + IPs hardcoded in source | L — credentials in app.py/main.go/definitions.json | M — Ansible playbooks, manual VM creation, hybrid Vagrant + VBox | M-H — multi-stage (Go + Node+Py), healthchecks, depends_on, no non-root | L — absent | L — single-host compose, hardcoded IPs | **M** |
 | **zakipnyi** | CoinGecko + NBU | H — excellent service separation, fanout exchange, retry-on-start | H — 30-attempt retry, dual sources, conn recovery | L — basic logging only | M — env vars, but creds hardcoded in 4+ files | L — `coinops123` in Vagrantfile/README/source, CORS `*` | M — Vagrant + inline shell, hardcoded IPs, 5 VMs | — | L — absent | L — VBox-locked, no containers | **M** |
 | **monero-privacy-system** | Monero RPC + CoinGecko | H — async FastAPI + SQLAlchemy, retry/backoff, graceful degradation | H — tenacity retries, CoinGecko throttling, cached fallback | M — **structlog** throughout, health endpoints, no metrics | H — Pydantic settings, env-based, `.env` templates | M — non-root containers, `*.env` gitignored, but TF state has plaintext creds, CORS `*` | H — Terraform (libvirt) + cloud-init, Alpine+OpenRC lean VMs | M — backend multi-stage + non-root, no frontend prod Dockerfile | H — best-organized TF (main/variables/outputs), cloud-init templating | L — libvirt-locked, no Helm, no StatefulSet, no managed-service story | **H** for infra, **L** for completeness |
-| **volynets** | — | — | — | — | — | — | — | — | — | — | **NO SUBMISSION** (only LICENSE) |
+| **volynets** ‡ | NBU | H — decoupled Go proxy + Go history + Flask UI, in-process cache-aside, graceful fallback chain | M — 2–5s timeouts, exp. backoff on RabbitMQ reconnect, parameterized SQL, no retries on NBU | L — `/health` on all services (dummy 200), plain stdlib logging, no metrics | H — all config via env vars, sensible defaults, no hardcoded IPs in app code | M — non-root (vagrant user), UFW per-service, hardcoded `guest:guest` / `coinops:coinops` as fallback defaults | H — Vagrant + Ansible (5 playbooks, idempotency guards, handlers, UFW) | — | — | L — stateless services, health endpoints, but no containers, no Helm, no cloud provider | **M** (no Docker/TF) |
 
 ---
 
@@ -73,7 +77,7 @@ Two branches have **missing required components** from Issue #1:
 
 - **monero-privacy-system**: no RabbitMQ, no Redis. Worker writes directly to Postgres. This is a significant gap despite the branch's otherwise strong infrastructure work — the task specifically requires async message-queue persistence.
 - **shturyn**: no Redis. Otherwise complete.
-- **volynets**: nothing at all.
+- **volynets**: no Redis (in-process memory cache only). Otherwise complete — Go proxy, Go history, Flask UI, RabbitMQ, PostgreSQL, Ansible, Vagrant all present.
 
 Every other branch implements all seven components (UI, Proxy, external API client, RabbitMQ, History Service, Postgres, Redis).
 

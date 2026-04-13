@@ -2,7 +2,7 @@
 
 For each architectural component, this document compares how each branch approached it and names the best-in-class implementation with justification. "Best-in-class" means most ready for enterprise cloud deployment (AWS/Azure/GCP + Kubernetes + Ansible + centralized secrets + observability).
 
-`volynets` is excluded throughout — it contains only `LICENSE`.
+`volynets` was initially excluded (only a `LICENSE` file), but a full implementation was pushed on 2026-04-13. It does not change any best-in-class verdicts; its patterns are summarized in the comparison matrix.
 
 ---
 
@@ -28,10 +28,10 @@ For each architectural component, this document compares how each branch approac
 
 ## 2. Proxy
 
-| Branch | Language | Retry logic | Timeouts | Resilience |
-|---|---|---|---|---|
-| Shabat | Go | Conditional publish, last-known-value cache | 10s HTTP client | Cache-aside with RWMutex, graceful degradation on upstream 5xx |
-| hrenchevskyi | Go | **5-retry exponential backoff with `Retry-After` header parsing** | Read/Write/Header timeouts configured | Graceful shutdown via SIGTERM + 10s ctx, security headers, health endpoint |
+| Branch | Language | Retry logic | Timeouts | Resilience | Input hardening |
+|---|---|---|---|---|---|
+| **Shabat** | Go | Conditional publish (only on upstream success), last-known-value cache fallback, smart NBU throttling (1-hour gate, failure-suppression to avoid retry storms) | 10s HTTP client; 2s request-scoped `context.WithTimeout` on every Redis call | Cache-aside with `sync.RWMutex` + copy-on-read to prevent handler/refresher races; mutex-guarded AMQP publish; non-fatal Redis startup ping (service boots with Redis down, `/state` returns 503 while `/current` etc. keep working) | **Regex-validated session IDs, `io.LimitReader(body, 4096)` DoS cap, `json.Valid` check before storing** |
+| hrenchevskyi | Go | **5-retry exponential backoff with `Retry-After` header parsing** | `ReadHeaderTimeout` / `ReadTimeout` / `WriteTimeout` configured on `http.Server` | Graceful SIGTERM shutdown with 10s drain ctx, security headers, `/healthz` | Security headers, CORS allowlist |
 | smoliakov | Go | ctx-aware | 15s | LimitReader bounds upstream response, atomic counters |
 | kurdupel | Python/Flask | — | 5s | Background thread for periodic refresh, price-smoothing |
 | kazachuk | Go | Cache fallback for CoinGecko (60s TTL) | — (**no HTTP timeout**) | Goroutine pool; missing timeouts are a hang risk |
@@ -40,9 +40,13 @@ For each architectural component, this document compares how each branch approac
 | penina | Flask | Stale-cache fallback | 5s | Redis-backed TTL cache |
 | shturyn | Go | — | 3s client | Cache-aside pattern |
 
-**Best-in-class: hrenchevskyi.** Its proxy is the only one that implements a real production-grade HTTP retry strategy: five attempts, exponential backoff, explicit handling of `Retry-After`, and context cancellation propagation. It also wires proper `ReadHeaderTimeout` / `ReadTimeout` / `WriteTimeout` on `http.Server`, plus a clean SIGTERM handler with a 10-second drain window — both table stakes for rolling deploys and K8s pod termination grace periods. Shabat's proxy has graceful degradation and a solid cache-aside, but the retry/backoff primitives are simpler.
+**Best-in-class: split verdict.** Shabat and hrenchevskyi are co-best along different axes. hrenchevskyi wins **outbound HTTP resilience**: exponential backoff with `Retry-After`, ctx cancellation propagation, `http.Server` with explicit timeouts, SIGTERM drain. Shabat wins **inbound hardening and internal consistency**: regex-validated session IDs, `io.LimitReader` body cap, `json.Valid` check, request-scoped Redis timeouts, copy-on-read cache snapshots, thread-safe AMQP publishing, and the smartest upstream-throttling logic in the field (NBU's 1-hour gate with failure-suppression — stops the proxy from hammering a failing upstream every 10s).
 
-**Cherry-pick from hrenchevskyi:** `services/proxy/http_retry.go` and the graceful-shutdown scaffold.
+Neither branch has both halves. The golden path needs both.
+
+**Cherry-pick from hrenchevskyi:** `services/proxy/http_retry.go` (exp. backoff + Retry-After) and the `http.Server` timeout configuration + SIGTERM handler.
+
+**Cherry-pick from Shabat's `proxy/main.go`:** `validSID` regex + `io.LimitReader` + `json.Valid` pattern on `/state` handlers; the `chMu`-guarded publisher; the copy-on-read cache pattern (`append([]T(nil), cache...)`); the NBU smart-throttle block (lines 415–427); the conditional publish guard (only publish price events when upstream fetch succeeded).
 
 ---
 
@@ -50,10 +54,10 @@ For each architectural component, this document compares how each branch approac
 
 The history service is the hardest component to get right because it combines a message consumer with a query API. This is where branches diverge most.
 
-| Branch | Consumer semantics | Dedup strategy | Reconnect strategy | API quality |
-|---|---|---|---|---|
-| **hrenchevskyi** | **Manual ACK only after DB commit** (at-least-once) | **UNIQUE(snapshot_event_id, asset_symbol, asset_type, source)**; poison messages ACK'd without requeue | Jittered exponential backoff | `/api/v1/history`, `/history/series`, `/history/dashboard` with pagination-ready queries |
-| Shabat | `ON CONFLICT DO NOTHING` | UNIQUE(slug, fetched_at) / UNIQUE(coin, fetched_at) | 5s constant retry | FastAPI with `/history`, `/history/{slug}`, `/prices/history/{coin}` (no pagination) |
+| Branch | Consumer semantics | Dedup strategy | Failure handling | Reconnect strategy | API quality |
+|---|---|---|---|---|---|
+| **Shabat** | **Manual ACK only after `db.commit()`** (at-least-once); `prefetch_count=1` for fair dispatch | UNIQUE(slug, fetched_at) / UNIQUE(coin, fetched_at) + `ON CONFLICT DO NOTHING` | **`db.rollback()` + `basic_nack(requeue=True)`** on exception (requeue for retry; can poison-loop without DLQ) | Outer loop recovers both MQ **and** Postgres on any exception | FastAPI with `/history`, `/history/{slug}`, `/prices/history/{coin}` (no pagination) |
+| **hrenchevskyi** | Manual ACK only after DB commit (at-least-once) | **UNIQUE(snapshot_event_id, asset_symbol, asset_type, source)** — event-ID-based, allows producer-side dedup | Poison messages ACK'd **without requeue** (drops the message, avoids poison-loop) | Jittered exponential backoff | `/api/v1/history`, `/history/series`, `/history/dashboard` with pagination-ready queries |
 | kazachuk | **auto-ack** (loses messages on crash) | No — duplicates possible | 5s sleep loop | Flask, LIMIT 10000 hard-coded |
 | shturyn | auto-ack | UPSERT on `time` column | 5s backoff | FastAPI `/history` (last 50), `/today` |
 | smoliakov | Manual ACK, signal-handling, UPSERT | UNIQUE(cc, exchange_date, collected_at) | Auto-reconnect 5s | Django read-through cache |
@@ -62,11 +66,20 @@ The history service is the hardest component to get right because it combines a 
 | zakipnyi | Auto-ack | No constraint | 5s backoff | FastAPI read endpoints |
 | monero-privacy-system | — (no queue) | — | — | Worker polls + writes directly to Postgres |
 
-**Best-in-class: hrenchevskyi.** This is the only consumer in the field that gets the semantics actually right. Manual acknowledgment *after* DB commit ensures at-least-once delivery; the UNIQUE constraint on `snapshot_event_id + asset_symbol + asset_type + source` turns those into effectively-once inserts; poison messages are ACK'd without requeueing to avoid a DLQ-less replay loop. It's the single clearest "production-ready" component across all ten branches.
+**Best-in-class: Shabat and hrenchevskyi are tied.** Both get the hardest part right: manual ACK only after `db.commit()`, with explicit rollback on exception. They differ on failure-path philosophy:
 
-**Runner-ups:** smoliakov (manual ACK, batch inserts, signal handling), Shabat (solid idempotency via `ON CONFLICT DO NOTHING`).
+- **Shabat** requeues failed messages (`basic_nack(requeue=True)`) after `db.rollback()`. Safer for transient errors; risks a poison-message loop without a DLQ.
+- **hrenchevskyi** ACKs poison messages to drop them after logging. Avoids poison-loops; risks silently dropping messages that a bug would have recovered after a restart.
 
-**Cherry-pick from hrenchevskyi:** `services/history_service/consumer.py`, `services/history_service/db.py` (ThreadedConnectionPool context manager).
+Both choices are legitimate and defensible; neither branch has a DLQ wired, which is the real fix either way.
+
+Shabat additionally has `prefetch_count=1` for fair dispatch and an outer reconnect loop that recovers **both** Rabbit and Postgres connections. hrenchevskyi has a UUID-based event ID flowing from producer to consumer, which enables true end-to-end idempotent replay (its UNIQUE constraint is keyed on the event ID, not just a time tuple).
+
+**Runner-up:** smoliakov (manual ACK, batch inserts, signal handling).
+
+**Cherry-pick from Shabat:** `history/consumer.py` — the commit-then-ack-then-log pattern, the outer dual-reconnect loop, and `prefetch_count=1`.
+**Cherry-pick from hrenchevskyi:** the UUID-based `snapshot_event_id` flowing from the Go publisher through to the consumer's UNIQUE constraint — this is the pattern that lets you reprocess an entire queue safely after a bug fix. Also `services/history_service/db.py` (ThreadedConnectionPool context manager).
+**Add to both:** a dead-letter queue on the RabbitMQ topology — this is the missing piece in every branch and should land in Week 1 of the golden-path sprint.
 
 ---
 
@@ -112,21 +125,28 @@ The history service is the hardest component to get right because it combines a 
 
 ## 6. RabbitMQ
 
-| Branch | Topology | Delivery mode | Ack strategy | Reconnect | DLQ |
-|---|---|---|---|---|---|
-| **hrenchevskyi** | **Durable direct exchange `coinops.rates` + routing key `rates.snapshot`** | Persistent | **Manual, after DB commit** | **Jittered exp. backoff** | No DLQ but poison-message handling is explicit |
-| zakipnyi | Durable fanout `rates` + durable queue | Persistent | Auto-ack | 5s constant | — |
-| smoliakov | Durable `nbu.exchange.rates`, batched payloads | Persistent | Manual | 5s, signal handling | — |
-| kurdupel | Durable `currency_rates` | Persistent | Manual | 5s | — |
-| Shabat | Single durable queue `market_events` | Persistent | (consumer) idempotent inserts, auto-routing | ctx-based | — |
+| Branch | Topology | Delivery mode | Publisher safety | Ack strategy | Reconnect | DLQ |
+|---|---|---|---|---|---|---|
+| **Shabat** | Durable queue `market_events`, `prefetch_count=1` on consume | **Persistent** on every publish | **Mutex-guarded channel (`chMu sync.Mutex`)** — Go AMQP channels are not thread-safe, and Shabat is the only branch that guards this correctly | **Manual ACK after `db.commit()`**; `basic_nack(requeue=True)` on failure | Outer loop reconnects both MQ **and** Postgres | — (requeue strategy covers transient but risks poison-loop) |
+| **hrenchevskyi** | **Durable direct exchange `coinops.rates` + routing key `rates.snapshot`** | Persistent | Mutex-protected publisher with UUID-keyed event IDs | Manual, after DB commit | Jittered exp. backoff | — (poison messages ACK'd to drop) |
+| zakipnyi | Durable fanout `rates` + durable queue | Persistent | — | Auto-ack | 5s constant | — |
+| smoliakov | Durable `nbu.exchange.rates`, batched payloads | Persistent | — | Manual | 5s, signal handling | — |
+| kurdupel | Durable `currency_rates` | Persistent | — | Manual | 5s | — |
 | kazachuk | Durable `rates`, auto-declared at boot | — | Auto-ack | 5s sleep | — |
 | shturyn | `weather_data` queue | — | Auto-ack | 5s | — |
 | penina | Queue `rates`, rabbitmq definitions.json for users | — | Auto-ack | — | — |
 | monero-privacy-system | — | — | — | — | — |
 
-**Best-in-class: hrenchevskyi.** Same reason as the History Service: it is the only branch where the producer/consumer contract is explicit (durable direct exchange + routing key, persistent delivery, manual ACK after commit, jittered reconnect). Every other branch either uses `auto_ack=True` (and loses messages on consumer crash) or has no reconnect strategy at all.
+**Best-in-class: Shabat and hrenchevskyi tied.** Both get the producer/consumer contract fully right (persistent delivery, manual ACK after commit, mutex-guarded publish, reconnect-with-recovery). The differentiators are:
 
-**Cherry-pick from hrenchevskyi:** `services/proxy/publisher.go` (mutex-protected publisher with idempotent event IDs) and the entire consumer loop.
+- **hrenchevskyi** has a richer topology (named direct exchange + routing key) and UUID-based event IDs for end-to-end replay safety.
+- **Shabat** has the tighter consumer: `prefetch_count=1` flow control, dual-reconnect outer loop, and `nack+requeue` on failure (whereas hrenchevskyi drops poison messages).
+
+Every other branch either uses `auto_ack=True` (loses messages on consumer crash) or has no publisher thread-safety at all.
+
+**Cherry-pick from Shabat:** `history/consumer.py` + the `chMu`-guarded publisher in `proxy/main.go` (lines 171–192).
+**Cherry-pick from hrenchevskyi:** the exchange topology with routing keys (easier to add new event types later) and the UUID event-ID pattern.
+**Add to the golden path:** a DLQ binding so the requeue-on-failure strategy stops being a poison-loop risk.
 
 ---
 
@@ -237,15 +257,15 @@ Every branch is in the "Low" bucket. The differences are in flavor, not quality.
 | Component | Winner | Runner-up |
 |---|---|---|
 | Frontend | Shabat (runtime config injection) | shturyn (React 19 polish) |
-| Proxy | hrenchevskyi (retry + Retry-After + graceful shutdown) | Shabat |
-| History Service | hrenchevskyi (manual-ACK after DB commit) | smoliakov |
+| Proxy | **Shabat + hrenchevskyi tied** (Shabat: input hardening + graceful fallback; hrenchevskyi: retry/backoff + timeouts) | — |
+| History Service | **Shabat + hrenchevskyi tied** (both do manual-ACK after DB commit; Shabat has tighter consumer, hrenchevskyi has UUID event IDs) | smoliakov |
 | PostgreSQL | hrenchevskyi (pool + SCRAM + idempotent schema) | Shabat |
 | Redis | Shabat (architecturally deliberate) | hrenchevskyi (best fallback) |
-| RabbitMQ | hrenchevskyi (durable exchange + routing key + manual ACK) | smoliakov |
+| RabbitMQ | **Shabat + hrenchevskyi tied** (both get persistent + manual ACK + mutex-guarded publish right) | — |
 | VM provisioning | Shabat (Terraform + Ansible deploy) | monero-privacy-system (Terraform structure) |
 | Docker | Shabat (non-root + scratch + runtime config) | kazachuk (smallest images + healthcheck discipline) |
 | Terraform / IaC | monero-privacy-system (structure) | Shabat (operational polish) |
 | Secrets | hrenchevskyi (Ansible Vault + templates) | Shabat |
 | Observability | monero-privacy-system (structlog) | — |
 
-**Pattern:** the "software quality" components (messaging, persistence, secrets) are overwhelmingly hrenchevskyi's. The "infrastructure quality" components (Terraform, Docker, VM deployment) are overwhelmingly Shabat's. The golden path is a Shabat base with hrenchevskyi transplants.
+**Pattern (revised after closer reading of Shabat's source):** Shabat and hrenchevskyi are much closer on software quality than the first pass suggested. Shabat's proxy and consumer are in the same league as hrenchevskyi's — a difference that was obscured by Shabat's own `CLAUDE.md` summary, which under-described the implementation. The golden path is still a Shabat base, but the transplant list from hrenchevskyi is shorter than originally claimed (mainly: retry/backoff on outbound HTTP, Ansible Vault for secrets, UUID event IDs, Postgres connection pooling). Shabat already has manual-ACK semantics, thread-safe publishing, input validation, and smart upstream throttling.

@@ -24,7 +24,9 @@ Actionable merge strategy and next-sprint roadmap for the coin-ops project, base
 
 9. **monero-privacy-system** — excellent Terraform (libvirt) structure with cloud-init templating, only branch using `structlog`, async FastAPI with SQLAlchemy async pools. **Critical gap: no RabbitMQ, no Redis.** The task requires a message queue for async persistence; this branch bypasses it entirely and has the worker write directly to Postgres. Strong infra patterns but a fundamentally incomplete software implementation.
 
-10. **volynets** — no submission. LICENSE file only. Disqualified.
+10. **volynets** ‡ — late submission; previously only a LICENSE file. Now contains a full Go proxy + Go history service + Flask UI + RabbitMQ + PostgreSQL + Vagrant + Ansible (5 playbooks). Architecture is clean and 12-factor compliant. Weak spots: no Redis (in-process memory cache only), no Docker, no Terraform, hardcoded `guest:guest` / `coinops:coinops` credential defaults. Ranks #5 on ELO (1730) but cannot be considered for the base branch — no containerization and no IaC are disqualifiers for the cloud/K8s sprint.
+
+‡ Updated 2026-04-13 after new commits pushed to the branch.
 
 ---
 
