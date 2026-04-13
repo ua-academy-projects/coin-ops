@@ -1,0 +1,119 @@
+# Unified Future Architecture Proposal
+
+## Baseline Direction
+
+Start from `origin/Shabat` and evolve it in two stages:
+
+1. AWS-ready container deployment that still resembles the current VM topology.
+2. Kubernetes-ready platform shape with stateless services separated from managed state.
+
+The goal is not to preserve every VM detail forever. The goal is to preserve the strongest service boundaries while moving state and deployment concerns into managed or orchestrated infrastructure.
+
+## Target Service Model
+
+```text
+Browser
+  -> UI: React static assets served by nginx now, CDN/S3/CloudFront later
+  -> Go live proxy: stateless HTTP service
+  -> FastAPI history API: stateless read API
+  -> History consumer workers: horizontally scalable queue consumers
+
+Go proxy
+  -> External APIs: Polymarket, CoinGecko, NBU
+  -> Redis: short-lived UI/session/cache state
+  -> RabbitMQ or managed queue: event persistence boundary
+
+Consumers
+  -> PostgreSQL: historical market/price/whale data
+
+History API
+  -> PostgreSQL: read-only time-series queries
+```
+
+## AWS Phase
+
+Recommended AWS landing shape for the next sprint:
+
+- Terraform remote state in S3 with DynamoDB locking.
+- VPC with public and private subnets across at least two Availability Zones.
+- ECR for application images, even if GHCR remains supported for demos.
+- RDS PostgreSQL for history data.
+- ElastiCache Redis for session/cache state.
+- Amazon MQ for RabbitMQ compatibility, or a deliberate decision to migrate to SQS/SNS if the app can accept that semantic change.
+- ECS/Fargate or EC2 with Docker Compose as the first cloud runtime.
+- Application Load Balancer with ACM TLS certificate.
+- CloudWatch logs and alarms.
+- Secrets Manager or SSM Parameter Store for database, queue, Redis, and registry credentials.
+
+Pragmatic path: start with EC2 plus Docker Compose if the team needs a small migration step from VMs. Prefer ECS/Fargate if the team can absorb the extra AWS concepts now. Both paths should use the same images and environment contract.
+
+## Kubernetes Phase
+
+Prepare for Kubernetes without rushing into it:
+
+- Define one container image per service.
+- Add `/health` or equivalent liveness/readiness endpoints to every custom service.
+- Externalize all config through environment variables.
+- Keep state outside application pods: RDS, managed Redis, managed queue, or explicitly managed StatefulSets only if required.
+- Add resource requests/limits and graceful shutdown behavior.
+- Package workloads with Helm or Kustomize.
+
+Kubernetes object mapping:
+
+| Current component | Kubernetes shape |
+| --- | --- |
+| UI container | `Deployment` + `Service` + `Ingress` or CDN outside cluster |
+| Go proxy | `Deployment` + `Service` + HPA |
+| History API | `Deployment` + `Service` + HPA |
+| History consumer | `Deployment` scaled by queue depth |
+| PostgreSQL | Prefer RDS outside cluster |
+| Redis | Prefer ElastiCache outside cluster |
+| RabbitMQ | Prefer Amazon MQ or managed RabbitMQ; otherwise operator-managed StatefulSet |
+| Runtime config | `ConfigMap` plus external secrets integration |
+| Secrets | External Secrets Operator backed by AWS Secrets Manager/SSM |
+
+## Ideas To Merge From Branches
+
+### From `origin/Shabat`
+
+- Keep the core application and service boundaries.
+- Keep image-based deployment and environment templating.
+- Keep per-service Dockerfiles and Compose health dependency patterns.
+- Keep Ansible roles as the VM/EC2 bridge until cloud-native deployment replaces them.
+
+### From `origin/hrenchevskyi`
+
+- Add stricter app config validation.
+- Add security headers and rate limiting where applicable.
+- Improve runbooks with smoke tests and operational commands.
+- Consider Ansible Vault only for local VM demos; cloud should use AWS secrets.
+
+### From `origin/kazachuk`
+
+- Add a single local developer Compose stack for the full system.
+- Reuse the idea of named volumes and health-gated dependencies.
+- Fix queue durability using the stronger ack-after-commit pattern from `Shabat`.
+
+### From `origin/monero-privacy-system`
+
+- Reuse the clearer Terraform variable/output documentation style.
+- Reuse cloud-init templating ideas if EC2 cloud-init remains part of the path.
+- Do not reuse cron-based Git polling deploys.
+
+### From `origin/zakipnyi`
+
+- Keep the five-role topology as a conceptual scaling model:
+  UI, proxy, history API/consumer, queue, database.
+- Do not keep shell-only provisioning as the long-term mechanism.
+
+## Production Architecture Principles
+
+- Stateless application containers; managed or explicitly backed-up state.
+- Immutable image tags and controlled promotion.
+- No secrets in Git, Dockerfiles, Compose files, or Terraform variables committed with real values.
+- Cloud network boundaries instead of host-only IP assumptions.
+- Health checks at container, load balancer, and deployment levels.
+- Observability from day one: structured logs, metrics, alerts, dashboards.
+- Database migrations as explicit release steps.
+- Backup and restore tested before declaring production readiness.
+
