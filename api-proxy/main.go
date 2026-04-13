@@ -15,7 +15,15 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-const nbuURL = "https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json"
+const nbuBaseURL = "https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange"
+
+// kyivZone is UTC+3 — Ukraine permanently switched to EEST in 2022.
+var kyivZone = time.FixedZone("Kyiv", 3*60*60)
+
+func nbuURL() string {
+	today := time.Now().In(kyivZone).Format("20060102")
+	return fmt.Sprintf("%s?date=%s&json", nbuBaseURL, today)
+}
 
 type Rate struct {
 	Code string  `json:"code"`
@@ -149,6 +157,18 @@ func fetchFromHistory() ([]Rate, string, bool) {
 	}
 
 	latestDate := records[0].RateDate
+
+	// Reject future dates — history DB may contain next-day rates stored
+	// before the proxy was fixed to always request today's date from NBU.
+	if parsed, err := time.ParseInLocation("02.01.2006", latestDate, kyivZone); err == nil {
+		now := time.Now().In(kyivZone)
+		today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, kyivZone)
+		if parsed.After(today) {
+			log.Printf("history-service: latest date %s is in the future, skipping", latestDate)
+			return nil, "", false
+		}
+	}
+
 	var rates []Rate
 	for _, rec := range records {
 		if rec.RateDate != latestDate {
@@ -237,7 +257,7 @@ func ratesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// fallback: fetch full list from NBU
-	resp, err := http.Get(nbuURL)
+	resp, err := http.Get(nbuURL())
 	if err != nil {
 		http.Error(w, "failed to fetch NBU data", http.StatusBadGateway)
 		return
@@ -332,6 +352,6 @@ func main() {
 	mux.HandleFunc("/rates", corsMiddleware(origins, ratesHandler))
 
 	addr := fmt.Sprintf(":%s", port)
-	log.Printf("api-proxy listening on %s", addr)
+	log.Printf("api-proxy listening on %s!", addr)
 	log.Fatal(http.ListenAndServe(addr, mux))
 }

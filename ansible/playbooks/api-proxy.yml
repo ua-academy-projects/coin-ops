@@ -13,6 +13,12 @@
   hosts: api_proxy
   become: true
 
+  handlers:
+    - name: Restart coin-proxy
+      ansible.builtin.systemd_service:
+        name: coin-proxy
+        state: restarted
+
   vars:
     go_version: "1.24.0"
     go_tarball: "go{{ go_version }}.linux-{{ go_arch }}.tar.gz"
@@ -57,11 +63,12 @@
           - "--exclude=api-proxy"
       register: sync_result
 
-    - name: Compile the Go application binary from source 
+    - name: Compile the Go application binary from source
       ansible.builtin.command:
         cmd: "{{ go_bin_path }}/go build -o api-proxy ."
         chdir: /home/{{ ansible_user }}/api-proxy
       when: sync_result.changed
+      notify: Restart coin-proxy
 
     - name: Deploy systemd service unit file for the coin-proxy service 
       ansible.builtin.template:
