@@ -4,13 +4,17 @@ FastAPI Backend — Monero Privacy Analytics API
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, func
 from datetime import datetime, timezone
 from typing import Optional
+from pydantic import BaseModel
 import structlog
+import redis.asyncio as aioredis
+from starsessions import SessionMiddleware, load_session
+from starsessions.stores.redis import RedisStore
 
 from database import (
     get_db, Block, NetworkStat, Price,
@@ -33,14 +37,38 @@ app = FastAPI(
     version="1.0.0",
 )
 
+session_store = RedisStore(settings.redis_url)
+
+app.add_middleware(
+    SessionMiddleware,
+    store=session_store,
+    cookie_name="session",
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
+async def get_session(request: Request):
+    await load_session(request)
+    return request.session
+
+class SessionCoinUpdate(BaseModel):
+    coin: str
+
+@app.get("/session/active_coin")
+async def get_active_coin(session: dict = Depends(get_session)):
+    return {"coin": session.get("active_coin", "monero")}
+
+@app.post("/session/active_coin")
+async def set_active_coin(body: SessionCoinUpdate, session: dict = Depends(get_session)):
+    session["active_coin"] = body.coin
+    return {"status": "ok", "coin": body.coin}
 
 @app.on_event("startup")
 async def startup():
@@ -55,8 +83,10 @@ async def health():
 
 
 @app.get("/stats", response_model=StatsResponse)
-async def get_stats(db: AsyncSession = Depends(get_db)):
+async def get_stats(db: AsyncSession = Depends(get_db), session: dict = Depends(get_session)):
     """Combined network stats snapshot"""
+    active_coin = session.get("active_coin", "monero")
+    
     # Latest block
     block_result = await db.execute(
         select(Block).order_by(desc(Block.height)).limit(1)
@@ -71,7 +101,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
 
     # Latest price
     price_result = await db.execute(
-        select(Price).order_by(desc(Price.timestamp)).limit(1)
+        select(Price).where(Price.coin_id == active_coin).order_by(desc(Price.timestamp)).limit(1)
     )
     latest_price = price_result.scalar_one_or_none()
 
@@ -174,10 +204,11 @@ async def get_privacy_prediction(db: AsyncSession = Depends(get_db)):
 
 
 @app.get("/price", response_model=PriceResponse)
-async def get_price(db: AsyncSession = Depends(get_db)):
-    """Latest XMR/USD price"""
+async def get_price(db: AsyncSession = Depends(get_db), session: dict = Depends(get_session)):
+    """Latest coin/USD price"""
+    active_coin = session.get("active_coin", "monero")
     result = await db.execute(
-        select(Price).order_by(desc(Price.timestamp)).limit(1)
+        select(Price).where(Price.coin_id == active_coin).order_by(desc(Price.timestamp)).limit(1)
     )
     price = result.scalar_one_or_none()
     if not price:
@@ -186,9 +217,10 @@ async def get_price(db: AsyncSession = Depends(get_db)):
 
 
 @app.get("/price/history", response_model=list[PriceResponse])
-async def get_price_history(limit: int = 100, db: AsyncSession = Depends(get_db)):
+async def get_price_history(limit: int = 100, db: AsyncSession = Depends(get_db), session: dict = Depends(get_session)):
+    active_coin = session.get("active_coin", "monero")
     result = await db.execute(
-        select(Price).order_by(desc(Price.timestamp)).limit(min(limit, 500))
+        select(Price).where(Price.coin_id == active_coin).order_by(desc(Price.timestamp)).limit(min(limit, 500))
     )
     prices = result.scalars().all()
     return [PriceResponse(usd=p.usd, timestamp=p.timestamp) for p in prices]

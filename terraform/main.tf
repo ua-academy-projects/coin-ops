@@ -38,6 +38,14 @@ resource "libvirt_network" "monero_net" {
       hostname = "db"
       ip       = "10.10.10.13"
     }
+    hosts {
+      hostname = "redis"
+      ip       = "10.10.10.14"
+    }
+    hosts {
+      hostname = "rabbitmq"
+      ip       = "10.10.10.15"
+    }
   }
 
   dhcp {
@@ -94,21 +102,20 @@ resource "libvirt_cloudinit_disk" "frontend_init" {
 }
 
 resource "libvirt_domain" "frontend" {
+  type      = "qemu"
   name      = "monero-frontend"
-  memory    = "128"
+  memory    = "96"
   vcpu      = 1
   autostart = true
 
   cloudinit = libvirt_cloudinit_disk.frontend_init.id
 
-  cpu {
-    mode = "host-passthrough"
-  }
+
 
   network_interface {
     network_id     = libvirt_network.monero_net.id
     addresses      = ["10.10.10.11"]
-    wait_for_lease = true
+    wait_for_lease = false
   }
 
   disk {
@@ -147,6 +154,8 @@ resource "libvirt_cloudinit_disk" "backend_init" {
     deploy_git_repo = var.deploy_git_repo
     deploy_branch   = var.deploy_branch
     db_ip           = "10.10.10.13"
+    redis_ip        = "10.10.10.14"
+    rabbitmq_ip     = "10.10.10.15"
     db_password     = var.db_password
     hostname        = "backend"
     static_ip       = "10.10.10.12"
@@ -157,21 +166,20 @@ resource "libvirt_cloudinit_disk" "backend_init" {
 }
 
 resource "libvirt_domain" "backend" {
+  type      = "qemu"
   name      = "monero-backend"
-  memory    = "256"
+  memory    = "128"
   vcpu      = 1
   autostart = true
 
   cloudinit = libvirt_cloudinit_disk.backend_init.id
 
-  cpu {
-    mode = "host-passthrough"
-  }
+
 
   network_interface {
     network_id     = libvirt_network.monero_net.id
     addresses      = ["10.10.10.12"]
-    wait_for_lease = true
+    wait_for_lease = false
   }
 
   disk {
@@ -216,25 +224,134 @@ resource "libvirt_cloudinit_disk" "db_init" {
 }
 
 resource "libvirt_domain" "database" {
+  type      = "qemu"
   name      = "monero-database"
-  memory    = "256"
+  memory    = "128"
   vcpu      = 1
   autostart = true
 
   cloudinit = libvirt_cloudinit_disk.db_init.id
 
-  cpu {
-    mode = "host-passthrough"
-  }
+
 
   network_interface {
     network_id     = libvirt_network.monero_net.id
     addresses      = ["10.10.10.13"]
-    wait_for_lease = true
+    wait_for_lease = false
   }
 
   disk {
     volume_id = libvirt_volume.db_disk.id
+  }
+
+  console {
+    type        = "pty"
+    target_port = "0"
+    target_type = "serial"
+  }
+
+  graphics {
+    type        = "vnc"
+    listen_type = "address"
+    autoport    = true
+  }
+}
+
+# ==========================================
+# VM4: Redis Cache & Sessions
+# ==========================================
+resource "libvirt_volume" "redis_disk" {
+  name           = "redis.qcow2"
+  base_volume_id = libvirt_volume.alpine_base.id
+  pool           = var.storage_pool
+  size           = 1073741824 # 1 ГБ
+  format         = "qcow2"
+}
+
+resource "libvirt_cloudinit_disk" "redis_init" {
+  name      = "redis-init.iso"
+  pool      = var.storage_pool
+  user_data = templatefile("${path.module}/cloud-init/redis.yml", {
+    hostname  = "redis"
+    static_ip = "10.10.10.14"
+    gateway   = "10.10.10.1"
+  })
+}
+
+resource "libvirt_domain" "redis_vm" {
+  type      = "qemu"
+  name      = "monero-redis"
+  memory    = "64"
+  vcpu      = 1
+  autostart = true
+
+  cloudinit = libvirt_cloudinit_disk.redis_init.id
+
+
+
+  network_interface {
+    network_id     = libvirt_network.monero_net.id
+    addresses      = ["10.10.10.14"]
+    wait_for_lease = false
+  }
+
+  disk {
+    volume_id = libvirt_volume.redis_disk.id
+  }
+
+  console {
+    type        = "pty"
+    target_port = "0"
+    target_type = "serial"
+  }
+
+  graphics {
+    type        = "vnc"
+    listen_type = "address"
+    autoport    = true
+  }
+}
+
+# ==========================================
+# VM5: RabbitMQ Broker
+# ==========================================
+resource "libvirt_volume" "rabbitmq_disk" {
+  name           = "rabbitmq.qcow2"
+  base_volume_id = libvirt_volume.alpine_base.id
+  pool           = var.storage_pool
+  size           = 1073741824 # 1 ГБ
+  format         = "qcow2"
+}
+
+resource "libvirt_cloudinit_disk" "rabbitmq_init" {
+  name      = "rabbitmq-init.iso"
+  pool      = var.storage_pool
+  user_data = templatefile("${path.module}/cloud-init/rabbitmq.yml", {
+    hostname  = "rabbitmq"
+    static_ip = "10.10.10.15"
+    gateway   = "10.10.10.1"
+  })
+}
+
+resource "libvirt_domain" "rabbitmq_vm" {
+  type      = "qemu"
+  name      = "monero-rabbitmq"
+  memory    = "64"
+  vcpu      = 1
+  autostart = true
+
+  cloudinit = libvirt_cloudinit_disk.rabbitmq_init.id
+
+
+
+  network_interface {
+    network_id     = libvirt_network.monero_net.id
+    addresses      = ["10.10.10.15"]
+    wait_for_lease = false
+  }
+
+  disk {
+    volume_id = libvirt_volume.rabbitmq_disk.id
   }
 
   console {

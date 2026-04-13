@@ -1,0 +1,34 @@
+#cloud-config
+# VM5 — RabbitMQ
+
+hostname: ${hostname}
+fqdn: ${hostname}.monero.local
+manage_etc_hosts: true
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - rabbitmq-server
+  - bash
+  - sudo
+
+write_files:
+  - path: /etc/network/interfaces
+    content: |
+      auto lo
+      iface lo inet loopback
+      auto eth0
+      iface eth0 inet static
+        address ${static_ip}/24
+        gateway ${gateway}
+        dns-nameservers 1.1.1.1 8.8.8.8
+
+runcmd:
+  - ifdown eth0 && ifup eth0 || true
+  - rc-update add rabbitmq default
+  - rc-service rabbitmq start
+  - sleep 5
+  - rabbitmqctl add_user guest guest || true
+  - rabbitmqctl set_user_tags guest administrator || true
+  - rabbitmqctl set_permissions -p / guest ".*" ".*" ".*" || true

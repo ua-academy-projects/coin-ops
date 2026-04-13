@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS network_stats (
 CREATE TABLE IF NOT EXISTS price (
     id              SERIAL PRIMARY KEY,
     timestamp       TIMESTAMP NOT NULL DEFAULT NOW(),
-    usd             FLOAT NOT NULL
+    usd             FLOAT NOT NULL,
+    coin_id         TEXT NOT NULL DEFAULT 'monero'
 );
 
 CREATE TABLE IF NOT EXISTS privacy_metrics (

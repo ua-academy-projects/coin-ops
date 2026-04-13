@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     ideal_tx_count_min: int = 20
     ideal_tx_count_max: int = 30
 
+    # Redis & RabbitMQ
+    redis_url: str = "redis://localhost:6379/0"
+    rabbitmq_url: str = "amqp://guest:guest@localhost:5672/"
+    session_secret_key: str = "super-secret-session-key-change-in-prod"
+
     # CORS
     cors_origins: list[str] = ["*"]
 

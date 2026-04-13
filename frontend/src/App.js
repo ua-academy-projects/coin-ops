@@ -7,6 +7,14 @@ import {
 import { api } from "./utils/api";
 import { usePolling } from "./hooks/usePolling";
 
+const COINS = [
+  { id: "monero", label: "XMR" },
+  { id: "bitcoin", label: "BTC" },
+  { id: "ethereum", label: "ETH" },
+  { id: "solana", label: "SOL" },
+  { id: "cardano", label: "ADA" },
+];
+
 // ─── Colour tokens ────────────────────────────────────────────────────────────
 const C = {
   bg: "#0a0c0f",
@@ -205,6 +213,21 @@ function PulseDot({ active }) {
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
+  const [activeCoin, setActiveCoinState] = useState("monero");
+
+  useEffect(() => {
+    api.getActiveCoin().then(res => {
+      if (res.coin) setActiveCoinState(res.coin);
+    }).catch(console.error);
+  }, []);
+
+  const handleCoinChange = async (coinId) => {
+    if (coinId === activeCoin) return;
+    setActiveCoinState(coinId);
+    await api.setActiveCoin(coinId);
+    window.location.reload();
+  };
+
   const statsF = useCallback(() => api.getStats(), []);
   const blocksF = useCallback(() => api.getLatestBlocks(20), []);
   const predF = useCallback(() => api.getPrivacyPrediction(), []);
@@ -218,6 +241,7 @@ export default function App() {
   const { data: priceHistory } = usePolling(priceHF, 60000);
 
   const isLive = lastUpdated && (Date.now() - lastUpdated.getTime()) < 15000;
+  const isMonero = activeCoin === "monero";
 
   // Privacy chart data
   const chartData = privHistory
@@ -230,10 +254,14 @@ export default function App() {
 
   // Price chart data
   const priceData = priceHistory
-    ? [...priceHistory].reverse().map((p, i) => ({
-        i,
-        price: p.usd,
-      }))
+    ? [...priceHistory].reverse().map((p, i) => {
+        const d = new Date(p.timestamp + "Z");
+        return {
+          i,
+          price: p.usd,
+          time: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+      })
     : [];
 
   const fmt = (n) => n != null ? n.toLocaleString() : "—";
@@ -281,6 +309,31 @@ export default function App() {
             </div>
           </div>
         </div>
+        
+        {/* Coin Selector */}
+        <div style={{ display: "flex", gap: "8px", background: C.bg, padding: "4px", borderRadius: "8px", border: `1px solid ${C.border}` }}>
+          {COINS.map(c => (
+            <button
+              key={c.id}
+              onClick={() => handleCoinChange(c.id)}
+              style={{
+                background: activeCoin === c.id ? C.surface : "transparent",
+                color: activeCoin === c.id ? C.orange : C.dim,
+                border: activeCoin === c.id ? `1px solid ${C.border}` : "1px solid transparent",
+                padding: "4px 12px",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: "11px",
+                fontWeight: activeCoin === c.id ? "700" : "400",
+                transition: "all 0.2s"
+              }}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+
         <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace", color: C.dim }}>
           <PulseDot active={isLive} />
           <span style={{ color: isLive ? C.green : C.muted }}>{isLive ? "LIVE" : "OFFLINE"}</span>
@@ -298,84 +351,91 @@ export default function App() {
         {/* Top row: Price + Stats */}
         <div style={{ display: "flex", gap: "14px", flexWrap: "wrap", marginBottom: "24px" }}>
           <StatCard
-            label="XMR / USD"
+            label={`${COINS.find(c => c.id === activeCoin)?.label || "XMR"} / USD`}
             value={stats?.price_usd ? `$${stats.price_usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
             accent={C.orange}
           />
-          <StatCard label="BLOCK HEIGHT" value={stats ? fmt(stats.block_height) : "—"} accent={C.orange} />
-          <StatCard label="TXS IN BLOCK" value={stats?.tx_count ?? "—"} sub="latest block" />
-          <StatCard label="MEMPOOL" value={stats?.mempool_size ?? "—"} sub="pending txs" />
-          <StatCard
-            label="DIFFICULTY"
-            value={stats?.difficulty ? `${(stats.difficulty / 1e9).toFixed(2)}G` : "—"}
-          />
-          <StatCard
-            label="AVG TX / BLOCK"
-            value={stats?.avg_tx_per_block ? stats.avg_tx_per_block.toFixed(1) : "—"}
-            sub="last 50 blocks"
-          />
+          {isMonero && (
+            <>
+              <StatCard label="BLOCK HEIGHT" value={stats ? fmt(stats.block_height) : "—"} accent={C.orange} />
+              <StatCard label="TXS IN BLOCK" value={stats?.tx_count ?? "—"} sub="latest block" />
+              <StatCard label="MEMPOOL" value={stats?.mempool_size ?? "—"} sub="pending txs" />
+              <StatCard
+                label="DIFFICULTY"
+                value={stats?.difficulty ? `${(stats.difficulty / 1e9).toFixed(2)}G` : "—"}
+              />
+              <StatCard
+                label="AVG TX / BLOCK"
+                value={stats?.avg_tx_per_block ? stats.avg_tx_per_block.toFixed(1) : "—"}
+                sub="last 50 blocks"
+              />
+            </>
+          )}
         </div>
 
         {/* Middle row: Gauge + Prediction */}
-        <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: "20px", marginBottom: "24px" }}>
+        {isMonero && (
+          <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: "20px", marginBottom: "24px" }}>
 
-          {/* Gauge card */}
-          <div className="card" style={{
-            background: C.surface, border: `1px solid ${C.border}`,
-            borderRadius: "12px", padding: "24px 20px",
-            display: "flex", flexDirection: "column", alignItems: "center",
-          }}>
-            <SectionHeader>Current Block Privacy</SectionHeader>
-            <PrivacyGauge
-              score={stats?.privacy_score}
-              riskLevel={stats?.risk_level}
-            />
-            <div style={{ width: "100%", marginTop: "16px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace", color: C.dim, marginBottom: "6px" }}>
-                <span>Block #{fmt(stats?.block_height)}</span>
-                <span>{stats?.tx_count ?? "—"} txs</span>
+            {/* Gauge card */}
+            <div className="card" style={{
+              background: C.surface, border: `1px solid ${C.border}`,
+              borderRadius: "12px", padding: "24px 20px",
+              display: "flex", flexDirection: "column", alignItems: "center",
+            }}>
+              <SectionHeader>Current Block Privacy</SectionHeader>
+              <PrivacyGauge
+                score={stats?.privacy_score}
+                riskLevel={stats?.risk_level}
+              />
+              <div style={{ width: "100%", marginTop: "16px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace", color: C.dim, marginBottom: "6px" }}>
+                  <span>Block #{fmt(stats?.block_height)}</span>
+                  <span>{stats?.tx_count ?? "—"} txs</span>
+                </div>
+                <div style={{ height: "4px", background: C.border, borderRadius: "2px" }}>
+                  <div style={{
+                    height: "100%", borderRadius: "2px",
+                    width: `${Math.round((stats?.privacy_score ?? 0) * 100)}%`,
+                    background: riskColor(stats?.risk_level),
+                    transition: "width 0.8s ease",
+                  }} />
+                </div>
               </div>
-              <div style={{ height: "4px", background: C.border, borderRadius: "2px" }}>
-                <div style={{
-                  height: "100%", borderRadius: "2px",
-                  width: `${Math.round((stats?.privacy_score ?? 0) * 100)}%`,
-                  background: riskColor(stats?.risk_level),
-                  transition: "width 0.8s ease",
-                }} />
+            </div>
+
+            {/* Prediction + recommendation */}
+            <div className="card" style={{
+              background: C.surface, border: `1px solid ${C.border}`,
+              borderRadius: "12px", padding: "24px 24px",
+            }}>
+              <SectionHeader>Next Block Prediction</SectionHeader>
+              <RecommendationBanner prediction={prediction} />
+              <div style={{ display: "flex", gap: "14px", marginTop: "20px", flexWrap: "wrap" }}>
+                <StatCard label="MEMPOOL SIZE" value={fmt(prediction?.mempool_size)} />
+                <StatCard label="EXPECTED TXS" value={fmt(prediction?.expected_tx)} />
+                <StatCard
+                  label="INCLUSION PROB"
+                  value={prediction ? `${Math.round(prediction.inclusion_probability * 100)}%` : "—"}
+                />
+                <StatCard
+                  label="PRED. PRIVACY"
+                  value={prediction ? `${Math.round(prediction.privacy_score * 100)}` : "—"}
+                  sub="/ 100"
+                />
               </div>
             </div>
           </div>
-
-          {/* Prediction + recommendation */}
-          <div className="card" style={{
-            background: C.surface, border: `1px solid ${C.border}`,
-            borderRadius: "12px", padding: "24px 24px",
-          }}>
-            <SectionHeader>Next Block Prediction</SectionHeader>
-            <RecommendationBanner prediction={prediction} />
-            <div style={{ display: "flex", gap: "14px", marginTop: "20px", flexWrap: "wrap" }}>
-              <StatCard label="MEMPOOL SIZE" value={fmt(prediction?.mempool_size)} />
-              <StatCard label="EXPECTED TXS" value={fmt(prediction?.expected_tx)} />
-              <StatCard
-                label="INCLUSION PROB"
-                value={prediction ? `${Math.round(prediction.inclusion_probability * 100)}%` : "—"}
-              />
-              <StatCard
-                label="PRED. PRIVACY"
-                value={prediction ? `${Math.round(prediction.privacy_score * 100)}` : "—"}
-                sub="/ 100"
-              />
-            </div>
-          </div>
-        </div>
+        )}
 
         {/* Charts row */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "24px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMonero ? "1fr 1fr" : "1fr", gap: "20px", marginBottom: "24px" }}>
 
           {/* Privacy history */}
-          <div className="card" style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: "12px", padding: "22px" }}>
-            <SectionHeader>Privacy Score History</SectionHeader>
-            <ResponsiveContainer width="100%" height={200}>
+          {isMonero && (
+            <div className="card" style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: "12px", padding: "22px" }}>
+              <SectionHeader>Privacy Score History</SectionHeader>
+              <ResponsiveContainer width="100%" height={260}>
               <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="privGrad" x1="0" y1="0" x2="0" y2="1">
@@ -397,30 +457,34 @@ export default function App() {
               </AreaChart>
             </ResponsiveContainer>
           </div>
+          )}
 
           {/* Price chart */}
           <div className="card" style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: "12px", padding: "22px" }}>
-            <SectionHeader>XMR Price (USD)</SectionHeader>
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={priceData}>
+            <SectionHeader>{COINS.find(c => c.id === activeCoin)?.label || "XMR"} Price (USD)</SectionHeader>
+            <ResponsiveContainer width="100%" height={260}>
+              <LineChart data={priceData} margin={{ top: 10, left: 0, right: 0, bottom: 0 }}>
                 <CartesianGrid stroke={C.border} strokeDasharray="3 3" />
-                <XAxis dataKey="i" hide />
-                <YAxis tick={{ fill: C.dim, fontSize: 11, fontFamily: "JetBrains Mono" }} />
+                <XAxis dataKey="time" tick={{ fill: C.dim, fontSize: 10, fontFamily: "JetBrains Mono" }} tickMargin={10} minTickGap={20} />
+                <YAxis domain={['auto', 'auto']} tick={{ fill: C.dim, fontSize: 11, fontFamily: "JetBrains Mono" }} width={60} />
                 <Tooltip
                   contentStyle={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: "6px", fontFamily: "JetBrains Mono", fontSize: "12px" }}
-                  formatter={(v) => [`$${v?.toFixed(2)}`, "XMR/USD"]}
+                  formatter={(v) => [`$${v?.toFixed(2)}`, `${COINS.find(c => c.id === activeCoin)?.label || "Token"}/USD`]}
+                  labelStyle={{ color: C.dim, marginBottom: "4px" }}
                 />
-                <Line type="monotone" dataKey="price" stroke={C.orange} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="price" stroke={C.orange} strokeWidth={2} dot={false} isAnimationActive={!isMonero} />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         {/* Block table */}
-        <div className="card" style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: "12px", padding: "22px" }}>
-          <SectionHeader>Recent Blocks</SectionHeader>
-          <BlockTable blocks={blocks} />
-        </div>
+        {isMonero && (
+          <div className="card" style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: "12px", padding: "22px" }}>
+            <SectionHeader>Recent Blocks</SectionHeader>
+            <BlockTable blocks={blocks} />
+          </div>
+        )}
 
         {/* Footer */}
         <div style={{ textAlign: "center", marginTop: "28px", color: C.muted, fontSize: "11px", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>

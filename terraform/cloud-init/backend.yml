@@ -60,6 +60,8 @@ write_files:
       WORKER_INTERVAL_SECONDS=10
       BLOCKS_HISTORY_FOR_AVG=50
       CORS_ORIGINS=*
+      REDIS_URL=redis://${redis_ip}:6379/0
+      RABBITMQ_URL=amqp://guest:guest@${rabbitmq_ip}:5672/
 
   - path: /etc/monero/deploy.env
     permissions: "0640"

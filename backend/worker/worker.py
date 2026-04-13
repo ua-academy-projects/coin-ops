@@ -5,9 +5,12 @@ stores results in PostgreSQL.
 import asyncio
 import sys
 import os
+import json
+import aio_pika
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from datetime import datetime, timezone
+import time
 import structlog
 from sqlalchemy import select, func, text
 from database import AsyncSessionLocal, Block, NetworkStat, Price, PrivacyMetric, NextBlockPrediction as DBPrediction
@@ -34,9 +37,22 @@ class Worker:
         self.price_fetcher = get_price_fetcher()
         self._cycle = 0
         self._last_height = -1
+        self._last_price_fetch_time = 0.0
+        self._rabbitmq_conn = None
+        self._rabbitmq_channel = None
+
+    async def _setup_rabbitmq(self):
+        if not self._rabbitmq_conn or self._rabbitmq_conn.is_closed:
+            try:
+                self._rabbitmq_conn = await aio_pika.connect_robust(settings.rabbitmq_url)
+                self._rabbitmq_channel = await self._rabbitmq_conn.channel()
+                log.info("worker_rabbitmq_connected")
+            except Exception as e:
+                log.error("worker_rabbitmq_connection_failed", error=str(e))
 
     async def run(self):
         log.info("worker_starting", interval=settings.worker_interval_seconds)
+        await self._setup_rabbitmq()
         while True:
             try:
                 await self._cycle_once()
@@ -103,13 +119,34 @@ class Worker:
             )
             session.add(db_pred)
 
-            # 8. Fetch price (throttled)
-            if self._cycle % PRICE_UPDATE_EVERY_N_CYCLES == 0:
-                price_usd = await self.price_fetcher.fetch_xmr_usd()
-                if price_usd:
-                    session.add(Price(usd=price_usd))
+            # 8. Fetch prices (throttled by time)
+            now = time.time()
+            if now - self._last_price_fetch_time >= 300:  # 5 minutes
+                prices = await self.price_fetcher.fetch_prices_usd()
+                if prices:
+                    for coin_str, usd_val in prices.items():
+                        session.add(Price(usd=usd_val, coin_id=coin_str))
+                self._last_price_fetch_time = now
 
             await session.commit()
+            
+            if self._rabbitmq_channel and not self._rabbitmq_channel.is_closed:
+                try:
+                    exchange = self._rabbitmq_channel.default_exchange
+                    msg = {
+                        "event": "metrics_computed",
+                        "block_height": height,
+                        "privacy_score": privacy.privacy_score,
+                        "risk_level": privacy.risk_level,
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    }
+                    await exchange.publish(
+                        aio_pika.Message(body=json.dumps(msg).encode()),
+                        routing_key="monero_events"
+                    )
+                except Exception as e:
+                    log.error("worker_publish_error", error=str(e))
+
             log.info("worker_cycle_complete",
                      height=height,
                      mempool=mempool_data["tx_count"],

@@ -1,0 +1,39 @@
+#cloud-config
+# VM4 — Redis
+
+hostname: ${hostname}
+fqdn: ${hostname}.monero.local
+manage_etc_hosts: true
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - redis
+  - bash
+  - sudo
+
+write_files:
+  - path: /etc/network/interfaces
+    content: |
+      auto lo
+      iface lo inet loopback
+      auto eth0
+      iface eth0 inet static
+        address ${static_ip}/24
+        gateway ${gateway}
+        dns-nameservers 1.1.1.1 8.8.8.8
+
+  - path: /etc/redis.conf
+    content: |
+      bind 0.0.0.0
+      protected-mode no
+      port 6379
+      daemonize yes
+      dir /var/lib/redis
+      loglevel notice
+
+runcmd:
+  - ifdown eth0 && ifup eth0 || true
+  - rc-update add redis default
+  - rc-service redis start

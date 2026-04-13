@@ -25,6 +25,28 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── VM4 equivalent: Redis ────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: monero_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # ── VM5 equivalent: RabbitMQ ─────────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: monero_rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
   # ── VM2 equivalent: FastAPI backend ──────────────────────────────────────
   api:
     build:
@@ -38,9 +60,15 @@ services:
       MONERO_RPC_HOST: xmr-node.cakewallet.com
       MONERO_RPC_PORT: 18081
       WORKER_INTERVAL_SECONDS: "10"
+      REDIS_URL: "redis://redis:6379/0"
+      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
     ports:
       - "8000:8000"
     volumes:
@@ -59,9 +87,15 @@ services:
       MONERO_RPC_HOST: xmr-node.cakewallet.com
       MONERO_RPC_PORT: 18081
       WORKER_INTERVAL_SECONDS: "10"
+      REDIS_URL: "redis://redis:6379/0"
+      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
     volumes:
       - ./backend:/app
 
@@ -98,4 +132,6 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
+  rabbitmq_data:
   # monerod_data:

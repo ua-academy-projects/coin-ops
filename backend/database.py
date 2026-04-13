@@ -40,6 +40,7 @@ class Price(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=func.now())
     usd: Mapped[float] = mapped_column(Float, nullable=False)
+    coin_id: Mapped[str] = mapped_column(Text, nullable=False, default='monero')
 
 
 class PrivacyMetric(Base):
