@@ -273,12 +273,12 @@ func main() {
 
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		dbURL = "postgres://coinops:coinops@localhost:5432/coinops?sslmode=disable"
+		log.Fatal("DATABASE_URL environment variable is required")
 	}
 
 	mqURL := os.Getenv("RABBITMQ_URL")
 	if mqURL == "" {
-		mqURL = "amqp://guest:guest@localhost:5672/"
+		log.Fatal("RABBITMQ_URL environment variable is required")
 	}
 
 	db, err := sql.Open("postgres", dbURL)

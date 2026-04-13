@@ -66,6 +66,23 @@
       when: sync_result.changed
       notify: Restart coin-history
 
+    - name: Create /etc/coin-ops directory for secret env files
+      ansible.builtin.file:
+        path: /etc/coin-ops
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Deploy secret environment file for coin-history
+      ansible.builtin.template:
+        src: ../templates/coin-history.env
+        dest: /etc/coin-ops/history.env
+        owner: root
+        group: root
+        mode: "0600"
+      notify: Restart coin-history
+
     - name: Deploy systemd service unit file for the coin-history service
       ansible.builtin.template:
         src: ../templates/coin-history.service

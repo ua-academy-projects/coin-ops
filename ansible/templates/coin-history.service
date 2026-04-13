@@ -9,8 +9,7 @@ WorkingDirectory=/home/{{ ansible_user }}/history-service
 ExecStart=/home/{{ ansible_user }}/history-service/history-service
 Environment=PORT=8001
 Environment=CORS_ORIGINS=http://192.168.56.10
-Environment=RABBITMQ_URL=amqp://coinops:{{ rabbit_mq_password }}@192.168.56.13:5672/
-Environment=DATABASE_URL=postgres://coinops:{{ db_password }}@192.168.56.12:5432/coinops?sslmode=disable
+EnvironmentFile=/etc/coin-ops/history.env
 Restart=on-failure
 RestartSec=5
 

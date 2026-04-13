@@ -344,7 +344,7 @@ func main() {
 
 	mqURL := os.Getenv("RABBITMQ_URL")
 	if mqURL == "" {
-		mqURL = "amqp://guest:guest@localhost:5672/"
+		log.Fatal("RABBITMQ_URL environment variable is required")
 	}
 	mq = &mqClient{url: mqURL}
 	go mq.connectLoop()

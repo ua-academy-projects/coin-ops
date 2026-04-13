@@ -70,7 +70,24 @@
       when: sync_result.changed
       notify: Restart coin-proxy
 
-    - name: Deploy systemd service unit file for the coin-proxy service 
+    - name: Create /etc/coin-ops directory for secret env files
+      ansible.builtin.file:
+        path: /etc/coin-ops
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Deploy secret environment file for coin-proxy
+      ansible.builtin.template:
+        src: ../templates/coin-proxy.env
+        dest: /etc/coin-ops/proxy.env
+        owner: root
+        group: root
+        mode: "0600"
+      notify: Restart coin-proxy
+
+    - name: Deploy systemd service unit file for the coin-proxy service
       ansible.builtin.template:
         src: ../templates/coin-proxy.service
         dest: /etc/systemd/system/coin-proxy.service
