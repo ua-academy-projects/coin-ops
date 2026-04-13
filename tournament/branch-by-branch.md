@@ -396,24 +396,49 @@ Initial repository state with only the MIT license.
 
 ### Summary
 
-Same state as `origin/main`: MIT license only.
+Rechecked after remote refresh. `origin/volynets` is now a real five-VM NBU exchange-rate tracker with Flask/Jinja UI, Go API proxy, Go history service, RabbitMQ, PostgreSQL, Vagrant VM creation, and Ansible provisioning. It is a strong VM/systemd implementation but has no Docker, Terraform, CI, or registry-based delivery.
 
 ### Strengths
 
-- Clean, no generated artifacts.
+- Clean five-VM service split: web UI, API proxy, database, message queue, and history service.
+- Good Ansible coverage with separate playbooks for PostgreSQL, RabbitMQ, history service, proxy, and web UI.
+- Uses environment variables for deployment secrets in Ansible instead of committing real passwords.
+- UFW rules are more deliberate than many branches: PostgreSQL and RabbitMQ are source-restricted to expected service hosts.
+- Go proxy has in-memory caching, history-service fallback, `/health`, CORS configuration, and RabbitMQ reconnect with exponential backoff.
+- Go history service has a solid consumer pattern: durable queue, manual ack, transaction per batch, upsert with `ON CONFLICT`, nack/requeue on transient database failures, and reconnect loop.
+- Database schema is simple but practical, with indexes and a unique `(code, rate_date)` key for idempotency.
+- README and Ansible README clearly explain local development, VM layout, configuration, and deployment order.
 
 ### Weaknesses
 
-- No implementation.
+- No Dockerfiles or Docker Compose.
+- No Terraform, cloud IaC, CI/CD pipeline, image registry, or immutable release artifact.
+- Vagrant is VMware Desktop-specific, which reduces portability across teammates compared with VirtualBox/Hyper-V-neutral options.
+- Ansible builds Go binaries directly on target VMs, so deployments depend on target build tooling and network access.
+- The product scope is narrower than `origin/Shabat`: NBU exchange rates only, with no broader market/price/whale dashboard.
+- No automated tests.
+- Local defaults still include `guest:guest` RabbitMQ URLs, even though Ansible deployment uses injected passwords.
 
 ### Risks / Technical Debt
 
-- No baseline value for the next sprint.
+- VM/systemd deployment would need substantial rework for AWS container services or Kubernetes.
+- No rollback strategy beyond rerunning Ansible.
+- No image scanning, dependency checks, or reproducible build artifact.
+- No backup/restore runbook for PostgreSQL.
+- No observability beyond service logs and health endpoints.
 
 ### Missing For Production
 
-- Everything beyond the license.
+- Containerization and registry-based deployment.
+- Terraform or equivalent IaC for cloud environments.
+- CI quality gates and release automation.
+- Secrets manager integration.
+- TLS, DNS, monitoring, alerting, backups, and migration tooling.
+- Kubernetes manifests or Helm/Kustomize packaging.
 
 ### Recommended Improvements
 
-- Do not rank as an implementation candidate.
+- Rank as a useful middle-tier implementation, especially for VM/Ansible quality.
+- Borrow its Ansible firewall discipline, five-VM separation, and Go consumer transaction/ack pattern.
+- Do not choose it as the baseline unless the team intentionally ignores Docker, Terraform, AWS, and Kubernetes readiness.
+- Add Dockerfiles and a local Compose stack before considering it for cloud migration.

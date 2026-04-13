@@ -14,6 +14,7 @@ Turn `origin/Shabat` into a clean team baseline that can run reproducibly, pass 
 - Stop ignoring Terraform provider lock files for real environments.
 - Keep `.env.example` as a template only; verify no real secrets are committed.
 - Add a short architecture decision record explaining why `Shabat` is the baseline and which ideas are being imported.
+- Explicitly compare `Shabat` Ansible against `volynets` Ansible and import useful source-restricted firewall and service-separation patterns.
 
 ### 2. Automated Quality Gates
 
@@ -45,6 +46,7 @@ Acceptance target: a new developer can run the system locally without creating V
 - For AWS, use Secrets Manager or SSM Parameter Store.
 - Remove hardcoded service IPs from application defaults where possible.
 - Document config names once and reuse them across Compose, Ansible, and future Kubernetes.
+- Keep `volynets` as the reference branch for cleaner VM-only Ansible boundaries while moving the chosen baseline toward image-based deploys.
 
 Acceptance target: deployment fails fast on missing config and never requires editing source code for environment changes.
 
@@ -125,4 +127,3 @@ Acceptance target: app containers are ready to be mapped to Kubernetes Deploymen
 - Adopting every idea from every branch.
 
 The next sprint should make one baseline solid, reproducible, and cloud-migratable.
-

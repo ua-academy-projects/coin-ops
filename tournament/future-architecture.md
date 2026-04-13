@@ -100,6 +100,13 @@ Kubernetes object mapping:
 - Reuse cloud-init templating ideas if EC2 cloud-init remains part of the path.
 - Do not reuse cron-based Git polling deploys.
 
+### From `origin/volynets`
+
+- Reuse the clean five-VM Ansible separation as a reference for service ownership: UI, proxy, queue, history service, and database.
+- Reuse the source-restricted UFW approach for VM or EC2 security-group thinking.
+- Reuse the Go history consumer pattern: transaction per batch, manual ack after commit, nack/requeue on transient failure, and idempotent upsert.
+- Do not reuse target-VM builds as the long-term delivery model; convert these services to images before AWS/Kubernetes migration.
+
 ### From `origin/zakipnyi`
 
 - Keep the five-role topology as a conceptual scaling model:
@@ -116,4 +123,3 @@ Kubernetes object mapping:
 - Observability from day one: structured logs, metrics, alerts, dashboards.
 - Database migrations as explicit release steps.
 - Backup and restore tested before declaring production readiness.
-
