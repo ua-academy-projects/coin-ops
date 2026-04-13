@@ -2,6 +2,48 @@
 
 Multi-service pet project for collecting, storing and displaying cryptocurrency prices in a small Vagrant-based environment.
 
+## Table of Contents
+
+- [Architecture Diagram](#architecture-diagram)
+- [Architecture](#architecture)
+- [VM Layout](#vm-layout)
+- [Repository Structure](#repository-structure)
+- [Configuration](#configuration)
+- [Deployment](#deployment)
+- [Services and Ports](#services-and-ports)
+- [Systemd Units](#systemd-units)
+- [Data Flow Details](#data-flow-details)
+- [Troubleshooting](#troubleshooting)
+- [Useful Commands](#useful-commands)
+- [Persistence](#persistence)
+- [Future Improvements](#future-improvements)
+
+## Architecture Diagram
+
+```mermaid
+flowchart LR
+    User[User Browser]
+    UI[UI Service<br/>Flask :5000<br/>devops-ui]
+    Proxy[Proxy Service<br/>Flask :5001<br/>devops-proxy]
+    History[History Service<br/>Go :5002<br/>devops-history]
+    Redis[(Redis<br/>:6379)]
+    Rabbit[(RabbitMQ<br/>:5672)]
+    Postgres[(PostgreSQL<br/>:5432)]
+    Coinbase[Coinbase API]
+
+    User --> UI
+    UI --> Proxy
+    UI --> History
+    UI <--> Redis
+    Proxy --> Coinbase
+    Proxy --> Rabbit
+    Proxy --> History
+    History --> Rabbit
+    History --> Postgres
+```
+
+GitHub renders Mermaid diagrams directly, so this section can be used as a navigable architecture view inside the repository page.
+
 The project provisions 4 virtual machines with Vagrant and configures them with Ansible:
 
 - `devops-ui` hosts the Flask web UI
