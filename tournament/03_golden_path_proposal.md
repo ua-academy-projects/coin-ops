@@ -4,29 +4,29 @@ Actionable merge strategy and next-sprint roadmap for the coin-ops project, base
 
 ---
 
-## Ranked list
+## Ranked list (ELO order)
 
-1. **Shabat** — highest overall DevOps maturity. Full Terraform (Hyper-V) + Ansible provision/deploy playbooks, per-node Docker Compose, non-root containers running on `scratch` base, runtime config injection for the UI, 12-factor throughout, idempotent DB writes. The branch feels like somebody's second pass — ops documentation (`CLAUDE.md`, `.env.example`) is unusually detailed. Weak spots: observability is stdlib-only, no DLQ on RabbitMQ, Terraform is Hyper-V-locked, and the API retry logic is simpler than hrenchevskyi's.
+1. **Shabat** (ELO 2135) — highest overall DevOps maturity. Full Terraform (Hyper-V) + Ansible provision/deploy playbooks, per-node Docker Compose, non-root containers on `scratch` base, runtime config injection for the UI, 12-factor throughout. Messaging layer is solid: manual ACK after `db.commit()`, `nack+requeue`, `prefetch_count=1`, mutex-guarded publishing, `DeliveryMode: Persistent`. Weak spots: no formal exp. backoff (smart NBU throttling instead), no DLQ, observability stdlib-only, Terraform Hyper-V-locked.
 
-2. **hrenchevskyi** — highest software quality. Only branch with (a) Ansible-Vault-encrypted secrets, (b) idempotent at-least-once messaging using UUID event IDs and a UNIQUE constraint, (c) real exponential backoff with `Retry-After` parsing, (d) ThreadedConnectionPool for Postgres, and (e) graceful SIGTERM handling. No Terraform and no cloud/K8s story beyond Vagrant + docker-compose, which is why it ranks below Shabat despite strictly better application code.
+2. **hrenchevskyi** (ELO 1985) — highest software quality. Only branch with (a) Ansible-Vault-encrypted secrets, (b) UUID event IDs + UNIQUE constraint for idempotent replay, (c) real exponential backoff with `Retry-After` parsing, (d) ThreadedConnectionPool for Postgres, (e) graceful SIGTERM handling. No Terraform, no cloud/K8s story beyond Vagrant + docker-compose — that's why it ranks below Shabat despite strictly better application-layer code.
 
-3. **kazachuk** — best Docker execution in the field. Multi-stage Alpine images down to 23.9 MB, healthchecks with `depends_on: service_healthy`, dual-path deployment (Ansible VMs + Docker Compose), and a rich frontend (favorites, CSV export, sparklines). Weak spots: plaintext passwords in inventory and compose, `auto_ack=True` on RabbitMQ (loses messages on consumer crash), no HTTP timeouts on upstream fetches.
+3. **monero-privacy-system** (ELO 1840, raw 79.0 → 64.0 after −15 penalty) — excellent Terraform (libvirt) with cloud-init templating, only branch using `structlog`, async FastAPI + SQLAlchemy async pools. **Critical gap: no RabbitMQ, no Redis** — bypasses the queue entirely and writes directly to Postgres. Strong infra patterns but fundamentally incomplete software implementation.
 
-4. **smoliakov** — only branch with AWS Terraform (however minimal), solid Go service with graceful shutdown and signal handling, comprehensive Ansible role structure, UNIQUE-constrained Postgres schema with UPSERT. Weak spots: no Docker, hardcoded passwords in playbooks, SG wide-open, `DJANGO_SECRET_KEY=replace-me-for-production`.
+4. **kazachuk** (ELO 1775) — best Docker execution: multi-stage Alpine images at 23.9 MB, `depends_on: service_healthy`, rich frontend (favorites, CSV export, sparklines). Weak spots: plaintext passwords in inventory and compose, `auto_ack=True` on RabbitMQ (message loss on crash), no HTTP timeouts on upstream fetches.
 
-5. **shturyn** — cleanest React 19 frontend and most modern TypeScript stack. Proxy uses cache-aside pattern. But: **no Redis**, no VM provisioning, single-host Docker Compose only, broad CORS, `.env` not committed (manual step). Great UI cherry-picks, weak infrastructure base.
+5. **volynets** (ELO 1730) ‡ — late submission (previously only LICENSE). Full Go proxy + Go history service + Flask UI + RabbitMQ + PostgreSQL + Ansible (5 playbooks) + Vagrant. Architecture is clean and 12-factor compliant. Weak spots: **no Redis** (in-process memory cache only), **no Docker**, **no Terraform**, hardcoded `guest:guest` / `coinops:coinops` as credential fallbacks. Strong showing on architecture and 12-factor; disqualified as a base branch by the missing containerization and IaC.
 
-6. **kurdupel** — best pure VM orchestration (Vagrant + Ansible, four-VM topology, clean role separation per service), good Go history service with sophisticated time-bucketing. Critically: **no Docker at all**. That disqualifies it as a base because containerization-ready was an explicit acceptance criterion in Issue #1.
+6. **smoliakov** (ELO 1700) — only branch with AWS Terraform (however minimal), solid Go service with graceful shutdown and signal handling, comprehensive Ansible role structure, UNIQUE-constrained Postgres schema with UPSERT. Weak spots: no Docker, hardcoded passwords in playbooks, SG wide-open, `DJANGO_SECRET_KEY=replace-me-for-production`.
 
-7. **penina** — best Docker learning documentation (`docs/03-docker.md` with a "Mistakes & Fixes" table is genuinely valuable as a teaching artifact). Dual VM/Docker deploy. But hardcoded credentials in source code, no Terraform, single-host Compose only, hardcoded IPs in the React app.
+7. **shturyn** (ELO 1660) — cleanest React 19 frontend and most modern TypeScript stack. Proxy uses cache-aside pattern. But: **no Redis**, no VM provisioning, single-host Docker Compose only, broad CORS. Great UI cherry-picks, weak infrastructure base.
 
-8. **zakipnyi** — good architecture on paper (durable fanout, Go fetcher with 30-attempt startup retry, proper indexing), but hardcoded `coinops123` in Vagrantfile + source + README + 4 other places, **no Docker**, no IaC beyond the Vagrantfile.
+8. **penina** (ELO 1620) — best Docker learning documentation (`docs/03-docker.md` with a "Mistakes & Fixes" table is genuinely valuable as a teaching artifact). Dual VM/Docker deploy. But hardcoded credentials in source code, no Terraform, single-host Compose only, hardcoded IPs in the React app.
 
-9. **monero-privacy-system** — excellent Terraform (libvirt) structure with cloud-init templating, only branch using `structlog`, async FastAPI with SQLAlchemy async pools. **Critical gap: no RabbitMQ, no Redis.** The task requires a message queue for async persistence; this branch bypasses it entirely and has the worker write directly to Postgres. Strong infra patterns but a fundamentally incomplete software implementation.
+9. **kurdupel** (ELO 1595) — best pure VM orchestration (Vagrant + Ansible, four-VM topology, clean role separation per service), good Go history service with sophisticated time-bucketing. Critically: **no Docker at all**. Disqualified as a base; containerization-ready was an explicit acceptance criterion in Issue #1.
 
-10. **volynets** ‡ — late submission; previously only a LICENSE file. Now contains a full Go proxy + Go history service + Flask UI + RabbitMQ + PostgreSQL + Vagrant + Ansible (5 playbooks). Architecture is clean and 12-factor compliant. Weak spots: no Redis (in-process memory cache only), no Docker, no Terraform, hardcoded `guest:guest` / `coinops:coinops` credential defaults. Ranks #5 on ELO (1730) but cannot be considered for the base branch — no containerization and no IaC are disqualifiers for the cloud/K8s sprint.
+10. **zakipnyi** (ELO 1590) — good architecture on paper (durable fanout, Go fetcher with 30-attempt startup retry, proper indexing), but hardcoded `coinops123` in Vagrantfile + source + README + 4 other places, **no Docker**, no IaC beyond the Vagrantfile.
 
-‡ Updated 2026-04-13 after new commits pushed to the branch.
+‡ volynets updated 2026-04-13 after new commits pushed to the branch.
 
 ---
 
@@ -36,7 +36,7 @@ Actionable merge strategy and next-sprint roadmap for the coin-ops project, base
 
 hrenchevskyi wins more component categories — five out of eleven. But it loses the base-branch selection for three specific reasons:
 
-1. **Shabat is containerization-complete, hrenchevskyi is not.** Shabat has four Dockerfiles (proxy, history-api, history-consumer, ui) with non-root users, `scratch` base for the Go proxy, per-node compose files, and an image pipeline to GHCR. hrenchevskyi has Dockerfiles but runs everything as root with no app-level healthchecks and no image registry strategy. Closing Shabat's software gaps (by transplanting from hrenchevskyi) is a day of work. Closing hrenchevskyi's infra gaps (building the entire image + deploy pipeline) is a sprint.
+1. **Shabat is containerization-complete, hrenchevskyi is not.** Shabat has four Dockerfiles (proxy, history-api, history-consumer, ui); the Go proxy uses `FROM scratch` + `USER 65532:65532`, both history services use `USER user`, and the nginx UI uses the standard nginx worker model. Per-node compose files, image pipeline to GHCR via `.github/workflows/docker-images.yml`. hrenchevskyi has Dockerfiles but the Flask frontend and history service run as root with no `USER` directive and no app-level healthchecks or image registry strategy. Closing Shabat's software gaps (by transplanting from hrenchevskyi) is a day of work. Closing hrenchevskyi's infra gaps (building the entire image + deploy pipeline) is a sprint.
 
 2. **Shabat has Terraform, hrenchevskyi does not.** Even locked to Hyper-V, having real Terraform + cloud-init is a head-start over Vagrant + docker-compose when the next stop is AWS.
 
