@@ -299,6 +299,14 @@ func main() {
 	mux.HandleFunc("/history", corsMiddleware(origins, makeHistoryHandler(db)))
 
 	addr := fmt.Sprintf(":%s", port)
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
 	log.Printf("history-service listening on %s", addr)
-	log.Fatal(http.ListenAndServe(addr, mux))
+	log.Fatal(srv.ListenAndServe())
 }
