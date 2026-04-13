@@ -16,31 +16,9 @@
 # restart - if something fails - put up again , restartsec = 5 - wait 5 sec before restarting
 - name: install history systemd unit
   become: true
-  ansible.builtin.copy:
+  ansible.builtin.template:
+    src: history.service.j2
     dest: /etc/systemd/system/history.service
-    content: |
-      [Unit]
-      Description=History service 
-      After=network.target  
-
-      [Service]
-      Type=simple
-      User=vagrant
-      WorkingDirectory=/vagrant/history_service
-      ExecStart=/vagrant/history_service/history-service
-      Restart=always
-      RestartSec=5
-      Environment=POSTGRES_HOST=192.168.56.14
-      Environment=POSTGRES_DB=currency_rates_tracker
-      Environment=POSTGRES_USER=currency_app_user
-      Environment=POSTGRES_PASS=password
-      Environment=RABBITMQ_HOST=192.168.56.14
-      Environment=RABBITMQ_USER=currency_app_user
-      Environment=RABBITMQ_PASS=password
-      Environment=RABBITMQ_QUEUE=currency_rates
-
-      [Install]
-      WantedBy=multi-user.target
 
   notify: reload systemd
 

@@ -8,11 +8,12 @@ import time
 
 app = Flask(__name__)
 
-RABBITMQ_HOST  = os.environ.get("RABBITMQ_HOST", "192.168.56.14")   # finds environ var if not found - uses ip .14
-RABBITMQ_USER  = os.environ.get("RABBITMQ_USER", "currency_app_user")
-RABBITMQ_PASS  = os.environ.get("RABBITMQ_PASS", "password")
-RABBITMQ_QUEUE = "currency_rates"
-HISTORY_HOST   = os.environ.get("HISTORY_HOST", "192.168.56.13")
+#RABBITMQ_HOST  = os.environ.get("RABBITMQ_HOST", "192.168.56.14")   # finds environ var if not found - uses ip .14
+RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST")
+RABBITMQ_USER  = os.environ.get("RABBITMQ_USER")
+RABBITMQ_PASS  = os.environ.get("RABBITMQ_PASS")
+RABBITMQ_QUEUE = os.environ.get("RABBITMQ_QUEUE")
+HISTORY_HOST   = os.environ.get("HISTORY_HOST")
 
 # set for performance, no duplicates for coins, good for for in
 SUPPORTED_COINS = {"BTC", "ETH", "SOL", "BNB"}
@@ -51,9 +52,9 @@ def send_to_queue(coin,price):
             properties=pika.BasicProperties(delivery_mode=2)    # message will be stored on a disk and survive Rabbitmq restarts
         )
         connection.close()
-        print(f"Sent to queue: {coin} = {price}")
+        print(f"Sent to queue: {coin} = {price}", flush = True) # force print to appear in terminal immediately
     except Exception as e:
-        print(f"RabbitMQ error: {e}")
+        print(f"RabbitMQ error: {e}", flush = True)
 
 
 def get_latest_history_price(coin):

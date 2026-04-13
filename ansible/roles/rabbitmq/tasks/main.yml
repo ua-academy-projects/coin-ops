@@ -18,7 +18,7 @@
 
 - name: create rabbitmq user
   become: true
-  ansible.builtin.command: rabbitmqctl add_user currency_app_user password
+  ansible.builtin.command: rabbitmqctl add_user {{rabbitmq_user}} {{rabbitmq_password}}
   register: rabbitmq_add_user
   # rc - return code stderr - standard error
   # 0 - suceess != - failure
@@ -28,4 +28,8 @@
 
 - name: set rabbitmq permissions
   become: true
-  ansible.builtin.command: rabbitmqctl set_permissions -p / currency_app_user ".*" ".*" ".*"
+  ansible.builtin.command: rabbitmqctl set_permissions -p / {{rabbitmq_user}} ".*" ".*" ".*"
+
+- name: set rabbitmq user tags
+  become: true
+  ansible.builtin.command: rabbitmqctl set_user_tags {{rabbitmq_user}} administrator

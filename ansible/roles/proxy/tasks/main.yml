@@ -11,27 +11,9 @@
 
 - name: install proxy systemd unit
   become: true
-  ansible.builtin.copy:
+  ansible.builtin.template:
+    src: proxy.service.j2
     dest: /etc/systemd/system/proxy.service 
-    content: |
-      [Unit]
-      Description=Proxy service
-      After=network.target
-
-      [Service]
-      Type=simple
-      User=vagrant
-      WorkingDirectory=/vagrant/proxy_service
-      ExecStart=/usr/bin/python3 /vagrant/proxy_service/proxy.py
-      Restart=always
-      RestartSec=5
-      Environment=RABBITMQ_HOST=192.168.56.14
-      Environment=RABBITMQ_USER=currency_app_user
-      Environment=RABBITMQ_PASS=password
-      Environment=HISTORY_HOST=192.168.56.13
-
-      [Install]
-      WantedBy=multi-user.target
 
   notify: reload systemd
 

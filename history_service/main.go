@@ -17,6 +17,7 @@ import (
 )
 
 var db *sql.DB
+var postgres_table string
 
 type Price struct {
 	Coin       string  `json:"coin"`
@@ -26,10 +27,11 @@ type Price struct {
 }
 
 func connectDB() *sql.DB {
-	host := getEnv("POSTGRES_HOST", "192.168.56.14")
-	dbname := getEnv("POSTGRES_DB", "currency_rates_tracker")
-	user := getEnv("POSTGRES_USER", "currency_app_user")
-	password := getEnv("POSTGRES_PASS", "password")
+	host := getEnv("POSTGRES_HOST", "")
+	dbname := getEnv("POSTGRES_DB", "")
+	user := getEnv("POSTGRES_USER", "")
+	password := getEnv("POSTGRES_PASS", "")
+
 
 	connStr := fmt.Sprintf(
 		"host=%s dbname=%s user=%s password=%s sslmode=disable",
@@ -41,14 +43,15 @@ func connectDB() *sql.DB {
 		log.Fatalf("DB connection error: %v", err)
 	}
 
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS currency_rates (
+	query := fmt.Sprintf(`
+		CREATE TABLE IF NOT EXISTS %s (
 			id SERIAL PRIMARY KEY,
 			coin	VARCHAR(10) NOT NULL,
 			price NUMERIC(15, 2) NOT NULL,
 			recorded_at TIMESTAMP DEFAULT NOW()
-		)
-	`)
+		)`, postgres_table)
+
+	_, err = db.Exec(query)
 
 	if err != nil {
 		log.Fatalf("Failed to create table: %v", err)
@@ -61,16 +64,15 @@ func connectDB() *sql.DB {
 
 func saveToDB(coin string, price float64) {
 	var exists bool
-	err := db.QueryRow(
+	query := fmt.Sprintf(
 		`SELECT EXISTS (
 			SELECT 1
-			FROM currency_rates
+			FROM %s
 			WHERE coin = $1
 			  AND price = $2
 			  AND recorded_at >= NOW() - INTERVAL '10 seconds'
-		)`,
-		coin, price,
-	).Scan(&exists)
+		)`,postgres_table)
+	err := db.QueryRow(query, coin, price).Scan(&exists)
 	if err != nil {
 		log.Printf("DB duplicate check error: %v", err)
 		return
@@ -80,10 +82,13 @@ func saveToDB(coin string, price float64) {
 		return
 	}
 
-	_, err = db.Exec(
-		"INSERT INTO currency_rates (coin, price) VALUES ($1, $2)", coin, price,
-	) // we only need err, _ - omits the result of exec
-	// $1 placeholder for coin value, $2 for price value
+	// _, err = db.Exec(
+	// 	"INSERT INTO currency_rates (coin, price) VALUES ($1, $2)", coin, price,
+	// ) // we only need err, _ - omits the result of exec
+	// // $1 placeholder for coin value, $2 for price value
+	query = fmt.Sprintf("INSERT INTO %s (coin, price) VALUES ($1, $2)", postgres_table)
+	_, err = db.Exec(query, coin, price)
+
 	if err != nil {
 		log.Printf("DB insert error: %v", err)
 		return
@@ -92,10 +97,10 @@ func saveToDB(coin string, price float64) {
 }
 
 func startWorker() {
-	host := getEnv("RABBITMQ_HOST", "192.168.56.14")
-	user := getEnv("RABBITMQ_USER", "currency_app_user")
-	password := getEnv("RABBITMQ_PASS", "password")
-	queue := getEnv("RABBITMQ_QUEUE", "currency_rates")
+	host := getEnv("RABBITMQ_HOST", "")
+	user := getEnv("RABBITMQ_USER", "")
+	password := getEnv("RABBITMQ_PASS", "")
+	queue := getEnv("RABBITMQ_QUEUE", "")
 
 	for {
 		url := fmt.Sprintf("amqp://%s:%s@%s:5672/", user, password, host)
@@ -191,7 +196,7 @@ func historyHandler(w http.ResponseWriter, r *http.Request) {
 		argIndex++
 	}
 
-	query := "SELECT coin, price, recorded_at FROM currency_rates"
+	query := fmt.Sprintf("SELECT coin, price, recorded_at FROM %s", postgres_table)
 	if len(whereParts) > 0 {
 		query += " WHERE " + strings.Join(whereParts, " AND ")
 	}
@@ -287,9 +292,11 @@ func statsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var stats Stats
-	err := db.QueryRow(
-		"SELECT MAX(price), MIN(price) FROM currency_rates WHERE coin = $1", coin,
-	).Scan(&stats.Highest_Price, &stats.Lowest_Price)
+	query := fmt.Sprintf(
+		"SELECT MAX(price), MIN(price) FROM %s WHERE coin = $1",
+		postgres_table,
+	)
+	err := db.QueryRow(query, coin).Scan(&stats.Highest_Price, &stats.Lowest_Price)
 
 	if err != nil {
 		http.Error(w, "DB error", http.StatusInternalServerError)
@@ -422,10 +429,11 @@ func latestRecordedAtForCoin(coin string) (time.Time, error) {
 	var recordedAt time.Time
 	// - if there are no rows for that coin, MAX(recorded_at) becomes NULL
 	//- COALESCE(..., NOW()) replaces that NULL with the current timestamp
-	err := db.QueryRow(
-		"SELECT COALESCE(MAX(recorded_at), NOW()) FROM currency_rates WHERE coin = $1",
-		coin,
-	).Scan(&recordedAt)
+	query := fmt.Sprintf(
+		"SELECT COALESCE(MAX(recorded_at), NOW()) FROM %s WHERE coin = $1",
+		postgres_table,
+	)
+	err := db.QueryRow(query, coin).Scan(&recordedAt)
 	return recordedAt, err
 }
 
@@ -518,9 +526,11 @@ func getEnv(key, fallback string) string {
 }
 
 func main() {
+	postgres_table = getEnv("POSTGRES_TABLE", "")
+
 	db = connectDB()
 	defer db.Close() // will be completed after all commands in the end
-
+	
 	go startWorker()
 
 	http.HandleFunc("/history", historyHandler)

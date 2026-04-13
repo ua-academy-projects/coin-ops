@@ -5,18 +5,19 @@ import requests
 import os
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret")
+# for signing session cookies
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY")  # is received from systemd service file (ui.service.j2 (jinja2)) in ansible (incl vault)
 app.config["SESSION_TYPE"] = "redis"
 app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_REDIS"] = redis.Redis(
-    host=os.environ.get("REDIS_HOST", "192.168.56.14"),
-    port=int(os.environ.get("REDIS_PORT", 6379)),
+    host=os.environ.get("REDIS_HOST"),
+    port = int(os.environ.get("REDIS_PORT")),
     decode_responses=False,
 )
 Session(app)
 
-PROXY_HOST   = os.environ.get("PROXY_HOST", "192.168.56.12")
-HISTORY_HOST = os.environ.get("HISTORY_HOST", "192.168.56.13")
+PROXY_HOST = os.environ.get("PROXY_HOST")
+HISTORY_HOST = os.environ.get("HISTORY_HOST")
 COINS = ("BTC", "ETH", "SOL", "BNB")
 
 def get_current_price(coin="BTC"):
@@ -168,4 +169,4 @@ def chart_data():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)  # 0 0 0 0 - ALL NETWORK INTERFACES LISTENING
+    app.run(host="0.0.0.0", port=5000, debug=False)  # 0 0 0 0 - ALL NETWORK INTERFACES LISTENING

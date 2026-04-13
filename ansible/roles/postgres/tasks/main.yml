@@ -33,17 +33,18 @@
 
 - name: create database
   become: true
+  # check if database exists, if not create it
   ansible.builtin.shell: |
     sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE
-    datname='currency_rates_tracker'" | grep -q 1 || \
-    sudo -u postgres createdb currency_rates_tracker
+    datname='{{postgres_db}}'" | grep -q 1 || \
+    sudo -u postgres createdb {{postgres_db}}
   args:
     executable: /bin/bash
 
 - name: create db table
   become: true
   ansible.builtin.shell: |
-    sudo -u postgres psql -d currency_rates_tracker <<'SQL'
+    sudo -u postgres psql -d {{postgres_db}} <<'SQL'
     CREATE TABLE IF NOT EXISTS currency_rates (
       id SERIAL PRIMARY KEY,
       coin VARCHAR(10) NOT NULL,
@@ -58,9 +59,9 @@
   become: true
   ansible.builtin.shell: |
     sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE
-    rolname='currency_app_user'" | grep -q 1 || \
-    sudo -u postgres psql -c "CREATE USER currency_app_user WITH PASSWORD
-    'password';"
+    rolname='{{postgres_user}}'" | grep -q 1 || \
+    sudo -u postgres psql -c "CREATE USER {{postgres_user}} WITH PASSWORD
+    '{{postgres_password}}';"
   args:
     executable: /bin/bash
 
@@ -76,23 +77,23 @@
 # grant access to db
 - name: grant privileges for user on database
   become: true
-  ansible.builtin.shell:  sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE currency_rates_tracker TO currency_app_user;"
+  ansible.builtin.shell:  sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE {{postgres_db}} TO {{postgres_user}};"
   args:
     executable: /bin/bash
 # grant access to schema's
 - name: grant app user access to public schema
   become: true
   ansible.builtin.shell: | 
-    sudo -u postgres psql -d currency_rates_tracker -c "GRANT USAGE, CREATE ON
-    SCHEMA public TO currency_app_user;"
+    sudo -u postgres psql -d {{postgres_db}} -c "GRANT USAGE, CREATE ON
+    SCHEMA public TO {{postgres_user}};"
   args:
     executable: /bin/bash
 
 - name: grant privileges for user on db table
   become: true
   ansible.builtin.shell: |
-   sudo -u postgres psql -d currency_rates_tracker -c "GRANT SELECT, INSERT,
-   UPDATE, DELETE ON TABLE currency_rates TO currency_app_user;"
+   sudo -u postgres psql -d {{postgres_db}} -c "GRANT SELECT, INSERT,
+   UPDATE, DELETE ON TABLE {{postgres_table}} TO {{postgres_user}};"
   args:
     executable: /bin/bash
 
@@ -100,8 +101,8 @@
 - name: grant privileges on currency_rates_sequence
   become: true
   ansible.builtin.shell: | 
-    sudo -u postgres psql -d currency_rates_tracker -c "GRANT USAGE, SELECT,
-    UPDATE ON SEQUENCE currency_rates_id_seq TO currency_app_user;"
+    sudo -u postgres psql -d {{postgres_db}} -c "GRANT USAGE, SELECT,
+    UPDATE ON SEQUENCE {{postgres_table}}_id_seq TO {{postgres_user}};"
   args:
     executable: /bin/bash
 
