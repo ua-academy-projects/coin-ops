@@ -1,0 +1,114 @@
+# History Service Configuration Playbook
+# Used packages:
+#   - ansible.builtin.get_url
+#   - ansible.builtin.unarchive
+#   - ansible.builtin.command
+#   - ansible.builtin.template
+#   - ansible.posix.synchronize
+#   - ansible.builtin.systemd
+#   - ansible.builtin.systemd_service
+#   - community.general.ufw
+---
+- name: History Service Configuration Playbook
+  hosts: history_svc
+  become: true
+  vars:
+    go_version: "1.24.0"
+    go_tarball: "go{{ go_version }}.linux-{{ go_arch }}.tar.gz"
+    go_download_url: "https://go.dev/dl/{{ go_tarball }}"
+    go_install_dir: "/usr/local"
+    go_bin_path: "{{ go_install_dir }}/go/bin"
+    web_ui_host: 192.168.56.10
+    api_proxy_host: 192.168.56.11
+    rabbit_mq_password: "{{ lookup('env', 'RABBIT_MQ_PASSWORD') }}"
+    db_password: "{{ lookup('env', 'DB_PASSWORD') }}"
+  tasks:
+
+    - name: Set Go architecture based on system architecture
+      ansible.builtin.set_fact:
+        go_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+
+    - name: Download Go {{ go_version }} archive from official source
+      ansible.builtin.get_url:
+        url: "{{ go_download_url }}"
+        dest: "/tmp/{{ go_tarball }}"
+        mode: "0644"
+
+    - name: Extract Go archive to {{ go_install_dir }}
+      ansible.builtin.unarchive:
+        src: "/tmp/{{ go_tarball }}"
+        dest: "{{ go_install_dir }}"
+        remote_src: true
+        creates: "{{ go_install_dir }}/go/bin/go"
+
+    - name: Synchronize History Service source code to the remote server
+      ansible.posix.synchronize:
+        src: "{{ playbook_dir }}/../../history-service/"
+        dest: /home/{{ ansible_user }}/history-service/
+        archive: true
+        rsync_opts:
+          - "--exclude=.venv"
+          - "--exclude=vendor"
+          - "--exclude=history-service"
+      register: sync_result
+
+    - name: Compile the Go application binary from source
+      ansible.builtin.command:
+        cmd: "{{ go_bin_path }}/go build -o history-service ."
+        chdir: /home/{{ ansible_user }}/history-service
+      when: sync_result.changed
+
+    - name: Deploy systemd service unit file for the coin-history service
+      ansible.builtin.template:
+        src: ../templates/coin-history.service
+        dest: /etc/systemd/system/coin-history.service
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Reload systemd daemon to pick up the new service file
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Ensure the coin-history service is enabled to start on boot
+      ansible.builtin.systemd:
+        name: coin-history
+        enabled: true
+
+    - name: Ensure the coin-history service is currently running
+      ansible.builtin.systemd_service:
+        name: coin-history
+        state: started
+
+    - name: Set UFW default policy to deny all incoming traffic
+      community.general.ufw:
+        default: deny
+        direction: incoming
+
+    - name: Set UFW default policy to allow all outgoing traffic
+      community.general.ufw:
+        default: allow
+        direction: outgoing
+
+    - name: Allow SSH traffic through UFW
+      community.general.ufw:
+        rule: allow
+        name: OpenSSH
+
+    - name: Allow TCP traffic on port 8001 from the Web UI host
+      community.general.ufw:
+        rule: allow
+        port: 8001
+        proto: tcp
+        src: "{{ web_ui_host }}"
+
+    - name: Allow TCP traffic on port 8001 from the API Proxy host
+      community.general.ufw:
+        rule: allow
+        port: 8001
+        proto: tcp
+        src: "{{ api_proxy_host }}"
+
+    - name: Finalize and enable UFW firewall rules
+      community.general.ufw:
+        state: enabled

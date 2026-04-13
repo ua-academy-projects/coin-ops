@@ -1,0 +1,140 @@
+# Web UI Service Configuration Playbook
+# Used packages:
+#   - ansible.builtin.apt
+#   - ansible.posix.synchronize
+#   - ansible.builtin.pip
+#   - ansible.builtin.template
+#   - ansible.builtin.systemd
+#   - ansible.builtin.systemd_service
+#   - ansible.builtin.file
+#   - ansible.builtin.command
+#   - community.general.ufw
+---
+- name: Web UI Service Configuration Playbook
+  hosts: web_ui
+  become: true
+  handlers:
+    - name: Reload Nginx
+      ansible.builtin.systemd_service:
+        name: nginx
+        state: reloaded
+  tasks:
+    - name: Download packages
+      ansible.builtin.apt:
+        pkg:
+          - python3
+          - python3-pip
+          - python3-venv
+          - nginx
+        update_cache: yes
+
+    - name: Synchronize Web UI source code to the remote server
+      ansible.posix.synchronize:
+        src: "{{ playbook_dir }}/../../ui/"
+        dest: /home/{{ ansible_user }}/ui/
+        archive: true
+        rsync_opts:
+          - "--exclude=.venv"
+          - "--exclude=__pycache__"
+      register: sync_result
+
+    - name: Create Python virtual environment
+      ansible.builtin.pip:
+        virtualenv: /home/{{ ansible_user }}/ui/.venv
+        virtualenv_command: python3 -m venv
+        name: pip
+
+    - name: Install dependencies
+      ansible.builtin.pip:
+        requirements: /home/{{ ansible_user }}/ui/requirements.txt
+        virtualenv: /home/{{ ansible_user }}/ui/.venv
+
+    # - name: Create Python virtual environment and install dependencies
+    #   ansible.builtin.pip:
+    #     requirements: /home/{{ ansible_user }}/ui/requirements.txt
+    #     virtualenv: /home/{{ ansible_user }}/ui/.venv
+    #     virtualenv_command: python3 -m venv
+    #   when: sync_result.changed
+
+    - name: Deploy systemd service unit file for the web-ui service
+      ansible.builtin.template:
+        src: ../templates/coin-ui.service
+        dest: /etc/systemd/system/coin-ui.service
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Reload systemd daemon to pick up the new service file
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Ensure the coin-ui service is enabled to start on boot
+      ansible.builtin.systemd:
+        name: coin-ui
+        enabled: true
+
+    - name: Ensure the coin-ui service is currently running
+      ansible.builtin.systemd_service:
+        name: coin-ui
+        state: started
+
+    - name: Deploy Nginx site configuration for coin-ui
+      ansible.builtin.template:
+        src: ../templates/coin-ui.nginx.conf
+        dest: /etc/nginx/sites-available/coin-ui
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload Nginx
+
+    - name: Enable coin-ui site by creating symlink in sites-enabled
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/coin-ui
+        dest: /etc/nginx/sites-enabled/coin-ui
+        state: link
+
+    - name: Remove default Nginx site
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: Reload Nginx
+
+    - name: Validate Nginx configuration
+      ansible.builtin.command:
+        cmd: nginx -t
+      changed_when: false
+
+    - name: Ensure Nginx service is enabled on boot
+      ansible.builtin.systemd:
+        name: nginx
+        enabled: true
+
+    - name: Ensure Nginx service is currently running
+      ansible.builtin.systemd_service:
+        name: nginx
+        state: started
+
+    - name: Set UFW default policy to deny all incoming traffic
+      community.general.ufw:
+        default: deny
+        direction: incoming
+
+    - name: Set UFW default policy to allow all outgoing traffic
+      community.general.ufw:
+        default: allow
+        direction: outgoing
+
+    - name: Allow SSH traffic through UFW
+      community.general.ufw:
+        rule: allow
+        name: OpenSSH
+
+    - name: Allow HTTP traffic on port 80
+      community.general.ufw:
+        rule: allow
+        port: 80
+        proto: tcp
+
+    - name: Finalize and enable UFW firewall rules
+      community.general.ufw:
+        state: enabled

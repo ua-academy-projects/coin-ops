@@ -1,0 +1,6 @@
+---
+- import_playbook: playbooks/db-server.yml
+- import_playbook: playbooks/msg-queue.yml
+- import_playbook: playbooks/history-service.yml
+- import_playbook: playbooks/api-proxy.yml
+- import_playbook: playbooks/web-ui.yml

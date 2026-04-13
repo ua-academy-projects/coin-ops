@@ -1,0 +1,163 @@
+# PostgreSQL Configuration Playbook
+#
+# Used packages:
+#   - ansible.builtin.systemd_service
+#   - ansible.general.ufw
+#   - ansible.builtin.apt
+#   - ansible.builtin.file
+#   - community.postgresql.postgresql_user
+#   - community.postgresql.postgresql_db
+#   - community.postgresql.postgresql_privs
+#   - ansible.builtin.replace
+#   - ansible.builtin.lineinfile
+#   - ansible.builtin.copy
+#   - community.postgresql.postgresql_script
+
+---
+- name: PostgreSQL database installation and configuration
+  hosts: db_server
+  become: true
+
+  vars:
+    db_user: coinops
+    db_name: coinops
+    db_roles: coinops 
+    db_password: "{{ lookup('env', 'DB_PASSWORD') }}"
+    history_svc_ip: 192.168.56.14/32
+    history_svc_host: 192.168.56.14
+    postgresql_version: 16
+    
+  handlers:
+    - name: Restart PostgreSQL to apply system-level changes 
+      ansible.builtin.systemd_service:
+        name: postgresql
+        state: restarted
+
+    - name: Reload PostgreSQL to apply configuration updates
+      ansible.builtin.systemd_service:
+        name: postgresql
+        state: reloaded
+
+    - name: Ensure UFW firewall is active and enabled
+      community.general.ufw:
+        state: enabled
+
+  tasks:
+
+    # POSTGRESQL DATABASE INSTALLATION
+
+    # acl -> required for Ansible to work as unprivileged become_user (postgres)
+    # psycopg2 -> postgresql database adapter for python3
+    # libpq-dev -> header files and static libraries for building PostgreSQL clients
+    - name: Install PostgreSQL, contrib, and dependencies via APT
+      ansible.builtin.apt:
+        pkg:
+          - postgresql-{{ postgresql_version }}
+          - postgresql-contrib-{{ postgresql_version }}
+          - python3-psycopg2
+          - libpq-dev
+          - acl
+        update_cache: yes
+
+    - name: Ensure PostgreSQL service is enabled on boot 
+      ansible.builtin.systemd_service:
+        name: postgresql
+        enabled: true
+
+    - name: Ensure PostgreSQL service is currently started 
+      ansible.builtin.systemd_service:
+        name: postgresql
+        state: started
+
+    # POSTGRESQL DATABASE CONFIGURATION
+
+    - name: Create Ansible temporary directory for the postgres user
+      ansible.builtin.file:
+        path: /var/lib/postgresql/.ansible/tmp
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: "0755"
+      become: true
+
+    - name: Create the "{{ db_user }}" database user
+      community.postgresql.postgresql_user:
+        name: "{{ db_user }}"
+        password: "{{ db_password }}"
+        state: present
+      become_user: postgres
+
+    - name: Create the "{{ db_name }}" database owned by "{{ db_user }}"
+      community.postgresql.postgresql_db:
+        name: "{{ db_name }}"
+        owner: "{{ db_user }}"
+        state: present
+      become_user: postgres
+
+    - name: Grant ALL privileges to "{{ db_roles }}" on "{{ db_name }}"
+      community.postgresql.postgresql_privs:
+        login_db: "{{ db_name }}"
+        privs: ALL
+        type: database
+        obj: "{{ db_name }}"
+        roles: "{{ db_roles }}"
+        state: present
+      become_user: postgres
+
+    - name: Configure PostgreSQL to listen on all network interfaces 
+      ansible.builtin.replace:
+        path: "/etc/postgresql/{{ postgresql_version }}/main/postgresql.conf"
+        regexp: "^#?listen_addresses\\s*=.*"
+        replace: "listen_addresses = '*'"
+      notify: Restart PostgreSQL to apply system-level changes 
+
+    - name: Configure pg_hba.conf to allow MD5 auth from history service 
+      ansible.builtin.lineinfile:
+        path: /etc/postgresql/{{ postgresql_version }}/main/pg_hba.conf
+        line: "host  coinops  coinops  {{ history_svc_ip }}  md5" # authentification using password
+      notify: Reload PostgreSQL to apply configuration updates
+
+    - name: Upload the SQL schema file to the remote server 
+      ansible.builtin.copy:
+        src: ../../history-service/schema.sql
+        dest: /tmp/schema.sql
+        owner: postgres
+        group: postgres
+        mode: "0644"
+
+    - name: Execute the database schema script via psql 
+      community.postgresql.postgresql_script:
+        login_db: "{{ db_name }}"
+        login_user: "{{ db_user }}"
+        login_password: "{{ db_password }}"
+        login_host: localhost
+        path: /tmp/schema.sql
+      changed_when: false # !!!
+
+    # UFW CONFIGURATION
+
+    - name: Set UFW default policy to deny all incoming traffic 
+      community.general.ufw:
+        default: deny
+        direction: incoming
+
+    - name: Set UFW default policy to allow all outgoing traffic 
+      community.general.ufw:
+        default: allow
+        direction: outgoing
+
+    - name: Allow SSH traffic through UFW 
+      community.general.ufw:
+        rule: allow
+        name: OpenSSH
+
+    - name: Allow incoming PostgreSQL traffic (Port 5432) from history service host 
+      community.general.ufw:
+        rule: allow
+        port: 5432
+        proto: tcp
+        src: "{{ history_svc_host }}"
+
+    - name: Finalize and enable UFW firewall rules
+      community.general.ufw:
+        state: enabled

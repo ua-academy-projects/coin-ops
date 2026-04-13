@@ -1,0 +1,98 @@
+# RabbitMQ Server Configuration Playbook
+#
+# Used packages:
+#   - ansible.builtin.apt
+#   - community.rabbitmq.rabbitmq_plugin
+#   - community.rabbitmq.rabbitmq_user
+#   - community.general.ufw
+
+---
+- name: RabbitMQ installation and configuration
+  hosts: msg_queue
+  become: true
+
+  vars:
+    rabbit_mq_user: coinops
+    rabbit_mq_password: "{{ lookup('env', 'RABBIT_MQ_PASSWORD') }}"
+    api_proxy_ip: 192.168.56.11/32
+    history_svc_ip: 192.168.56.14/32
+    host_ip: "{{ lookup('env', 'HOST_IP') | default('127.0.0.1/32', true) }}"
+
+  tasks:
+
+    # RABBITMQ SERVER INSTALLATION
+
+    - name: Install RabbitMQ Server via APT
+      ansible.builtin.apt:
+        name: rabbitmq-server
+        update_cache: yes
+
+    - name: Ensure RabbitMQ service is enabled on boot
+      ansible.builtin.systemd_service:
+        name: rabbitmq-server
+        enabled: true
+
+    - name: Ensure RabbitMQ service is currently started
+      ansible.builtin.systemd_service:
+        name: rabbitmq-server
+        state: started
+
+    - name: Ensure RabbitMQ Management plugin service is enabled on boot
+      community.rabbitmq.rabbitmq_plugin:
+        names: rabbitmq_management
+        state: enabled
+
+    # RABBITMQ SERVER CONFIGURATION
+
+    - name: Remove default guest user
+      community.rabbitmq.rabbitmq_user:
+        user: guest
+        state: absent
+
+    - name: Add user to RabbitMQ server and assign permission rules to it
+      community.rabbitmq.rabbitmq_user:
+        user: coinops
+        password: "{{ rabbit_mq_password }}"
+        vhost: /
+        configure_priv: .*
+        read_priv: .*
+        write_priv: .*
+        state: present
+
+    # UFW CONFIGURATION
+
+    - name: Set UFW default policy to deny all incoming traffic 
+      community.general.ufw:
+        default: deny
+        direction: incoming
+
+    - name: Default allow outgoing
+      community.general.ufw:
+        default: allow
+        direction: outgoing
+
+    - name: Allow SSH traffic through UFW
+      community.general.ufw:
+        rule: allow
+        name: OpenSSH
+
+    - name: Allow AMQP traffic (5672) from authorized services
+      community.general.ufw:
+        rule: allow
+        port: 5672
+        proto: tcp
+        src: "{{ item }}"
+      loop:
+        - "{{ history_svc_ip }}"
+        - "{{ api_proxy_ip }}"
+
+    - name: Allow access to RabbitMQ Management Dashboard (15672) from host IP 
+      community.general.ufw:
+        rule: allow
+        port: 15672
+        proto: tcp
+        src: "{{ host_ip }}"
+
+    - name: Finalize and enable UFW firewall rules
+      community.general.ufw:
+        state: enabled

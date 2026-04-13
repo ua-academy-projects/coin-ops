@@ -1,0 +1,18 @@
+[Unit]
+Description=Coin-Ops API Proxy
+After=network.target
+
+[Service]
+Type=simple
+User={{ ansible_user }}
+WorkingDirectory=/home/{{ ansible_user }}/api-proxy
+ExecStart=/home/{{ ansible_user }}/api-proxy/api-proxy
+Environment=PORT=8000
+Environment=CORS_ORIGINS=http://192.168.56.10
+Environment=RABBITMQ_URL=amqp://coinops:{{ rabbit_mq_password }}@192.168.56.13:5672/
+Environment=HISTORY_SERVICE_URL=http://192.168.56.14:8001
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

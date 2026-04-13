@@ -1,0 +1,114 @@
+# API-Proxy Configuration Playbook
+# Used packages:
+#   - ansible.builtin.get_url
+#   - ansible.builtin.unarchive
+#   - ansible.builtin.command
+#   - ansible.posix.synchronize
+#   - ansible.builtin.template
+#   - ansible.builtin.systemd
+#   - community.general.ufw
+
+---
+- name: API Proxy Configuration Playbook
+  hosts: api_proxy
+  become: true
+
+  vars:
+    go_version: "1.24.0"
+    go_tarball: "go{{ go_version }}.linux-{{ go_arch }}.tar.gz"
+    go_download_url: "https://go.dev/dl/{{ go_tarball }}"
+    go_install_dir: "/usr/local"
+    go_bin_path: "{{ go_install_dir }}/go/bin"
+
+    web_ui_host: 192.168.56.10
+    rabbit_mq_password: "{{ lookup('env', 'RABBIT_MQ_PASSWORD') }}"
+
+  tasks:
+
+    # GO INSTALLATION
+
+    - name: Set Go architecture based on system architecture
+      ansible.builtin.set_fact:
+        go_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+
+    - name: Download Go version {{ go_version }} archive from official source 
+      ansible.builtin.get_url:
+        url: "{{ go_download_url }}"
+        dest: "/tmp/{{ go_tarball }}"
+        mode: "0644"
+
+    - name: Extract Go archive to {{ go_install_dir }} 
+      ansible.builtin.unarchive:
+        src: "/tmp/{{ go_tarball }}"
+        dest: "{{ go_install_dir }}"
+        remote_src: true # archive already exists on a target
+        creates: "{{ go_install_dir }}/go/bin/go"
+
+    # SOURCE CODE DOWNLOADING AND SERVICE CONFIGURATION
+    
+    - name: Synchronize API Proxy source code to the remote server 
+      ansible.posix.synchronize:
+        src: "{{ playbook_dir }}/../../api-proxy/"
+        dest: /home/{{ ansible_user }}/api-proxy/
+        archive: true
+        rsync_opts:
+          - "--exclude=.venv"
+          - "--exclude=vendor"
+          - "--exclude=api-proxy"
+      register: sync_result
+
+    - name: Compile the Go application binary from source 
+      ansible.builtin.command:
+        cmd: "{{ go_bin_path }}/go build -o api-proxy ."
+        chdir: /home/{{ ansible_user }}/api-proxy
+      when: sync_result.changed
+
+    - name: Deploy systemd service unit file for the coin-proxy service 
+      ansible.builtin.template:
+        src: ../templates/coin-proxy.service
+        dest: /etc/systemd/system/coin-proxy.service
+        owner: root
+        group: root
+        mode: "0644"
+
+    # UFW CONFIGURATION
+
+    - name: Reload systemd daemon to pick up the new service file
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Ensure the coin-proxy service is enabled to start on boot 
+      ansible.builtin.systemd:
+        name: coin-proxy
+        enabled: true
+
+    - name: Ensure the coin-proxy service is currently running 
+      ansible.builtin.systemd_service:
+        name: coin-proxy
+        state: started
+
+    - name: Set UFW default policy to deny all incoming traffic 
+      community.general.ufw:
+        default: deny
+        direction: incoming
+
+    - name: Set UFW default policy to allow all outgoing traffic 
+      community.general.ufw:
+        default: allow
+        direction: outgoing
+
+    - name: Allow SSH traffic through UFW 
+      community.general.ufw:
+        rule: allow
+        name: OpenSSH
+
+    - name: Allow TCP traffic on port 8000 from the Web UI host
+      community.general.ufw:
+        rule: allow
+        port: 8000
+        proto: tcp
+        src: "{{ web_ui_host }}"
+
+    - name: Finalize and enable UFW firewall rules
+      community.general.ufw:
+        state: enabled
