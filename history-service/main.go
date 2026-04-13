@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -39,7 +42,7 @@ type historyRecord struct {
 
 // --- consumer ---
 
-func startConsumer(mqURL string, db *sql.DB) error {
+func startConsumer(ctx context.Context, mqURL string, db *sql.DB) error {
 	conn, err := amqp.Dial(mqURL)
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
@@ -64,60 +67,71 @@ func startConsumer(mqURL string, db *sql.DB) error {
 
 	log.Println("rabbitmq: consumer started, waiting for messages")
 
-	for msg := range msgs {
-		var event rateEvent
-		if err := json.Unmarshal(msg.Body, &event); err != nil {
-			log.Printf("consumer: failed to parse message: %v", err)
-			msg.Nack(false, false)
-			continue
-		}
-
-		fetchedAt, err := time.Parse(time.RFC3339, event.FetchedAt)
-		if err != nil {
-			log.Printf("consumer: invalid fetched_at: %v", err)
-			msg.Nack(false, false)
-			continue
-		}
-
-		tx, err := db.Begin()
-		if err != nil {
-			log.Printf("consumer: failed to begin tx: %v", err)
-			msg.Nack(false, true)
-			continue
-		}
-
-		failed := false
-		for _, r := range event.Rates {
-			_, err := tx.Exec(
-				`INSERT INTO rate_history (code, name, rate, rate_date, fetched_at)
-				 VALUES ($1, $2, $3, $4, $5)
-				 ON CONFLICT (code, rate_date) DO UPDATE
-				 SET rate = EXCLUDED.rate, name = EXCLUDED.name, fetched_at = EXCLUDED.fetched_at`,
-				r.Code, r.Name, r.Rate, r.Date, fetchedAt,
-			)
-			if err != nil {
-				log.Printf("consumer: insert failed: %v", err)
-				failed = true
-				break
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("rabbitmq: consumer stopping")
+			return nil
+		case msg, ok := <-msgs:
+			if !ok {
+				return nil
 			}
-		}
 
-		if failed {
-			tx.Rollback()
-			msg.Nack(false, true)
-			continue
-		}
+			var event rateEvent
+			if err := json.Unmarshal(msg.Body, &event); err != nil {
+				log.Printf("consumer: failed to parse message: %v", err)
+				msg.Nack(false, false)
+				continue
+			}
 
-		if err := tx.Commit(); err != nil {
-			log.Printf("consumer: commit failed: %v", err)
-			msg.Nack(false, true)
-			continue
-		}
+			fetchedAt, err := time.Parse(time.RFC3339, event.FetchedAt)
+			if err != nil {
+				log.Printf("consumer: invalid fetched_at: %v", err)
+				msg.Nack(false, false)
+				continue
+			}
 
-		log.Printf("consumer: stored %d rates fetched at %s", len(event.Rates), event.FetchedAt)
-		msg.Ack(false)
+			tx, err := db.Begin()
+			if err != nil {
+				log.Printf("consumer: failed to begin tx: %v", err)
+				msg.Nack(false, true)
+				continue
+			}
+
+			failed := false
+			for _, r := range event.Rates {
+				_, err := tx.Exec(
+					`INSERT INTO rate_history (code, name, rate, rate_date, fetched_at)
+					 VALUES ($1, $2, $3, $4, $5)
+					 ON CONFLICT (code, rate_date) DO UPDATE
+					 SET rate = EXCLUDED.rate, name = EXCLUDED.name, fetched_at = EXCLUDED.fetched_at`,
+					r.Code, r.Name, r.Rate, r.Date, fetchedAt,
+				)
+				if err != nil {
+					log.Printf("consumer: insert failed: %v", err)
+					failed = true
+					break
+				}
+			}
+
+			if failed {
+				if err := tx.Rollback(); err != nil {
+					log.Printf("consumer: rollback failed: %v", err)
+				}
+				msg.Nack(false, true)
+				continue
+			}
+
+			if err := tx.Commit(); err != nil {
+				log.Printf("consumer: commit failed: %v", err)
+				msg.Nack(false, true)
+				continue
+			}
+
+			log.Printf("consumer: stored %d rates fetched at %s", len(event.Rates), event.FetchedAt)
+			msg.Ack(false)
+		}
 	}
-	return nil
 }
 
 // --- HTTP handlers ---
@@ -278,10 +292,16 @@ func main() {
 	}
 	log.Println("db: connected")
 
+	consumerCtx, consumerCancel := context.WithCancel(context.Background())
+	defer consumerCancel()
+
 	go func() {
 		backoff := time.Second
 		for {
-			err := startConsumer(mqURL, db)
+			err := startConsumer(consumerCtx, mqURL, db)
+			if consumerCtx.Err() != nil {
+				return // context cancelled — shutting down
+			}
 			if err != nil {
 				log.Printf("rabbitmq consumer error: %v, retrying in %s", err, backoff)
 			} else {
@@ -308,5 +328,24 @@ func main() {
 		IdleTimeout:       60 * time.Second,
 	}
 	log.Printf("history-service listening on %s", addr)
-	log.Fatal(srv.ListenAndServe())
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %v", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("shutting down...")
+
+	consumerCancel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("forced shutdown: %v", err)
+	}
+	log.Println("stopped")
 }
