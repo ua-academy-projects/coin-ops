@@ -76,4 +76,4 @@ Inside the Docker network, services communicate using their container names as D
 
 ## Notes
 - **Hot Reload**: The Frontend and History services have volumes mounted in `docker-compose.yml`. Changes to Python code will reflect instantly.
-- **Proxy Rebuild**: Since the Proxy (Go) is compiled, a rebuild is required for changes to take effect.
+- **Proxy Rebuild**: Since the Proxy (Go) is compiled, a rebuild is required for changes to take effect.
