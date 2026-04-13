@@ -26,7 +26,7 @@ type Price struct {
 }
 
 func connectDB() *sql.DB {
-	host := getEnv("POSTGRES_HOST", "localhost")
+	host := getEnv("POSTGRES_HOST", "192.168.56.14")
 	dbname := getEnv("POSTGRES_DB", "currency_rates_tracker")
 	user := getEnv("POSTGRES_USER", "currency_app_user")
 	password := getEnv("POSTGRES_PASS", "password")
@@ -60,7 +60,27 @@ func connectDB() *sql.DB {
 }
 
 func saveToDB(coin string, price float64) {
-	_, err := db.Exec(
+	var exists bool
+	err := db.QueryRow(
+		`SELECT EXISTS (
+			SELECT 1
+			FROM currency_rates
+			WHERE coin = $1
+			  AND price = $2
+			  AND recorded_at >= NOW() - INTERVAL '10 seconds'
+		)`,
+		coin, price,
+	).Scan(&exists)
+	if err != nil {
+		log.Printf("DB duplicate check error: %v", err)
+		return
+	}
+	if exists {
+		log.Printf("Skipped duplicate DB insert: %s = %f", coin, price)
+		return
+	}
+
+	_, err = db.Exec(
 		"INSERT INTO currency_rates (coin, price) VALUES ($1, $2)", coin, price,
 	) // we only need err, _ - omits the result of exec
 	// $1 placeholder for coin value, $2 for price value
@@ -72,7 +92,7 @@ func saveToDB(coin string, price float64) {
 }
 
 func startWorker() {
-	host := getEnv("RABBITMQ_HOST", "localhost")
+	host := getEnv("RABBITMQ_HOST", "192.168.56.14")
 	user := getEnv("RABBITMQ_USER", "currency_app_user")
 	password := getEnv("RABBITMQ_PASS", "password")
 	queue := getEnv("RABBITMQ_QUEUE", "currency_rates")
@@ -254,6 +274,11 @@ type ChartResponse struct {
 	Points       []ChartPoint `json:"points"`
 }
 
+type RawChartPoint struct {
+	Price      float64
+	RecordedAt time.Time
+}
+
 func statsHandler(w http.ResponseWriter, r *http.Request) {
 	// get coin from query params default - BTC
 	coin := strings.ToUpper(r.URL.Query().Get("coin"))
@@ -292,7 +317,7 @@ func parseRangeWindow(rangeValue string) (time.Duration, string) {
 func pointStrideForRange(rangeValue string) int {
 	switch strings.ToUpper(rangeValue) {
 	case "24H":
-		return 12
+		return 24
 	case "7D":
 		return 48
 	case "1M":
@@ -300,6 +325,62 @@ func pointStrideForRange(rangeValue string) int {
 	default:
 		return 1
 	}
+}
+
+func bucketDurationForRange(rangeValue string) time.Duration {
+	switch strings.ToUpper(rangeValue) {
+	case "1H":
+		return 15 * time.Minute
+	case "24H":
+		return time.Hour
+	default:
+		return 0
+	}
+}
+
+func roundDownTime(t time.Time, step time.Duration) time.Time {
+	if step <= 0 {
+		return t
+	}
+	return t.Truncate(step)
+}
+
+func buildDisplayPoints(rawPoints []RawChartPoint, rangeValue string, labelFormat string) []ChartPoint {
+	bucketDuration := bucketDurationForRange(rangeValue)
+	if bucketDuration <= 0 {
+		points := make([]ChartPoint, 0, len(rawPoints))
+		for _, rawPoint := range rawPoints {
+			points = append(points, ChartPoint{
+				Price:      rawPoint.Price,
+				RecordedAt: rawPoint.RecordedAt.Format("2006-01-02 15:04:05"),
+				Label:      rawPoint.RecordedAt.Format(labelFormat),
+			})
+		}
+		return downsamplePoints(points, pointStrideForRange(rangeValue))
+	}
+
+	buckets := make(map[time.Time]ChartPoint)
+	order := []time.Time{}
+
+	for _, rawPoint := range rawPoints {
+		bucketStart := roundDownTime(rawPoint.RecordedAt, bucketDuration)
+		if _, exists := buckets[bucketStart]; !exists {
+			order = append(order, bucketStart)
+		}
+
+		buckets[bucketStart] = ChartPoint{
+			Price:      rawPoint.Price,
+			RecordedAt: rawPoint.RecordedAt.Format("2006-01-02 15:04:05"),
+			Label:      bucketStart.Format(labelFormat),
+		}
+	}
+
+	points := make([]ChartPoint, 0, len(order))
+	for _, bucketStart := range order {
+		points = append(points, buckets[bucketStart])
+	}
+
+	return points
 }
 
 func downsamplePoints(points []ChartPoint, stride int) []ChartPoint {
@@ -397,31 +478,33 @@ func chartHandler(w http.ResponseWriter, r *http.Request) {
 		Range:        rangeValue,
 		Points:       []ChartPoint{},
 	}
+	rawPoints := []RawChartPoint{}
 
 	var highestSet bool
 	for rows.Next() {
-		var point ChartPoint
 		var recordedAt time.Time
-		if err := rows.Scan(&point.Price, &recordedAt); err != nil {
+		var price float64
+		if err := rows.Scan(&price, &recordedAt); err != nil {
 			continue
 		}
 
-		point.RecordedAt = recordedAt.Format("2006-01-02 15:04:05")
-		point.Label = recordedAt.Format(labelFormat)
-		response.Points = append(response.Points, point)
+		rawPoints = append(rawPoints, RawChartPoint{
+			Price:      price,
+			RecordedAt: recordedAt,
+		})
 
-		if !highestSet || point.Price > response.HighestPrice {
-			response.HighestPrice = point.Price
+		if !highestSet || price > response.HighestPrice {
+			response.HighestPrice = price
 		}
-		if !highestSet || point.Price < response.LowestPrice {
-			response.LowestPrice = point.Price
+		if !highestSet || price < response.LowestPrice {
+			response.LowestPrice = price
 		}
-		current := point.Price
+		current := price
 		response.CurrentPrice = &current
 		highestSet = true
 	}
 
-	response.Points = downsamplePoints(response.Points, pointStrideForRange(rangeValue))
+	response.Points = buildDisplayPoints(rawPoints, rangeValue, labelFormat)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)

@@ -1,0 +1,34 @@
+- name: install redis packages
+  ansible.builtin.apt:
+    name: 
+      - redis-server
+    state: present
+    update_cache: true
+
+- name: ensure redis is running
+  ansible.builtin.service:
+    name: redis-server
+    state: started
+    enabled: true
+
+# to allow connection
+- name: configure redis bind address
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/redis/redis.conf
+    regexp: '^bind '
+    line: 'bind 127.0.0.1 192.168.56.14'
+  notify: reload redis
+
+- name: disable protected mode for private network
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/redis/redis.conf
+    regexp: '^protected-mode '
+    line: 'protected-mode no'
+  notify: reload redis
+
+#   - 1 task was completed -> restart redis set to queue
+#  - 2 task was completed ->a again restart redis set to queue
+#  in the restart redis will be only completed once
+

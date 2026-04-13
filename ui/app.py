@@ -8,17 +8,24 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret")
 app.config["SESSION_TYPE"] = "redis"
 app.config["SESSION_PERMANENT"] = False
-app.config["SESSION_USE_SIGNER"] = True
 app.config["SESSION_REDIS"] = redis.Redis(
-    host=os.environ.get("REDIS_HOST", "localhost"),
+    host=os.environ.get("REDIS_HOST", "192.168.56.14"),
     port=int(os.environ.get("REDIS_PORT", 6379)),
     decode_responses=False,
 )
 Session(app)
 
-PROXY_HOST   = os.environ.get("PROXY_HOST", "localhost")
-HISTORY_HOST = os.environ.get("HISTORY_HOST", "localhost")
+PROXY_HOST   = os.environ.get("PROXY_HOST", "192.168.56.12")
+HISTORY_HOST = os.environ.get("HISTORY_HOST", "192.168.56.13")
 COINS = ("BTC", "ETH", "SOL", "BNB")
+
+def get_current_price(coin="BTC"):
+    try:
+        response = requests.get(f"http://{PROXY_HOST}:5001/price/{coin}", timeout=5)
+        return round(response.json()["price"], 2)
+    except Exception as e:
+        print(f"Proxy error: {e}")
+        return None
 
 def get_chart_data(coin="BTC", selected_date=None, selected_range="7D"):
     try:
@@ -54,15 +61,16 @@ def index():
 
     # if coin is not in the list of supported coins - set it to default BTC
     if coin not in COINS:
-        coin = "BTC"
+        coin = "BTC"    
     if selected_range not in {"1H", "24H", "7D", "1M"}:
         selected_range = "7D"
 
     session["selected_coin"] = coin
     session["selected_range"] = selected_range
 
+    live_price = get_current_price(coin)
     chart_data = get_chart_data(coin, None, selected_range)
-    current_price = chart_data.get("current_price")
+    current_price = live_price if live_price is not None else chart_data.get("current_price")
     highest_price = chart_data.get("highest_price")
     lowest_price = chart_data.get("lowest_price")
 

@@ -13,7 +13,7 @@
 <div class="wrapper">
 
     <div class="topbar">
-        <h1>Crypto Tracker</h1>
+        <h1>Coin-Ops</h1>
 
         <div class="topbar-actions">
             <a href="/history" class="btn">History</a>
@@ -74,6 +74,8 @@
                 <button class="range-btn {% if selected_range == '7D' %}active{% endif %}" data-range="7D">7D</button>
                 <button class="range-btn {% if selected_range == '1M' %}active{% endif %}" data-range="1M">1M</button>
             </div>
+
+            <div class="auto-refresh-badge" id="refreshCountdown">Next update in 03:00</div>
         </div>
 
         <canvas id="chart"></canvas>
@@ -84,6 +86,9 @@
 <script>
 let selectedCoin = "{{ selected_coin }}";
 let selectedRange = "{{ selected_range }}";
+const AUTO_REFRESH_INTERVAL_MS = 180000;
+let nextRefreshAt = Date.now() + AUTO_REFRESH_INTERVAL_MS;
+let autoRefreshTimeoutId = null;
 
 const coinButtons = document.querySelectorAll(".coin-btn");
 const rangeButtons = document.querySelectorAll(".range-btn");
@@ -92,6 +97,7 @@ const priceEl = document.getElementById("currentPrice");
 const coinBadge = document.getElementById("coinBadge");
 const highEl = document.getElementById("highValue");
 const lowEl = document.getElementById("lowValue");
+const refreshCountdownEl = document.getElementById("refreshCountdown");
 
 const ctx = document.getElementById("chart").getContext("2d");
 
@@ -195,7 +201,31 @@ function syncUrl() {
     window.history.replaceState({}, "", url);
 }
 
-async function loadChartData() {
+function formatCountdown(millisecondsLeft) {
+    const totalSeconds = Math.max(0, Math.ceil(millisecondsLeft / 1000));
+    const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
+    const seconds = String(totalSeconds % 60).padStart(2, "0");
+    return `${minutes}:${seconds}`;
+}
+
+function updateCountdown() {
+    refreshCountdownEl.textContent = `Next update in ${formatCountdown(nextRefreshAt - Date.now())}`;
+}
+
+function scheduleNextAutoRefresh() {
+    if (autoRefreshTimeoutId !== null) {
+        clearTimeout(autoRefreshTimeoutId);
+    }
+
+    nextRefreshAt = Date.now() + AUTO_REFRESH_INTERVAL_MS;
+    updateCountdown();
+    autoRefreshTimeoutId = setTimeout(async () => {
+        await loadChartData({ resetAutoRefresh: false });
+        scheduleNextAutoRefresh();
+    }, AUTO_REFRESH_INTERVAL_MS);
+}
+
+async function loadChartData({ resetAutoRefresh = false } = {}) {
     const params = new URLSearchParams({
         coin: selectedCoin,
         range: selectedRange
@@ -213,6 +243,9 @@ async function loadChartData() {
     lowEl.textContent = formatUsd(data.lowest_price);
     coinBadge.textContent = selectedCoin;
     syncUrl();
+    if (resetAutoRefresh) {
+        scheduleNextAutoRefresh();
+    }
 }
 
 coinButtons.forEach((button) => {
@@ -223,7 +256,7 @@ coinButtons.forEach((button) => {
         coinButtons.forEach((item) => item.classList.remove("active"));
         button.classList.add("active");
 
-        loadChartData();
+        loadChartData({ resetAutoRefresh: true });
     });
 });
 
@@ -239,11 +272,12 @@ rangeButtons.forEach((button) => {
         rangeButtons.forEach((item) => item.classList.remove("active"));
         button.classList.add("active");
 
-        loadChartData();
+        loadChartData({ resetAutoRefresh: true });
     });
 });
 
-loadChartData();
+loadChartData({ resetAutoRefresh: true });
+setInterval(updateCountdown, 1000);
 </script>
 
 </body>

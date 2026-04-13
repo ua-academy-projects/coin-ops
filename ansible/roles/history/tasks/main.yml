@@ -1,0 +1,57 @@
+# do not need to ensure running because go is a package not a systemsd service
+- name: install go packages
+  ansible.builtin.apt:
+    name: 
+      - golang-go
+    state: present
+    update_cache: true
+
+# 1) enter history_app_dir 2) complete go build
+- name: build history service
+  ansible.builtin.command: go build -o history-service main.go  # create binary file of main.go
+  args:
+    chdir: /vagrant/history_service 
+  
+# manual on how to launch my history-service as a service
+# restart - if something fails - put up again , restartsec = 5 - wait 5 sec before restarting
+- name: install history systemd unit
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/history.service
+    content: |
+      [Unit]
+      Description=History service 
+      After=network.target  
+
+      [Service]
+      Type=simple
+      User=vagrant
+      WorkingDirectory=/vagrant/history_service
+      ExecStart=/vagrant/history_service/history-service
+      Restart=always
+      RestartSec=5
+      Environment=POSTGRES_HOST=192.168.56.14
+      Environment=POSTGRES_DB=currency_rates_tracker
+      Environment=POSTGRES_USER=currency_app_user
+      Environment=POSTGRES_PASS=password
+      Environment=RABBITMQ_HOST=192.168.56.14
+      Environment=RABBITMQ_USER=currency_app_user
+      Environment=RABBITMQ_PASS=password
+      Environment=RABBITMQ_QUEUE=currency_rates
+
+      [Install]
+      WantedBy=multi-user.target
+
+  notify: reload systemd
+
+# handlers acts in the end and systemd may not see new or altered system unit
+# complete all handlers right now not in the end
+- meta: flush_handlers
+
+# restart and start the process of history-service
+- name: enable and start history service
+  become: true
+  ansible.builtin.systemd:
+    name: history # file that cointains configuration from the block above
+    enabled: true # auto start-up
+    state: restarted

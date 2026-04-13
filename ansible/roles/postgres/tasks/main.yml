@@ -1,0 +1,123 @@
+# align timezone settings for postgres and vm
+- name: install time sync packages
+  ansible.builtin.apt:
+    name:
+      - chrony
+    state: present
+    update_cache: true
+
+- name: ensure chrony is running
+  ansible.builtin.service:
+    name: chrony
+    state: started
+    enabled: true
+
+- name: set timezone 
+  community.general.timezone:
+    name: Europe/Kyiv
+
+- name: install postgres packages
+  ansible.builtin.apt:
+    name:
+      - postgresql
+      - postgresql-contrib
+      - python3-psycopg2
+    state: present
+    update_cache: true
+
+- name: ensure postgres is running
+  ansible.builtin.service:
+    name: postgresql
+    state: started
+    enabled: true
+
+- name: create database
+  become: true
+  ansible.builtin.shell: |
+    sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE
+    datname='currency_rates_tracker'" | grep -q 1 || \
+    sudo -u postgres createdb currency_rates_tracker
+  args:
+    executable: /bin/bash
+
+- name: create db table
+  become: true
+  ansible.builtin.shell: |
+    sudo -u postgres psql -d currency_rates_tracker <<'SQL'
+    CREATE TABLE IF NOT EXISTS currency_rates (
+      id SERIAL PRIMARY KEY,
+      coin VARCHAR(10) NOT NULL,
+      price NUMERIC(15,2) NOT NULL,
+      recorded_at TIMESTAMP DEFAULT NOW()
+    );
+    SQL
+  args:
+    executable: /bin/bash
+
+- name: create db user
+  become: true
+  ansible.builtin.shell: |
+    sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE
+    rolname='currency_app_user'" | grep -q 1 || \
+    sudo -u postgres psql -c "CREATE USER currency_app_user WITH PASSWORD
+    'password';"
+  args:
+    executable: /bin/bash
+
+- name: configure correct db data time
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/postgresql/16/main/postgresql.conf
+    regexp: '^#?timezone\s*='
+    line: "timezone = 'Europe/Kyiv'"
+  notify: restart postgres
+
+
+# grant access to db
+- name: grant privileges for user on database
+  become: true
+  ansible.builtin.shell:  sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE currency_rates_tracker TO currency_app_user;"
+  args:
+    executable: /bin/bash
+# grant access to schema's
+- name: grant app user access to public schema
+  become: true
+  ansible.builtin.shell: | 
+    sudo -u postgres psql -d currency_rates_tracker -c "GRANT USAGE, CREATE ON
+    SCHEMA public TO currency_app_user;"
+  args:
+    executable: /bin/bash
+
+- name: grant privileges for user on db table
+  become: true
+  ansible.builtin.shell: |
+   sudo -u postgres psql -d currency_rates_tracker -c "GRANT SELECT, INSERT,
+   UPDATE, DELETE ON TABLE currency_rates TO currency_app_user;"
+  args:
+    executable: /bin/bash
+
+# for auto generating id's
+- name: grant privileges on currency_rates_sequence
+  become: true
+  ansible.builtin.shell: | 
+    sudo -u postgres psql -d currency_rates_tracker -c "GRANT USAGE, SELECT,
+    UPDATE ON SEQUENCE currency_rates_id_seq TO currency_app_user;"
+  args:
+    executable: /bin/bash
+
+
+
+- name: configure postgres listen addresses
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/postgresql/16/main/postgresql.conf
+    regexp: '^#?listen_addresses\s*='
+    line: "listen_addresses = '192.168.56.14'"
+
+- name: allow connections from vagrant network
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/postgresql/16/main/pg_hba.conf
+    line: "host   all   all   192.168.56.0/24 scram-sha-256"
+  notify: restart postgresql  # notify handler
+  

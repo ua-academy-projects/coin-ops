@@ -1,0 +1,45 @@
+- name: install ui packages
+  ansible.builtin.apt:
+    name:
+      - python3
+      - python3-flask
+      - python3-flask-session
+      - python3-redis
+      - python3-requests
+
+
+    state: present
+    update_cache: true  # apt update
+
+- name: install ui systemd unit
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/ui.service
+    content: |
+      [Unit]
+      Description=UI Service
+      After=network.target
+      [Service]
+      Type=simple
+      User=vagrant
+      WorkingDirectory=/vagrant/ui
+      ExecStart=/usr/bin/python3 /vagrant/ui/app.py
+      Restart=always
+      RestartSec=5
+      Environment=REDIS_HOST=192.168.56.14
+      Environment=REDIS_PORT=6379
+      Environment=PROXY_HOST=192.168.56.12
+      Environment=HISTORY_HOST=192.168.56.13
+      Environment=SECRET_KEY=dev-secret
+
+      [Install]
+      WantedBy=multi-user.target
+
+  notify: reload systemd
+- meta: flush_handlers
+- name: enable and start ui service
+  become: true
+  ansible.builtin.systemd:
+    name: ui
+    enabled: true
+    state: restarted

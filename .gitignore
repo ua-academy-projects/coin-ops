@@ -1,3 +1,4 @@
 .vagrant/
 .DS_Store
 __pycache__/
+history-service/history-service

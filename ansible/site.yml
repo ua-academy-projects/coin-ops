@@ -1,0 +1,28 @@
+- hosts: all
+  become: true
+  roles: 
+    - common
+  tags: 
+    - common
+
+- hosts: data
+  become: true
+  roles:
+    - postgres
+    - rabbitmq
+    - redis
+
+- hosts: history
+  become: true
+  roles:
+    - history
+
+- hosts: proxy
+  become: true
+  roles:
+    - proxy
+
+- hosts: ui
+  become: true
+  roles:
+    - ui
