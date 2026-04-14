@@ -86,7 +86,8 @@ def background_updater():
 
 
 def should_start_background_worker():
-    return not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true"
+    # make sure that main service is running, not the reloader, to avoid multiple background threads in development mode
+    return not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true" 
 
 
 # 1
