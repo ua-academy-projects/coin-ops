@@ -19,7 +19,6 @@ func getEnv(key, fallback string) string {
 }
 
 func main() {
-	historyServiceURL := "http://history:8000"
 	rabbitmqURL := getEnv("RABBIT_URL", "")
 
 	var conn *amqp.Connection
@@ -74,19 +73,7 @@ func main() {
 			lon = "30.5234"
 		}
 
-		client := http.Client{Timeout: 3 * time.Second}
-		respHistory, err := client.Get(fmt.Sprintf("%s/today", historyServiceURL))
-		
-		if err == nil {
-			defer respHistory.Body.Close()
-			if respHistory.StatusCode == http.StatusOK {
-				body, _ := ioutil.ReadAll(respHistory.Body)
-				log.Println("Success: Found fresh data in History Service")
-				w.Write(body)
-				return
-			}
-		}
-
+		// Завжди звертаємось до API, щоб мати актуальну поточну погоду
 		log.Println("Fetching from Open-Meteo API...")
 		apiURL := fmt.Sprintf(
 			"https://api.open-meteo.com/v1/forecast?latitude=%s&longitude=%s&current_weather=true&daily=temperature_2m_max,temperature_2m_min,windspeed_10m_max&timezone=auto",
@@ -102,6 +89,7 @@ func main() {
 
 		body, _ := ioutil.ReadAll(resp.Body)
 
+		// Відправляємо дані в RabbitMQ для оновлення історії
 		err = ch.Publish(
 			"", q.Name, false, false,
 			amqp.Publishing{

@@ -63,32 +63,34 @@ def consume_rabbitmq():
             if current and daily:
                 conn = get_db_conn()
                 cur = conn.cursor()
-                weather_time = current.get("time")
+                # Використовуємо дату з daily замість точного часу current
+                weather_date = daily.get("time", [None])[0]
                 
-                cur.execute(
-                    """
-                    INSERT INTO weather_history (temp, temp_max, temp_min, windspeed, windspeed_max, time)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (time) DO UPDATE SET
-                        temp = EXCLUDED.temp,
-                        temp_max = EXCLUDED.temp_max,
-                        temp_min = EXCLUDED.temp_min,
-                        windspeed = EXCLUDED.windspeed,
-                        windspeed_max = EXCLUDED.windspeed_max
-                    """,
-                    (
-                        current.get("temperature"),
-                        daily.get("temperature_2m_max", [0])[0],
-                        daily.get("temperature_2m_min", [0])[0],
-                        current.get("windspeed"),
-                        daily.get("windspeed_10m_max", [0])[0],
-                        weather_time
+                if weather_date:
+                    cur.execute(
+                        """
+                        INSERT INTO weather_history (temp, temp_max, temp_min, windspeed, windspeed_max, time)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (time) DO UPDATE SET
+                            temp = EXCLUDED.temp,
+                            temp_max = EXCLUDED.temp_max,
+                            temp_min = EXCLUDED.temp_min,
+                            windspeed = EXCLUDED.windspeed,
+                            windspeed_max = EXCLUDED.windspeed_max
+                        """,
+                        (
+                            current.get("temperature"),
+                            daily.get("temperature_2m_max", [0])[0],
+                            daily.get("temperature_2m_min", [0])[0],
+                            current.get("windspeed"),
+                            daily.get("windspeed_10m_max", [0])[0],
+                            weather_date
+                        )
                     )
-                )
-                conn.commit()
+                    conn.commit()
+                    print(f"[{datetime.now()}] Daily data updated for {weather_date}")
                 cur.close()
                 conn.close()
-                print(f"[{datetime.now()}] Data updated for {weather_time}")
         except Exception as e:
             print(f"Error processing message: {e}")
 
@@ -106,6 +108,7 @@ def get_history():
         rows = cur.fetchall()
         cur.close()
         conn.close()
+        # time у нас тепер DATE, тому isoformat() поверне YYYY-MM-DD
         return [{"temp": float(r[0]), "temp_max": float(r[1]), "temp_min": float(r[2]), "windspeed": float(r[3]), "windspeed_max": float(r[4]), "time": r[5].isoformat()} for r in rows]
     except Exception as e:
         return {"error": str(e)}
@@ -115,17 +118,19 @@ def get_today_weather():
     try:
         conn = get_db_conn()
         cur = conn.cursor()
-        cur.execute("SELECT temp, temp_max, temp_min, windspeed, windspeed_max, time FROM weather_history WHERE time >= NOW() - INTERVAL '24 hours' ORDER BY time DESC LIMIT 1")
+        # Шукаємо запис за сьогоднішню дату
+        today_str = datetime.now().date().isoformat()
+        cur.execute("SELECT temp, temp_max, temp_min, windspeed, windspeed_max, time FROM weather_history WHERE time = %s", (today_str,))
         row = cur.fetchone()
         cur.close()
         conn.close()
         if row:
             return {
                 "current_weather": {"temperature": float(row[0]), "windspeed": float(row[3]), "time": row[5].isoformat()},
-                "daily": {"temperature_2m_max": [float(row[1])], "temperature_2m_min": [float(row[2])], "windspeed_10m_max": [float(row[4])]}
+                "daily": {"temperature_2m_max": [float(row[1])], "temperature_2m_min": [float(row[2])], "windspeed_10m_max": [float(row[4])], "time": [row[5].isoformat()]}
             }
         from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail="No data")
+        raise HTTPException(status_code=404, detail="No data for today")
     except Exception as e:
         from fastapi import HTTPException
         raise HTTPException(status_code=500, detail=str(e))

@@ -14,6 +14,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Legend,
 } from "recharts";
 import { Cloud, History, Thermometer, Wind, RefreshCw } from "lucide-react";
 import { BACKEND_URL, HISTORY_URL } from "./config";
@@ -302,7 +303,7 @@ const WeatherHistory = () => {
             gap: "0.75rem",
           }}
         >
-          <Thermometer color="#3b82f6" /> Temperature History
+          <Thermometer color="#3b82f6" /> Temperature History (Daily Min/Max)
         </h2>
 
         {history.length > 0 ? (
@@ -335,11 +336,21 @@ const WeatherHistory = () => {
                       border: "none",
                       boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
                     }}
-                    itemStyle={{ color: "#3b82f6" }}
+                  />
+                  <Legend />
+                  <Line
+                    name="Max Temp"
+                    type="monotone"
+                    dataKey="temp_max"
+                    stroke="#ef4444"
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: "#ef4444" }}
+                    activeDot={{ r: 6 }}
                   />
                   <Line
+                    name="Min Temp"
                     type="monotone"
-                    dataKey="temp"
+                    dataKey="temp_min"
                     stroke="#3b82f6"
                     strokeWidth={3}
                     dot={{ r: 4, fill: "#3b82f6" }}
@@ -396,7 +407,7 @@ const WeatherHistory = () => {
                             {item.temp_min}°C / {item.temp_max}°C
                           </td>
                           <td style={{ padding: "1rem", color: "#64748b" }}>
-                            {item.windspeed} / {item.windspeed_max} km/h
+                            {item.temp}°C / {item.windspeed_max} km/h
                           </td>
                         </tr>
                       ))}
