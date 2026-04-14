@@ -42,6 +42,7 @@
           - "--exclude=.venv"
           - "--exclude=__pycache__"
       register: sync_result
+      notify: Restart coin-ui
 
     - name: Create Python virtual environment and install dependencies
       ansible.builtin.pip:
