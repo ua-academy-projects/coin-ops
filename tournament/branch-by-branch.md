@@ -2,6 +2,8 @@
 
 This file covers all 11 inspected branches, including `main` and `volynets`.
 
+2026-04-14 delta recheck: `origin/tsyhan`, `origin/kurdupel`, and `origin/volynets` were refreshed and re-evaluated from non-Markdown files only. Participant README/report Markdown files were ignored. API topic itself is not treated as a disqualifier; the analysis focuses on service boundaries, persistence, queueing, reproducibility, and deployment maturity.
+
 ## `origin/Shabat`
 
 ### Summary
@@ -22,7 +24,7 @@ Three-VM distributed Polymarket dashboard. The branch contains React/Vite UI, Go
 - Terraform is tightly coupled to local Hyper-V, WSL, WinRM, Windows paths, and `null_resource`/local-exec flows. It is useful now but not reusable as AWS infrastructure.
 - No automated test suite is present for UI, Go proxy, Python services, deployment, or infrastructure.
 - No Kubernetes manifests, Helm chart, ECS task definitions, or AWS Terraform modules.
-- Some documentation still describes the older systemd/source-sync deployment path while the current README and playbooks use GHCR plus Docker Compose.
+- Some deployment artifacts still reflect the older systemd/source-sync path while the current playbooks use GHCR plus Docker Compose.
 - `community.general.ufw` is used but no Ansible collection requirements file is committed.
 - `.terraform.lock.hcl` is ignored, which weakens provider reproducibility.
 - Custom application containers do not define Dockerfile-level `HEALTHCHECK`; health is mostly enforced externally through Ansible.
@@ -49,7 +51,7 @@ Three-VM distributed Polymarket dashboard. The branch contains React/Vite UI, Go
 ### Recommended Improvements
 
 - Use this as the baseline.
-- Update or clearly label stale systemd-era docs.
+- Remove or isolate stale systemd-era deployment artifacts.
 - Add `ansible/requirements.yml` and pin collections.
 - Commit Terraform lock files for real environments.
 - Add root-level local Compose for developers while keeping per-node Compose for VM deployment.
@@ -115,11 +117,11 @@ Currency and crypto rates system with two deployment modes: four VM systemd depl
 - Docker Compose includes full stack dependencies, named Postgres volume, health checks for Postgres/RabbitMQ/Redis, and service-name networking.
 - Custom Dockerfiles use multi-stage builds and Alpine/slim images.
 - Application config can be overridden through environment variables.
-- README explains blockers and operational commands clearly.
+- Service layout and automation make the dual VM/Docker intent visible from code and config.
 
 ### Weaknesses
 
-- Hardcoded credentials appear in Compose, Ansible, source defaults, and documentation.
+- Hardcoded credentials appear in Compose, Ansible, and source defaults.
 - No Terraform, no CI, no registry deployment, and no cloud path.
 - RabbitMQ queue/publish settings in the proxy are non-durable in places, and the consumer uses `auto_ack=True`, so messages can be lost on crash or failed database write.
 - Database, Redis, and RabbitMQ ports are exposed broadly in Docker mode.
@@ -146,46 +148,53 @@ Currency and crypto rates system with two deployment modes: four VM systemd depl
 - Add Terraform for the current VM topology or jump straight to AWS modules.
 - Pull Compose health-check patterns into the unified baseline.
 
-## `origin/monero-privacy-system`
+## `origin/tsyhan`
 
 ### Summary
 
-Separate Monero privacy analytics product. It has a React frontend, FastAPI backend, worker, PostgreSQL, local Docker Compose, deploy scripts, Alpine/OpenRC production VM model, and libvirt Terraform with cloud-init.
+Formerly evaluated as `origin/monero-privacy-system`. The refreshed `origin/tsyhan` branch is a Monero/privacy analytics implementation with React frontend, FastAPI backend, worker, PostgreSQL, Redis-backed sessions, RabbitMQ, local Docker Compose, Alpine/OpenRC deploy scripts, and libvirt Terraform with cloud-init. The API topic is not the issue; the important caveat is that RabbitMQ is not used as the persistence boundary. The worker writes directly to PostgreSQL and publishes a notification event afterward.
 
 ### Strengths
 
 - Strongest standalone Terraform/cloud-init experiment outside `Shabat`.
 - Terraform models network, static IPs, VM disks, cloud-init disks, variables, and outputs.
-- Cloud-init files install packages, create users, write config, define OpenRC services, and bootstrap deploy scripts.
+- Cloud-init now models separate frontend, backend, database, Redis, and RabbitMQ VMs.
+- Local Docker Compose now includes PostgreSQL, Redis, RabbitMQ, API, worker, and frontend services.
+- FastAPI uses Pydantic settings, async SQLAlchemy, Redis session storage, health endpoint, and structured logging through `structlog`.
 - Docker backend runs as non-root and includes a health check.
-- Documentation covers local dev, VM production deployment, RPC dependencies, and verification commands.
+- Price fetching has retry/backoff and cached fallback behavior.
 
 ### Weaknesses
 
-- It is a different application/domain and does not implement the Coin-Ops Polymarket or currency dashboard architecture.
-- No RabbitMQ/event-ingestion shape comparable to the current project baseline.
+- RabbitMQ is present but notification-only: there is no queue-backed history consumer, no ACK-after-commit persistence flow, and no DLQ.
 - Production deploy model uses cron polling from Git every minute, which is not a controlled release mechanism.
+- `terraform/variables.tf` still defaults `deploy_branch` to `monero-privacy-system`, which no longer exists as a remote branch after pruning.
 - Terraform is libvirt/KVM specific, not AWS.
+- Docker coverage is incomplete for production: backend image exists, but frontend is a dev-server container and there is no registry release path.
+- Defaults include demo credentials and a broad CORS posture.
 - No CI, no image registry deployment, no Kubernetes manifests.
 
 ### Risks / Technical Debt
 
-- Product mismatch makes it risky as a team baseline even though some IaC ideas are useful.
+- Direct database writes from the worker bypass the queue semantics the team should keep for scalable ingestion.
 - Auto-deploy from branch state can deploy unreviewed or broken commits.
 - Terraform state would contain secrets rendered into cloud-init.
 - Small VM sizes and Alpine/OpenRC assumptions may not represent the team target.
+- The branch rename/default mismatch can break fresh VM deploys unless `deploy_branch` is overridden.
 
 ### Missing For Production
 
-- Coin-Ops application functionality.
-- Controlled release pipeline, rollback, monitoring, TLS, backups, and cloud-managed dependencies.
+- Queue-backed persistence with manual ACK after database commit.
+- Controlled release pipeline, rollback, monitoring, TLS, backups, cloud-managed dependencies, and secret management.
 - AWS modules and Kubernetes packaging.
 
 ### Recommended Improvements
 
 - Do not use as the baseline.
-- Reuse the clearer cloud-init structure, Terraform outputs, and static network modeling ideas when building AWS/VM modules.
+- Reuse the clearer cloud-init structure, Terraform outputs, Pydantic settings, and `structlog` patterns when building the unified baseline.
+- If the team wants to mine the Docker Compose work, keep the service set but replace the frontend dev server with a production image and add health-gated dependencies.
 - Replace cron-pull deployment with CI/CD-controlled image promotion.
+- Move RabbitMQ in front of persistence or treat its current event stream as a notification bus only.
 
 ## `origin/penina`
 
@@ -195,7 +204,7 @@ Five-VM currency dashboard design with Flask/React UI, Python proxy, RabbitMQ, G
 
 ### Strengths
 
-- Clear five-VM architecture and data flow in the README.
+- Clear five-VM service split is visible from the committed service directories and automation files.
 - Documents real operational blockers and learning around Docker, RabbitMQ definitions, Redis caching, and image size.
 - Includes separate service directories and a RabbitMQ definitions file.
 - Attempts both systemd VM deployment and Docker Compose.
@@ -204,9 +213,9 @@ Five-VM currency dashboard design with Flask/React UI, Python proxy, RabbitMQ, G
 
 - Docker Compose build paths do not match committed directories (`./proxy`, `./history`, `./ui` under `docker/` are not present).
 - Ansible playbooks reference missing `ansible/files/...` sources.
-- Credentials and IPs are hardcoded in playbooks, Compose, source, and docs.
+- Credentials and IPs are hardcoded in playbooks, Compose, and source.
 - No Terraform, no CI, and no registry.
-- Systemd, Docker, and documentation drift apart.
+- Systemd and Docker automation drift apart.
 
 ### Risks / Technical Debt
 
@@ -223,7 +232,7 @@ Five-VM currency dashboard design with Flask/React UI, Python proxy, RabbitMQ, G
 
 - Fix repository layout and Compose build contexts first.
 - Replace hardcoded credentials/IPs with environment templates.
-- Consolidate docs to match runnable commands.
+- Consolidate runnable commands after the automation paths are fixed.
 - Use as a learning artifact, not as baseline.
 
 ## `origin/zakipnyi`
@@ -244,7 +253,7 @@ Nested `coin-ops/` project with a five-VM Vagrant deployment: nginx static UI, F
 
 - No Docker, no Terraform, no Ansible, no CI.
 - Provisioning is embedded in a large Vagrantfile with shell scripts.
-- Credentials and fixed IPs are hardcoded throughout Vagrant, source defaults, and docs.
+- Credentials and fixed IPs are hardcoded throughout Vagrant and source defaults.
 - Uses Ubuntu 22.04 instead of the newer Ubuntu 24.04 target used by stronger branches.
 - No robust secret handling, migrations, tests, or image artifacts.
 
@@ -306,42 +315,54 @@ Nested `coin-ops/` project with a five-VM Vagrant deployment: nginx static UI, F
 
 ### Summary
 
-Partial four-VM Vagrant scaffold with Flask UI, Flask proxy, Go history service, RabbitMQ/PostgreSQL interaction, and a single Ansible playbook for PostgreSQL.
+Four-VM Vagrant/VirtualBox implementation with Flask UI, Flask proxy, Go history service, PostgreSQL, RabbitMQ, Redis, and Ansible roles for each service. The 2026-04-14 update makes it a real VM/Ansible implementation rather than the earlier partial scaffold, but it still has no Docker, Terraform, CI, registry, or cloud migration path.
 
 ### Strengths
 
-- Basic service separation exists: UI, proxy, history, data.
-- Some RabbitMQ usage is durable and messages are persistent.
-- Services read several connection values from environment variables.
+- Clear four-VM split: UI, proxy, history, and data services.
+- Ansible now has a role-per-service structure: common packages, PostgreSQL, RabbitMQ, Redis, proxy, history, and UI.
+- systemd unit templates exist for UI, proxy, and history services with environment-driven host/password values.
+- RabbitMQ queue is durable and proxy publishes persistent messages.
+- UI uses Redis-backed Flask sessions.
+- Go history service has useful chart/history query logic, including range windows and downsampling.
 
 ### Weaknesses
 
-- No complete VM provisioning for UI, proxy, RabbitMQ, or history service.
 - No Docker, Terraform, CI, or registry.
-- No README/runbook.
-- Debug mode is enabled in Flask services.
-- Hardcoded weak defaults and local assumptions remain.
+- Inventory contains host-specific absolute private-key paths under a local macOS home directory.
+- Runtime code is executed from `/vagrant`, so deployment is tied to the Vagrant shared folder rather than a release artifact.
+- PostgreSQL setup uses multiple shell/psql blocks instead of idempotent PostgreSQL Ansible modules.
+- Redis protected mode is disabled for the private network.
+- Proxy still has no retry/backoff around the upstream API and limited failure isolation.
 
 ### Risks / Technical Debt
 
-- Not reproducible as a full environment from the committed automation.
-- Error handling is fragile, including unsafe type assertions in Go history code.
-- Manual service startup and configuration would be required.
+- It is reproducible mainly on the original author's local Vagrant/VirtualBox path unless inventory paths are fixed.
+- The Go consumer calls `saveToDB`, but `saveToDB` only logs insert errors and does not return failure to the consumer; the message is ACKed even when the insert failed.
+- Several JSON paths use unchecked type assertions, so malformed queue messages can panic the consumer.
+- RabbitMQ, Redis, and PostgreSQL are co-located on one data VM, which is fine for a demo but not a scalable state boundary.
+- No immutable artifact or rollback model exists.
 
 ### Missing For Production
 
-- Nearly all production foundations: full provisioning, secrets, tests, Docker, cloud IaC, TLS, backups, monitoring, and Kubernetes packaging.
+- Docker images, image registry, and cloud IaC.
+- CI checks, tests, Ansible linting, and reproducible release artifacts.
+- Proper secrets manager integration, TLS, backups, monitoring, and Kubernetes packaging.
+- Better poison-message handling and ACK-after-confirmed-write behavior.
 
 ### Recommended Improvements
 
-- Treat as an early prototype.
-- Add complete Ansible roles or replace with the stronger baseline.
+- Treat as a VM/Ansible learning reference, not as the team baseline.
+- Replace absolute inventory key paths with portable Vagrant inventory generation.
+- Make `saveToDB` return an error and ACK only after confirmed database success.
+- Replace shell SQL provisioning with PostgreSQL Ansible modules.
+- Containerize the services before any AWS/Kubernetes work.
 
 ## `origin/shturyn`
 
 ### Summary
 
-Small React/Vite frontend and Go weather proxy. It is not a Coin-Ops currency/Polymarket implementation and contains no meaningful infrastructure automation.
+Small React/Vite frontend and Go weather proxy. The weather API topic is not a disqualifier by itself, but the branch contains no meaningful database, queue, cache, VM, Terraform, Ansible, or CI implementation for the tournament architecture.
 
 ### Strengths
 
@@ -350,7 +371,6 @@ Small React/Vite frontend and Go weather proxy. It is not a Coin-Ops currency/Po
 
 ### Weaknesses
 
-- Wrong product domain: weather instead of Coin-Ops.
 - No database, queue, cache, VM deployment, Docker, Terraform, Ansible, or CI.
 - Hardcoded backend URL in frontend config.
 
@@ -396,18 +416,19 @@ Initial repository state with only the MIT license.
 
 ### Summary
 
-Rechecked after remote refresh. `origin/volynets` is now a real five-VM NBU exchange-rate tracker with Flask/Jinja UI, Go API proxy, Go history service, RabbitMQ, PostgreSQL, Vagrant VM creation, and Ansible provisioning. It is a strong VM/systemd implementation but has no Docker, Terraform, CI, or registry-based delivery.
+Rechecked after the 2026-04-14 remote refresh. `origin/volynets` is a real five-VM exchange-rate tracker with Flask/Jinja UI, Go API proxy, Go history service, RabbitMQ, PostgreSQL, Vagrant VM creation, and Ansible provisioning. The latest commits add operational hardening: root-owned env files, restart handlers, Gunicorn for the UI, graceful shutdown in the Go services, and richer chart modes. It is a strong VM/systemd implementation but still has no Docker, Terraform, CI, registry-based delivery, or Redis.
 
 ### Strengths
 
 - Clean five-VM service split: web UI, API proxy, database, message queue, and history service.
 - Good Ansible coverage with separate playbooks for PostgreSQL, RabbitMQ, history service, proxy, and web UI.
-- Uses environment variables for deployment secrets in Ansible instead of committing real passwords.
+- Uses environment variables for deployment secrets in Ansible and writes runtime env files under `/etc/coin-ops` with root-only permissions.
 - UFW rules are more deliberate than many branches: PostgreSQL and RabbitMQ are source-restricted to expected service hosts.
 - Go proxy has in-memory caching, history-service fallback, `/health`, CORS configuration, and RabbitMQ reconnect with exponential backoff.
-- Go history service has a solid consumer pattern: durable queue, manual ack, transaction per batch, upsert with `ON CONFLICT`, nack/requeue on transient database failures, and reconnect loop.
+- Go proxy and history service now include graceful SIGINT/SIGTERM shutdown paths.
+- Go history service has a solid consumer pattern: durable queue, manual ack after transaction commit, transaction per batch, upsert with `ON CONFLICT`, nack/requeue on transient database failures, and reconnect loop.
 - Database schema is simple but practical, with indexes and a unique `(code, rate_date)` key for idempotency.
-- README and Ansible README clearly explain local development, VM layout, configuration, and deployment order.
+- Web UI now runs with Gunicorn under systemd and includes more useful chart/history display modes.
 
 ### Weaknesses
 
@@ -417,7 +438,8 @@ Rechecked after remote refresh. `origin/volynets` is now a real five-VM NBU exch
 - Ansible builds Go binaries directly on target VMs, so deployments depend on target build tooling and network access.
 - The product scope is narrower than `origin/Shabat`: NBU exchange rates only, with no broader market/price/whale dashboard.
 - No automated tests.
-- Local defaults still include `guest:guest` RabbitMQ URLs, even though Ansible deployment uses injected passwords.
+- No Redis; cache is in-process memory only.
+- Local `.env.example` files still contain demo `guest:guest` / `coinops:coinops` values, even though Ansible deployment injects runtime passwords.
 
 ### Risks / Technical Debt
 
@@ -426,6 +448,7 @@ Rechecked after remote refresh. `origin/volynets` is now a real five-VM NBU exch
 - No image scanning, dependency checks, or reproducible build artifact.
 - No backup/restore runbook for PostgreSQL.
 - No observability beyond service logs and health endpoints.
+- `ansible/ansible.cfg` disables host key checking, explicitly marked temporary.
 
 ### Missing For Production
 
@@ -440,5 +463,6 @@ Rechecked after remote refresh. `origin/volynets` is now a real five-VM NBU exch
 
 - Rank as a useful middle-tier implementation, especially for VM/Ansible quality.
 - Borrow its Ansible firewall discipline, five-VM separation, and Go consumer transaction/ack pattern.
+- Also borrow its root-owned env-file pattern, Gunicorn/systemd service shape, and graceful shutdown code.
 - Do not choose it as the baseline unless the team intentionally ignores Docker, Terraform, AWS, and Kubernetes readiness.
 - Add Dockerfiles and a local Compose stack before considering it for cloud migration.

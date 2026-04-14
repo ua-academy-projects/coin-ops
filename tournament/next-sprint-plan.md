@@ -4,6 +4,8 @@
 
 Turn `origin/Shabat` into a clean team baseline that can run reproducibly, pass automated checks, and begin a controlled AWS migration without blocking a later Kubernetes move.
 
+2026-04-14 branch refresh impact: `origin/tsyhan`, `origin/kurdupel`, and `origin/volynets` were rechecked from non-Markdown files only. The baseline remains `origin/Shabat`. The next sprint should mine `tsyhan` for Terraform/structlog/settings patterns, `volynets` for VM/systemd/UFW hardening, and `kurdupel` only for a simple Ansible role layout reference.
+
 ## Recommended Work Items
 
 ### 1. Baseline Cleanup
@@ -15,6 +17,8 @@ Turn `origin/Shabat` into a clean team baseline that can run reproducibly, pass 
 - Keep `.env.example` as a template only; verify no real secrets are committed.
 - Add a short architecture decision record explaining why `Shabat` is the baseline and which ideas are being imported.
 - Explicitly compare `Shabat` Ansible against `volynets` Ansible and import useful source-restricted firewall and service-separation patterns.
+- Explicitly compare `Shabat` Terraform against `tsyhan` Terraform and split the current Terraform into a cleaner `main.tf` / `variables.tf` / `outputs.tf` shape before starting AWS modules.
+- Note that API topic was not part of the selection criteria; queue semantics, persistence, deployment reproducibility, and cloud readiness were.
 
 ### 2. Automated Quality Gates
 
@@ -47,6 +51,8 @@ Acceptance target: a new developer can run the system locally without creating V
 - Remove hardcoded service IPs from application defaults where possible.
 - Document config names once and reuse them across Compose, Ansible, and future Kubernetes.
 - Keep `volynets` as the reference branch for cleaner VM-only Ansible boundaries while moving the chosen baseline toward image-based deploys.
+- Keep `tsyhan` as the reference branch for Terraform/cloud-init layout and `structlog`/Pydantic settings.
+- Keep `kurdupel` out of the baseline path until it has portable inventory, Docker images, and ACK-after-confirmed-write behavior.
 
 Acceptance target: deployment fails fast on missing config and never requires editing source code for environment changes.
 

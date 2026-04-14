@@ -9,6 +9,8 @@ Start from `origin/Shabat` and evolve it in two stages:
 
 The goal is not to preserve every VM detail forever. The goal is to preserve the strongest service boundaries while moving state and deployment concerns into managed or orchestrated infrastructure.
 
+2026-04-14 update: the refreshed `origin/tsyhan`, `origin/kurdupel`, and `origin/volynets` branches do not change the baseline decision. They do change the import list: `tsyhan` is now the strongest Terraform/observability reference, `volynets` is the strongest VM/systemd hardening reference, and `kurdupel` is a useful simple Ansible-role reference only.
+
 ## Target Service Model
 
 ```text
@@ -94,18 +96,27 @@ Kubernetes object mapping:
 - Reuse the idea of named volumes and health-gated dependencies.
 - Fix queue durability using the stronger ack-after-commit pattern from `Shabat`.
 
-### From `origin/monero-privacy-system`
+### From `origin/tsyhan`
 
-- Reuse the clearer Terraform variable/output documentation style.
+- Reuse the clearer Terraform variable/output description style.
 - Reuse cloud-init templating ideas if EC2 cloud-init remains part of the path.
+- Reuse the Pydantic settings and `structlog` patterns.
+- Reuse separate Redis/RabbitMQ VM modeling as a temporary VM bridge, but prefer managed Redis/queue on AWS.
 - Do not reuse cron-based Git polling deploys.
+- Do not reuse the worker-writes-directly-to-Postgres ingestion path as the primary queue model.
 
 ### From `origin/volynets`
 
 - Reuse the clean five-VM Ansible separation as a reference for service ownership: UI, proxy, queue, history service, and database.
 - Reuse the source-restricted UFW approach for VM or EC2 security-group thinking.
 - Reuse the Go history consumer pattern: transaction per batch, manual ack after commit, nack/requeue on transient failure, and idempotent upsert.
+- Reuse root-owned env files for VM deployments, Gunicorn/systemd service shape for Python web processes, and graceful shutdown handling from the Go services.
 - Do not reuse target-VM builds as the long-term delivery model; convert these services to images before AWS/Kubernetes migration.
+
+### From `origin/kurdupel`
+
+- Reuse only the simple role-per-service Ansible layout as a teaching/reference pattern.
+- Do not reuse `/vagrant` runtime coupling, absolute private-key inventory paths, Redis protected-mode disablement, or ACK-after-logged-error consumer behavior.
 
 ### From `origin/zakipnyi`
 

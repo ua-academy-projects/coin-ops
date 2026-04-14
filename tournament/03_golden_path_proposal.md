@@ -2,6 +2,8 @@
 
 Actionable merge strategy and next-sprint roadmap for the coin-ops project, based on component-level analysis of all 10 non-main branches.
 
+2026-04-14 delta recheck: `origin/tsyhan`, `origin/kurdupel`, and `origin/volynets` were refreshed from code/config/IaC files only. Participant Markdown files were ignored. API topic itself is not a scoring factor.
+
 ---
 
 ## Ranked list (ELO order)
@@ -10,23 +12,23 @@ Actionable merge strategy and next-sprint roadmap for the coin-ops project, base
 
 2. **hrenchevskyi** (ELO 1985) — highest software quality. Only branch with (a) Ansible-Vault-encrypted secrets, (b) UUID event IDs + UNIQUE constraint for idempotent replay, (c) real exponential backoff with `Retry-After` parsing, (d) ThreadedConnectionPool for Postgres, (e) graceful SIGTERM handling. No Terraform, no cloud/K8s story beyond Vagrant + docker-compose — that's why it ranks below Shabat despite strictly better application-layer code.
 
-3. **monero-privacy-system** (ELO 1840, raw 79.0 → 64.0 after −15 penalty) — excellent Terraform (libvirt) with cloud-init templating, only branch using `structlog`, async FastAPI + SQLAlchemy async pools. **Critical gap: no RabbitMQ, no Redis** — bypasses the queue entirely and writes directly to Postgres. Strong infra patterns but fundamentally incomplete software implementation.
+3. **tsyhan** (ELO 1965) — strongest Terraform/libvirt and observability reference after the refresh. It has clean `main.tf` / `variables.tf` / `outputs.tf` structure, cloud-init templates for app/db/Redis/RabbitMQ VMs, local Docker Compose with PostgreSQL/Redis/RabbitMQ/API/worker/frontend, Pydantic settings, async SQLAlchemy, and `structlog`. Weak spots: RabbitMQ is notification-only after direct DB writes, deploy still cron-pulls Git, Terraform is libvirt-locked, and `deploy_branch` still defaults to the deleted `monero-privacy-system` branch.
 
-4. **kazachuk** (ELO 1775) — best Docker execution: multi-stage Alpine images at 23.9 MB, `depends_on: service_healthy`, rich frontend (favorites, CSV export, sparklines). Weak spots: plaintext passwords in inventory and compose, `auto_ack=True` on RabbitMQ (message loss on crash), no HTTP timeouts on upstream fetches.
+4. **kazachuk** (ELO 1775) — best Docker execution: multi-stage Alpine images at 23.9 MB, `depends_on: service_healthy`, dual-path deployment, and a rich frontend. Weak spots: plaintext passwords in inventory and compose, `auto_ack=True` on RabbitMQ, and no HTTP timeouts on upstream fetches.
 
-5. **volynets** (ELO 1730) ‡ — late submission (previously only LICENSE). Full Go proxy + Go history service + Flask UI + RabbitMQ + PostgreSQL + Ansible (5 playbooks) + Vagrant. Architecture is clean and 12-factor compliant. Weak spots: **no Redis** (in-process memory cache only), **no Docker**, **no Terraform**, hardcoded `guest:guest` / `coinops:coinops` as credential fallbacks. Strong showing on architecture and 12-factor; disqualified as a base branch by the missing containerization and IaC.
+5. **volynets** (ELO 1755) — strongest VM/systemd/Ansible reference. Five VMs, separate Ansible playbooks, source-restricted UFW, root-only env files, Gunicorn UI service, graceful shutdown in Go services, durable RabbitMQ queue, transaction-per-batch history consumer, and idempotent upsert. Weak spots: no Docker, no Terraform, no Redis, no CI, VMware Desktop-specific Vagrant, and target-VM builds.
 
-6. **smoliakov** (ELO 1700) — only branch with AWS Terraform (however minimal), solid Go service with graceful shutdown and signal handling, comprehensive Ansible role structure, UNIQUE-constrained Postgres schema with UPSERT. Weak spots: no Docker, hardcoded passwords in playbooks, SG wide-open, `DJANGO_SECRET_KEY=replace-me-for-production`.
+6. **smoliakov** (ELO 1700) — only branch with AWS Terraform, solid Go service with graceful shutdown and signal handling, comprehensive Ansible role structure, UNIQUE-constrained Postgres schema with UPSERT. Weak spots: no Docker, hardcoded passwords in playbooks, overly broad security group, and placeholder Django secret.
 
-7. **shturyn** (ELO 1660) — cleanest React 19 frontend and most modern TypeScript stack. Proxy uses cache-aside pattern. But: **no Redis**, no VM provisioning, single-host Docker Compose only, broad CORS. Great UI cherry-picks, weak infrastructure base.
+7. **shturyn** (ELO 1660) — clean React 19 frontend and modern TypeScript stack. Proxy uses cache-aside pattern. The weather API topic is not the problem; the problem is missing Redis, VM provisioning, database/queue depth, Terraform, Ansible, and production deployment shape.
 
-8. **penina** (ELO 1620) — best Docker learning documentation (`docs/03-docker.md` with a "Mistakes & Fixes" table is genuinely valuable as a teaching artifact). Dual VM/Docker deploy. But hardcoded credentials in source code, no Terraform, single-host Compose only, hardcoded IPs in the React app.
+8. **penina** (ELO 1620) — dual VM/Docker attempt with useful service split, but hardcoded credentials in source code, no Terraform, single-host Compose only, hardcoded IPs in the React app, and runnable drift.
 
-9. **kurdupel** (ELO 1595) — best pure VM orchestration (Vagrant + Ansible, four-VM topology, clean role separation per service), good Go history service with sophisticated time-bucketing. Critically: **no Docker at all**. Disqualified as a base; containerization-ready was an explicit acceptance criterion in Issue #1.
+9. **kurdupel** (ELO 1600) — improved from scaffold to full VM/Ansible implementation. Four-VM Vagrant topology, role-per-service Ansible, systemd templates, Redis-backed Flask sessions, durable RabbitMQ publish, and a Go history API with range bucketing. Weak spots: no Docker/Terraform/CI, `/vagrant` runtime, absolute local private-key paths in inventory, Redis protected-mode disabled, shell-heavy PostgreSQL provisioning, and ACK even when DB insert errors are only logged.
 
-10. **zakipnyi** (ELO 1590) — good architecture on paper (durable fanout, Go fetcher with 30-attempt startup retry, proper indexing), but hardcoded `coinops123` in Vagrantfile + source + README + 4 other places, **no Docker**, no IaC beyond the Vagrantfile.
+10. **zakipnyi** (ELO 1590) — good architecture on paper, with durable fanout, Go fetcher startup retry, and proper indexing. Weak spots: hardcoded credentials in Vagrantfile and source, no Docker, no Terraform, and shell-only provisioning.
 
-‡ volynets updated 2026-04-13 after new commits pushed to the branch.
+Impact: none of the refreshed branches overtakes `Shabat` as the baseline. `tsyhan` becomes the strongest Terraform/observability reference, `volynets` becomes the strongest VM/Ansible reference, and `kurdupel` moves out of "partial scaffold" but remains a VM-only learning branch.
 
 ---
 
@@ -60,19 +62,29 @@ These are the components where hrenchevskyi is clearly best-in-class and the tra
 |---|---|---|
 | `proxy/main.go` retry loop | `services/proxy/http_retry.go` | Exponential backoff with `Retry-After` header parsing — Shabat's 10s-timeout-no-retry strategy is the weakest part of its proxy |
 | `proxy/main.go` publisher | `services/proxy/publisher.go` | Mutex-protected RabbitMQ publish with UUID-keyed event IDs for idempotent delivery |
-| `history/consumer.py` ack logic | `services/history_service/consumer.py` | Manual ACK only after DB commit — Shabat uses `ON CONFLICT DO NOTHING` which is correct but the ack semantics should still be tightened for poison-message handling |
+| `history/consumer.py` poison-message handling | `services/history_service/consumer.py` | Shabat already ACKs after DB commit; hrenchevskyi adds a different poison-message philosophy and UUID event IDs worth merging selectively |
 | `history/db.py` pooling | `services/history_service/db.py` | ThreadedConnectionPool context manager — replaces Shabat's default psycopg2 connection per request |
 | `history/schema.sql` | Merge the UNIQUE-constraint pattern from hrenchevskyi's templated schema (`snapshot_event_id` pattern) | Gives the consumer genuine idempotent-replay semantics |
 | Secrets flow across all services | `infra/group_vars/all/vault.yml` + `infra/templates/.env.j2` | Replace Shabat's `.env`-rendered-by-Ansible flow with Vault-encrypted source of truth. Shabat's template structure stays; only the variable source changes |
 | Ansible role layout | `infra/roles/base/` + `infra/roles/database/` patterns | Supplement Shabat's provisioning roles where hrenchevskyi's Postgres hardening (`pg_hba.conf` + SCRAM-SHA-256) is more complete |
 
-### From monero-privacy-system → observability baseline
+### From tsyhan → Terraform and observability baseline
 
 | Target in Shabat | Replacement | Rationale |
 |---|---|---|
 | Every service's logging setup | `structlog` bootstrap from `backend/core/*.py` | Only branch with JSON-ready structured logging from day one; tiny retrofit |
 | `proxy/` and `history/` config loading | `backend/config.py` Pydantic `Settings` + `lru_cache` pattern | Cleaner than Shabat's ad-hoc `os.Getenv` scattering, easier to document required/optional config |
-| `terraform/` structure | `terraform/main.tf` / `variables.tf` / `outputs.tf` separation + cloud-init templating | Shabat's Terraform is a 227-LOC flat file; split it along monero-privacy-system's structure before adding the AWS provider |
+| `terraform/` structure | `terraform/main.tf` / `variables.tf` / `outputs.tf` separation + cloud-init templating | Shabat's Terraform is a 227-LOC flat file; split it along tsyhan's structure before adding the AWS provider |
+| VM component modeling | separate Redis and RabbitMQ VM cloud-init files | Useful bridge pattern while moving toward managed Redis/queue on AWS |
+
+### From volynets → VM/systemd hardening
+
+| Target in Shabat | Replacement | Rationale |
+|---|---|---|
+| Ansible firewall rules | Source-restricted UFW rules from service playbooks | Better maps to AWS security-group thinking than broad port opens |
+| Runtime secret files | `/etc/coin-ops/*.env` root-owned env-file pattern | Cleaner than scattered environment values; easy to replace later with AWS Secrets Manager |
+| Go service lifecycle | graceful SIGINT/SIGTERM shutdown in proxy/history services | Needed for ECS/Kubernetes rolling updates |
+| UI process model | Gunicorn-backed systemd service pattern | Good VM bridge until the UI is fully image-based |
 
 ### From kazachuk → Docker polish
 
@@ -95,7 +107,8 @@ These are the components where hrenchevskyi is clearly best-in-class and the tra
 
 ### Explicitly reject
 
-- **monero-privacy-system's worker-writes-directly-to-Postgres pattern.** It's simpler than RabbitMQ but violates the task requirement for async queue persistence and prevents horizontal scaling of the consumer. Keep Shabat's proxy-to-queue-to-consumer flow.
+- **tsyhan's worker-writes-directly-to-Postgres pattern.** It's simpler than RabbitMQ but weakens async persistence and prevents horizontal scaling of the consumer. Keep Shabat's proxy-to-queue-to-consumer flow.
+- **tsyhan's cron/Git-poll deployment.** Useful for a lab demo, wrong direction for production. Deploy image tags from CI/CD instead.
 - **Any branch's hardcoded credentials.** Shabat, hrenchevskyi, and shturyn are the only three with clean secrets handling. Everything else stays out of the golden path.
 - **kurdupel's Flask/Jinja2 UI.** Good for what it is, but incompatible with the React + runtime-config-injection direction.
 
@@ -110,13 +123,13 @@ Ordered from highest leverage to lowest, each item scoped to roughly one pairing
 1. **Fork Shabat to a new `golden-path` branch.** Do not merge into `main` until the transplants land.
 2. **Transplant the hrenchevskyi messaging layer** (proxy publisher, consumer, retry helper). Verify at-least-once semantics with a crash-injection test (`kill -9` the consumer mid-message).
 3. **Transplant the hrenchevskyi Ansible Vault workflow.** Move every secret out of `.env` into `vault.yml`; delete `.env.example` fallbacks for anything sensitive; verify `git grep` returns no plaintext credentials.
-4. **Transplant the `structlog` setup from monero-privacy-system.** Replace every `log.Printf` / `logger.info(...)` with a structured call. This is purely mechanical and unlocks everything downstream.
+4. **Transplant the `structlog` setup from tsyhan.** Replace every `log.Printf` / `logger.info(...)` with a structured call. This is purely mechanical and unlocks everything downstream.
 5. **Transplant hrenchevskyi's `pg_hba.conf` + SCRAM-SHA-256 auth** into Shabat's Postgres Ansible role.
 
 ### Week 2 — Ansible hardening and cloud-readiness
 
 6. **Add app-level HEALTHCHECK directives** to every Dockerfile (not just Redis/RabbitMQ). Wire them into compose and into the future K8s liveness/readiness probes.
-7. **Split Shabat's flat `terraform/` into `main.tf` / `variables.tf` / `outputs.tf`** along monero-privacy-system's pattern. No behavior change, just structure.
+7. **Split Shabat's flat `terraform/` into `main.tf` / `variables.tf` / `outputs.tf`** along tsyhan's pattern. No behavior change, just structure.
 8. **Build an AWS provider module** alongside the existing Hyper-V one, using smoliakov's `aws_instance` definition as a starting point. Reuse the same cloud-init templates (cloud-init is provider-agnostic). Keep both providers side-by-side until AWS parity is proven.
 9. **Migrate secrets from Ansible Vault to AWS Secrets Manager** via a thin lookup wrapper. This is the single largest architectural shift toward cloud-native and should be done before K8s, not after.
 10. **Add a dead-letter queue** to the RabbitMQ topology. hrenchevskyi's consumer is at-least-once but has no DLQ; this is trivial to add on the exchange side and will save debugging pain on Day 1 of production.
@@ -144,6 +157,6 @@ Ordered from highest leverage to lowest, each item scoped to roughly one pairing
 
 ## Summary
 
-**Base: Shabat.** Transplant hrenchevskyi's messaging, secrets, and Postgres hardening onto it. Add structlog from monero-privacy-system. Cherry-pick Docker discipline from kazachuk. Build the AWS Terraform module on smoliakov's scaffolding.
+**Base: Shabat.** Transplant hrenchevskyi's messaging, secrets, and Postgres hardening onto it. Add structlog and Terraform structure from tsyhan. Cherry-pick Docker discipline from kazachuk. Use volynets for VM/systemd hardening patterns. Build the AWS Terraform module on smoliakov's scaffolding.
 
 The result is a branch that combines the strongest software components (hrenchevskyi) with the strongest infrastructure components (Shabat) while maintaining 12-factor compliance and containerization-readiness across the entire stack. It is ready to be the launch pad for the team's cloud + Kubernetes sprint.
