@@ -160,15 +160,14 @@ func fetchFromHistory() ([]Rate, string, bool) {
 
 	latestDate := records[0].RateDate
 
-	// Reject future dates — history DB may contain next-day rates stored
-	// before the proxy was fixed to always request today's date from NBU.
-	if parsed, err := time.ParseInLocation("02.01.2006", latestDate, kyivZone); err == nil {
-		now := time.Now().In(kyivZone)
-		today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, kyivZone)
-		if parsed.After(today) {
-			log.Printf("history-service: latest date %s is in the future, skipping", latestDate)
-			return nil, "", false
-		}
+	// Only serve history data if it matches today's Kyiv date. Past data
+	// means we haven't fetched today's rates yet; future data means old
+	// next-day rates are still in the DB. Either way, fall through to NBU.
+	now := time.Now().In(kyivZone)
+	todayStr := now.Format("02.01.2006")
+	if latestDate != todayStr {
+		log.Printf("history-service: latest date %s != today %s, skipping", latestDate, todayStr)
+		return nil, "", false
 	}
 
 	var rates []Rate
