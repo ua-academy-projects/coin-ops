@@ -17,6 +17,12 @@ services:
       - "5672:5672"
       - "15672:15672"
 
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6379:6379"
+
   history:
     build:
       context: ./history
@@ -33,9 +39,12 @@ services:
       context: ./backend
     restart: always
     env_file: .env
+    environment:
+      - REDIS_URL=redis:6379
     depends_on:
       - history
       - rabbitmq
+      - redis
     ports:
       - "8080:8080"
 

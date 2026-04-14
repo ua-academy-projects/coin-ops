@@ -8,8 +8,12 @@ import (
 	"os"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/streadway/amqp"
+	"context"
 )
+
+var ctx = context.Background()
 
 func getEnv(key, fallback string) string {
 	if value, ok := os.LookupEnv(key); ok {
@@ -20,6 +24,12 @@ func getEnv(key, fallback string) string {
 
 func main() {
 	rabbitmqURL := getEnv("RABBIT_URL", "")
+	redisURL := getEnv("REDIS_URL", "localhost:6379")
+
+	// Redis connection
+	rdb := redis.NewClient(&redis.Options{
+		Addr: redisURL,
+	})
 
 	var conn *amqp.Connection
 	var err error
@@ -73,7 +83,16 @@ func main() {
 			lon = "30.5234"
 		}
 
-		// Завжди звертаємось до API, щоб мати актуальну поточну погоду
+		cacheKey := fmt.Sprintf("weather:%s:%s", lat, lon)
+
+		// Check Redis cache
+		cachedData, err := rdb.Get(ctx, cacheKey).Bytes()
+		if err == nil {
+			log.Println("Returning cached data from Redis...")
+			w.Write(cachedData)
+			return
+		}
+
 		log.Println("Fetching from Open-Meteo API...")
 		apiURL := fmt.Sprintf(
 			"https://api.open-meteo.com/v1/forecast?latitude=%s&longitude=%s&current_weather=true&daily=temperature_2m_max,temperature_2m_min,windspeed_10m_max&timezone=auto",
@@ -88,6 +107,12 @@ func main() {
 		defer resp.Body.Close()
 
 		body, _ := ioutil.ReadAll(resp.Body)
+
+		// Save to Redis with 5 minute expiration
+		err = rdb.Set(ctx, cacheKey, body, 5*time.Minute).Err()
+		if err != nil {
+			log.Printf("Failed to save to Redis: %v", err)
+		}
 
 		// Відправляємо дані в RabbitMQ для оновлення історії
 		err = ch.Publish(
