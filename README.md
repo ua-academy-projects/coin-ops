@@ -98,6 +98,7 @@ SSH forwarded ports:
 ├── deploy.sh
 ├── ansible/
 │   ├── inventory.ini
+│   ├── host_vars/
 │   ├── site.yml
 │   ├── group_vars/
 │   │   └── all/
@@ -136,7 +137,10 @@ Recommended keys:
 
 ```yaml
 postgres_password: "devpass123"
+pgadmin_login: "postgres"
+pgadmin_login_password: "coinops"
 rabbitmq_password: "devpass123"
+redis_password: "devpass123"
 ui_secret_key: "dev-secret"
 ```
 
@@ -144,7 +148,11 @@ Notes:
 
 - `ui_secret_key` can be any stable string in development
 - `postgres_password` and `rabbitmq_password` can also be chosen by you, but must match the credentials created by Ansible and used by the services
+- `pgadmin_login` and `pgadmin_login_password` are used by the PostgreSQL Ansible modules for administrative tasks
+- `redis_password` must match the Redis password expected by the UI service
 - `group_vars/all/vault.yml` is the correct location if you want Ansible to load the secrets automatically for all hosts
+
+SSH private key paths for Vagrant machines are kept in `ansible/host_vars/` with repo-relative paths.
 
 ## Deployment
 
@@ -200,6 +208,7 @@ Environment variables passed through systemd:
 
 - `REDIS_HOST`
 - `REDIS_PORT`
+- `REDIS_PASSWORD`
 - `PROXY_HOST`
 - `HISTORY_HOST`
 - `SECRET_KEY`

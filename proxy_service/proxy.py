@@ -107,4 +107,4 @@ if __name__ == "__main__":
     if should_start_background_worker():
         updater_thread = threading.Thread(target=background_updater, daemon=True)
         updater_thread.start()
-    app.run(host="0.0.0.0", port=5001, debug=True)
+    app.run(host="0.0.0.0", port=5001)

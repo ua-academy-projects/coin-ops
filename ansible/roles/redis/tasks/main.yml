@@ -20,15 +20,16 @@
     line: 'bind 127.0.0.1 {{redis_host}}'
   notify: reload redis
 
-- name: disable protected mode for private network
-  become: true
-  ansible.builtin.lineinfile:
-    path: /etc/redis/redis.conf
-    regexp: '^protected-mode '
-    line: 'protected-mode no'
-  notify: reload redis
 
 #   - 1 task was completed -> restart redis set to queue
 #  - 2 task was completed ->a again restart redis set to queue
 #  in the restart redis will be only completed once
 
+
+- name: set redis password
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/redis/redis.conf
+    regexp: '^#?\s*requirepass\s*'
+    line: 'requirepass {{redis_password}}'
+  notify: reload redis

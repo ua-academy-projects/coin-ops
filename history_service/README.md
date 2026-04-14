@@ -99,3 +99,6 @@ sudo journalctl -u history.service -n 50
 
 - the service creates the target table if it does not exist
 - duplicate inserts within a short time window are skipped
+- malformed RabbitMQ messages are NACKed without requeue
+- DB save failures are NACKed with requeue
+- messages are ACKed only after successful processing

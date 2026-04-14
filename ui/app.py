@@ -12,6 +12,7 @@ app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_REDIS"] = redis.Redis(
     host=os.environ.get("REDIS_HOST"),
     port = int(os.environ.get("REDIS_PORT")),
+    password = os.environ.get("REDIS_PASSWORD"),
     decode_responses=False,
 )
 Session(app)

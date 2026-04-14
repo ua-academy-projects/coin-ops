@@ -32,7 +32,6 @@ func connectDB() *sql.DB {
 	user := getEnv("POSTGRES_USER", "")
 	password := getEnv("POSTGRES_PASS", "")
 
-
 	connStr := fmt.Sprintf(
 		"host=%s dbname=%s user=%s password=%s sslmode=disable",
 		host, dbname, user, password,
@@ -62,7 +61,7 @@ func connectDB() *sql.DB {
 	return db
 }
 
-func saveToDB(coin string, price float64) {
+func saveToDB(coin string, price float64) error {
 	var exists bool
 	query := fmt.Sprintf(
 		`SELECT EXISTS (
@@ -71,15 +70,15 @@ func saveToDB(coin string, price float64) {
 			WHERE coin = $1
 			  AND price = $2
 			  AND recorded_at >= NOW() - INTERVAL '10 seconds'
-		)`,postgres_table)
+		)`, postgres_table)
 	err := db.QueryRow(query, coin, price).Scan(&exists)
 	if err != nil {
-		log.Printf("DB duplicate check error: %v", err)
-		return
+		return fmt.Errorf("DB duplicate check error: %w", err)
 	}
 	if exists {
 		log.Printf("Skipped duplicate DB insert: %s = %f", coin, price)
-		return
+		return nil
+
 	}
 
 	// _, err = db.Exec(
@@ -90,10 +89,10 @@ func saveToDB(coin string, price float64) {
 	_, err = db.Exec(query, coin, price)
 
 	if err != nil {
-		log.Printf("DB insert error: %v", err)
-		return
+		return fmt.Errorf("DB insert error: %w", err)
 	}
 	log.Printf("Saved to DB: %s = %f", coin, price)
+	return nil
 }
 
 func startWorker() {
@@ -151,9 +150,15 @@ func startWorker() {
 				coin = "BTC"
 			}
 			log.Printf("Received: %s = %f", coin, price)
-			saveToDB(coin, price)
-			// save to db and remove from queue
-			msg.Ack(false)
+
+			if err := saveToDB(coin, price); err != nil {
+				log.Printf("Save failed: %v", err)
+				// error occured - do not acknowledge msg - return it to queue
+				msg.Nack(false, true)
+				continue
+			}
+
+			msg.Ack(false) // acknowledge that msg is processed successfully (false - only this msg (single acknowledgment))
 		}
 
 		conn.Close()
@@ -530,7 +535,7 @@ func main() {
 
 	db = connectDB()
 	defer db.Close() // will be completed after all commands in the end
-	
+
 	go startWorker()
 
 	http.HandleFunc("/history", historyHandler)

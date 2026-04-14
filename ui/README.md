@@ -32,6 +32,7 @@ Flask web application that renders the main price dashboard and history page.
 
 - `REDIS_HOST`
 - `REDIS_PORT`
+- `REDIS_PASSWORD`
 - `PROXY_HOST`
 - `HISTORY_HOST`
 - `SECRET_KEY`

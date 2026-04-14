@@ -6,7 +6,6 @@ Flask service that fetches live cryptocurrency prices from Coinbase and sends th
 
 - provides live prices for supported coins
 - periodically refreshes prices in the background
-- smooths sharp price jumps before publishing
 - sends messages to RabbitMQ for the history service
 
 ## Runtime
