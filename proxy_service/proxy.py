@@ -48,7 +48,7 @@ def send_to_queue(coin,price):
         connection.close()
         print(f"Sent to queue: {coin} = {price}", flush = True) # force print to appear in terminal immediately
     except Exception as e:
-        print(f"RabbitMQ error: {e}", flush = True)
+         print(f"RabbitMQ error: {type(e).__name__}: {e!r}", flush=True)
 
 
 def get_latest_history_price(coin):

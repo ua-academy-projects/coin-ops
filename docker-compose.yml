@@ -1,0 +1,38 @@
+services:
+  ui:
+    build: ./ui
+    ports:
+      - "5000:5000"
+    depends_on:
+      - proxy
+      - history
+    env_file:
+      - .env
+
+  proxy:
+    build: ./proxy_service
+    ports:
+      - "5001:5001"
+    env_file:
+      - .env
+  
+  history:
+    build: ./history_service
+    ports:
+      - "5002:5002"
+    env_file:
+      - .env
+
+# depends on tells docker to wait until the proxy and history services are up before starting the ui service
+# 192.168.0.52 
+
+# • If you changed only runtime state or env-like things, yes:
+
+#   docker compose down
+#   docker compose up
+
+#   But if you changed code, Dockerfile, or dependencies, use:
+
+#   docker compose down
+#   docker compose up --build
+

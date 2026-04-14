@@ -1,6 +1,6 @@
 # Currency Rates Tracker
 
-Multi-service pet project for collecting, storing and displaying cryptocurrency prices in a small Vagrant-based environment.
+Multi-service pet project for collecting, storing and displaying cryptocurrency prices in a small Vagrant-based environment, with an optional Docker Compose app layer.
 
 ## Table of Contents
 
@@ -67,6 +67,7 @@ Main technologies:
 
 - Vagrant
 - Ansible
+- Docker Compose
 - Python / Flask
 - Go
 - PostgreSQL
@@ -96,6 +97,9 @@ SSH forwarded ports:
 .
 ├── Vagrantfile
 ├── deploy.sh
+├── docker-compose.yml
+├── .env
+├── .env.example
 ├── ansible/
 │   ├── inventory.ini
 │   ├── host_vars/
@@ -183,6 +187,39 @@ If you already have a vault password file:
 ansible-playbook ansible/site.yml --vault-password-file .vault_pass
 ```
 
+### Docker Compose
+
+The application layer can also run in Docker while the data layer stays on the Vagrant data VM.
+
+Current mixed setup:
+
+- `ui`, `proxy`, `history` run in Docker Compose
+- PostgreSQL, RabbitMQ, and Redis stay on `devops-data`
+
+Setup:
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+In this mode:
+
+- UI is available on `http://localhost:5000`
+- Proxy is available on `http://localhost:5001`
+- History is available on `http://localhost:5002`
+
+Container-to-container communication uses Docker service names:
+
+- `PROXY_HOST=proxy`
+- `HISTORY_HOST=history`
+
+Container-to-VM communication uses the Vagrant data VM IP:
+
+- `POSTGRES_HOST=192.168.56.14`
+- `RABBITMQ_HOST=192.168.56.14`
+- `REDIS_HOST=192.168.56.14`
+
 To re-run only one machine:
 
 ```bash
@@ -213,6 +250,11 @@ Environment variables passed through systemd:
 - `HISTORY_HOST`
 - `SECRET_KEY`
 
+Docker:
+
+- image build context: `ui/`
+- published port: `5000:5000`
+
 ### Proxy Service
 
 - Host: `devops-proxy`
@@ -236,6 +278,11 @@ Environment variables:
 - `RABBITMQ_QUEUE`
 - `HISTORY_HOST`
 
+Docker:
+
+- image build context: `proxy_service/`
+- published port: `5001:5001`
+
 ### History Service
 
 - Host: `devops-history`
@@ -257,6 +304,11 @@ Environment variables:
 - `RABBITMQ_USER`
 - `RABBITMQ_PASS`
 - `RABBITMQ_QUEUE`
+
+Docker:
+
+- image build context: `history_service/`
+- published port: `5002:5002`
 
 ### Data Services
 
@@ -300,7 +352,7 @@ sudo systemctl show history.service -p Environment
 
 1. UI calls `http://<proxy_host>:5001/price/<coin>`
 2. Proxy fetches price from Coinbase
-3. Proxy smooths sudden price jumps
+3. Proxy publishes the fetched price to RabbitMQ
 4. Proxy sends the result to RabbitMQ
 5. History service consumes the message and inserts it into PostgreSQL
 
