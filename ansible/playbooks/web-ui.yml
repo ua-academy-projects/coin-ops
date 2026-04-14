@@ -43,23 +43,12 @@
           - "--exclude=__pycache__"
       register: sync_result
 
-    - name: Create Python virtual environment
-      ansible.builtin.pip:
-        virtualenv: /home/{{ ansible_user }}/ui/.venv
-        virtualenv_command: python3 -m venv
-        name: pip
-
-    - name: Install dependencies
+    - name: Create Python virtual environment and install dependencies
       ansible.builtin.pip:
         requirements: /home/{{ ansible_user }}/ui/requirements.txt
         virtualenv: /home/{{ ansible_user }}/ui/.venv
-
-    # - name: Create Python virtual environment and install dependencies
-    #   ansible.builtin.pip:
-    #     requirements: /home/{{ ansible_user }}/ui/requirements.txt
-    #     virtualenv: /home/{{ ansible_user }}/ui/.venv
-    #     virtualenv_command: python3 -m venv
-    #   when: sync_result.changed
+        virtualenv_command: python3 -m venv
+      when: sync_result.changed
 
     - name: Deploy systemd service unit file for the web-ui service
       ansible.builtin.template:
