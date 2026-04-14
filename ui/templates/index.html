@@ -24,7 +24,25 @@
       margin-bottom: 1.5rem;
     }
 
-    h1 { font-size: 1.6rem; font-weight: 700; }
+    h1 {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 1.75rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+    h1 .logo-icon {
+      width: 2rem;
+      height: 2rem;
+      flex-shrink: 0;
+    }
+    h1 .logo-text {
+      color: #e2e8f0;
+    }
+    h1 .logo-ops {
+      color: #f6c90e;
+    }
 
     .badge {
       display: flex;
@@ -289,7 +307,14 @@
 <body>
   <div class="app">
     <div class="header">
-      <h1>coin-ops</h1>
+      <h1>
+        <svg class="logo-icon" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="16" cy="16" r="15" fill="#f6c90e" stroke="#d4a800" stroke-width="1.5"/>
+          <circle cx="16" cy="16" r="11" fill="none" stroke="#d4a800" stroke-width="1"/>
+          <text x="16" y="21" text-anchor="middle" font-size="13" font-weight="800" font-family="sans-serif" fill="#1a1a2e">₴</text>
+        </svg>
+        <span><span class="logo-text">coin-</span><span class="logo-ops">ops</span></span>
+      </h1>
       <span class="badge">
         <span class="badge-dot"></span>
         National Bank of Ukraine
