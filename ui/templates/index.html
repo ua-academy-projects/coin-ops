@@ -99,6 +99,27 @@
       align-items: flex-end;
     }
 
+    .mode-toggle {
+      display: flex;
+      margin-left: auto;
+      background: #1e2330;
+      border: 1px solid #2d3748;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .mode-opt {
+      padding: 0.3rem 0.75rem;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #64748b;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s, color 0.15s;
+    }
+    .mode-opt:first-child { border-right: 1px solid #2d3748; }
+    .mode-opt.active { background: #2d3748; color: #e2e8f0; }
+    .mode-opt input[type="radio"] { display: none; }
+
     .control-group {
       display: flex;
       flex-direction: column;
@@ -502,6 +523,18 @@
             {% endfor %}
           </div>
         </div>
+        <div class="mode-toggle">
+          <label class="mode-opt {% if chart_mode == 'absolute' %}active{% endif %}">
+            <input type="radio" name="mode" value="absolute"
+                   {% if chart_mode == 'absolute' %}checked{% endif %}>
+            UAH
+          </label>
+          <label class="mode-opt {% if chart_mode == 'normalized' %}active{% endif %}">
+            <input type="radio" name="mode" value="normalized"
+                   {% if chart_mode == 'normalized' %}checked{% endif %}>
+            %
+          </label>
+        </div>
       </form>
 
       {% if error %}
@@ -563,6 +596,16 @@
       rb.addEventListener('change', function() {
         document.querySelectorAll('.charts-form .range-pill').forEach(function(p) {
           p.classList.toggle('selected', p.querySelector('input').checked);
+        });
+        this.form.submit();
+      });
+    });
+
+    // Charts: mode toggle — toggle active + auto-submit
+    document.querySelectorAll('.mode-toggle .mode-opt input[type="radio"]').forEach(function(rb) {
+      rb.addEventListener('change', function() {
+        document.querySelectorAll('.mode-toggle .mode-opt').forEach(function(opt) {
+          opt.classList.toggle('active', opt.querySelector('input').checked);
         });
         this.form.submit();
       });
@@ -656,11 +699,24 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
   <script>
     var chartData = {{ chart_data | tojson }};
+    var chartMode = {{ chart_mode | tojson }};
     var colors = ['#3b82f6','#22c55e','#f59e0b','#ef4444','#8b5cf6','#ec4899','#06b6d4','#f97316'];
+
+    function toNormalized(rates) {
+      var baseline = null;
+      for (var i = 0; i < rates.length; i++) {
+        if (rates[i] != null) { baseline = rates[i]; break; }
+      }
+      if (baseline == null || baseline === 0) return rates;
+      return rates.map(function(r) {
+        return r == null ? null : ((r - baseline) / baseline) * 100;
+      });
+    }
+
     var datasets = chartData.datasets.map(function(ds, i) {
       return {
         label: ds.code,
-        data: ds.rates,
+        data: chartMode === 'normalized' ? toNormalized(ds.rates) : ds.rates,
         borderColor: colors[i % colors.length],
         backgroundColor: colors[i % colors.length] + '20',
         borderWidth: 2,
@@ -676,11 +732,31 @@
       options: {
         responsive: true,
         plugins: {
-          legend: { labels: { color: '#e2e8f0' } }
+          legend: { labels: { color: '#e2e8f0' } },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                var v = ctx.parsed.y;
+                if (v == null) return ctx.dataset.label + ': —';
+                if (chartMode === 'normalized') {
+                  return ctx.dataset.label + ': ' + (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+                }
+                return ctx.dataset.label + ': ' + v.toFixed(4) + ' UAH';
+              }
+            }
+          }
         },
         scales: {
           x: { ticks: { color: '#64748b' }, grid: { color: '#2d3748' } },
-          y: { ticks: { color: '#64748b' }, grid: { color: '#2d3748' } }
+          y: {
+            ticks: {
+              color: '#64748b',
+              callback: function(v) {
+                return chartMode === 'normalized' ? v.toFixed(1) + '%' : v;
+              }
+            },
+            grid: { color: '#2d3748' }
+          }
         }
       }
     });

@@ -159,9 +159,13 @@ def charts():
         saved_cc = request.cookies.get("charts_cc", "")
         selected = [c for c in saved_cc.split(",") if c] or ["USD"]
         time_range = request.cookies.get("charts_range", "30d")
+        chart_mode = request.cookies.get("charts_mode", "absolute")
     else:
         selected = request.args.getlist("cc") or ["USD"]
         time_range = request.args.get("range", "30d")
+        chart_mode = request.args.get("mode", "absolute")
+    if chart_mode not in ("absolute", "normalized"):
+        chart_mode = "absolute"
 
     chart_data = {"labels": [], "datasets": []}
     error = None
@@ -181,10 +185,11 @@ def charts():
 
     rendered = render_template("index.html", chart_data=chart_data, error=error,
                                selected=selected, time_range=time_range,
-                               view="charts", currencies=CURRENCIES)
+                               chart_mode=chart_mode, view="charts", currencies=CURRENCIES)
     resp = make_response(rendered)
     resp.set_cookie("charts_cc", ",".join(selected), max_age=31536000, samesite="Lax")
     resp.set_cookie("charts_range", time_range, max_age=31536000, samesite="Lax")
+    resp.set_cookie("charts_mode", chart_mode, max_age=31536000, samesite="Lax")
     return resp
 
 
