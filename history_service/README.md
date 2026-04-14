@@ -52,6 +52,12 @@ Systemd unit template:
 
 - `ansible/roles/history/templates/history.service.j2`
 
+## Docker
+
+- Dockerfile: `history_service/Dockerfile`
+- exposed application port: `5002`
+- Docker Compose host access: `http://localhost:5002`
+
 Useful commands on `devops-history`:
 
 ```bash

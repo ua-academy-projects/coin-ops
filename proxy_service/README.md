@@ -48,6 +48,12 @@ Unit template:
 
 - `ansible/roles/proxy/templates/proxy.service.j2`
 
+## Docker
+
+- Dockerfile: `proxy_service/Dockerfile`
+- exposed application port: `5001`
+- Docker Compose host access: `http://localhost:5001`
+
 Useful commands on `devops-proxy`:
 
 ```bash

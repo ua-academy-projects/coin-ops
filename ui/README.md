@@ -45,6 +45,12 @@ Unit template:
 
 - `ansible/roles/ui/templates/ui.service.j2`
 
+## Docker
+
+- Dockerfile: `ui/Dockerfile`
+- exposed application port: `5000`
+- Docker Compose host access: `http://localhost:5000`
+
 Useful commands on `devops-ui`:
 
 ```bash
