@@ -18,12 +18,6 @@ HISTORY_HOST   = os.environ.get("HISTORY_HOST")
 # set for performance, no duplicates for coins, good for for in
 SUPPORTED_COINS = {"BTC", "ETH", "SOL", "BNB"}
 UPDATE_INTERVAL_SECONDS = 180
-MAX_PRICE_STEP = {
-    "BTC": 180.0,
-    "ETH": 18.0,
-    "SOL": 1.8,
-    "BNB": 4.5,
-}
 last_sent_prices = {}
 
 # default parameter coin="BTC"
@@ -74,29 +68,11 @@ def get_latest_history_price(coin):
         return None
 
 
-def smooth_price(coin, fetched_price):
-    reference_price = last_sent_prices.get(coin)
-    if reference_price is None:
-        reference_price = get_latest_history_price(coin)
-
-    if reference_price is None:
-        return round(fetched_price, 2)
-
-    max_step = MAX_PRICE_STEP.get(coin, 1.0)
-    delta = fetched_price - reference_price
-    if abs(delta) <= max_step:
-        return round(fetched_price, 2)
-
-    if delta > 0:
-        return round(reference_price + max_step, 2)
-    return round(reference_price - max_step, 2)
-
-
 def refresh_all_coins():
     for coin in sorted(SUPPORTED_COINS):
         try:
             fetched_price = fetch_price(coin)
-            price = smooth_price(coin, fetched_price)
+            price = round(fetched_price, 2)
             send_to_queue(coin, price)
             last_sent_prices[coin] = price
         except Exception as e:
@@ -120,7 +96,7 @@ def provide_price(coin):
     if coin not in SUPPORTED_COINS:
         return jsonify({'error': "unsupported coin"}), 400
     fetched_price = fetch_price(coin)
-    price = smooth_price(coin, fetched_price)
+    price = round(fetched_price, 2)
     send_to_queue(coin,price)
     last_sent_prices[coin] = price
     return jsonify({"price": price})
