@@ -38,21 +38,37 @@ def pretty_datetime_filter(value):
 API_PROXY_URL = os.environ.get("API_PROXY_URL", "http://localhost:8000")
 HISTORY_SERVICE_URL = os.environ.get("HISTORY_SERVICE_URL", "http://localhost:8001")
 
-CURRENCIES = ["USD", "EUR", "GBP", "PLN", "CHF", "JPY", "CNY", "CAD"]
+FALLBACK_CURRENCIES = ["USD", "EUR", "GBP", "PLN", "CHF", "JPY", "CNY", "CAD"]
+
+_currencies_cache = {"codes": None, "at": 0.0}
+_CURRENCIES_TTL = 3600
+
+
+def get_currencies():
+    import time
+    now = time.time()
+    if _currencies_cache["codes"] and now - _currencies_cache["at"] < _CURRENCIES_TTL:
+        return _currencies_cache["codes"]
+    try:
+        resp = requests.get(f"{API_PROXY_URL}/rates", timeout=3)
+        resp.raise_for_status()
+        codes = sorted({r["code"] for r in resp.json() if r.get("code")})
+        if codes:
+            _currencies_cache["codes"] = codes
+            _currencies_cache["at"] = now
+            return codes
+    except Exception:
+        pass
+    return _currencies_cache["codes"] or FALLBACK_CURRENCIES
 
 
 @app.route("/")
 def index():
-    cc = request.args.get("cc", "")
     rates = []
     error = None
 
-    url = f"{API_PROXY_URL}/rates"
-    if cc:
-        url += f"?cc={cc.upper()}"
-
     try:
-        resp = requests.get(url, timeout=5)
+        resp = requests.get(f"{API_PROXY_URL}/rates", timeout=5)
         resp.raise_for_status()
         rates = resp.json()
     except requests.exceptions.ConnectionError:
@@ -64,7 +80,7 @@ def index():
 
     prev_rates = {}
     if rates:
-        cc_param = cc if cc else ",".join(r["code"] for r in rates)
+        cc_param = ",".join(r["code"] for r in rates)
         current_date = rates[0].get("date", "")
         try:
             hist_resp = requests.get(
@@ -90,8 +106,8 @@ def index():
 
     favorites = {c for c in request.cookies.get("favorites", "").split(",") if c}
 
-    return render_template("index.html", rates=rates, error=error, cc=cc, view="rates",
-                           currencies=CURRENCIES, prev_rates=prev_rates, favorites=favorites)
+    return render_template("index.html", rates=rates, error=error, view="rates",
+                           currencies=get_currencies(), prev_rates=prev_rates, favorites=favorites)
 
 
 @app.route("/history")
@@ -121,7 +137,7 @@ def history():
 
     rendered = render_template("index.html", records=records, error=error,
                                selected=selected, time_range=time_range,
-                               view="history", currencies=CURRENCIES)
+                               view="history", currencies=get_currencies())
     resp = make_response(rendered)
     resp.set_cookie("history_cc", ",".join(selected), max_age=31536000, samesite="Lax")
     resp.set_cookie("history_range", time_range, max_age=31536000, samesite="Lax")
@@ -185,7 +201,7 @@ def charts():
 
     rendered = render_template("index.html", chart_data=chart_data, error=error,
                                selected=selected, time_range=time_range,
-                               chart_mode=chart_mode, view="charts", currencies=CURRENCIES)
+                               chart_mode=chart_mode, view="charts", currencies=get_currencies())
     resp = make_response(rendered)
     resp.set_cookie("charts_cc", ",".join(selected), max_age=31536000, samesite="Lax")
     resp.set_cookie("charts_range", time_range, max_age=31536000, samesite="Lax")

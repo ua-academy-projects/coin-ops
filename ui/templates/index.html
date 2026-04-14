@@ -86,7 +86,7 @@
 
     .tab.active {
       color: #e2e8f0;
-      background: #1e2330;
+      background: transparent;
       border-color: #2d3748;
     }
 
@@ -94,18 +94,18 @@
     .controls {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.75rem;
+      gap: 0.75rem 1.25rem;
       margin-bottom: 1.5rem;
-      align-items: flex-end;
+      align-items: flex-start;
     }
 
     .mode-toggle {
       display: flex;
-      margin-left: auto;
       background: #1e2330;
       border: 1px solid #2d3748;
       border-radius: 6px;
       overflow: hidden;
+      align-self: flex-start;
     }
     .mode-opt {
       padding: 0.3rem 0.75rem;
@@ -259,14 +259,13 @@
       background: transparent;
       border: 1px solid #2d3748;
       color: #94a3b8;
-      padding: 0.5rem 0.6rem;
+      padding: 0.25rem 0.5rem;
       font-size: 1rem;
       line-height: 1;
       border-radius: 6px;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
-      margin-left: auto;
     }
     .btn-refresh:hover { color: #e2e8f0; border-color: #475569; }
 
@@ -278,14 +277,13 @@
       margin-bottom: 1.5rem;
     }
 
-    /* --- pill chips --- */
-    .pill-group, .range-pills {
+    /* --- range pills (time range selection) --- */
+    .range-pills {
       display: flex;
       flex-wrap: wrap;
       gap: 0.4rem;
     }
-
-    .pill, .range-pill {
+    .range-pill {
       display: inline-block;
       padding: 0.4rem 0.85rem;
       font-size: 0.85rem;
@@ -298,16 +296,57 @@
       transition: all 0.15s ease;
       user-select: none;
     }
-    .pill:hover, .range-pill:hover { border-color: #475569; color: #cbd5e1; }
-    .pill.selected, .range-pill.selected {
+    .range-pill:hover { border-color: #475569; color: #cbd5e1; }
+    .range-pill.selected {
       background: #1e3a5f;
       border-color: #3b82f6;
       color: #60a5fa;
     }
-
-    .pill input[type="checkbox"],
-    .pill input[type="radio"],
     .range-pill input[type="radio"] { display: none; }
+
+    /* --- currency combo (chips + autocomplete) --- */
+    .cc-combo {
+      display: flex; align-items: center; gap: 0.4rem;
+      width: 420px; max-width: 100%;
+      padding: 0.35rem 0.5rem;
+      background: #1e2330; border: 1px solid #2d3748; border-radius: 8px;
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
+    .cc-combo:focus-within { border-color: #3b82f6; }
+    .cc-combo::-webkit-scrollbar { height: 6px; }
+    .cc-combo::-webkit-scrollbar-thumb { background: #2d3748; border-radius: 3px; }
+    .cc-chip {
+      display: inline-flex; align-items: center;
+      flex-shrink: 0;
+      padding: 0.25rem 0.7rem;
+      font-size: 0.78rem; font-weight: 600;
+      line-height: 1;
+      background: #1e3a5f; color: #60a5fa;
+      border-radius: 999px;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s, color 0.15s;
+    }
+    .cc-chip:hover { background: #3b1f28; color: #f87171; }
+    .cc-input-wrap { position: relative; flex: 1 0 120px; min-width: 120px; }
+    .cc-input {
+      width: 100%; border: none; outline: none; background: transparent;
+      color: #e2e8f0; font-size: 0.85rem; padding: 0.25rem 0;
+    }
+    .cc-input::placeholder { color: #64748b; }
+    .cc-dropdown {
+      position: absolute; left: 0; right: 0; top: calc(100% + 4px);
+      max-height: 14rem; overflow-y: auto;
+      background: #151923; border: 1px solid #2d3748; border-radius: 6px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+      z-index: 50;
+    }
+    .cc-dropdown-item {
+      padding: 0.45rem 0.75rem; font-size: 0.85rem; color: #cbd5e1; cursor: pointer;
+    }
+    .cc-dropdown-item:hover, .cc-dropdown-item.active { background: #1e3a5f; color: #60a5fa; }
+    .cc-dropdown-empty { padding: 0.45rem 0.75rem; font-size: 0.8rem; color: #64748b; }
 
     /* --- prominent rate date --- */
     .rate-date-badge {
@@ -350,23 +389,6 @@
 
     {% if view == "rates" %}
 
-      <form method="get" action="/" class="controls-row rates-form">
-        <div class="control-group">
-          <label>Currency</label>
-          <div class="pill-group">
-            <label class="pill {% if not cc %}selected{% endif %}">
-              <input type="radio" name="cc" value="" {% if not cc %}checked{% endif %}>All
-            </label>
-            {% for code in currencies %}
-              <label class="pill {% if cc == code %}selected{% endif %}">
-                <input type="radio" name="cc" value="{{ code }}" {% if cc == code %}checked{% endif %}>{{ code }}
-              </label>
-            {% endfor %}
-          </div>
-        </div>
-        <button type="button" class="btn-refresh" onclick="window.location.reload()" title="Refresh rates">&#x21bb;</button>
-      </form>
-
       {% if error %}
         <div class="error-box">⚠ {{ error }}</div>
       {% endif %}
@@ -381,11 +403,11 @@
       {% if rates %}
         <div class="table-card">
           <div class="table-meta">
-            <strong>{{ rates|length }} {{ "currency" if rates|length == 1 else "currencies" }}</strong>
+            <span class="rate-date-badge">{{ rates[0].date | pretty_date }}</span>
             <span style="display:flex;align-items:center;gap:0.6rem;">
               <input class="search-input" id="ratesSearch" type="text" placeholder="Search…" autocomplete="off">
               <span class="search-count" id="ratesCount"></span>
-              <span class="rate-date-badge">{{ rates[0].date | pretty_date }}</span>
+              <button type="button" class="btn-refresh" onclick="window.location.reload()" title="Refresh rates">&#x21bb;</button>
             </span>
           </div>
           <table id="ratesTable">
@@ -429,14 +451,17 @@
       <form method="get" action="/history" class="controls history-form">
         <div class="control-group">
           <label>Currencies</label>
-          <div class="pill-group">
-            {% for code in currencies %}
-              <label class="pill {% if code in selected %}selected{% endif %}">
-                <input type="checkbox" name="cc" value="{{ code }}"
-                       {% if code in selected %}checked{% endif %}>
+          <div class="cc-combo" data-codes='{{ currencies | tojson }}'>
+            {% for code in selected %}
+              <span class="cc-chip" data-code="{{ code }}" title="Click to remove {{ code }}">
                 {{ code }}
-              </label>
+                <input type="hidden" name="cc" value="{{ code }}">
+              </span>
             {% endfor %}
+            <div class="cc-input-wrap">
+              <input type="text" class="cc-input" placeholder="Add currency…" autocomplete="off">
+              <div class="cc-dropdown" hidden></div>
+            </div>
           </div>
         </div>
         <div class="control-group">
@@ -501,14 +526,17 @@
       <form method="get" action="/charts" class="controls charts-form">
         <div class="control-group">
           <label>Currencies</label>
-          <div class="pill-group">
-            {% for code in currencies %}
-              <label class="pill {% if code in selected %}selected{% endif %}">
-                <input type="checkbox" name="cc" value="{{ code }}"
-                       {% if code in selected %}checked{% endif %}>
+          <div class="cc-combo" data-codes='{{ currencies | tojson }}'>
+            {% for code in selected %}
+              <span class="cc-chip" data-code="{{ code }}" title="Click to remove {{ code }}">
                 {{ code }}
-              </label>
+                <input type="hidden" name="cc" value="{{ code }}">
+              </span>
             {% endfor %}
+            <div class="cc-input-wrap">
+              <input type="text" class="cc-input" placeholder="Add currency…" autocomplete="off">
+              <div class="cc-dropdown" hidden></div>
+            </div>
           </div>
         </div>
         <div class="control-group">
@@ -523,17 +551,20 @@
             {% endfor %}
           </div>
         </div>
-        <div class="mode-toggle">
-          <label class="mode-opt {% if chart_mode == 'absolute' %}active{% endif %}">
-            <input type="radio" name="mode" value="absolute"
-                   {% if chart_mode == 'absolute' %}checked{% endif %}>
-            UAH
-          </label>
-          <label class="mode-opt {% if chart_mode == 'normalized' %}active{% endif %}">
-            <input type="radio" name="mode" value="normalized"
-                   {% if chart_mode == 'normalized' %}checked{% endif %}>
-            %
-          </label>
+        <div class="control-group">
+          <label>Mode</label>
+          <div class="mode-toggle">
+            <label class="mode-opt {% if chart_mode == 'absolute' %}active{% endif %}">
+              <input type="radio" name="mode" value="absolute"
+                     {% if chart_mode == 'absolute' %}checked{% endif %}>
+              UAH
+            </label>
+            <label class="mode-opt {% if chart_mode == 'normalized' %}active{% endif %}">
+              <input type="radio" name="mode" value="normalized"
+                     {% if chart_mode == 'normalized' %}checked{% endif %}>
+              %
+            </label>
+          </div>
         </div>
       </form>
 
@@ -555,21 +586,93 @@
     {% endif %}
   </div>
   <script>
-    // Rates: radio pills — toggle selected + auto-submit
-    document.querySelectorAll('.rates-form .pill input[type="radio"]').forEach(function(rb) {
-      rb.addEventListener('change', function() {
-        document.querySelectorAll('.rates-form .pill').forEach(function(p) {
-          p.classList.toggle('selected', p.querySelector('input').checked);
-        });
-        this.form.submit();
-      });
-    });
+    // Currency combo: chips + autocomplete dropdown
+    document.querySelectorAll('.cc-combo').forEach(function(combo) {
+      var allCodes = [];
+      try { allCodes = JSON.parse(combo.dataset.codes || '[]'); } catch (e) {}
+      var input = combo.querySelector('.cc-input');
+      var dropdown = combo.querySelector('.cc-dropdown');
+      var wrap = combo.querySelector('.cc-input-wrap');
+      var form = combo.closest('form');
+      var activeIdx = 0;
 
-    // History: currency checkboxes — toggle selected + auto-submit
-    document.querySelectorAll('.history-form .pill input[type="checkbox"]').forEach(function(cb) {
-      cb.addEventListener('change', function() {
-        this.parentElement.classList.toggle('selected', this.checked);
-        this.form.submit();
+      function selectedCodes() {
+        return Array.from(combo.querySelectorAll('.cc-chip')).map(function(c) { return c.dataset.code; });
+      }
+
+      function addChip(code) {
+        if (!code || selectedCodes().indexOf(code) !== -1) return;
+        var chip = document.createElement('span');
+        chip.className = 'cc-chip';
+        chip.dataset.code = code;
+        chip.title = 'Click to remove ' + code;
+        chip.innerHTML = code + '<input type="hidden" name="cc" value="' + code + '">';
+        combo.insertBefore(chip, wrap);
+        form.submit();
+      }
+
+      function renderDropdown() {
+        var q = input.value.trim().toUpperCase();
+        var taken = selectedCodes();
+        var matches = allCodes.filter(function(c) {
+          return taken.indexOf(c) === -1 && (q === '' || c.indexOf(q) !== -1);
+        });
+        if (matches.length === 0) {
+          dropdown.innerHTML = '<div class="cc-dropdown-empty">No matches</div>';
+        } else {
+          activeIdx = 0;
+          dropdown.innerHTML = matches.map(function(c, i) {
+            return '<div class="cc-dropdown-item' + (i === 0 ? ' active' : '') + '" data-code="' + c + '">' + c + '</div>';
+          }).join('');
+        }
+        dropdown.hidden = false;
+      }
+
+      function hideDropdown() { dropdown.hidden = true; }
+
+      input.addEventListener('focus', renderDropdown);
+      input.addEventListener('input', renderDropdown);
+      input.addEventListener('keydown', function(e) {
+        var items = dropdown.querySelectorAll('.cc-dropdown-item');
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (items.length && items[activeIdx]) addChip(items[activeIdx].dataset.code);
+        } else if (e.key === 'Backspace' && input.value === '') {
+          var chips = combo.querySelectorAll('.cc-chip');
+          if (chips.length) { chips[chips.length - 1].remove(); form.submit(); }
+        } else if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          if (items.length) {
+            items[activeIdx] && items[activeIdx].classList.remove('active');
+            activeIdx = (activeIdx + 1) % items.length;
+            items[activeIdx].classList.add('active');
+          }
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (items.length) {
+            items[activeIdx] && items[activeIdx].classList.remove('active');
+            activeIdx = (activeIdx - 1 + items.length) % items.length;
+            items[activeIdx].classList.add('active');
+          }
+        } else if (e.key === 'Escape') {
+          hideDropdown();
+        }
+      });
+      dropdown.addEventListener('mousedown', function(e) {
+        var item = e.target.closest('.cc-dropdown-item');
+        if (item) { e.preventDefault(); addChip(item.dataset.code); }
+      });
+      combo.addEventListener('click', function(e) {
+        var chip = e.target.closest('.cc-chip');
+        if (chip) {
+          chip.remove();
+          form.submit();
+          return;
+        }
+        if (e.target === combo) input.focus();
+      });
+      document.addEventListener('click', function(e) {
+        if (!combo.contains(e.target)) hideDropdown();
       });
     });
 
@@ -579,14 +682,6 @@
         document.querySelectorAll('.history-form .range-pill').forEach(function(p) {
           p.classList.toggle('selected', p.querySelector('input').checked);
         });
-        this.form.submit();
-      });
-    });
-
-    // Charts: currency checkboxes — toggle selected + auto-submit
-    document.querySelectorAll('.charts-form .pill input[type="checkbox"]').forEach(function(cb) {
-      cb.addEventListener('change', function() {
-        this.parentElement.classList.toggle('selected', this.checked);
         this.form.submit();
       });
     });
