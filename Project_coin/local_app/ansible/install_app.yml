@@ -1,0 +1,206 @@
+- name: Setup NBU Collector
+  hosts: application
+  become: yes
+
+  vars:
+    go_version: "1.22.3"
+    app_dir: /app
+    go_arch_map:
+      x86_64: amd64
+      aarch64: arm64
+    rabbitmq_listen_address: "0.0.0.0"
+    rabbitmq_user: "nbu_consumer"
+    rabbitmq_password: "NBUConsumerPass123!"
+    rabbitmq_vhost: "/"
+    rabbitmq_queue: "nbu.exchange.rates"
+    cloud: "false"
+    app_user: "vagrant"
+  tasks:
+    # ------------------------
+    # System update + deps
+    # ------------------------
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install dependencies
+      apt:
+        name:
+          - curl
+          - git
+          - rabbitmq-server
+        state: present
+
+    # ------------------------
+    # Install Go
+    # ------------------------
+    - name: Check if Go is installed
+      command: /usr/local/go/bin/go version
+      register: go_check
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Set Go architecture fact
+      set_fact:
+        go_arch: "{{ go_arch_map.get(ansible_architecture, 'amd64') }}"
+
+    - name: Download Go
+      get_url:
+        url: "https://go.dev/dl/go{{ go_version }}.linux-{{ go_arch }}.tar.gz"
+        dest: "/tmp/go{{ go_version }}-{{ go_arch }}.tar.gz"
+        force: yes
+      when: go_check.failed
+
+    - name: Remove old Go
+      file:
+        path: /usr/local/go
+        state: absent
+      when: go_check.failed
+
+    - name: Extract Go
+      unarchive:
+        src: "/tmp/go{{ go_version }}-{{ go_arch }}.tar.gz"
+        dest: /usr/local
+        remote_src: yes
+      when: go_check.failed
+
+    - name: Add Go to PATH
+      lineinfile:
+        path: /etc/profile
+        line: "export PATH=$PATH:/usr/local/go/bin"
+        state: present
+
+    # ------------------------
+    # RabbitMQ
+    # ------------------------
+    - name: Enable RabbitMQ
+      service:
+        name: rabbitmq-server
+        enabled: yes
+        state: started
+
+    - name: Configure RabbitMQ to listen on all interfaces
+      lineinfile:
+        path: /etc/rabbitmq/rabbitmq.conf
+        create: yes
+        line: "listeners.tcp.default = {{ rabbitmq_listen_address }}:5672"
+        state: present
+      notify: restart rabbitmq
+
+    - name: Restart RabbitMQ after configuration changes
+      meta: flush_handlers
+
+    - name: Check if RabbitMQ consumer user exists
+      command: rabbitmqctl list_users
+      register: rabbitmq_users
+      changed_when: false
+
+    - name: Create RabbitMQ consumer user
+      command: "rabbitmqctl add_user {{ rabbitmq_user }} {{ rabbitmq_password }}"
+      when: "rabbitmq_user not in rabbitmq_users.stdout"
+
+    - name: Set RabbitMQ permissions for consumer user
+      command: "rabbitmqctl set_permissions -p {{ rabbitmq_vhost }} {{ rabbitmq_user }} .* .* .*"
+
+    - name: run task for the local
+      block:
+        - name: Ensure app directory exists
+          file:
+            path: "{{ app_dir }}"
+            state: directory
+            owner: vagrant
+            group: vagrant
+            mode: "0755"
+        - name: Copy app files
+          copy:
+            src: ./app/
+            dest: "{{ app_dir }}"
+            owner: vagrant
+            group: vagrant
+
+        - name: Ensure app directory permissions are correct
+          file:
+            path: "{{ app_dir }}"
+            state: directory
+            owner: vagrant
+            group: vagrant
+            mode: "0755"
+            recurse: yes
+      when: cloud | lower == "false"
+    # ------------------------
+    # Build app
+    # ------------------------
+    #- name: Ensure app directory exists
+    #  file:
+    #   path: "{{ app_dir }}"
+    #  state: directory
+    # owner: vagrant
+    #group: vagrant
+    #    mode: "0755"
+    - name: run task for aws
+      block:
+        - name: Copy app files
+          copy:
+            src: ./app/
+            dest: "{{ app_dir }}"
+
+        - name: Ensure app directory permissions are correct
+          file:
+            path: "{{ app_dir }}"
+            state: directory
+            mode: "0755"
+            recurse: yes
+      when: cloud | lower == "true"
+    - name: Run go mod tidy
+      command: /usr/local/go/bin/go mod tidy
+      args:
+        chdir: "{{ app_dir }}"
+
+    - name: Build Go app
+      command: /usr/local/go/bin/go build -o nbu-collector
+      args:
+        chdir: "{{ app_dir }}"
+
+    # ------------------------
+    # Systemd service
+    # ------------------------
+    - name: Create systemd service
+      copy:
+        dest: /etc/systemd/system/nbu-collector.service
+        content: |
+          [Unit]
+          Description=NBU Collector
+          After=network.target rabbitmq-server.service
+
+          [Service]
+          WorkingDirectory=/app
+          ExecStart=/app/nbu-collector
+
+          Environment="PUBLISH_MODE=rabbit"
+          Environment="DRY_RUN=false"
+          Environment="RABBITMQ_URL=amqp://guest:guest@localhost:5672/"
+          Environment="RABBITMQ_QUEUE={{ rabbitmq_queue }}"
+          Environment="HTTP_ADDR=:8080"
+
+          Restart=always
+          RestartSec=5
+          User={{ app_user }}
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable and start app
+      systemd:
+        name: nbu-collector
+        enabled: yes
+        state: restarted
+
+  handlers:
+    - name: restart rabbitmq
+      service:
+        name: rabbitmq-server
+        state: restarted
