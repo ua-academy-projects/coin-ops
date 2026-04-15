@@ -603,3 +603,121 @@ ssh-keygen -R 172.31.1.11
 ssh-keygen -R 172.31.1.12
 ```
 Run these after every `terraform destroy && apply` before attempting SSH or Ansible.
+
+---
+
+## 27. Local HTTPS domain shows certificate name mismatch
+
+**Symptom:** Opening `https://dashboard.coinops.demo` fails with:
+```
+NET::ERR_CERT_COMMON_NAME_INVALID
+```
+Inspecting the served certificate shows:
+```bash
+echo | openssl s_client -connect dashboard.coinops.demo:443 \
+  -servername dashboard.coinops.demo 2>/dev/null |
+  openssl x509 -noout -subject -ext subjectAltName
+```
+Output still contains:
+```
+subject=CN = coinops.test
+DNS:coinops.test
+```
+
+**Root cause:** Three independent values must match: the browser hostname, the nginx `server_name`, and the certificate SAN. The cert was generated for `coinops.test`, or Ansible was re-run without `APP_DOMAIN=dashboard.coinops.demo`, so nginx kept serving config/certs for the old local name.
+
+**Fix:**
+```bash
+# 1. Add Windows hosts entry:
+# 172.31.1.12 dashboard.coinops.demo
+
+# 2. Generate trusted local cert on Windows with mkcert:
+mkcert dashboard.coinops.demo
+
+# 3. Copy cert/key from WSL repo root to node-03:
+scp -i terraform/keys/softserve_rsa dashboard.coinops.demo.pem \
+  vagrant@172.31.1.12:/tmp/coinops.crt
+scp -i terraform/keys/softserve_rsa dashboard.coinops.demo-key.pem \
+  vagrant@172.31.1.12:/tmp/coinops.key
+
+# 4. Install them where nginx expects them:
+ssh -i terraform/keys/softserve_rsa vagrant@172.31.1.12 \
+  "sudo mkdir -p /etc/cognitor/tls && \
+   sudo cp /tmp/coinops.crt /etc/cognitor/tls/coinops.crt && \
+   sudo cp /tmp/coinops.key /etc/cognitor/tls/coinops.key && \
+   sudo chown root:root /etc/cognitor/tls/coinops.crt /etc/cognitor/tls/coinops.key && \
+   sudo chmod 644 /etc/cognitor/tls/coinops.crt && \
+   sudo chmod 600 /etc/cognitor/tls/coinops.key"
+
+# 5. Re-render nginx with the same hostname:
+APP_DOMAIN=dashboard.coinops.demo TLS_MODE=provided \
+  ansible-playbook -i ansible/inventory ansible/deploy.yml --limit softserve-node-03
+```
+
+**Verification:**
+```bash
+ssh -i terraform/keys/softserve_rsa vagrant@172.31.1.12 \
+  "grep -n 'server_name' /opt/cognitor/ui/nginx.conf"
+
+echo | openssl s_client -connect dashboard.coinops.demo:443 \
+  -servername dashboard.coinops.demo 2>/dev/null |
+  openssl x509 -noout -subject -ext subjectAltName
+```
+Both nginx and the certificate must mention `dashboard.coinops.demo`.
+
+---
+
+## 28. Chrome still marks local HTTPS as "Not secure" after mkcert
+
+**Symptom:** Chrome says:
+```
+This page is not secure (broken HTTPS)
+Resources - active content with certificate errors
+```
+but the certificate section says the certificate is valid and trusted.
+
+**Root cause:** Chrome cached a previous certificate-error exception or HSTS/security policy for the same hostname. This can persist after replacing the self-signed certificate with a trusted mkcert certificate.
+
+**Fix:**
+1. Open `chrome://net-internals/#hsts`.
+2. In "Delete domain security policies", enter the local domain, for example `dashboard.coinops.demo`.
+3. Click Delete.
+4. Clear site data for the same domain if needed.
+5. Fully close Chrome and reopen it.
+
+**Verification:** In DevTools Security, the certificate, connection, and resources sections should all be green. Also verify the frontend runtime config no longer points at raw HTTP backend IPs:
+```bash
+curl -k https://dashboard.coinops.demo/config.js
+```
+Expected:
+```js
+window.__COIN_OPS_CONFIG__ = {
+  proxyUrl: "/api",
+  historyUrl: "/history-api"
+};
+```
+
+---
+
+## 29. Windows OpenSSH refuses project SSH key during scp
+
+**Symptom:** PowerShell `scp` fails with:
+```
+WARNING: UNPROTECTED PRIVATE KEY FILE!
+Bad permissions. Try removing permissions for user: ... CodexSandboxUsers ...
+Load key "...softserve_rsa": bad permissions
+```
+
+**Root cause:** Windows OpenSSH enforces strict ACLs for private keys. The key under the project directory is on an NTFS mount and may be readable by extra Windows principals, so OpenSSH refuses to use it.
+
+**Workaround:** Run `scp` from WSL, or copy the key into the Linux filesystem and lock it down:
+```bash
+mkdir -p ~/.ssh
+cp /mnt/f/univ/softserv-internship/terraform/keys/softserve_rsa ~/.ssh/softserve_rsa
+chmod 600 ~/.ssh/softserve_rsa
+
+scp -i ~/.ssh/softserve_rsa dashboard.coinops.demo.pem \
+  vagrant@172.31.1.12:/tmp/coinops.crt
+```
+
+**Lesson:** For VM operations from WSL, prefer WSL `ssh`/`scp` and a private key stored under `~/.ssh` with `0600` permissions. Avoid Windows OpenSSH against keys stored on broad-permission project directories.
