@@ -15,7 +15,7 @@ The supported deployment model is:
 ```mermaid
 flowchart LR
     User[User]
-    UI[Web UI<br/>Current View + History View]
+    UI[UI Service]
     Proxy[API Proxy Service]
     Coinbase[Public API<br/>Coinbase]
     Rabbit[RabbitMQ]
