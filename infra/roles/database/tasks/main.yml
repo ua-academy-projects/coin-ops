@@ -8,6 +8,41 @@
     state: present
     update_cache: yes
 
+# --- Firewall configuration ---
+
+- name: Configure UFW default deny incoming
+  community.general.ufw:
+    default: deny
+    direction: incoming
+
+- name: Allow SSH 22 via UFW
+  community.general.ufw:
+    rule: allow
+    port: "22"
+    proto: tcp
+    src: "10.10.1.0/24"
+
+- name: Allow SSH 2205 via UFW
+  community.general.ufw:
+    rule: allow
+    port: "2205"
+    proto: tcp
+    src: "10.10.1.0/24"
+
+- name: Allow PostgreSQL (5432) from Docker subnet via UFW
+  community.general.ufw:
+    rule: allow
+    port: "5432"
+    proto: tcp
+    src: "10.10.1.0/24"
+
+
+- name: Enable UFW
+  community.general.ufw:
+    state: enabled
+
+# --- PostgreSQL configuration ---
+
 - name: Allow PostgreSQL to listen on all interfaces
   lineinfile:
     path: "/etc/postgresql/{{ pg_version | default('16') }}/main/postgresql.conf"
@@ -25,6 +60,8 @@
 
 - name: Apply PostgreSQL config before local init
   meta: flush_handlers
+
+# --- Database initialization ---
 
 - name: Create database user
   postgresql_user:
@@ -56,6 +93,8 @@
   become: yes
   become_user: postgres
   changed_when: false
+
+# --- Service management ---
 
 - name: Start PostgreSQL service
   systemd:

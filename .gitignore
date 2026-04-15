@@ -12,5 +12,5 @@ env/
 /bin/
 
 docs/task.md
-
 review_artifacts/
+infra/certs/*

@@ -13,4 +13,3 @@
         dest: /vagrant/.env
         mode: '0644'
       tags: [config, env]
-
