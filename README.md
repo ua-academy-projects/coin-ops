@@ -112,6 +112,14 @@ The VMs do not need application source code for deployment. They only need Docke
 
 SemVer Git tags (`v0.1.0`, `v0.2.0`, etc.) trigger the same image build workflow and publish matching GHCR image tags. Branch pushes still publish `shabat-latest` for quick demos.
 
+Version numbers follow SemVer:
+
+```text
+vMAJOR.MINOR.PATCH
+```
+
+Use `PATCH` for fixes only, for example `v0.1.0 -> v0.1.1`. Use `MINOR` for compatible new capabilities, for example `v0.1.0 -> v0.2.0`. Use `MAJOR` for breaking changes, for example `v1.4.2 -> v2.0.0`. This project starts at `v0.1.0` because it is the first stable baseline before a formal `v1.0.0` release.
+
 ## Public Gateway and TLS
 
 Node-03 is the browser-facing gateway. It serves the React UI and reverse-proxies same-origin backend paths:
@@ -169,6 +177,14 @@ Deploy application containers:
 ansible-playbook -i ansible/inventory ansible/deploy.yml
 ```
 
+This deploys the moving branch image tag by default:
+
+```text
+IMAGE_TAG=shabat-latest
+```
+
+Use this for active demos after pushing to the `Shabat` branch. GitHub Actions rebuilds `shabat-latest`, and Ansible pulls that current image.
+
 If GHCR packages are private, export registry credentials first. The token only needs package read access:
 
 ```bash
@@ -177,11 +193,37 @@ export GHCR_TOKEN=<github-token-with-read-packages>
 ansible-playbook -i ansible/inventory ansible/deploy.yml
 ```
 
-Deploy a specific image tag:
+Deploy a stable release tag:
 
 ```bash
 IMAGE_TAG=v0.1.0 ansible-playbook -i ansible/inventory ansible/deploy.yml
 ```
+
+Use this for production-style deploys. `v0.1.0` is immutable: it points to the exact image built from the `v0.1.0` Git tag. Rollback is the same operation with an older tag, for example `IMAGE_TAG=v0.0.9`.
+
+Deploy an exact commit image when debugging or proving reproducibility:
+
+```bash
+IMAGE_TAG=<full-commit-sha> ansible-playbook -i ansible/inventory ansible/deploy.yml
+```
+
+Live demo release flow:
+
+```bash
+# 1. Push the current branch so shabat-latest images build
+git push origin Shabat
+
+# 2. Create a visible SemVer release tag from the current commit
+git tag -a v0.1.0 -m "Release v0.1.0"
+git push origin v0.1.0
+
+# 3. Wait for GitHub Actions to finish publishing GHCR images
+
+# 4. Deploy the pinned release
+IMAGE_TAG=v0.1.0 ansible-playbook -i ansible/inventory ansible/deploy.yml
+```
+
+If the tag already exists, do not recreate it during the demo. Either deploy the existing tag or create the next version, for example `v0.1.1` for a small fix or `v0.2.0` for new sprint work.
 
 Deploy only one node:
 

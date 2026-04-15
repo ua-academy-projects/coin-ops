@@ -37,6 +37,9 @@ coin-ops-intelligence.zip
 # Patch files
 *.patch
 
+# Local TLS certificates/keys generated for mkcert demos
+*.pem
+
 # Personal notes — not for the repo
 docs/interview-notes.md
 interview-notes.md

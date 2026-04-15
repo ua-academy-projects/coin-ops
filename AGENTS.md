@@ -36,8 +36,10 @@ python consumer.py   # RabbitMQ consumer
 Infrastructure:
 
 ```bash
+ansible-galaxy collection install -r ansible/requirements.yml
 ansible-playbook -i ansible/inventory ansible/provision.yml
 ansible-playbook -i ansible/inventory ansible/deploy.yml
+IMAGE_TAG=v0.1.0 ansible-playbook -i ansible/inventory ansible/deploy.yml
 ```
 
 ## Coding Style & Naming Conventions
@@ -59,3 +61,9 @@ Never commit real credentials. Use `.env`, Ansible variables, and generated env 
 ## Architecture Notes
 
 Terraform creates VMs, Ansible configures and deploys them, Docker packages runtime services, RabbitMQ decouples ingestion, PostgreSQL stores history, and Redis stores short-lived UI session state.
+
+Node-03 is the browser-facing gateway. Frontend runtime URLs should stay same-origin (`/api` and `/history-api`) so nginx can reverse-proxy to node-02 and node-01. Do not reintroduce direct browser calls to `172.31.1.10:8000` or `172.31.1.11:8080` unless intentionally debugging CORS.
+
+Container images are built by GitHub Actions and pushed to GHCR. Default deploys use `shabat-latest`; production-style or demo release deploys should use `IMAGE_TAG=vX.Y.Z`. SemVer tags are repository-level release tags: use patch for fixes, minor for compatible features, and major for breaking changes.
+
+TLS is controlled by `APP_DOMAIN` and `TLS_MODE`. Local lab HTTPS defaults to `APP_DOMAIN=coinops.test` and `TLS_MODE=selfsigned`; browsers will warn unless the generated certificate or a local CA is trusted.
