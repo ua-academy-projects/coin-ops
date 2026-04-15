@@ -28,6 +28,7 @@
       - docker-ce-cli
       - containerd.io
       - docker-compose-plugin
+      - python3-docker
     state: present
 
 - name: Ensure Docker is started and enabled

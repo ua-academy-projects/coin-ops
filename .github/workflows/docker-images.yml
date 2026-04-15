@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - Shabat
+    tags:
+      - "v*.*.*"
     paths:
       - ".github/workflows/docker-images.yml"
       - "proxy/**"
@@ -58,12 +60,38 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Compute image metadata
+        id: image-meta
+        shell: bash
+        run: |
+          image="${REGISTRY}/${OWNER}/${{ matrix.image }}"
+          tags="${image}:${GITHUB_SHA}"
+          version="${GITHUB_SHA}"
+
+          if [[ "${GITHUB_REF_TYPE}" == "branch" && "${GITHUB_REF_NAME}" == "Shabat" ]]; then
+            tags="${tags}"$'\n'"${image}:shabat-latest"
+          fi
+
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            tags="${tags}"$'\n'"${image}:${GITHUB_REF_NAME}"
+            version="${GITHUB_REF_NAME}"
+          fi
+
+          {
+            echo "tags<<EOF"
+            echo "${tags}"
+            echo "EOF"
+            echo "version=${version}"
+          } >> "${GITHUB_OUTPUT}"
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ matrix.image }}:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ matrix.image }}:shabat-latest
+          tags: ${{ steps.image-meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.image-meta.outputs.version }}

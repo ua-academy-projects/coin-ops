@@ -108,7 +108,27 @@ push to Shabat
   -> docker compose up -d starts containers
 ```
 
-The VMs do not need application source code for deployment. They only need Docker, Compose files, runtime env files, and network access to GHCR. The default tag is `shabat-latest`; set `IMAGE_TAG=<commit-sha>` for immutable rollouts or rollback.
+The VMs do not need application source code for deployment. They only need Docker, Compose files, runtime env files, and network access to GHCR. The default tag is `shabat-latest`; set `IMAGE_TAG=<commit-sha>` or `IMAGE_TAG=vX.Y.Z` for immutable rollouts or rollback.
+
+SemVer Git tags (`v0.1.0`, `v0.2.0`, etc.) trigger the same image build workflow and publish matching GHCR image tags. Branch pushes still publish `shabat-latest` for quick demos.
+
+## Public Gateway and TLS
+
+Node-03 is the browser-facing gateway. It serves the React UI and reverse-proxies same-origin backend paths:
+
+```text
+https://coinops.test/              -> React UI
+https://coinops.test/api/*         -> node-02 proxy
+https://coinops.test/history-api/* -> node-01 history API
+```
+
+For local lab HTTPS, keep `APP_DOMAIN=coinops.test`, `TLS_MODE=selfsigned`, and add this hosts entry on the machine running the browser:
+
+```text
+172.31.1.12 coinops.test
+```
+
+The self-signed certificate will show a browser trust warning. For a real domain, point DNS to node-03 and replace the self-signed cert with a trusted certificate using `TLS_MODE=provided`; the UI node expects `/etc/cognitor/tls/coinops.crt` and `/etc/cognitor/tls/coinops.key`.
 
 ## Secrets and Runtime Configuration
 
@@ -123,6 +143,12 @@ Prepare environment variables first:
 ```bash
 cp .env.example .env
 source .env
+```
+
+Install pinned Ansible collections:
+
+```bash
+ansible-galaxy collection install -r ansible/requirements.yml
 ```
 
 Provision infrastructure:
@@ -154,7 +180,7 @@ ansible-playbook -i ansible/inventory ansible/deploy.yml
 Deploy a specific image tag:
 
 ```bash
-IMAGE_TAG=<commit-sha> ansible-playbook -i ansible/inventory ansible/deploy.yml
+IMAGE_TAG=v0.1.0 ansible-playbook -i ansible/inventory ansible/deploy.yml
 ```
 
 Deploy only one node:

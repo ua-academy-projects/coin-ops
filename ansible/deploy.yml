@@ -25,11 +25,12 @@
   become: yes
   tasks:
     - name: Log in to configured container registry
-      command:
-        cmd: "docker login {{ image_registry_host }} -u {{ registry_username }} --password-stdin"
-        stdin: "{{ registry_token }}"
+      community.docker.docker_login:
+        registry_url: "{{ image_registry_host }}"
+        username: "{{ registry_username }}"
+        password: "{{ registry_token }}"
+        reauthorize: true
       no_log: true
-      changed_when: false
       when:
         - registry_username | length > 0
         - registry_token | length > 0
