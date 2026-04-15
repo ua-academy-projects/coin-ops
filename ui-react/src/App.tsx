@@ -37,6 +37,10 @@ import { cn } from '@/src/lib/utils';
 import { MarketSnapshot, Whale, HistoryPoint, Prices, PriceHistory } from './types';
 import { PROXY_URL, HISTORY_URL, REFRESH_MS, PRICES_REFRESH_MS } from './config';
 
+const LIVE_FETCH_OPTIONS: RequestInit = {
+  cache: 'no-store',
+};
+
 function getSessionId(): string {
   const name = 'coinops_sid=';
   const cookie = document.cookie.split(';').find(c => c.trim().startsWith(name));
@@ -104,8 +108,8 @@ export default function App() {
     if (isInitialLoad.current || forceLoading) setIsLoading(true);
     try {
       const [marketsRes, whalesRes] = await Promise.all([
-        fetch(PROXY_URL + '/current'),
-        fetch(PROXY_URL + '/whales'),
+        fetch(PROXY_URL + '/current', LIVE_FETCH_OPTIONS),
+        fetch(PROXY_URL + '/whales', LIVE_FETCH_OPTIONS),
       ]);
       if (marketsRes.ok) setMarkets(await marketsRes.json() as MarketSnapshot[]);
       if (whalesRes.ok) setWhales(await whalesRes.json() as Whale[]);
@@ -121,7 +125,7 @@ export default function App() {
 
   const loadPrices = async () => {
     try {
-      const res = await fetch(PROXY_URL + '/prices');
+      const res = await fetch(PROXY_URL + '/prices', LIVE_FETCH_OPTIONS);
       if (res.ok) setPrices(await res.json() as Prices);
     } catch {
       // silent fail — prices are optional
@@ -133,7 +137,7 @@ export default function App() {
       const coins = ['usd_uah', 'bitcoin', 'ethereum'] as const;
       const results = await Promise.all(
         coins.map(async (coin) => {
-          const res = await fetch(`${HISTORY_URL}/prices/history/${coin}?limit=72`);
+          const res = await fetch(`${HISTORY_URL}/prices/history/${coin}?limit=72`, LIVE_FETCH_OPTIONS);
           if (!res.ok) return [coin, []] as const;
           const data = await res.json() as PriceHistory[];
           return [coin, data.reverse()] as const;
@@ -147,7 +151,7 @@ export default function App() {
 
   const fetchMarketHistory = async (slug: string) => {
     try {
-      const res = await fetch(`${HISTORY_URL}/history/${slug}?limit=500`);
+      const res = await fetch(`${HISTORY_URL}/history/${slug}?limit=500`, LIVE_FETCH_OPTIONS);
       if (res.ok) {
         const data = await res.json() as HistoryPoint[];
         setHistoryData(data.reverse());
@@ -159,19 +163,23 @@ export default function App() {
     }
   };
 
+  const fetchPriceHistory = async (coin: string, limit = 200) => {
+    try {
+      const res = await fetch(`${HISTORY_URL}/prices/history/${coin}?limit=${limit}`, LIVE_FETCH_OPTIONS);
+      if (res.ok) {
+        const data = await res.json() as PriceHistory[];
+        setPriceHistoryData(data.reverse());
+      }
+    } catch { /* silent */ }
+  };
+
   const openPriceChart = async (coin: string) => {
     if (coin !== activePriceCoin) {
       setPriceHistoryData([]);
       saveState(sidRef.current, activeTab, coin, selectedMarket?.slug ?? null);
     }
     setActivePriceCoin(coin);
-    try {
-      const res = await fetch(`${HISTORY_URL}/prices/history/${coin}?limit=200`);
-      if (res.ok) {
-        const data = await res.json() as PriceHistory[];
-        setPriceHistoryData(data.reverse());
-      }
-    } catch { /* silent */ }
+    fetchPriceHistory(coin);
   };
 
   const saveState = async (sid: string, tab: string, coin: string | null = activePriceCoin, marketSlug: string | null = selectedMarket?.slug ?? null) => {
@@ -186,7 +194,7 @@ export default function App() {
 
   const restoreState = async (sid: string) => {
     try {
-      const res = await fetch(`${PROXY_URL}/state?sid=${sid}`);
+      const res = await fetch(`${PROXY_URL}/state?sid=${sid}`, LIVE_FETCH_OPTIONS);
       if (res.ok) {
         const state = await res.json() as { active_tab?: string, active_price_coin?: string, active_market_slug?: string };
         if (state.active_tab) setActiveTab(state.active_tab as typeof activeTab);
@@ -210,18 +218,47 @@ export default function App() {
     const marketTimer = setInterval(loadData, REFRESH_MS);
     const priceTimer = setInterval(loadPrices, PRICES_REFRESH_MS);
     const homepagePriceTimer = setInterval(loadHomepagePriceHistory, PRICES_REFRESH_MS);
+    const refreshVisibleData = () => {
+      if (document.visibilityState !== 'visible') return;
+      loadData();
+      loadPrices();
+      loadHomepagePriceHistory();
+    };
+    window.addEventListener('focus', refreshVisibleData);
+    document.addEventListener('visibilitychange', refreshVisibleData);
     return () => {
       clearInterval(marketTimer);
       clearInterval(priceTimer);
       clearInterval(homepagePriceTimer);
+      window.removeEventListener('focus', refreshVisibleData);
+      document.removeEventListener('visibilitychange', refreshVisibleData);
     };
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'history' && selectedMarket) {
-      fetchMarketHistory(selectedMarket.slug);
+    if (!selectedMarket) return;
+
+    const freshMarket = markets.find(market => market.slug === selectedMarket.slug);
+    if (freshMarket && freshMarket.fetched_at !== selectedMarket.fetched_at) {
+      setSelectedMarket(freshMarket);
     }
-  }, [activeTab, selectedMarket]);
+  }, [markets, selectedMarket]);
+
+  useEffect(() => {
+    if (activeTab !== 'history' || !selectedMarket) return;
+
+    fetchMarketHistory(selectedMarket.slug);
+    const historyTimer = setInterval(() => fetchMarketHistory(selectedMarket.slug), REFRESH_MS);
+    return () => clearInterval(historyTimer);
+  }, [activeTab, selectedMarket?.slug]);
+
+  useEffect(() => {
+    if (!activePriceCoin) return;
+
+    fetchPriceHistory(activePriceCoin);
+    const priceHistoryTimer = setInterval(() => fetchPriceHistory(activePriceCoin), PRICES_REFRESH_MS);
+    return () => clearInterval(priceHistoryTimer);
+  }, [activePriceCoin]);
 
   useEffect(() => {
     if (restoredMarketSlug && markets.length > 0 && !selectedMarket) {
