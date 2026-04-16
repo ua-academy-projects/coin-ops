@@ -50,8 +50,19 @@ resource "aws_security_group" "my_sg" {
     cidr_blocks = ["0.0.0.0/0"]
 
   }
+
+
+
   ingress {
-    description = "SSH"
+    description = "https"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+
+  }
+  ingress {
+    description = "nginx"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -59,7 +70,7 @@ resource "aws_security_group" "my_sg" {
 
   }
   ingress {
-    description = "SSH"
+    description = "Rebbit"
     from_port   = 5672
     to_port     = 5672
     protocol    = "tcp"
@@ -67,7 +78,7 @@ resource "aws_security_group" "my_sg" {
 
   }
   ingress {
-    description = "SSH"
+    description = "Postgre"
     from_port   = 5432
     to_port     = 5432
     protocol    = "tcp"
@@ -109,7 +120,7 @@ resource "null_resource" "postgres" {
 
 
   provisioner "local-exec" {
-    command = "ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ../ansible/hosts-aws.ini /home/valentyn/Project_coin/aws_app/ansible/install_postgres.yml --extra-vars rabbitmq_host=${aws_instance.app_server.public_ip}"
+    command = "ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ../ansible/hosts-aws.ini ../ansible/install_postgres_serv/install_postgres.yml --vault-password-file ../ansible/install_postgres_serv/.vault_pass --extra-vars rabbitmq_host=${aws_instance.app_server.public_ip}"
 
 
   }
@@ -127,7 +138,7 @@ resource "null_resource" "nginx" {
 
 
   provisioner "local-exec" {
-    command = "ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ../ansible/hosts-aws.ini /home/valentyn/Project_coin/aws_app/ansible/install_nginx.yml --extra-vars postgres_host=${aws_instance.db_server.public_ip} --extra-vars public_ip=${aws_instance.web_server.public_ip}"
+    command = "ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ../ansible/hosts-aws.ini ../ansible/install_nginx_serv/install_nginx.yml --vault-password-file ../ansible/install_nginx_serv/.vault_pass --extra-vars postgres_host=${aws_instance.db_server.public_ip} --extra-vars public_ip=${aws_instance.web_server.public_ip}"
 
 
   }
@@ -143,7 +154,7 @@ resource "null_resource" "app" {
 
 
   provisioner "local-exec" {
-    command = "ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ../ansible/hosts-aws.ini /home/valentyn/Project_coin/aws_app/ansible/install_app.yml --extra-vars cloud=true  --extra-vars app_user=root"
+    command = "ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ../ansible/hosts-aws.ini ../ansible/install_app_serv/install_app.yml --vault-password-file ../ansible/install_app_serv/.vault_pass  --extra-vars cloud=true  --extra-vars app_user=root"
 
 
   }
