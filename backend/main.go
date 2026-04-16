@@ -69,6 +69,22 @@ func main() {
 			return
 		}
 
+		if r.URL.Path == "/history" {
+			historyURL := "http://history:8000/history"
+			resp, err := http.Get(historyURL)
+			if err != nil {
+				log.Printf("Failed to fetch history: %v", err)
+				http.Error(w, "Failed to fetch history from service", http.StatusInternalServerError)
+				return
+			}
+			defer resp.Body.Close()
+
+			body, _ := ioutil.ReadAll(resp.Body)
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(body)
+			return
+		}
+
 		if r.URL.Path != "/weather" {
 			http.NotFound(w, r)
 			return
