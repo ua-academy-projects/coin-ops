@@ -79,11 +79,11 @@ function downsampleItems(items, bucketMs, minTs, maxTs) {
   const result = [];
   for (let t = startTs; t <= endTs; t += bucketMs) {
     if (buckets[t]) {
-      result.push(buckets[t]);
+      var snapped = Object.assign({}, buckets[t]);
+      snapped.created_at = new Date(t).toISOString();
+      result.push(snapped);
     } else {
-      // Insert a "gap" item with null prices
-      // We use the timestamp of the bucket start
-      const gapDate = new Date(t).toISOString();
+      var gapDate = new Date(t).toISOString();
       result.push({
         created_at: gapDate,
         price_uah: null, price_usd: null,
@@ -239,6 +239,7 @@ export function initHistRangeFilter() {
   const { el } = store;
   if (!el.histRange || !el.histRangeMenu || !el.histRangeLabel) return;
   const defs = [
+    { value: '12h',    label: '12 годин' },
     { value: '24h',    label: '24 години' },
     { value: '7d',     label: '7 днів' },
     { value: '30d',    label: '1 місяць' },
@@ -461,7 +462,9 @@ export async function loadHistorySeries() {
 
     let xScaleMin = null;
     let xScaleMax = Date.now();
-    if (range === '24h') {
+    if (range === '12h') {
+      xScaleMin = xScaleMax - 12 * 60 * 60 * 1000;
+    } else if (range === '24h') {
       xScaleMin = xScaleMax - 24 * 60 * 60 * 1000;
     } else if (range === '7d') {
       xScaleMin = xScaleMax - 7 * 24 * 60 * 60 * 1000;
@@ -497,7 +500,9 @@ export async function loadHistorySeries() {
     
     let bucketMs = null;
     if (durationMs) {
-      if (durationMs <= 24 * 3600 * 1000) {
+      if (durationMs <= 12 * 3600 * 1000) {
+        bucketMs = 5 * 60 * 1000; // 5 mins — ~144 points for 12h
+      } else if (durationMs <= 24 * 3600 * 1000) {
         bucketMs = 30 * 60 * 1000; // 30 mins
       } else if (durationMs <= 7 * 24 * 3600 * 1000) {
         bucketMs = 4 * 3600 * 1000; // 4 hours
@@ -595,7 +600,7 @@ export async function loadHistorySeries() {
       const allSeries   = parsed.map(function (p) { return p.chartItems; });
       const timeline    = buildUnifiedTimeline(allSeries);
       let toleranceMs = 15 * 60 * 1000;
-      if (range === '24h') toleranceMs = 5 * 60 * 1000;
+      if (range === '12h' || range === '24h') toleranceMs = 5 * 60 * 1000;
       
       datasets = parsed.map(function (p, idx) {
         const aligned    = alignSeriesToTimeline(p.chartItems, timeline, p.metric, toleranceMs);

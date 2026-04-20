@@ -17,7 +17,7 @@ from db import pg_conn
 LOG = logging.getLogger("coinops.history.repo")
 
 MAX_SERIES_POINTS = 200
-SERIES_BUCKET_MINUTES = 10
+SERIES_BUCKET_MINUTES = 5
 
 
 # ---------------------------------------------------------------------------
@@ -469,7 +469,7 @@ def fetch_series_for_range(
 ) -> list[dict[str, Any]]:
     """Chronological snapshots with pct_change_from_prev on one metric (UAH or USD)."""
     rk = (range_key or "7d").lower().strip()
-    if rk not in {"7d", "30d", "all", "24h", "custom"}:
+    if rk not in {"7d", "30d", "all", "24h", "12h", "custom"}:
         rk = "7d"
     clauses = ["asset_symbol = %s", "asset_type = %s"]
     params: list[Any] = [asset_symbol.upper(), asset_type]
@@ -489,6 +489,9 @@ def fetch_series_for_range(
     elif rk == "24h":
         clauses.append("created_at >= %s")
         params.append(datetime.now(timezone.utc) - timedelta(hours=24))
+    elif rk == "12h":
+        clauses.append("created_at >= %s")
+        params.append(datetime.now(timezone.utc) - timedelta(hours=12))
 
     where_sql = " AND ".join(clauses)
     sql = f"""
