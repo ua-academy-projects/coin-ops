@@ -14,7 +14,9 @@ docs/superpowers/
 # Compiled binary
 proxy/proxy
 
-scripts
+# Local/scratch analysis and helper artifacts excluded from dev
+scripts/
+tournament/
 
 # Terraform
 terraform/.terraform/
