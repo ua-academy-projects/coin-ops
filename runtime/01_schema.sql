@@ -57,7 +57,8 @@ COMMENT ON TABLE runtime.event_retry IS
 
 CREATE TABLE IF NOT EXISTS runtime.dead_letter_audit (
     id              BIGSERIAL   PRIMARY KEY,
-    original_msg_id BIGINT      NOT NULL,
+    original_msg_id BIGINT      NOT NULL,   -- msg_id in the original 'events' queue
+    dlq_msg_id      BIGINT,                 -- msg_id assigned in 'events_dlq' (NULL = unknown)
     queue_name      TEXT        NOT NULL DEFAULT 'events',
     payload         JSONB       NOT NULL,
     last_error      TEXT,

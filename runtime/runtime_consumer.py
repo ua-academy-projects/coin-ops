@@ -95,13 +95,25 @@ def connect_db() -> psycopg2.extensions.connection:
     while not _shutdown:
         try:
             conn = psycopg2.connect(DATABASE_URL)
-            conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+            # autocommit = True is the preferred way in psycopg2 ≥2.4.2.
+            # set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT) is deprecated.
+            conn.autocommit = True
             log.info("Connected to PostgreSQL")
             return conn
         except Exception as exc:
             log.error("PostgreSQL unavailable: %s — retrying in 5s", exc)
             time.sleep(5)
     raise SystemExit(0)
+
+
+def reconnect_db(old_conn: psycopg2.extensions.connection) -> psycopg2.extensions.connection:
+    """Close old connection and reconnect. Called on OperationalError / InterfaceError."""
+    try:
+        old_conn.close()
+    except Exception:
+        pass
+    log.warning("Reconnecting to PostgreSQL...")
+    return connect_db()
 
 
 def setup_listen(conn: psycopg2.extensions.connection) -> None:
@@ -185,6 +197,8 @@ def drain_batch(conn: psycopg2.extensions.connection) -> int:
     """
     Claim up to BATCH_SIZE messages, process each, return count processed.
     Uses AUTOCOMMIT so each ack/fail is immediately visible.
+    Raises psycopg2.OperationalError / InterfaceError on DB connection loss
+    so the caller can reconnect and re-try.
     """
     processed = 0
     with conn.cursor() as cur:
@@ -209,6 +223,9 @@ def drain_batch(conn: psycopg2.extensions.connection) -> int:
         try:
             process_message(conn, msg_id, payload)
             processed += 1
+        except (psycopg2.OperationalError, psycopg2.InterfaceError):
+            # Connection dropped mid-message; re-raise so main() reconnects.
+            raise
         except Exception as exc:
             log.error("msg_id=%s processing failed: %s", msg_id, exc)
             handle_failure(conn, msg_id, str(exc))
@@ -236,12 +253,9 @@ def main() -> None:
     if not try_acquire_consumer_lock(conn):
         log.warning(
             "Another consumer already holds the advisory lock. "
-            "Running in read-only fallback mode (no claiming)."
+            "Exiting — let the scheduler restart this replica when the lock is free."
         )
-        # In a real deployment you'd exit here and let the scheduler restart.
-        # We keep running but skip drain_batch so no data is double-consumed.
-        while not _shutdown:
-            time.sleep(5)
+        conn.close()
         return
 
     log.info(
@@ -251,17 +265,28 @@ def main() -> None:
 
     try:
         while not _shutdown:
-            # --- Process whatever is already in the queue ---
-            while not _shutdown:
-                n = drain_batch(conn)
-                if n < BATCH_SIZE:
-                    break   # queue is drained; wait for NOTIFY
+            try:
+                # --- Drain whatever is already in the queue ---
+                while not _shutdown:
+                    n = drain_batch(conn)
+                    if n < BATCH_SIZE:
+                        break   # queue is drained; block on NOTIFY
 
-            if _shutdown:
-                break
+                if _shutdown:
+                    break
 
-            # --- Block until a new event arrives or timeout ---
-            wait_for_notify(conn)
+                # --- Block until a new event arrives or timeout ---
+                wait_for_notify(conn)
+
+            except (psycopg2.OperationalError, psycopg2.InterfaceError) as exc:
+                log.error("DB connection lost: %s — reconnecting", exc)
+                conn = reconnect_db(conn)
+                setup_listen(conn)
+                # Advisory lock is session-scoped — we must re-acquire it.
+                if not try_acquire_consumer_lock(conn):
+                    log.warning("Could not re-acquire advisory lock after reconnect — exiting.")
+                    break
+                log.info("Reconnected and re-acquired advisory lock.")
 
     finally:
         release_consumer_lock(conn)

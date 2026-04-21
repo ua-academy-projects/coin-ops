@@ -48,38 +48,40 @@ DECLARE
     v_payload    JSONB;
     v_new_msg_id BIGINT;
 BEGIN
-    -- Fetch payload from DLQ.
-    SELECT message
-    INTO   v_payload
-    FROM   pgmq.read('events_dlq', 0, 1)  -- peek, no visibility lock
-    WHERE  msg_id = p_dlq_msg_id;         -- pgmq.read returns a set; filter below
+    -- Read payload directly from the pgmq internal DLQ table.
+    -- pgmq stores 'events_dlq' in pgmq.q_events_dlq or public.q_events_dlq
+    -- depending on the install layout. Try both defensively.
+    BEGIN
+        EXECUTE '
+            SELECT message FROM pgmq.q_events_dlq WHERE msg_id = $1
+        ' INTO v_payload USING p_dlq_msg_id;
+    EXCEPTION WHEN undefined_table THEN
+        BEGIN
+            EXECUTE '
+                SELECT message FROM public.q_events_dlq WHERE msg_id = $1
+            ' INTO v_payload USING p_dlq_msg_id;
+        EXCEPTION WHEN undefined_table THEN
+            v_payload := NULL;
+        END;
+    END;
 
-    -- pgmq.read does not support WHERE on msg_id; re-query the internal table.
     IF v_payload IS NULL THEN
-        SELECT message
-        INTO   v_payload
-        FROM   pgmq.q_events_dlq
-        WHERE  msg_id = p_dlq_msg_id;
+        RAISE EXCEPTION 'DLQ message % not found in events_dlq', p_dlq_msg_id;
     END IF;
 
-    IF v_payload IS NULL THEN
-        RAISE EXCEPTION 'DLQ message % not found', p_dlq_msg_id;
-    END IF;
-
-    -- Re-enqueue via the wrapper (resets retry counter + sends NOTIFY).
+    -- Re-enqueue via the wrapper (resets retry counter + triggers NOTIFY).
     v_new_msg_id := runtime.enqueue_event(v_payload);
 
-    -- Delete from DLQ.
+    -- Delete from DLQ queue using the DLQ msg_id.
     PERFORM pgmq.delete('events_dlq', p_dlq_msg_id);
 
-    -- Update audit log.
+    -- Mark audit row as replayed (set dead_at = NULL as a "replayed" sentinel).
     UPDATE runtime.dead_letter_audit
-    SET    dead_at = NULL   -- NULL dead_at signals "replayed"
-    WHERE  original_msg_id = p_dlq_msg_id
-      AND  dead_at IS NOT NULL
-    ;
+    SET    dead_at = NULL
+    WHERE  dlq_msg_id = p_dlq_msg_id
+      AND  dead_at IS NOT NULL;
 
-    RAISE NOTICE 'runtime.dlq_replay: dlq_msg_id=% re-enqueued as msg_id=%',
+    RAISE NOTICE 'runtime.dlq_replay: dlq_msg_id=% re-enqueued as events msg_id=%',
         p_dlq_msg_id, v_new_msg_id;
 
     RETURN v_new_msg_id;
@@ -102,11 +104,12 @@ SECURITY DEFINER
 SET search_path = runtime, public
 AS $$
 BEGIN
+    -- p_dlq_msg_id is the msg_id in the events_dlq queue (= dead_letter_audit.dlq_msg_id).
     PERFORM pgmq.delete('events_dlq', p_dlq_msg_id);
     -- Keep the audit row but mark it discarded.
     UPDATE runtime.dead_letter_audit
     SET    last_error = COALESCE(last_error, '') || ' [DISCARDED]'
-    WHERE  original_msg_id = p_dlq_msg_id;
+    WHERE  dlq_msg_id = p_dlq_msg_id;
 END;
 $$;
 
@@ -180,12 +183,16 @@ BEGIN
         FROM   runtime.dead_letter_audit
         WHERE  dead_at < NOW() - p_older_than
     LOOP
-        -- Best-effort deletion from DLQ queue (may already be gone).
-        BEGIN
-            PERFORM pgmq.delete('events_dlq', v_row.original_msg_id);
-        EXCEPTION WHEN OTHERS THEN
-            NULL;
-        END;
+        -- Delete from DLQ queue using dlq_msg_id (the id in events_dlq),
+        -- not original_msg_id (which is the id in the original events queue).
+        -- Best-effort: message may already be gone.
+        IF v_row.dlq_msg_id IS NOT NULL THEN
+            BEGIN
+                PERFORM pgmq.delete('events_dlq', v_row.dlq_msg_id);
+            EXCEPTION WHEN OTHERS THEN
+                NULL;
+            END;
+        END IF;
 
         DELETE FROM runtime.dead_letter_audit WHERE id = v_row.id;
         v_count := v_count + 1;

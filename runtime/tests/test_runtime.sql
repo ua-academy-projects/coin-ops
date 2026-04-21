@@ -30,21 +30,31 @@ $$;
 DO $$
 DECLARE
     v_enqueue_id BIGINT;
-    v_msg        RECORD;
+    v_found_msg  JSONB;
+    v_rec        RECORD;
 BEGIN
     SELECT runtime.enqueue_event('{"type":"market","slug":"test-2","yes_price":0.6}'::JSONB)
     INTO   v_enqueue_id;
 
-    SELECT * INTO v_msg
-    FROM   runtime.claim_events(1, 30)
-    WHERE  msg_id = v_enqueue_id;
+    -- Claim a batch (not just 1) in case other messages are already in the queue.
+    -- Search for our specific msg_id among the claimed messages.
+    FOR v_rec IN
+        SELECT * FROM runtime.claim_events(50, 30)
+    LOOP
+        IF v_rec.msg_id = v_enqueue_id THEN
+            v_found_msg := v_rec.message;
+        ELSE
+            -- Release all other messages we claimed (reset vt to 0).
+            PERFORM pgmq.set_vt('events', v_rec.msg_id, 0);
+        END IF;
+    END LOOP;
 
-    IF v_msg IS NULL THEN
+    IF v_found_msg IS NULL THEN
         RAISE EXCEPTION 'FAIL test2: claim_events did not return enqueued msg_id=%', v_enqueue_id;
     END IF;
 
-    IF (v_msg.message->>'slug') <> 'test-2' THEN
-        RAISE EXCEPTION 'FAIL test2: payload slug mismatch, got %', v_msg.message->>'slug';
+    IF (v_found_msg->>'slug') <> 'test-2' THEN
+        RAISE EXCEPTION 'FAIL test2: payload slug mismatch, got %', v_found_msg->>'slug';
     END IF;
 
     -- cleanup
@@ -107,9 +117,8 @@ $$;
 -- ── Test 5: fail_event promotes to DLQ after MAX_RETRIES ─────────────────────
 DO $$
 DECLARE
-    v_id       BIGINT;
-    v_dlq_cnt  INT;
-    v_audit_cnt INT;
+    v_id        BIGINT;
+    v_audit_row runtime.dead_letter_audit;
 BEGIN
     SELECT runtime.enqueue_event('{"type":"poison","slug":"test-5","yes_price":0.0}'::JSONB)
     INTO   v_id;
@@ -118,29 +127,30 @@ BEGIN
     PERFORM runtime.fail_event(v_id, 'err1', 2);
     PERFORM runtime.fail_event(v_id, 'err2', 2);
 
-    -- Message should now be in events_dlq
-    SELECT COUNT(*) INTO v_dlq_cnt
-    FROM   pgmq.q_events_dlq;
-
-    SELECT COUNT(*) INTO v_audit_cnt
-    FROM   runtime.dead_letter_audit
-    WHERE  original_msg_id = v_id;
-
-    -- Retry row should be gone
+    -- Retry row should be gone from event_retry
     IF EXISTS (SELECT 1 FROM runtime.event_retry WHERE msg_id = v_id) THEN
         RAISE EXCEPTION 'FAIL test5: retry row still present after DLQ promotion';
     END IF;
 
-    IF v_audit_cnt < 1 THEN
+    -- Audit row must exist with dlq_msg_id populated
+    SELECT * INTO v_audit_row
+    FROM   runtime.dead_letter_audit
+    WHERE  original_msg_id = v_id;
+
+    IF v_audit_row IS NULL THEN
         RAISE EXCEPTION 'FAIL test5: no audit row written for DLQ promotion';
     END IF;
 
-    RAISE NOTICE 'PASS test5: msg_id=% promoted to DLQ after 2 failures; audit rows=%',
-        v_id, v_audit_cnt;
+    IF v_audit_row.dlq_msg_id IS NULL THEN
+        RAISE EXCEPTION 'FAIL test5: dlq_msg_id is NULL in audit row — pgmq.send return not captured';
+    END IF;
 
-    -- Cleanup DLQ
+    RAISE NOTICE 'PASS test5: msg_id=% promoted to DLQ after 2 failures; dlq_msg_id=%',
+        v_id, v_audit_row.dlq_msg_id;
+
+    -- Cleanup: use dlq_msg_id to delete from DLQ queue
+    PERFORM pgmq.delete('events_dlq', v_audit_row.dlq_msg_id);
     DELETE FROM runtime.dead_letter_audit WHERE original_msg_id = v_id;
-    PERFORM pgmq.purge_queue('events_dlq');
 END;
 $$;
 

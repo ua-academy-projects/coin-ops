@@ -35,8 +35,11 @@ BEGIN
     VALUES (v_msg_id, 'events')
     ON CONFLICT (msg_id) DO NOTHING;
 
-    -- Wake up any LISTEN-based consumers immediately (see 03_notify.sql).
-    PERFORM pg_notify('runtime_events', v_msg_id::TEXT);
+    -- NOTE: pg_notify is intentionally NOT called here.
+    -- The trigger trg_runtime_events_notify (03_notify.sql) fires on every
+    -- INSERT into the pgmq table — including direct pgmq.send() calls that
+    -- bypass this wrapper. Calling pg_notify here too would cause double
+    -- notifications for every enqueue_event() call.
 
     RETURN v_msg_id;
 END;
@@ -102,8 +105,9 @@ SECURITY DEFINER
 SET search_path = runtime, public
 AS $$
 DECLARE
-    v_attempts  INT;
-    v_payload   JSONB;
+    v_attempts   INT;
+    v_payload    JSONB;
+    v_dlq_msg_id BIGINT;
 BEGIN
     -- ── 1. Increment attempt counter ─────────────────────────────────────────
     UPDATE runtime.event_retry
@@ -134,28 +138,40 @@ BEGIN
             LEAST(120, (5 * (2 ^ v_attempts))::INT);
     ELSE
         -- ── 3. Promote to DLQ ────────────────────────────────────────────────
-        -- Read the raw payload before deleting.
-        SELECT message
-        INTO   v_payload
-        FROM   pgmq.q_events          -- pgmq internal table for 'events' queue
-        WHERE  msg_id = p_msg_id;
+        -- Read the raw payload from the pgmq internal table.
+        -- pgmq stores queue 'events' in pgmq.q_events (schema-qualified install)
+        -- or public.q_events (schema-less install). Try both defensively.
+        BEGIN
+            EXECUTE '
+                SELECT message FROM pgmq.q_events WHERE msg_id = $1
+            ' INTO v_payload USING p_msg_id;
+        EXCEPTION WHEN undefined_table THEN
+            BEGIN
+                EXECUTE '
+                    SELECT message FROM public.q_events WHERE msg_id = $1
+                ' INTO v_payload USING p_msg_id;
+            EXCEPTION WHEN undefined_table THEN
+                v_payload := NULL;
+            END;
+        END;
 
         IF v_payload IS NULL THEN
-            -- Message may have already been deleted; record what we know.
+            -- Message may have already expired or been deleted.
             v_payload := jsonb_build_object(
-                '_dlq_warning', 'original payload not found',
-                '_msg_id',      p_msg_id
+                '_dlq_warning', 'original payload not found at DLQ promotion time',
+                '_msg_id',      p_msg_id,
+                '_error',       p_error
             );
         END IF;
 
-        -- Move message to DLQ queue.
-        PERFORM pgmq.send('events_dlq', v_payload);
+        -- Move message to DLQ queue; capture the new dlq msg_id for the audit row.
+        SELECT pgmq.send('events_dlq', v_payload) INTO v_dlq_msg_id;
 
-        -- Write audit row.
+        -- Write audit row with both the original and DLQ msg ids.
         INSERT INTO runtime.dead_letter_audit
-            (original_msg_id, queue_name, payload, last_error, attempt_count)
+            (original_msg_id, dlq_msg_id, queue_name, payload, last_error, attempt_count)
         VALUES
-            (p_msg_id, 'events', v_payload, p_error, v_attempts);
+            (p_msg_id, v_dlq_msg_id, 'events', v_payload, p_error, v_attempts);
 
         -- Remove from primary queue and retry table.
         PERFORM pgmq.delete('events', p_msg_id);

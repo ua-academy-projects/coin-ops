@@ -145,10 +145,10 @@ SELECT
 FROM pg_locks         l
 JOIN pg_stat_activity a ON a.pid = l.pid
 LEFT JOIN runtime.advisory_lock_keys k
-    ON  l.classid = runtime.lock_namespace()
-    AND l.objid   = k.lock_key
+    ON  l.classid = runtime.lock_namespace()::OID
+    AND l.objid   = k.lock_key::OID
 WHERE l.locktype  = 'advisory'
-  AND l.classid   = runtime.lock_namespace();
+  AND l.classid   = runtime.lock_namespace()::OID;
 
 COMMENT ON VIEW runtime.active_locks IS
   'Active advisory locks held by live sessions, annotated with lock names.';
