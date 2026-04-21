@@ -4,3 +4,6 @@
 
 # SQL
 *.sql @DmyMi
+
+# .github/CODEOWNERS
+* @Leev1tan
