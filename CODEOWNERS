@@ -1,0 +1,6 @@
+# Deploy / CI
+/.github/workflows/ @DmyMi
+/infra/ @DmyMi
+
+# SQL
+*.sql @DmyMi
