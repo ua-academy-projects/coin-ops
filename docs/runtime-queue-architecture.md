@@ -112,7 +112,8 @@ runtime/
 | `payload` | JSONB | copy of the message payload |
 | `last_error` | TEXT | final error that triggered DLQ |
 | `attempt_count` | INT | total attempts before DLQ |
-| `dead_at` | TIMESTAMPTZ | when promoted to DLQ |
+| `dead_at` | TIMESTAMPTZ NOT NULL | when promoted to DLQ — always set, never nulled |
+| `replayed_at` | TIMESTAMPTZ (nullable) | set when re-enqueued via `dlq_replay`; NULL = still poisoned |
 
 #### `runtime.advisory_lock_keys`
 
@@ -511,10 +512,17 @@ SELECT * FROM runtime.queue_depth;
 ### Inspect DLQ audit log
 
 ```sql
+-- Active (un-replayed) dead-letter entries, newest first
 SELECT original_msg_id, payload->>'slug', last_error, attempt_count, dead_at
 FROM runtime.dead_letter_audit
-WHERE dead_at IS NOT NULL
+WHERE replayed_at IS NULL
 ORDER BY dead_at DESC;
+
+-- Already-replayed entries (audit history)
+SELECT original_msg_id, dead_at, replayed_at
+FROM runtime.dead_letter_audit
+WHERE replayed_at IS NOT NULL
+ORDER BY replayed_at DESC;
 ```
 
 ### Replay all DLQ messages

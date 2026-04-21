@@ -63,11 +63,18 @@ CREATE TABLE IF NOT EXISTS runtime.dead_letter_audit (
     payload         JSONB       NOT NULL,
     last_error      TEXT,
     attempt_count   INT         NOT NULL,
-    dead_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    dead_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    replayed_at     TIMESTAMPTZ             -- set by dlq_replay/dlq_replay_all; NULL = not yet replayed
 );
 
 CREATE INDEX IF NOT EXISTS idx_dlq_audit_dead_at
     ON runtime.dead_letter_audit (dead_at DESC);
 
+-- Partial index: fast lookup of rows that have NOT been replayed yet
+CREATE INDEX IF NOT EXISTS idx_dlq_audit_unreplayed
+    ON runtime.dead_letter_audit (dead_at DESC)
+    WHERE replayed_at IS NULL;
+
 COMMENT ON TABLE runtime.dead_letter_audit IS
-  'Audit log of events that exhausted all retries and were moved to events_dlq.';
+  'Audit log of events that exhausted all retries and were moved to events_dlq. '
+  'dead_at is always set (NOT NULL). replayed_at is set when the message is re-enqueued via dlq_replay.';

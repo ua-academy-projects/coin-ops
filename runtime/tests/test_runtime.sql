@@ -142,14 +142,77 @@ BEGIN
     END IF;
 
     IF v_audit_row.dlq_msg_id IS NULL THEN
-        RAISE EXCEPTION 'FAIL test5: dlq_msg_id is NULL in audit row — pgmq.send return not captured';
+        RAISE EXCEPTION 'FAIL test5: dlq_msg_id is NULL — pgmq.send return not captured';
     END IF;
 
-    RAISE NOTICE 'PASS test5: msg_id=% promoted to DLQ after 2 failures; dlq_msg_id=%',
+    -- dead_at must still be NOT NULL (it is declared NOT NULL in schema)
+    IF v_audit_row.dead_at IS NULL THEN
+        RAISE EXCEPTION 'FAIL test5: dead_at is NULL — NOT NULL constraint violated';
+    END IF;
+
+    -- replayed_at must be NULL at this point (message not yet replayed)
+    IF v_audit_row.replayed_at IS NOT NULL THEN
+        RAISE EXCEPTION 'FAIL test5: replayed_at is unexpectedly set before replay';
+    END IF;
+
+    RAISE NOTICE 'PASS test5: msg_id=% promoted to DLQ; dlq_msg_id=%; dead_at set; replayed_at NULL',
         v_id, v_audit_row.dlq_msg_id;
 
     -- Cleanup: use dlq_msg_id to delete from DLQ queue
     PERFORM pgmq.delete('events_dlq', v_audit_row.dlq_msg_id);
+    DELETE FROM runtime.dead_letter_audit WHERE original_msg_id = v_id;
+END;
+$$;
+
+-- ── Test 7: dlq_replay sets replayed_at and does not null dead_at ────────────
+DO $$
+DECLARE
+    v_id             BIGINT;
+    v_dlq_msg_id     BIGINT;
+    v_audit_row      runtime.dead_letter_audit;
+    v_replayed_msg   BIGINT;
+BEGIN
+    -- Promote to DLQ (2 failures with max_tries=2)
+    SELECT runtime.enqueue_event('{"type":"market","slug":"test-7-replay","yes_price":0.1}'::JSONB)
+    INTO   v_id;
+    PERFORM runtime.fail_event(v_id, 'err-replay-1', 2);
+    PERFORM runtime.fail_event(v_id, 'err-replay-2', 2);
+
+    SELECT dlq_msg_id INTO v_dlq_msg_id
+    FROM   runtime.dead_letter_audit
+    WHERE  original_msg_id = v_id;
+
+    IF v_dlq_msg_id IS NULL THEN
+        RAISE EXCEPTION 'FAIL test7: dlq_msg_id not set, cannot test replay';
+    END IF;
+
+    -- Replay the DLQ message
+    SELECT runtime.dlq_replay(v_dlq_msg_id) INTO v_replayed_msg;
+
+    -- replayed_at must now be set
+    SELECT * INTO v_audit_row
+    FROM   runtime.dead_letter_audit
+    WHERE  original_msg_id = v_id;
+
+    IF v_audit_row.replayed_at IS NULL THEN
+        RAISE EXCEPTION 'FAIL test7: replayed_at is still NULL after dlq_replay';
+    END IF;
+
+    -- dead_at must still be NOT NULL (this was the P1 bug: SET dead_at = NULL would fail here)
+    IF v_audit_row.dead_at IS NULL THEN
+        RAISE EXCEPTION 'FAIL test7: dead_at became NULL after replay — NOT NULL constraint violated';
+    END IF;
+
+    -- The replayed message must now be visible in the events queue
+    IF v_replayed_msg IS NULL OR v_replayed_msg <= 0 THEN
+        RAISE EXCEPTION 'FAIL test7: dlq_replay returned invalid new msg_id: %', v_replayed_msg;
+    END IF;
+
+    RAISE NOTICE 'PASS test7: dlq_replay set replayed_at=%; dead_at preserved; new events msg_id=%',
+        v_audit_row.replayed_at, v_replayed_msg;
+
+    -- Cleanup
+    PERFORM pgmq.delete('events', v_replayed_msg);
     DELETE FROM runtime.dead_letter_audit WHERE original_msg_id = v_id;
 END;
 $$;

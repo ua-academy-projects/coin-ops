@@ -75,11 +75,14 @@ BEGIN
     -- Delete from DLQ queue using the DLQ msg_id.
     PERFORM pgmq.delete('events_dlq', p_dlq_msg_id);
 
-    -- Mark audit row as replayed (set dead_at = NULL as a "replayed" sentinel).
+    -- Mark audit row as replayed.
+    -- We set replayed_at instead of nulling dead_at:
+    --   dead_at is NOT NULL (records when the message died — immutable fact).
+    --   replayed_at is nullable and records when it was re-enqueued.
     UPDATE runtime.dead_letter_audit
-    SET    dead_at = NULL
-    WHERE  dlq_msg_id = p_dlq_msg_id
-      AND  dead_at IS NOT NULL;
+    SET    replayed_at = NOW()
+    WHERE  dlq_msg_id  = p_dlq_msg_id
+      AND  replayed_at IS NULL;
 
     RAISE NOTICE 'runtime.dlq_replay: dlq_msg_id=% re-enqueued as events msg_id=%',
         p_dlq_msg_id, v_new_msg_id;
@@ -145,6 +148,13 @@ BEGIN
             -- Re-enqueue and delete from DLQ.
             PERFORM runtime.enqueue_event(v_msg.message);
             PERFORM pgmq.delete('events_dlq', v_msg.msg_id);
+
+            -- Update audit row so ops queries no longer see this as an active dead letter.
+            UPDATE runtime.dead_letter_audit
+            SET    replayed_at = NOW()
+            WHERE  dlq_msg_id  = v_msg.msg_id
+              AND  replayed_at IS NULL;
+
             v_count := v_count + 1;
         END LOOP;
     EXCEPTION WHEN OTHERS THEN
@@ -183,14 +193,14 @@ BEGIN
         FROM   runtime.dead_letter_audit
         WHERE  dead_at < NOW() - p_older_than
     LOOP
-        -- Delete from DLQ queue using dlq_msg_id (the id in events_dlq),
-        -- not original_msg_id (which is the id in the original events queue).
-        -- Best-effort: message may already be gone.
-        IF v_row.dlq_msg_id IS NOT NULL THEN
+        -- For un-replayed rows, also remove the message from the DLQ queue.
+        -- Replayed rows have already had their DLQ entry deleted by dlq_replay;
+        -- attempting pgmq.delete again is harmless but unnecessary.
+        IF v_row.replayed_at IS NULL AND v_row.dlq_msg_id IS NOT NULL THEN
             BEGIN
                 PERFORM pgmq.delete('events_dlq', v_row.dlq_msg_id);
             EXCEPTION WHEN OTHERS THEN
-                NULL;
+                NULL;  -- message may already be gone; continue
             END;
         END IF;
 
