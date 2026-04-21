@@ -15,6 +15,7 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/redis/go-redis/v9"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const (
@@ -130,9 +131,11 @@ type PriceEvent struct {
 // ---- Server ----
 
 type Server struct {
-	ch    *amqp.Channel
-	chMu  sync.Mutex
-	rdb   *redis.Client
+	ch      *amqp.Channel
+	chMu    sync.Mutex
+	rdb     *redis.Client
+	db      *pgxpool.Pool
+	backend string
 	cache struct {
 		sync.RWMutex
 		markets []MarketSnapshot
@@ -634,50 +637,58 @@ func main() {
 	}
 	dbURL := os.Getenv("DATABASE_URL")
 	log.Printf("Runtime backend: %s", backend)
-	_ = dbURL
 
-	rabbitURL := os.Getenv("RABBITMQ_URL")
-	if rabbitURL == "" {
-		rabbitURL = "amqp://guest:guest@localhost:5672/"
-	}
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	conn := connectRabbitMQ(rabbitURL)
-	defer conn.Close()
+	srv := &Server{backend: backend}
 
-	ch, err := conn.Channel()
-	if err != nil {
-		log.Fatalf("open channel: %v", err)
-	}
-	defer ch.Close()
+	switch backend {
+	case "postgres":
+		pool, err := pgxpool.New(context.Background(), dbURL)
+		if err != nil {
+			log.Fatalf("connect postgres: %v", err)
+		}
+		defer pool.Close()
+		srv.db = pool
+		log.Println("Connected to PostgreSQL (postgres mode)")
 
-	if _, err := ch.QueueDeclare(queueName, true, false, false, false, nil); err != nil {
-		log.Fatalf("declare queue: %v", err)
-	}
+	default: // "external" — current RabbitMQ + Redis behavior
+		rabbitURL := os.Getenv("RABBITMQ_URL")
+		if rabbitURL == "" {
+			rabbitURL = "amqp://guest:guest@localhost:5672/"
+		}
+		conn := connectRabbitMQ(rabbitURL)
+		defer conn.Close()
+		ch, err := conn.Channel()
+		if err != nil {
+			log.Fatalf("open channel: %v", err)
+		}
+		defer ch.Close()
+		if _, err := ch.QueueDeclare(queueName, true, false, false, false, nil); err != nil {
+			log.Fatalf("declare queue: %v", err)
+		}
+		srv.ch = ch
 
-	srv := &Server{ch: ch}
-
-	redisURL := os.Getenv("REDIS_URL")
-	if redisURL == "" {
-		redisURL = "redis://localhost:6379/0"
+		redisURL := os.Getenv("REDIS_URL")
+		if redisURL == "" {
+			redisURL = "redis://localhost:6379/0"
+		}
+		redisOpts, err := redis.ParseURL(redisURL)
+		if err != nil {
+			log.Fatalf("parse redis url: %v", err)
+		}
+		srv.rdb = redis.NewClient(redisOpts)
+		pingCtx, pingCancel := context.WithTimeout(context.Background(), 3*time.Second)
+		if pingErr := srv.rdb.Ping(pingCtx).Err(); pingErr != nil {
+			log.Printf("Warning: Redis not reachable: %v — /state will return 503", pingErr)
+		} else {
+			log.Println("Connected to Redis")
+		}
+		pingCancel()
 	}
-	redisOpts, err := redis.ParseURL(redisURL)
-	if err != nil {
-		log.Fatalf("parse redis url: %v", err)
-	}
-	srv.rdb = redis.NewClient(redisOpts)
-
-	// Verify Redis is reachable (non-fatal — state endpoints will return 503 if down)
-	pingCtx, pingCancel := context.WithTimeout(context.Background(), 3*time.Second)
-	if pingErr := srv.rdb.Ping(pingCtx).Err(); pingErr != nil {
-		log.Printf("Warning: Redis not reachable: %v — /state will return 503", pingErr)
-	} else {
-		log.Println("Connected to Redis")
-	}
-	pingCancel()
 
 	// Populate market cache immediately, then refresh independently of UI requests.
 	go func() {
