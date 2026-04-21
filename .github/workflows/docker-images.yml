@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - Shabat
+      - dev
     tags:
       - "v*.*.*"
     paths:
@@ -71,6 +72,12 @@ jobs:
           if [[ "${GITHUB_REF_TYPE}" == "branch" && "${GITHUB_REF_NAME}" == "Shabat" ]]; then
             tags="${tags}"$'\n'"${image}:shabat-latest"
           fi
+
+                     
+          if [[ "${GITHUB_REF_TYPE}" == "branch" && "${GITHUB_REF_NAME}" == "dev" ]]; then
+            tags="${tags}"$'\n'"${image}:dev-latest"
+          fi
+
 
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             tags="${tags}"$'\n'"${image}:${GITHUB_REF_NAME}"
