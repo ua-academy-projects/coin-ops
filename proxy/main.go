@@ -628,6 +628,14 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 // ---- main ----
 
 func main() {
+	backend := os.Getenv("RUNTIME_BACKEND")
+	if backend == "" {
+		backend = "external"
+	}
+	dbURL := os.Getenv("DATABASE_URL")
+	log.Printf("Runtime backend: %s", backend)
+	_ = dbURL
+
 	rabbitURL := os.Getenv("RABBITMQ_URL")
 	if rabbitURL == "" {
 		rabbitURL = "amqp://guest:guest@localhost:5672/"
