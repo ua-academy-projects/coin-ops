@@ -14,7 +14,7 @@ The project is intentionally not a single web app. It separates live aggregation
     ```
 2.  **Launch Docker Stack**:
     ```bash
-    docker compose up -d
+    docker compose -f compose.local.yaml up --build
     ```
 3.  **Open the UI**:
     Open [http://localhost:5000](http://localhost:5000) (or the mapped Compose port) in your browser.
