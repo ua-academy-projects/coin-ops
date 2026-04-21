@@ -4,39 +4,48 @@ Coin-Ops is a distributed Polymarket intelligence dashboard. It shows live marke
 
 The project is intentionally not a single web app. It separates live aggregation, async ingestion, historical storage, and UI delivery so the architecture is easy to reason about and easy to demonstrate.
 
+**[📚 Read the Documentation](docs/)** | **[🤝 How to Contribute](CONTRIBUTING.md)**
+
+## Quick Start
+1.  **Clone the repository**:
+    ```bash
+    git clone https://github.com/ua-academy-projects/coin-ops.git
+    cd coin-ops
+    ```
+2.  **Launch Docker Stack**:
+    ```bash
+    docker compose up -d
+    ```
+3.  **Open the UI**:
+    Open [http://localhost:5000](http://localhost:5000) (or the mapped Compose port) in your browser.
+
 ## Architecture
 
-```text
-                                   Browser
-                              React/Vite SPA
-                                      |
-                    +-----------------+-----------------+
-                    |                                   |
-                    | live data                         | history charts
-                    v                                   v
-        +-------------------------+        +-------------------------+
-        | node-02                 |        | node-01                 |
-        | Go proxy :8080          |        | FastAPI history :8000   |
-        |                         |        |                         |
-        | - Polymarket markets    |        | - Reads PostgreSQL      |
-        | - Whale positions       |        | - Returns time series   |
-        | - BTC/ETH from CoinGecko|        +------------+------------+
-        | - USD/UAH from NBU      |                     |
-        | - UI state via Redis    |                     | SELECT
-        | - Publishes to RabbitMQ |                     v
-        +------------+------------+        +-------------------------+
-                     |                     | PostgreSQL              |
-                     | AMQP publish        | market/price snapshots  |
-                     v                     | whale snapshots         |
-        +-------------------------+        +-------------------------+
-        | node-01                 |
-        | Python history consumer |
-        |                         |
-        | - Consumes RabbitMQ     |        +-------------------------+
-        | - Writes PostgreSQL     |        | node-02                 |
-        | - Idempotent inserts    |        | Redis                   |
-        +-------------------------+        | short-lived UI state    |
-                                           +-------------------------+
+```mermaid
+flowchart TB
+    Browser[Browser<br/>React/Vite SPA]
+    
+    subgraph node02 [node-02]
+        direction TB
+        Proxy[Go proxy :8080<br/>- Polymarket markets<br/>- Whale positions<br/>- BTC/ETH from CoinGecko<br/>- USD/UAH from NBU<br/>- UI state via Redis<br/>- Publishes to RabbitMQ]
+        Redis[(Redis<br/>short-lived UI state)]
+    end
+    
+    subgraph node01 [node-01]
+        direction TB
+        API[FastAPI history :8000<br/>- Reads PostgreSQL<br/>- Returns time series]
+        Consumer[Python history consumer<br/>- Consumes RabbitMQ<br/>- Writes PostgreSQL<br/>- Idempotent inserts]
+        DB[(PostgreSQL<br/>market/price/whale snapshots)]
+    end
+
+    Browser -->|live data| Proxy
+    Browser -->|history charts| API
+    
+    Proxy -.->|state| Redis
+    Proxy -->|AMQP publish| Consumer
+    
+    API -->|SELECT| DB
+    Consumer -->|writes| DB
 ```
 
 | VM | IP | Runs |
