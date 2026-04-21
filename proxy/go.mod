@@ -1,6 +1,6 @@
 module github.com/ua-academy-projects/coin-ops/proxy
 
-go 1.25.0
+go 1.22.0
 
 require (
 	github.com/jackc/pgx/v5 v5.9.2
