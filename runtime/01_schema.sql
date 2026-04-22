@@ -67,14 +67,29 @@ CREATE TABLE IF NOT EXISTS runtime.dead_letter_audit (
     replayed_at     TIMESTAMPTZ             -- set by dlq_replay/dlq_replay_all; NULL = not yet replayed
 );
 
+-- ── Upgrade path ──────────────────────────────────────────────────────────────
+-- CREATE TABLE IF NOT EXISTS only creates the table on a fresh install.
+-- ALTER TABLE ADD COLUMN IF NOT EXISTS handles existing deployments that already
+-- have dead_letter_audit but are missing columns added in later revisions.
+-- These statements are idempotent and safe to re-run.
+ALTER TABLE runtime.dead_letter_audit
+    ADD COLUMN IF NOT EXISTS replayed_at TIMESTAMPTZ;   -- NULL = not yet replayed/discarded
+
+ALTER TABLE runtime.dead_letter_audit
+    ADD COLUMN IF NOT EXISTS dlq_msg_id BIGINT;          -- msg_id in events_dlq queue
+
 CREATE INDEX IF NOT EXISTS idx_dlq_audit_dead_at
     ON runtime.dead_letter_audit (dead_at DESC);
 
--- Partial index: fast lookup of rows that have NOT been replayed yet
+-- Partial index: fast lookup of rows still requiring ops attention.
+-- Covers both un-replayed AND un-discarded rows (replayed_at IS NULL for both).
 CREATE INDEX IF NOT EXISTS idx_dlq_audit_unreplayed
     ON runtime.dead_letter_audit (dead_at DESC)
     WHERE replayed_at IS NULL;
 
 COMMENT ON TABLE runtime.dead_letter_audit IS
   'Audit log of events that exhausted all retries and were moved to events_dlq. '
-  'dead_at is always set (NOT NULL). replayed_at is set when the message is re-enqueued via dlq_replay.';
+  'dead_at is always set (NOT NULL). '
+  'replayed_at is set by dlq_replay() and dlq_replay_all() on re-enqueue. '
+  'dlq_discard() also sets replayed_at (= discard timestamp) so ops queries '
+  'using WHERE replayed_at IS NULL exclude both replayed and discarded rows.';

@@ -68,13 +68,20 @@ $$;
 DO $$
 DECLARE
     v_id   BIGINT;
-    v_msg  RECORD;
+    v_rec  RECORD;
 BEGIN
     SELECT runtime.enqueue_event('{"type":"market","slug":"test-3","yes_price":0.7}'::JSONB)
     INTO   v_id;
 
-    -- Claim then ack.
-    PERFORM runtime.claim_events(1, 5) WHERE msg_id = v_id;
+    -- Claim then ack. Use a loop to cleanly handle any other messages in queue.
+    FOR v_rec IN 
+        SELECT * FROM runtime.claim_events(50, 5)
+    LOOP
+        IF v_rec.msg_id <> v_id THEN
+            PERFORM pgmq.set_vt('events', v_rec.msg_id, 0);
+        END IF;
+    END LOOP;
+    
     PERFORM runtime.ack_event(v_id);
 
     -- Retry state should be gone.

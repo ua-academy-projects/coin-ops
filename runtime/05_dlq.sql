@@ -109,9 +109,10 @@ AS $$
 BEGIN
     -- p_dlq_msg_id is the msg_id in the events_dlq queue (= dead_letter_audit.dlq_msg_id).
     PERFORM pgmq.delete('events_dlq', p_dlq_msg_id);
-    -- Keep the audit row but mark it discarded.
+    -- Keep the audit row but mark it discarded and no longer active.
     UPDATE runtime.dead_letter_audit
-    SET    last_error = COALESCE(last_error, '') || ' [DISCARDED]'
+    SET    last_error = COALESCE(last_error, '') || ' [DISCARDED]',
+           replayed_at = NOW()
     WHERE  dlq_msg_id = p_dlq_msg_id;
 END;
 $$;
