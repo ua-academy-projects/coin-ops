@@ -10,6 +10,13 @@
 -- Idempotent: each job is unscheduled (if present) before being rescheduled,
 -- so re-running this file never duplicates jobs.
 --
+-- Database targeting: pg_cron jobs execute against a single database set by
+-- `cron.database_name` in postgresql.conf (default: 'postgres'). Since the
+-- `runtime` schema lives in the application database, we use
+-- `cron.schedule_in_database(jobname, schedule, command, current_database())`
+-- so the jobs run where the functions actually exist, regardless of how
+-- pg_cron's default is configured.
+--
 -- Ordering note: runtime-dlq-reap references runtime.dlq_reap_expired(), which
 -- is defined in 05_dlq.sql (queue branch). pg_cron stores the command body as
 -- text and does not resolve it at schedule time, so this script still succeeds
@@ -29,10 +36,11 @@ BEGIN
 END;
 $$;
 
-SELECT cron.schedule(
+SELECT cron.schedule_in_database(
     'runtime-cache-reap',
     '* * * * *',
-    $$SELECT runtime.cache_reap()$$
+    $$SELECT runtime.cache_reap()$$,
+    current_database()
 );
 
 -- ── runtime-session-reap ─────────────────────────────────────────────────────
@@ -44,10 +52,11 @@ BEGIN
 END;
 $$;
 
-SELECT cron.schedule(
+SELECT cron.schedule_in_database(
     'runtime-session-reap',
     '*/5 * * * *',
-    $$SELECT runtime.session_reap()$$
+    $$SELECT runtime.session_reap()$$,
+    current_database()
 );
 
 -- ── runtime-dlq-reap ─────────────────────────────────────────────────────────
@@ -60,8 +69,9 @@ BEGIN
 END;
 $$;
 
-SELECT cron.schedule(
+SELECT cron.schedule_in_database(
     'runtime-dlq-reap',
     '0 3 * * *',
-    $$SELECT runtime.dlq_reap_expired('30 days')$$
+    $$SELECT runtime.dlq_reap_expired('30 days')$$,
+    current_database()
 );

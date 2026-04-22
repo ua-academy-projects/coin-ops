@@ -101,7 +101,10 @@ AS $$
 DECLARE
     v_rows INT;
 BEGIN
-    DELETE FROM runtime.cache WHERE expires_at < NOW();
+    -- Use <= to match cache_get's strict `expires_at > NOW()`: a row with
+    -- expires_at exactly equal to NOW() is invisible to readers and should
+    -- be reaped in the same tick.
+    DELETE FROM runtime.cache WHERE expires_at <= NOW();
     GET DIAGNOSTICS v_rows = ROW_COUNT;
     RETURN v_rows;
 END;
@@ -190,7 +193,7 @@ AS $$
 DECLARE
     v_rows INT;
 BEGIN
-    DELETE FROM runtime.session WHERE expires_at < NOW();
+    DELETE FROM runtime.session WHERE expires_at <= NOW();
     GET DIAGNOSTICS v_rows = ROW_COUNT;
     RETURN v_rows;
 END;
@@ -198,3 +201,54 @@ $$;
 
 COMMENT ON FUNCTION runtime.session_reap() IS
   'Delete expired rows from runtime.session. Scheduled by 08_cron.sql.';
+
+-- ── Privilege hardening ──────────────────────────────────────────────────────
+-- SECURITY DEFINER means these functions run with the owner's rights, so we
+-- must not leave the default `GRANT EXECUTE … TO PUBLIC` in place — any role
+-- with CONNECT on this DB could otherwise invoke session_delete / cache_set
+-- etc. as the owner.
+--
+-- `runtime.app_role` is a GUC the caller sets before running this file, e.g.
+--   psql -v ON_ERROR_STOP=1 \
+--        -c "SET runtime.app_role = 'cognitor_app'" \
+--        -f runtime/07_cache_wrappers.sql
+-- or persistently via `ALTER DATABASE <db> SET runtime.app_role = '<role>';`.
+-- If unset, the DO block short-circuits and only the REVOKE runs (fail-closed
+-- default; grant explicitly later).
+REVOKE EXECUTE ON FUNCTION
+    runtime.cache_set   (TEXT, JSONB, INTERVAL),
+    runtime.cache_get   (TEXT),
+    runtime.cache_delete(TEXT),
+    runtime.cache_reap  (),
+    runtime.session_set   (TEXT, JSONB, INTERVAL),
+    runtime.session_get   (TEXT),
+    runtime.session_delete(TEXT),
+    runtime.session_reap  ()
+FROM PUBLIC;
+
+DO $$
+DECLARE
+    v_role TEXT := current_setting('runtime.app_role', true);
+BEGIN
+    IF v_role IS NULL OR v_role = '' THEN
+        RAISE NOTICE
+          'runtime.app_role not set — skipping GRANT EXECUTE. '
+          'Re-run with: SET runtime.app_role = ''<role>''; '
+          '\i runtime/07_cache_wrappers.sql (or set persistently via '
+          'ALTER DATABASE <db> SET runtime.app_role = ''<role>'';).';
+        RETURN;
+    END IF;
+
+    EXECUTE format(
+      'GRANT EXECUTE ON FUNCTION '
+      'runtime.cache_set(TEXT, JSONB, INTERVAL), '
+      'runtime.cache_get(TEXT), '
+      'runtime.cache_delete(TEXT), '
+      'runtime.cache_reap(), '
+      'runtime.session_set(TEXT, JSONB, INTERVAL), '
+      'runtime.session_get(TEXT), '
+      'runtime.session_delete(TEXT), '
+      'runtime.session_reap() '
+      'TO %I', v_role);
+END;
+$$;
