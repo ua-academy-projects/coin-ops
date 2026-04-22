@@ -1,13 +1,20 @@
 # ADR 0001: Postgres-native runtime layer
+- **Status**: Proposed / Accepted
+- **Date**: 2026-04-21
+- **Deciders**: [list]
+- **Context reference**: Issue #8, #16
 ## 1. Context
-Today the system runs two auxiliary services next to Postgres:
+Today the system runs two auxiliary services next to Postgres, plus an in-process cache inside the Go proxy:
 
-| Service | Role | Pain |
+| Component | Role | Pain |
 |---|---|---|
 | RabbitMQ (node-01) | Transport for market/price events | Extra VM + second persistence store; DLQ only inspectable via Rabbit UI |
-| Redis (node-02) | Proxy whale cache (5 min), price cache (60 s), session KV (`session:{sid}`, 24 h) | Another VM; non-durable by default; inconsistent with Postgres on crash |
+| Redis (node-02) | Proxy session KV (`session:{sid}`, 24 h) | Another VM; non-durable by default; inconsistent with Postgres on crash |
+| Proxy in-process cache (node-02) | Whales (5 min), BTC/ETH/UAH prices (60 s), current markets — held in `s.cache` guarded by a `sync.RWMutex` (`proxy/main.go:371-404,453-456`) | Disappears on every proxy restart; not visible to operators; split responsibility with Redis confuses readers; no shared view if the proxy ever scales horizontally |
 
 Mentor direction: Redis **and** RabbitMQ should be replaced by **PostgreSQL mechanisms** — specifically `pgmq`, `pg_cron`, `LISTEN/NOTIFY`, advisory locks, and `UNLOGGED` + `JSONB`. A plain polling table is explicitly out of scope.
+
+**Scope note.** This ADR goes slightly beyond the "replace Redis and RabbitMQ" brief: it also folds the proxy's in-process whales/prices/markets caches into `runtime.cache` (§6, §7). Justification: once we have a Postgres-backed TTL cache, keeping a parallel in-memory cache inside the proxy is strictly worse — it re-introduces the drift problem we are trying to delete, and it hides hot state from SQL-level observability. If this broader move is not wanted, the cache API in §6 still stands on its own for the session KV; flag it on this PR.
 
 Postgres is already our system of record. Moving transport and cache inside it collapses three services into one, makes every runtime artefact queryable with SQL, and removes a full class of "two datastores drifted" failures.
 
@@ -144,7 +151,7 @@ CREATE INDEX session_expires_at_idx ON runtime.session (expires_at);
 runtime.cache_set   (p_key TEXT, p_value JSONB, p_ttl INTERVAL) RETURNS VOID
 runtime.cache_get   (p_key TEXT)                                 RETURNS JSONB   -- NULL if missing or expired
 runtime.cache_delete(p_key TEXT)                                 RETURNS BOOLEAN -- true if a row was removed
-runtime.cache_reap  ()                                           RETURNS INT     -- deletes rows WHERE expires_at < now()
+runtime.cache_reap  ()                                           RETURNS INT     -- deletes rows WHERE expires_at <= now()
 
 -- Session (thin wrappers; same contract, different table)
 runtime.session_set   (p_sid TEXT, p_data JSONB, p_ttl INTERVAL) RETURNS VOID
@@ -154,24 +161,60 @@ runtime.session_reap  ()                                         RETURNS INT
 ```
 
 **Semantics.**
-`cache_set` is an UPSERT — `INSERT ... ON CONFLICT (key) DO UPDATE`. `cache_get` filters `WHERE expires_at > now()`, so expired rows are invisible even before the reaper runs. `*_reap` is what `pg_cron` calls.
+`cache_set` is an UPSERT — `INSERT ... ON CONFLICT (key) DO UPDATE`. `cache_get` filters `WHERE expires_at > now()`, so expired rows are invisible even before the reaper runs. `*_reap` is what `pg_cron` calls, and it deletes `WHERE expires_at <= now()` — the `<=` matches the strict `>` in `cache_get` so a boundary row is invisible to readers and reaped in the same tick.
+
+### Privileges
+
+All wrappers are `SECURITY DEFINER`. To prevent any role with `CONNECT` on the database from invoking `session_delete` / `cache_set` / etc. as the wrapper owner, bootstrap runs:
+
+```sql
+REVOKE EXECUTE ON FUNCTION
+    runtime.cache_set(TEXT, JSONB, INTERVAL),
+    runtime.cache_get(TEXT),
+    runtime.cache_delete(TEXT),
+    runtime.cache_reap(),
+    runtime.session_set(TEXT, JSONB, INTERVAL),
+    runtime.session_get(TEXT),
+    runtime.session_delete(TEXT),
+    runtime.session_reap()
+FROM PUBLIC;
+
+-- Grant only to the role named by the runtime.app_role GUC; fail-closed if unset.
+DO $$
+DECLARE v_role TEXT := current_setting('runtime.app_role', true);
+BEGIN
+    IF v_role IS NULL OR v_role = '' THEN
+        RAISE NOTICE 'runtime.app_role not set — skipping GRANT EXECUTE';
+        RETURN;
+    END IF;
+    EXECUTE format('GRANT EXECUTE ON FUNCTION runtime.cache_set(...), ... TO %I', v_role);
+END $$;
+```
+
+The GUC is set once per database, before the wrappers are loaded:
+
+```sql
+ALTER DATABASE <db> SET runtime.app_role = 'cognitor_app';
+```
+
+**Deploy ordering matters.** Set the GUC before loading `runtime/07_cache_wrappers.sql`, or re-run the file after setting it. A fresh bootstrap without the GUC runs the REVOKE, skips the GRANT, and the proxy gets permission-denied on its first `runtime.cache_*` call.
 
 ### Scheduled jobs (pg_cron)
 
 ```sql
 -- Cache: reap every minute (matches current 60 s price TTL granularity).
-SELECT cron.schedule('runtime-cache-reap',    '* * * * *',
-                     $$SELECT runtime.cache_reap()$$);
+SELECT cron.schedule_in_database('runtime-cache-reap',   '* * * * *',
+                                 $$SELECT runtime.cache_reap()$$,   current_database());
 
-SELECT cron.schedule('runtime-session-reap',  '*/5 * * * *',
-                     $$SELECT runtime.session_reap()$$);
+SELECT cron.schedule_in_database('runtime-session-reap', '*/5 * * * *',
+                                 $$SELECT runtime.session_reap()$$, current_database());
 
 -- DLQ: nightly purge of audit rows older than 30 days.
-SELECT cron.schedule('runtime-dlq-reap',      '0 3 * * *',
-                     $$SELECT runtime.dlq_reap_expired('30 days')$$);
+SELECT cron.schedule_in_database('runtime-dlq-reap',     '0 3 * * *',
+                                 $$SELECT runtime.dlq_reap_expired('30 days')$$, current_database());
 ```
 
-Jobs are registered by `runtime/` bootstrap SQL, so a fresh DB boot autostarts them — no manual step required after a restore or a new environment spin-up.
+Jobs are scheduled with `cron.schedule_in_database(..., current_database())` so they run against the application database regardless of how `cron.database_name` is configured in `postgresql.conf`. They are registered by `runtime/` bootstrap SQL, so a fresh DB boot autostarts them — no manual step required after a restore or a new environment spin-up.
 
 ---
 
