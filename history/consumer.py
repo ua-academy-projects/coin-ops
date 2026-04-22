@@ -25,13 +25,11 @@ DATABASE_URL = os.environ["DATABASE_URL"]
 QUEUE_NAME = "market_events"
 DEAD_QUEUE_NAME = "market_events_dead_letter"
 
-POSTGRES_QUEUE_NAME = os.environ.get("POSTGRES_QUEUE_NAME", QUEUE_NAME)
-POSTGRES_DLQ_NAME = os.environ.get("POSTGRES_DLQ_NAME", DEAD_QUEUE_NAME)
-
 RUNTIME_BACKEND = os.environ.get("RUNTIME_BACKEND", "external")
 POSTGRES_BATCH_SIZE = int(os.environ.get("POSTGRES_BATCH_SIZE", "100"))
 POSTGRES_VISIBILITY_TIMEOUT = int(os.environ.get("POSTGRES_VISIBILITY_TIMEOUT", "30"))
 
+POSTGRES_MAX_RETRIES = int(os.environ.get("POSTGRES_MAX_RETRIES", "3"))
 
 INSERT_SQL = """
     INSERT INTO market_snapshots
@@ -128,12 +126,11 @@ def claim_postgres_events(db_ref: dict):
         cur.execute(
             """
             SELECT msg_id, message, read_ct
-            FROM pgmq.read(%s, %s, %s)
+            FROM runtime.claim_events(%s, %s)
             """,
             (
-                POSTGRES_QUEUE_NAME,
-                POSTGRES_VISIBILITY_TIMEOUT,
                 POSTGRES_BATCH_SIZE,
+                POSTGRES_VISIBILITY_TIMEOUT,
             ),
         )
         rows = cur.fetchall()
@@ -141,26 +138,16 @@ def claim_postgres_events(db_ref: dict):
     return rows
 
 
-
-def send_postgres_to_dead_letter(db_ref: dict, event_id, payload, error_message: str) -> None:
+def fail_postgres_event(db_ref: dict, event_id, error_message: str) -> None:
     db = db_ref["conn"]
-    dlq_payload = {
-        "source_queue": POSTGRES_QUEUE_NAME,
-        "source_message_id": event_id,
-        "payload": payload,
-        "error": error_message,
-    }
     with db.cursor() as cur:
         cur.execute(
-            "SELECT pgmq.send(%s, %s::jsonb)",
+            "SELECT runtime.fail_event(%s, %s, %s)",
             (
-                POSTGRES_DLQ_NAME,
-                json.dumps(dlq_payload),
-            ),
-        )
-        cur.execute(
-            "SELECT pgmq.archive(%s, %s)",
-            (POSTGRES_QUEUE_NAME, event_id)
+                event_id,
+                error_message,
+                POSTGRES_MAX_RETRIES
+            )
         )
     db.commit()
 
@@ -195,7 +182,7 @@ def process_event_payload(db_ref: dict, data: dict) -> None:
 def ack_postgres_event(db_ref: dict, event_id) -> None:
     db = db_ref["conn"]
     with db.cursor() as cur:
-        cur.execute("SELECT pgmq.archive(%s, %s)", (POSTGRES_QUEUE_NAME, event_id),)
+        cur.execute("SELECT runtime.ack_event(%s)", (event_id,))
     db.commit()
 
 def make_callback(db_ref: dict):
@@ -266,8 +253,8 @@ def run_postgres_worker(db_ref: dict) -> None:
                         db_ref["conn"].rollback()
                     except Exception:
                         pass
-                    send_postgres_to_dead_letter(db_ref, event_id, payload, str(exc))
-                    log.error("Moved postgres queue event %s to DLQ: %s", event_id, exc)
+                    fail_postgres_event(db_ref, event_id, str(exc))
+                    log.error("Failed postgres queue event %s via runtime.fail_event: %s", event_id, exc)
 
         except (psycopg2.OperationalError, psycopg2.InterfaceError) as exc:
             log.error("PostgreSQL worker connection error: %s - reconnecting", exc)
