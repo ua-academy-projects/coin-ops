@@ -1,7 +1,8 @@
 # Runtime Queue Architecture (PostgreSQL + pgmq)
 
-> **Branch:** `feature/postgres-runtime-queue`  
-> **Goal:** Replace the RabbitMQ hop for internal event delivery with a pure-PostgreSQL queue backed by [pgmq](https://github.com/tembo-io/pgmq), adding reliable retries, dead-letter handling, LISTEN/NOTIFY wake-up, and advisory-lock-based single-consumer coordination.
+> **Status:** Queue-side PostgreSQL runtime assets are present under `runtime/`, but the default deployed path on `dev` still uses RabbitMQ and Redis.
+> **Scope:** This document describes the PostgreSQL queue path: `pgmq`, retries, dead-letter handling, `LISTEN/NOTIFY`, and advisory-lock-based consumer coordination.
+> **Next step:** proxy wiring, consumer switching, and deployment bootstrap still need to be connected behind the planned `RUNTIME_BACKEND=external|postgres` cutover.
 
 ---
 

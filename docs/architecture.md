@@ -1,168 +1,255 @@
 # Architecture
 
-## Overview
+## Status
 
-Polymarket Intelligence Dashboard — three cooperating services across three VMs, connected by RabbitMQ. The UI never touches the database directly; all writes go through the message queue.
+The `dev` branch now has three layers of architectural truth that matter together:
 
-```
+1. The default deployed/runtime path is still `external`: RabbitMQ carries async events and Redis stores short-lived session JSON.
+2. Team workflow and release plumbing from the roadmap are already present on `dev`: PR checks run for `dev`, and pushes to `dev` publish `dev-latest`.
+3. Queue-side PostgreSQL runtime assets already exist under `runtime/`, but proxy wiring, consumer switching, deploy wiring, and RabbitMQ/Redis removal are not finished yet.
+
+This document separates the current deployed path from the runtime-consolidation target so the docs do not drift again.
+
+## Current Deployed Architecture (`external` runtime path)
+
+```text
 Browser
-  │
-  ├─ GET /current ──► Proxy Service (Go, node-02)
-  │  GET /whales  ─►      │ fetches Gamma API (20 markets)
-  │  GET /prices  ─►      │ fetches CoinGecko + NBU (60s cache)
-  │  GET/POST /state ─►   │ reads/writes Redis (session state)
-  │                       │ normalizes → publishes msgs to RabbitMQ
-  │                       └─ returns JSON to browser
-  │
-  └─ GET /history ──► History API (Python/FastAPI, node-01)
-     GET /prices/history ─► └─ reads market_snapshots + price_snapshots from PostgreSQL
+  |
+  v
+node-03
+  ui container
+  - serves the React SPA
+  - reverse-proxies /api and /history-api
+  |
+  +-- /api -----------> node-02 proxy container :8080
+  |                       - Polymarket live markets
+  |                       - whale leaderboard and positions
+  |                       - BTC/ETH + USD/UAH
+  |                       - session state in Redis
+  |                       - publish market/price events to RabbitMQ
+  |
+  +-- /history-api ---> node-01 history-api container :8000
+                          - read-only FastAPI over PostgreSQL
 
-RabbitMQ (node-01, queue: market_events)
-  └─► History Consumer (Python/pika, node-01)
-          └─ routes by message type:
-             no type / "market" → inserts into market_snapshots
-             "price"            → inserts into price_snapshots
+node-01
+  postgres container
+  rabbitmq container
+  history-consumer container
+    - consumes `market_events`
+    - writes `market_snapshots` and `price_snapshots`
 
-Redis (node-02, localhost:6379)
-  └─► Session state (key: "session:<uuid>", TTL: 24h)
+node-02
+  redis container
 ```
 
-## Services
+## VM and Service Layout
 
-### Proxy Service — Go (node-02:8080)
+| VM | IP | Current containers |
+| --- | --- | --- |
+| node-01 | `172.31.1.10` | `postgres`, `rabbitmq`, `history-consumer`, `history-api` |
+| node-02 | `172.31.1.11` | `redis`, `proxy` |
+| node-03 | `172.31.1.12` | `ui` |
 
-**Responsibility:** stateless HTTP bridge between the UI and the external Polymarket APIs. Never touches the database.
+### Why the browser stays same-origin
+
+The React app uses `/api` and `/history-api`, not hard-coded private IPs. Node-03's nginx gateway forwards those paths to node-02 and node-01.
+
+That matters for:
+
+- avoiding browser CORS complexity
+- keeping frontend runtime config environment-agnostic
+- preserving the UI contract while backend internals change
+
+## Current Responsibilities By Service
+
+### UI (`ui-react/`, node-03)
+
+Current behavior:
+
+- React + Vite frontend served by nginx
+- runtime URLs default to `/api` and `/history-api`
+- live markets and whales refresh every 30 seconds
+- price ticker/history refresh every 10 seconds
+- session state is saved through proxy `/state`
+
+The frontend should remain agnostic to whether runtime internals are RabbitMQ/Redis or PostgreSQL.
+
+### Proxy (`proxy/main.go`, node-02)
+
+Current behavior:
+
+- fetches top 20 active markets from Gamma
+- normalizes market payloads into `MarketSnapshot`
+- publishes RabbitMQ messages for market snapshots
+- fetches whale leaderboard and positions into Go memory
+- fetches BTC/ETH from CoinGecko and USD/UAH from NBU
+- publishes price events to RabbitMQ
+- reads and writes session JSON in Redis with a 24-hour TTL
+
+Important implementation details:
+
+- RabbitMQ publish calls are mutex-guarded because the shared AMQP channel is not thread-safe
+- market cache refresh runs every 60 seconds
+- whale cache refresh runs every 5 minutes
+- price refresh runs every 10 seconds, while NBU is refreshed at most hourly
+- Redis is not used for upstream data caching; those caches live in Go memory
+
+### History Consumer (`history/consumer.py`, node-01)
+
+Current deployed consumer behavior:
+
+- consumes RabbitMQ queue `market_events`
+- writes market messages into `market_snapshots`
+- writes price messages into `price_snapshots`
+- keeps a RabbitMQ dead-letter queue `market_events_dead_letter`
+- acknowledges messages after the PostgreSQL commit
+- reconnects to PostgreSQL and RabbitMQ in a retry loop
+
+Current reliability model:
+
+- at-least-once delivery
+- idempotent writes through `ON CONFLICT DO NOTHING`
+- queue durability in RabbitMQ
+
+### History API (`history/main.py`, node-01)
+
+Current responsibility: read-only historical API over PostgreSQL.
 
 Endpoints:
-- `GET /current` — fetches top 20 markets from Gamma API, normalizes prices, publishes one JSON message per market to the `market_events` RabbitMQ queue, returns the snapshot array.
-- `GET /whales` — returns cached whale positions. Cache is updated by a background goroutine every 5 minutes.
-- `GET /prices` — fetches BTC, ETH prices from CoinGecko and USD/UAH rate from NBU. Cached in RAM and refreshed every 60s by a background goroutine. On each refresh, publishes 3 price events to `market_events` queue for persistence.
-- `GET /state?sid=<uuid>` — returns session state JSON from Redis (or `{}` if key not found). Redis unavailable → 503.
-- `POST /state?sid=<uuid>` — stores session state JSON in Redis with 24h TTL. Requires valid alphanumeric sid (8-128 chars). Requires valid JSON body.
-- `GET /health` — liveness probe (`{"status":"ok"}`).
 
-The AMQP channel is shared across goroutines; a `sync.Mutex` (`chMu`) guards every publish call because `amqp.Channel` is not thread-safe.
+- `GET /health`
+- `GET /history`
+- `GET /history/{slug}`
+- `GET /prices/history/{coin}`
 
-Background goroutine (whale cache):
-1. Fetches top 20 traders from the Data API leaderboard.
-2. For each trader, fetches their open positions (up to 50).
-3. Slug is taken directly from the positions API response.
-4. Stores result in an in-memory cache guarded by `sync.RWMutex`.
-5. Runs once on startup, then every 5 minutes via `time.Ticker`.
+### PostgreSQL History Tables (`history/schema.sql`)
 
-Why cached: fetching whale positions requires 1 + 20 sequential HTTP calls. Doing this on every user request would be slow and risks rate-limiting. 5-minute staleness is acceptable for whale positions.
+Current persisted history tables:
 
-Background goroutine (prices):
-1. Fetches BTC and ETH prices (USD) from CoinGecko, USD/UAH rate from NBU.
-2. Caches result in RAM guarded by `sync.RWMutex`.
-3. Publishes 3 price event messages to `market_events` queue.
-4. Runs once on startup, then every 60s via `time.Ticker`.
+- `market_snapshots`
+- `whales`
+- `whale_positions`
+- `price_snapshots`
 
-Redis dependency: connected on startup via `REDIS_URL` env var (default `localhost:6379`). Non-fatal if unreachable — `/state` returns 503 but all other endpoints continue.
+These remain the system-of-record tables for historical data.
 
-### History Consumer — Python/pika (node-01)
+### RabbitMQ and Redis
 
-**Responsibility:** reliable message consumer. Inserts market and price snapshots into PostgreSQL.
+Current responsibilities are narrower than some older notes implied:
 
-- Consumes `market_events` queue (durable, persistent).
-- Consumer now routes by the `type` field in the message:
-  - Messages without type (or type="market"): insert into `market_snapshots` (existing behavior, backwards compatible).
-  - Messages with type="price": insert into `price_snapshots`.
-- `basic_qos(prefetch_count=1)` — consumer holds at most one unacknowledged message at a time. Without this, RabbitMQ pushes all queued messages at once; a crash mid-batch would lose everything.
-- `basic_ack` is called **after** `db.commit()`. If the process crashes between commit and ack, RabbitMQ redelivers; `ON CONFLICT DO NOTHING` silently discards the duplicate.
-- On exception: `db.rollback()` then `basic_nack(requeue=True)` — message goes back to the queue for retry.
-- Same ack-after-commit, nack-with-requeue pattern applies to both market and price paths.
-- Runs schema initialization on startup (`CREATE TABLE IF NOT EXISTS` + indexes).
-- Outer `while True` reconnects RabbitMQ automatically at runtime if the connection drops — not only on startup.
+- RabbitMQ is only the async queue between proxy and consumer
+- Redis is only used by proxy `/state` for short-lived session JSON
+- the proxy's live caches for markets, whales, and prices are still in-process memory
 
-### History API — Python/FastAPI (node-01:8000)
+## Already Merged On `dev`
 
-**Responsibility:** read-only API exposing stored snapshots to the UI.
+### CI and branch plumbing
 
-Endpoints:
-- `GET /history?limit=50` — latest snapshots across all markets.
-- `GET /history/{slug}?limit=100` — time-series price history for a single market.
-- `GET /prices/history/{coin}?limit=500` — time-series price history for a coin (`bitcoin`, `ethereum`, `usd_uah`). Returns up to 2000 rows. 404 if no data.
-- `GET /health` — liveness probe.
+These roadmap items are already present:
 
-Shares the same virtualenv as the consumer (`/opt/cognitor/history/venv/`). Does **not** run schema migrations — the consumer owns the schema.
+- `.github/workflows/pr-checks.yml` validates PRs into `dev`
+- `.github/workflows/docker-images.yml` publishes `dev-latest`
+- `dev` is the intended integration branch for feature PRs
 
-### Web UI — Vanilla JS + Tailwind + nginx (node-03:80)
+### Queue-side PostgreSQL runtime assets
 
-**Responsibility:** dark, data-dense single-page dashboard.
+The repo already contains queue-side PostgreSQL runtime work under `runtime/`:
 
-- Static HTML served by nginx. No build step, no node_modules.
-- Tailwind CSS via CDN for styling.
-- Two tabs: **Live Markets** (auto-refreshes every 30s via `setInterval`) and **History**.
-- On each live refresh, `/current`, `/whales`, and `/prices` are fetched in parallel via `Promise.all`.
-- Ticker strip in header shows BTC, ETH, and USD/UAH prices, updated on each refresh.
-- Price history charts rendered when user clicks on price ticker items.
-- Session state (active tab, scroll position) saved to/restored from Redis via `/state` endpoints on tab switches and page load.
-- Vanilla JS `fetch()` calls the proxy and history APIs. XSS-safe rendering via DOM escaping.
+- `00_run_all.sql` bootstrap script
+- `01_schema.sql` runtime schema + `pgmq` queue setup
+- `02_wrappers.sql` queue API wrappers such as `runtime.enqueue_event` and `runtime.claim_events`
+- `03_notify.sql` `LISTEN/NOTIFY` trigger wiring
+- `04_advisory.sql` advisory-lock helpers
+- `05_dlq.sql` dead-letter queue management
+- `runtime_consumer.py` pgmq-backed consumer
+- `tests/test_runtime.sql` queue acceptance checks
 
-## Data Flow
+That means the queue design is no longer just an issue idea. It exists in-repo. What is still missing is wiring the deployed services and deployment stack to actually use it by default or behind a runtime flag.
 
-```
-1. User opens dashboard (node-03:80)
-2. Browser fetches /current, /whales, and /prices in parallel from proxy (node-02:8080)
-3. Proxy calls Gamma API → normalizes 20 markets
-4. Proxy calls CoinGecko + NBU → caches prices (background, every 60s)
-5. Proxy publishes 20 market messages + 3 price messages to RabbitMQ (node-01:5672)
-6. Proxy returns JSON to browser → UI renders markets, whale tracker, and price ticker
-7. History consumer (node-01) receives messages → routes by type → inserts into correct table
-8. User clicks History tab or price ticker → browser fetches /history/{slug} or /prices/history/{coin} from history-api (node-01:8000)
-9. History API queries PostgreSQL → returns rows → UI renders chart
-10. Session state saved to/restored from Redis (node-02:6379) on tab switches and page load
-```
+## Current Deployment Shape
 
-## Data Schema
+The deployed system is containerized:
 
-See [`../history/schema.sql`](../history/schema.sql).
+- Terraform creates the VMs and networking
+- Ansible provisions hosts and installs Docker/Compose
+- GitHub Actions builds service images and pushes them to GHCR
+- per-node Compose stacks are rendered from `deploy/compose/*.yaml`
+- node-01, node-02, and node-03 each run their assigned containers
 
-Key design decisions:
-- `TIMESTAMPTZ` everywhere — VMs in different timezones would corrupt time-series data silently if naive timestamps were used.
-- `UNIQUE (slug, fetched_at)` on `market_snapshots` and `UNIQUE (coin, fetched_at)` on `price_snapshots` — enables idempotent consumer writes.
-- Indexes on `(slug/coin, fetched_at DESC)` — prevents full table scans on history queries.
-- Redis (node-02, localhost:6379) — session state only. Key pattern: `session:<uuid>`, TTL 24h. Not used for data caching (proxy uses Go RAM cache for that).
+Current image publishing behavior on `dev`:
 
-## Message Contract (`market_events`)
+- push to `Shabat` publishes `shabat-latest`
+- push to `dev` publishes `dev-latest`
+- push of a SemVer tag publishes immutable `vX.Y.Z` tags
 
-Two message types share the same queue.
+## Runtime Consolidation Target
 
-**Market snapshot** (20 messages per `/current` call):
-```json
-{
-  "slug": "will-bitcoin-reach-100k-by-june-2026",
-  "question": "Will Bitcoin reach $100k by June 2026?",
-  "yes_price": 0.62,
-  "no_price": 0.38,
-  "volume_24h": 184000.00,
-  "category": "Crypto",
-  "end_date": "2026-06-30T23:59:00Z",
-  "fetched_at": "2026-03-30T12:00:00Z"
-}
+The approved target is still a PostgreSQL-centered runtime, but it is only partially landed.
+
+### Target `postgres` runtime shape
+
+```text
+Browser
+  |
+  v
+node-03 ui gateway
+  |
+  +-- /api -----------> node-02 proxy
+  |                       - same HTTP contract
+  |                       - enqueue events through PostgreSQL runtime API
+  |                       - read/write session state through PostgreSQL runtime API
+  |
+  +-- /history-api ---> node-01 history-api
+
+node-01 postgres
+  - history tables
+  - runtime schema
+  - queue wrappers over pgmq
+  - DLQ and retry metadata
+  - LISTEN/NOTIFY wake-ups
+  - advisory-lock coordination
+
+node-01 history-consumer
+  - claim events from PostgreSQL runtime API
+  - write history tables
+  - ack/fail through PostgreSQL runtime API
+
+RabbitMQ and Redis stay present until the PostgreSQL path is verified end to end.
 ```
 
-**Price event** (3 messages per 60s refresh: bitcoin, ethereum, usd_uah):
-```json
-{
-  "type": "price",
-  "coin": "bitcoin",
-  "price_usd": 97000.00,
-  "change_24h": -1.2,
-  "fetched_at": "2026-04-03T12:00:00Z"
-}
-```
+### What is still pending
 
-Consumer routes by the `type` field. Market snapshots have no `type` field; they are backwards-compatible with pre-existing queue messages.
+The major unfinished steps are:
 
-## External APIs
+- add `RUNTIME_BACKEND=external|postgres` selection in proxy and consumer startup/config
+- switch proxy publishing from RabbitMQ to `runtime.enqueue_event(...)` in `postgres` mode
+- switch the deployed history-consumer path from `history/consumer.py` to `runtime/runtime_consumer.py` in `postgres` mode
+- add deployment/bootstrap wiring so `runtime/00_run_all.sql` is applied before consumers start
+- decide and provision remaining PostgreSQL runtime pieces that are documented but not yet deployed, such as `pg_cron`
+- migrate Redis-backed session/runtime state behind PostgreSQL runtime primitives
+- remove RabbitMQ and Redis only after verification
 
-| API | Purpose | Auth |
-|-----|---------|------|
-| `gamma-api.polymarket.com` | Top 20 live markets | None |
-| `data-api.polymarket.com` | Leaderboard + whale positions | None |
-| `api.coingecko.com` | BTC, ETH prices + 24h change | None |
-| `bank.gov.ua` | USD/UAH exchange rate (NBU) | None |
+## Constraints That Must Stay Stable
 
-All are free public APIs with no authentication required.
+These constraints come directly from the current codebase and the roadmap:
+
+- the UI keeps using `/api` and `/history-api`
+- the browser must not care whether runtime internals are RabbitMQ/Redis or PostgreSQL
+- PostgreSQL remains the history system of record
+- node-03 remains the browser-facing gateway
+- the project keeps the three-VM deployment story during the migration
+
+## What Is Not True Yet
+
+To avoid repeating the earlier drift, these statements are still false on current `dev`:
+
+- the proxy does not call `runtime.enqueue_event(...)` yet
+- the default deployed consumer is not `runtime/runtime_consumer.py`
+- there is no service-level `RUNTIME_BACKEND` switch in proxy or consumer startup paths yet
+- Ansible/Compose do not yet bootstrap the `runtime/` schema as part of the normal deploy flow
+- Redis and RabbitMQ are not removed from the default deployment
+
+## Related Reading
+
+- [README.md](../README.md)
+- [runtime-queue-architecture.md](runtime-queue-architecture.md)
