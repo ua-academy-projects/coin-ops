@@ -1,5 +1,4 @@
-# ADR 0001: Postgres-native runtime layer
-- **Status**: Accepted
+# ADR 0001: Postgres-native runtime layer - **Status**: Accepted
 - **Date**: 2026-04-21
 - **Deciders**: Team consensus
 - **Context reference**: Issue #8
@@ -13,8 +12,6 @@ Today the system runs two auxiliary services next to Postgres, plus an in-proces
 | Proxy in-process cache (node-02) | Whales (5 min), BTC/ETH/UAH prices (60 s), current markets — held in `s.cache` guarded by a `sync.RWMutex` (`proxy/main.go:371-404,453-456`) | Disappears on every proxy restart; not visible to operators; split responsibility with Redis confuses readers; no shared view if the proxy ever scales horizontally |
 
 Mentor direction: Redis **and** RabbitMQ should be replaced by **PostgreSQL mechanisms** — specifically `pgmq`, `pg_cron`, `LISTEN/NOTIFY`, advisory locks, and `UNLOGGED` + `JSONB`. A plain polling table is explicitly out of scope.
-
-**Scope note.** This ADR goes slightly beyond the "replace Redis and RabbitMQ" brief: it also folds the proxy's in-process whales/prices/markets caches into `runtime.cache` (§6, §7). Justification: once we have a Postgres-backed TTL cache, keeping a parallel in-memory cache inside the proxy is strictly worse — it re-introduces the drift problem we are trying to delete, and it hides hot state from SQL-level observability. If this broader move is not wanted, the cache API in §6 still stands on its own for the session KV; flag it on this PR.
 
 Postgres is already our system of record. Moving transport and cache inside it collapses three services into one, makes every runtime artefact queryable with SQL, and removes a full class of "two datastores drifted" failures.
 
