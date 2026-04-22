@@ -3,7 +3,7 @@
 /infra/ @Leev1tan
 
 # SQL
-*.sql @DmyMi
+*.sql @Leev1tan
 
 # .github/CODEOWNERS
 * @Leev1tan
