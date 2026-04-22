@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/redis/go-redis/v9"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const (
@@ -136,7 +136,7 @@ type Server struct {
 	rdb     *redis.Client
 	db      *pgxpool.Pool
 	backend string
-	cache struct {
+	cache   struct {
 		sync.RWMutex
 		markets []MarketSnapshot
 		whales  []Whale
@@ -171,6 +171,14 @@ func (s *Server) publishPriceEvent(coin string, priceUsd, change24h float64, fet
 	if err != nil {
 		return err
 	}
+
+	if s.backend == "postgres" {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_, err := s.db.Exec(ctx, "SELECT runtime.enqueue_event($1::jsonb)", body)
+		return err
+	}
+
 	s.chMu.Lock()
 	defer s.chMu.Unlock()
 	return s.ch.Publish("", queueName, false, false, amqp.Publishing{
@@ -185,6 +193,14 @@ func (s *Server) publish(snap MarketSnapshot) error {
 	if err != nil {
 		return err
 	}
+
+	if s.backend == "postgres" {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_, err := s.db.Exec(ctx, "SELECT runtime.enqueue_event($1::jsonb)", body)
+		return err
+	}
+
 	s.chMu.Lock()
 	defer s.chMu.Unlock()
 	return s.ch.Publish("", queueName, false, false, amqp.Publishing{
@@ -569,10 +585,21 @@ func (s *Server) handleGetState(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 
+	if s.backend == "postgres" {
+		var val []byte
+		err := s.db.QueryRow(ctx, "SELECT runtime.session_get($1)", sid).Scan(&val)
+		if err != nil || val == nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte("{}"))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(val)
+		return
+	}
+
 	val, err := s.rdb.Get(ctx, "session:"+sid).Result()
 	if err == redis.Nil {
-		// No state stored yet for this session — return empty object so
-		// callers don't need to special-case 404 vs. empty state.
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte("{}"))
 		return
@@ -581,7 +608,6 @@ func (s *Server) handleGetState(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "state unavailable", http.StatusServiceUnavailable)
 		return
 	}
-
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(val))
 }
@@ -611,9 +637,17 @@ func (s *Server) handlePostState(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 
-	if err := s.rdb.Set(ctx, "session:"+sid, string(body), 24*time.Hour).Err(); err != nil {
-		http.Error(w, "state unavailable", http.StatusServiceUnavailable)
-		return
+	if s.backend == "postgres" {
+		_, pgErr := s.db.Exec(ctx, "SELECT runtime.session_set($1, $2::jsonb, '24 hours')", sid, body)
+		if pgErr != nil {
+			http.Error(w, "state unavailable", http.StatusServiceUnavailable)
+			return
+		}
+	} else {
+		if err := s.rdb.Set(ctx, "session:"+sid, string(body), 24*time.Hour).Err(); err != nil {
+			http.Error(w, "state unavailable", http.StatusServiceUnavailable)
+			return
+		}
 	}
 }
 
