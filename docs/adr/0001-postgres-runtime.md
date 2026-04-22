@@ -1,8 +1,8 @@
 # ADR 0001: Postgres-native runtime layer
-- **Status**: Proposed / Accepted
+- **Status**: Accepted
 - **Date**: 2026-04-21
-- **Deciders**: [list]
-- **Context reference**: Issue #8, #16
+- **Deciders**: Team consensus
+- **Context reference**: Issue #8
 ## 1. Context
 Today the system runs two auxiliary services next to Postgres, plus an in-process cache inside the Go proxy:
 
