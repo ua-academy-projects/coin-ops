@@ -86,6 +86,14 @@
     path: /opt/cognitor/history/history
     state: absent
 
+- name: Copy PostgreSQL runtime schema
+  copy:
+    src: "{{ playbook_dir }}/../history/schema.sql"
+    dest: /opt/cognitor/history/schema.sql
+    owner: root
+    group: root
+    mode: '0644'
+
 - name: Render compose file
   template:
     src: "{{ playbook_dir }}/../deploy/compose/node-01.compose.yaml"
@@ -138,6 +146,12 @@
   when:
     - legacy_postgres_dump.stat.exists
     - not host_postgres_migration_marker.stat.exists
+
+- name: Apply PostgreSQL runtime schema before app startup
+  shell: "docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres psql -U {{ db_user }} -d {{ db_name }} < /opt/cognitor/history/schema.sql"
+  args:
+    chdir: /opt/cognitor/history
+  changed_when: false
 
 - name: Mark legacy PostgreSQL migration complete
   file:
