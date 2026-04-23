@@ -70,6 +70,16 @@ python -m py_compile main.py consumer.py   # syntax verification
 
 If you add new `.py` files, include them in the `py_compile` step.
 
+If you changed history read/write database behavior, also run PostgreSQL-backed integration tests:
+
+```bash
+cd ..
+pip install -r history/requirements-dev.txt
+python -m pytest tests/python/integration -v
+```
+
+These integration tests use an ephemeral PostgreSQL container (Docker required) and are intentionally separate from the fast unit suite.
+
 ### Docker Images
 
 Run these if you changed a Dockerfile, service dependencies, or the build

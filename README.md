@@ -294,6 +294,18 @@ If you are already in `history/`, either `cd ..` first or run `python -m pytest 
 
 The fast `pytest` suite lives under `tests/python/unit`. Keep PostgreSQL-backed integration coverage separate from these unit tests.
 
+PostgreSQL-backed integration tests for `history/main.py` and `history/consumer.py` (requires Docker):
+
+```bash
+cd <repo-root>
+python -m venv venv
+source venv/bin/activate
+pip install -r history/requirements-dev.txt
+python -m pytest tests/python/integration -v
+```
+
+These integration tests run against an ephemeral PostgreSQL container, apply `history/schema.sql`, and validate real read/write behavior.
+
 ## External Data Sources
 
 | Source | Data |
