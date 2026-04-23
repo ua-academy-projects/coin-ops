@@ -1,14 +1,4 @@
 services:
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    volumes:
-      - /var/lib/coin-ops/redis:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   proxy:
     image: "{{ proxy_image }}"
@@ -17,6 +7,3 @@ services:
       - "{{ proxy_port }}:{{ proxy_port }}"
     env_file:
       - /etc/cognitor/proxy.env
-    depends_on:
-      redis:
-        condition: service_healthy

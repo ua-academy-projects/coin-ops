@@ -52,7 +52,6 @@
     enabled: no
   loop:
     - postgresql
-    - rabbitmq-server
     - cognitor-history-consumer
     - cognitor-history-api
   failed_when: false
@@ -86,6 +85,14 @@
     path: /opt/cognitor/history/history
     state: absent
 
+- name: Copy PostgreSQL runtime schema
+  copy:
+    src: "{{ playbook_dir }}/../history/schema.sql"
+    dest: /opt/cognitor/history/schema.sql
+    owner: root
+    group: root
+    mode: '0644'
+
 - name: Render compose file
   template:
     src: "{{ playbook_dir }}/../deploy/compose/node-01.compose.yaml"
@@ -113,7 +120,7 @@
     chdir: /opt/cognitor/history
 
 - name: Start history dependencies first
-  command: docker compose -f /opt/cognitor/history/compose.yaml up -d postgres rabbitmq
+  command: docker compose -f /opt/cognitor/history/compose.yaml up -d postgres 
   args:
     chdir: /opt/cognitor/history
 
@@ -138,6 +145,12 @@
   when:
     - legacy_postgres_dump.stat.exists
     - not host_postgres_migration_marker.stat.exists
+
+- name: Apply PostgreSQL runtime schema before app startup
+  shell: "docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres psql -U {{ db_user }} -d {{ db_name }} < /opt/cognitor/history/schema.sql"
+  args:
+    chdir: /opt/cognitor/history
+  changed_when: false
 
 - name: Mark legacy PostgreSQL migration complete
   file:

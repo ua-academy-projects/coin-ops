@@ -343,7 +343,7 @@ If SSH connects and you get a prompt, cloud-init is done. If connection is refus
 
 **Step 6 — `ansible-playbook -i ansible/inventory ansible/provision.yml`**
 
-Ansible SSHes into all three VMs using the `vagrant` user (key-based auth, no password). It installs system packages: PostgreSQL and RabbitMQ on node-01, Go and Redis on node-02, nginx on node-03. It also creates the `cognitor` database user, the RabbitMQ user, and the database. This step is slow — apt downloads packages. Re-running it is safe (idempotent).
+Ansible SSHes into all three VMs using the `vagrant` user (key-based auth, no password). It installs Docker on all nodes and creates data directories for PostgreSQL on node-01. It also creates the `cognitor` database user and database. This step is slow — apt downloads packages. Re-running it is safe (idempotent).
 
 **Step 7 — `ansible-playbook -i ansible/inventory ansible/deploy.yml`**
 
