@@ -87,8 +87,6 @@ ansible-playbook -i ansible/inventory ansible/deploy.yml
 
 `deploy.yml` syncs source files, rebuilds the Go binary, restarts services via systemd.
 
-> **Note:** For migrating between `external` and `postgres` runtime modes, or for performing version rollbacks, see the [Migration and Demo Runbook](migration-runbook.md).
-
 ## Rebuilding a Destroyed VM
 
 ```bash

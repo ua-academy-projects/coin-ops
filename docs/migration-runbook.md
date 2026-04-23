@@ -66,8 +66,8 @@ IMAGE_TAG=v0.2.0 ansible-playbook -i ansible/inventory ansible/deploy.yml
 If you need to force a specific container/service to restart and pull the latest image on its respective node:
 
 ```bash
-docker compose -f deploy/compose/node-02.yml pull proxy
-docker compose -f deploy/compose/node-02.yml up -d proxy
+docker compose -f deploy/compose/node-02.compose.yaml pull proxy
+docker compose -f deploy/compose/node-02.compose.yaml up -d proxy
 ```
 
 ## 4. Rollback Procedures
@@ -88,9 +88,9 @@ If the PostgreSQL runtime experiences catastrophic failure (e.g., unresolvable e
    RUNTIME_BACKEND=external
    # Ensure RABBITMQ_URL and REDIS_URL are still present and correct
    ```
-3. Restart the proxy and consumer services:
+3. Restart the proxy and consumer services via Docker Compose:
    ```bash
-   ssh vagrant@172.31.1.11 sudo systemctl restart cognitor-proxy
-   ssh vagrant@172.31.1.10 sudo systemctl restart cognitor-history-consumer
+   ssh vagrant@172.31.1.11 docker compose -f deploy/compose/node-02.compose.yaml restart proxy
+   ssh vagrant@172.31.1.10 docker compose -f deploy/compose/node-01.compose.yaml restart history-consumer
    ```
 *(Note: Data written to the PostgreSQL queues during the outage will need to be manually drained or reconciled once the backend is restored, as the legacy consumer reads from RabbitMQ only).*

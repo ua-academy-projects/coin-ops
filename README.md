@@ -1,15 +1,15 @@
 # Coin-Ops
 
-Coin-Ops is a distributed Polymarket dashboard deployed across three VMs. The default deployed path on `dev` is still a containerized React + Go + Python system that uses RabbitMQ for asynchronous ingestion and Redis for short-lived UI session state.
+Coin-Ops is a distributed Polymarket dashboard deployed across three VMs. The system uses a PostgreSQL-native runtime architecture, consolidating queue, cache, and session state management directly into PostgreSQL. 
 
-At the same time, the roadmap from the April 20-21, 2026 GitHub issues has already started landing on `dev`:
+The roadmap from the April 20-21, 2026 GitHub issues has landed on `dev`:
 
 - `dev` is the integration branch for team PRs
 - PR validation now runs on pull requests into `dev`
 - pushes to `dev` now publish `dev-latest` images
-- queue-side PostgreSQL runtime assets are present under `runtime/`
-- the full proxy/consumer/deploy cutover behind `RUNTIME_BACKEND=external|postgres` is still pending
-- RabbitMQ and Redis are still part of the default deployment until that cutover is verified
+- PostgreSQL serves as the unified backend for multiple runtime concerns via the `runtime/` schema
+- the full proxy/consumer/deploy cutover to `RUNTIME_BACKEND=postgres` is complete
+- RabbitMQ and Redis have been deprecated as primary dependencies, though `external` mode remains available as a legacy fallback
 
 **[Read the Documentation](docs/)** | **[How to Contribute](CONTRIBUTING.md)**
 
@@ -17,10 +17,10 @@ At the same time, the roadmap from the April 20-21, 2026 GitHub issues has alrea
 
 | Topic | Current repo state on `dev` | Next planned step |
 | --- | --- | --- |
-| Runtime backend | Default deployed path is `external`: RabbitMQ queue + Redis session state | Add service/deploy switching so proxy and consumer can run in `postgres` mode |
-| Runtime queue assets | `runtime/` already contains `pgmq` queue SQL, DLQ, `LISTEN/NOTIFY`, advisory locks, and `runtime_consumer.py` | Wire proxy and deployment to use those assets |
-| Frontend contract | same-origin `/api` and `/history-api` | keep the same HTTP contract while backend internals change |
-| Deployment shape | Docker Compose on three VMs via Ansible | keep the three-VM story during the migration |
+| Runtime backend | Default deployed path is `postgres`: queue, cache, and session state consolidated in PostgreSQL | Monitor and optimize PostgreSQL runtime load |
+| Runtime queue assets | Proxy and consumer use `pgmq` queue SQL, DLQ, and `LISTEN/NOTIFY` via `runtime/` schema | Remove remaining legacy dead code if any |
+| Frontend contract | same-origin `/api` and `/history-api` | keep the same HTTP contract |
+| Deployment shape | Docker Compose on three VMs via Ansible | keep the three-VM story |
 | Image publishing | `Shabat` -> `shabat-latest`, `dev` -> `dev-latest`, tags -> `vX.Y.Z` | use moving branch tags for integration/demo deploys and tags for pinned releases |
 | Validation | PR checks run on pull requests into `dev` | extend the test pyramid beyond the current baseline over time |
 
@@ -54,7 +54,7 @@ node-02
 ```
 
 > **Note:** The runtime mode is now PostgreSQL-native (`RUNTIME_BACKEND=postgres`). The legacy mode using RabbitMQ and Redis (`RUNTIME_BACKEND=external`) is kept as a fallback.
-> -> See `docs/architecture.md` for details.
+> -> See `docs/migration-runbook.md` for migration steps and rollback procedures.
 > -> See `docs/adr/0001-postgres-runtime.md` for design decisions.
 
 | VM | IP | Runtime services |
@@ -114,7 +114,7 @@ The browser does not call `172.31.1.10:8000` or `172.31.1.11:8080` directly. Nod
 |-- ansible/          # provisioning and deployment automation
 |-- deploy/compose/   # per-node Docker Compose stacks
 |-- docs/             # architecture, deployment, and runbook notes
-|-- history/          # FastAPI history API, RabbitMQ consumer, schema
+|-- history/          # FastAPI history API, consumer (pika fallback), schema
 |-- proxy/            # Go live-data proxy
 |-- runtime/          # PostgreSQL runtime queue SQL and pgmq-backed consumer assets
 |-- terraform/        # VM and network provisioning
@@ -133,7 +133,7 @@ Each application service has its own Dockerfile.
 | History consumer | `history/Dockerfile.consumer` | `python:3.12-slim-bookworm` |
 | UI | `ui-react/Dockerfile` | `node:22-bookworm-slim` builder, `nginx:alpine` runtime |
 
-Official images are still used for PostgreSQL, RabbitMQ, and Redis. The queue-side PostgreSQL runtime SQL assumes `pgmq` is available in PostgreSQL, but the default deployment has not been switched over to that path yet.
+Official images are used for PostgreSQL. The queue-side PostgreSQL runtime SQL requires `pgmq` to be available in PostgreSQL. RabbitMQ and Redis images are also available if the `external` fallback mode is used.
 
 ## Deployment Model
 
@@ -190,15 +190,14 @@ Secrets are not baked into images. Ansible writes root-owned env files on the VM
 
 Current runtime env highlights:
 
-- proxy: `RABBITMQ_URL`, `REDIS_URL`, `PORT`
-- history: `DATABASE_URL`, `RABBITMQ_URL`, `POSTGRES_*`, `PORT`
+- proxy: `DATABASE_URL`, `RUNTIME_BACKEND=postgres`, `PORT`
+- history: `DATABASE_URL`, `RUNTIME_BACKEND=postgres`, `POSTGRES_*`, `PORT`
 - ui: `PROXY_URL=/api`, `HISTORY_URL=/history-api`
 
-Pending full PostgreSQL runtime mode still adds:
+Legacy mode env variables (if `RUNTIME_BACKEND=external`):
 
-- `RUNTIME_BACKEND=external|postgres`
-- proxy `DATABASE_URL`
-- runtime schema/bootstrap in deployment before app containers start
+- proxy: `RABBITMQ_URL`, `REDIS_URL`
+- history: `RABBITMQ_URL`
 
 ## Deployment Commands
 
@@ -359,5 +358,5 @@ These are public unauthenticated APIs, so live behavior depends on upstream avai
 
 ## More Detail
 
-- [docs/architecture.md](docs/architecture.md) explains the current deployed path versus the PostgreSQL runtime target.
+- [docs/architecture.md](docs/architecture.md) explains the system architecture and service responsibilities.
 - [docs/runtime-queue-architecture.md](docs/runtime-queue-architecture.md) focuses on the queue-side PostgreSQL runtime design and its current status on `dev`.
