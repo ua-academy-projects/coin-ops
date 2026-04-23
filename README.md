@@ -162,6 +162,8 @@ Current branch and publishing model:
 - `dev` publishes moving `dev-latest`
 - `vX.Y.Z` publishes immutable release tags
 
+Release tags are automated from Conventional Commit style squash merge titles on `main`. See [Release Automation](docs/release-automation.md) for the version bump rules and maintainer workflow.
+
 ## Public Gateway and TLS
 
 Node-03 is the browser-facing gateway. It serves the React UI and reverse-proxies the backend paths:
