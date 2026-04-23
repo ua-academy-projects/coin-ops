@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import App from './App';
@@ -42,6 +42,52 @@ function mockAppFetch({
 }
 
 describe('App', () => {
+  it('shows loading skeleton cards before live market data finishes loading', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : input.toString();
+
+      if (url.includes('/api/current') || url.includes('/api/whales')) {
+        return new Promise(() => {}) as Promise<Response>;
+      }
+
+      if (url.includes('/api/prices')) {
+        return {
+          ok: true,
+          json: async () => ({
+            btc_usd: 105000,
+            eth_usd: 3200,
+            btc_24h_change: 2.5,
+            eth_24h_change: -1.25,
+            usd_uah: 41.25,
+            fetched_at: '2026-01-01T12:00:00Z',
+          }),
+        } as Response;
+      }
+
+      if (url.includes('/api/state?sid=')) {
+        return {
+          ok: true,
+          json: async () => ({}),
+        } as Response;
+      }
+
+      if (url.includes('/history-api/prices/history/')) {
+        return {
+          ok: true,
+          json: async () => [],
+        } as Response;
+      }
+
+      throw new Error(`Unhandled fetch in test: ${url}`);
+    });
+
+    const { container } = render(<App />);
+
+    await waitFor(() => {
+      expect(container.querySelectorAll('.glass.rounded-2xl.p-5.animate-pulse')).toHaveLength(6);
+    });
+  });
+
   it('renders the home view with mocked live data and does not use real backend URLs', async () => {
     const fetchMock = mockAppFetch({
       current: [
