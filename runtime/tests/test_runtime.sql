@@ -245,7 +245,7 @@ $$;
 
 \echo '=== runtime cache/session acceptance tests ==='
 
--- ── Test 1: cache_set + cache_get round-trip ────────────────────────────────
+-- ── Test 8: cache_set + cache_get round-trip ────────────────────────────────
 DO $$
 DECLARE
     v_got JSONB;
@@ -254,14 +254,14 @@ BEGIN
     SELECT runtime.cache_get('t1') INTO v_got;
 
     IF v_got IS NULL OR v_got <> '{"x":1}'::JSONB THEN
-        RAISE EXCEPTION 'FAIL test1: cache_get returned %, want {"x":1}', v_got;
+        RAISE EXCEPTION 'FAIL test8: cache_get returned %, want {"x":1}', v_got;
     END IF;
 
-    RAISE NOTICE 'PASS test1: cache_set + cache_get round-trip';
+    RAISE NOTICE 'PASS test8: cache_set + cache_get round-trip';
 END;
 $$;
 
--- ── Test 2: cache_delete hit/miss semantics ─────────────────────────────────
+-- ── Test 9: cache_delete hit/miss semantics ─────────────────────────────────
 DO $$
 DECLARE
     v_hit  BOOLEAN;
@@ -271,18 +271,18 @@ BEGIN
     v_miss := runtime.cache_delete('t1');
 
     IF v_hit IS NOT TRUE THEN
-        RAISE EXCEPTION 'FAIL test2: delete on existing key returned %, want true', v_hit;
+        RAISE EXCEPTION 'FAIL test9: delete on existing key returned %, want true', v_hit;
     END IF;
 
     IF v_miss IS NOT FALSE THEN
-        RAISE EXCEPTION 'FAIL test2: delete on absent key returned %, want false', v_miss;
+        RAISE EXCEPTION 'FAIL test9: delete on absent key returned %, want false', v_miss;
     END IF;
 
-    RAISE NOTICE 'PASS test2: cache_delete hit=true / miss=false';
+    RAISE NOTICE 'PASS test9: cache_delete hit=true / miss=false';
 END;
 $$;
 
--- ── Test 3: cache_get filters expired rows pre-reap ─────────────────────────
+-- ── Test 10: cache_get filters expired rows pre-reap ────────────────────────
 DO $$
 DECLARE
     v_got JSONB;
@@ -292,19 +292,19 @@ BEGIN
 
     SELECT runtime.cache_get('t3') INTO v_got;
     IF v_got IS NOT NULL THEN
-        RAISE EXCEPTION 'FAIL test3: cache_get returned % for expired row, want NULL', v_got;
+        RAISE EXCEPTION 'FAIL test10: cache_get returned % for expired row, want NULL', v_got;
     END IF;
 
-    -- Row is still physically present — reap lives in test 4.
+    -- Row is still physically present — reap lives in test 11.
     IF (SELECT COUNT(*) FROM runtime.cache WHERE key = 't3') <> 1 THEN
-        RAISE EXCEPTION 'FAIL test3: expired row missing from physical storage';
+        RAISE EXCEPTION 'FAIL test10: expired row missing from physical storage';
     END IF;
 
-    RAISE NOTICE 'PASS test3: cache_get hides rows past expires_at';
+    RAISE NOTICE 'PASS test10: cache_get hides rows past expires_at';
 END;
 $$;
 
--- ── Test 4: cache_reap removes expired rows ─────────────────────────────────
+-- ── Test 11: cache_reap removes expired rows ────────────────────────────────
 DO $$
 DECLARE
     v_reaped INT;
@@ -313,19 +313,19 @@ BEGIN
     v_reaped := runtime.cache_reap();
 
     IF v_reaped < 1 THEN
-        RAISE EXCEPTION 'FAIL test4: cache_reap returned %, want >= 1', v_reaped;
+        RAISE EXCEPTION 'FAIL test11: cache_reap returned %, want >= 1', v_reaped;
     END IF;
 
     SELECT COUNT(*) INTO v_left FROM runtime.cache WHERE key = 't3';
     IF v_left <> 0 THEN
-        RAISE EXCEPTION 'FAIL test4: runtime.cache still has % row(s) for t3 after reap', v_left;
+        RAISE EXCEPTION 'FAIL test11: runtime.cache still has % row(s) for t3 after reap', v_left;
     END IF;
 
-    RAISE NOTICE 'PASS test4: cache_reap deleted % expired row(s)', v_reaped;
+    RAISE NOTICE 'PASS test11: cache_reap deleted % expired row(s)', v_reaped;
 END;
 $$;
 
--- ── Test 5: session round-trip (set/get/delete) ─────────────────────────────
+-- ── Test 12: session round-trip (set/get/delete) ────────────────────────────
 DO $$
 DECLARE
     v_got     JSONB;
@@ -335,19 +335,19 @@ BEGIN
 
     SELECT runtime.session_get('sid-abc') INTO v_got;
     IF v_got IS NULL OR v_got <> '{"uid":42}'::JSONB THEN
-        RAISE EXCEPTION 'FAIL test5: session_get returned %, want {"uid":42}', v_got;
+        RAISE EXCEPTION 'FAIL test12: session_get returned %, want {"uid":42}', v_got;
     END IF;
 
     v_deleted := runtime.session_delete('sid-abc');
     IF v_deleted IS NOT TRUE THEN
-        RAISE EXCEPTION 'FAIL test5: session_delete returned %, want true', v_deleted;
+        RAISE EXCEPTION 'FAIL test12: session_delete returned %, want true', v_deleted;
     END IF;
 
-    RAISE NOTICE 'PASS test5: session_set + session_get + session_delete round-trip';
+    RAISE NOTICE 'PASS test12: session_set + session_get + session_delete round-trip';
 END;
 $$;
 
--- ── Test 6: cache and session tables are UNLOGGED ───────────────────────────
+-- ── Test 13: cache and session tables are UNLOGGED ──────────────────────────
 DO $$
 DECLARE
     v_cache_persistence   CHAR;
@@ -367,20 +367,20 @@ BEGIN
     WHERE  n.nspname = 'runtime' AND c.relname = 'session';
 
     IF v_cache_persistence <> 'u' THEN
-        RAISE EXCEPTION 'FAIL test6: runtime.cache relpersistence = %, want u (UNLOGGED)',
+        RAISE EXCEPTION 'FAIL test13: runtime.cache relpersistence = %, want u (UNLOGGED)',
                         v_cache_persistence;
     END IF;
 
     IF v_session_persistence <> 'u' THEN
-        RAISE EXCEPTION 'FAIL test6: runtime.session relpersistence = %, want u (UNLOGGED)',
+        RAISE EXCEPTION 'FAIL test13: runtime.session relpersistence = %, want u (UNLOGGED)',
                         v_session_persistence;
     END IF;
 
-    RAISE NOTICE 'PASS test6: runtime.cache and runtime.session are UNLOGGED';
+    RAISE NOTICE 'PASS test13: runtime.cache and runtime.session are UNLOGGED';
 END;
 $$;
 
--- ── Test 7: pg_cron jobs registered ─────────────────────────────────────────
+-- ── Test 14: pg_cron jobs registered ────────────────────────────────────────
 -- Expect 3 active runtime-* cron jobs after bootstrap:
 -- runtime-cache-reap, runtime-session-reap, runtime-dlq-reap.
 DO $$
@@ -398,10 +398,10 @@ BEGIN
       AND  active;
 
     IF v_count < 3 THEN
-        RAISE EXCEPTION 'FAIL test7: expected 3 active runtime-* cron jobs, got %', v_count;
+        RAISE EXCEPTION 'FAIL test14: expected 3 active runtime-* cron jobs, got %', v_count;
     END IF;
 
-    RAISE NOTICE 'PASS test7: % runtime-* cron jobs are scheduled and active', v_count;
+    RAISE NOTICE 'PASS test14: % runtime-* cron jobs are scheduled and active', v_count;
 END;
 $$;
 
