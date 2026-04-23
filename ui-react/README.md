@@ -1,11 +1,20 @@
 # UI React
 
-## Install
+Main React + Vite frontend for Coin-Ops.
 
-Enter the frontend directory and install dependencies:
+## Requirements
+
+Before running the app or the tests, you need:
+
+- Node.js
+- npm
+
+## Setup
+
+Install frontend dependencies:
 
 ```bash
-cd /Users/arturvolinec/Projects/internship/coin-ops/ui-react
+cd ui-react
 npm install
 ```
 
@@ -25,11 +34,13 @@ http://localhost:3000/
 
 ## Run Tests
 
-Start test watch mode:
+Start Vitest in watch mode:
 
 ```bash
 npm test
 ```
+
+This keeps running and re-runs tests when files change.
 
 Run the full test suite one time:
 
@@ -37,31 +48,28 @@ Run the full test suite one time:
 npm run test:run
 ```
 
-You can also use:
+You can also run a one-time test run with:
 
 ```bash
 npm test -- --run
 ```
 
-That does the same kind of one-time run, but through the `npm test` command.
-That performs the same one-time run through the `npm test` command.
+Both one-time commands do the same job.
 
-## What Tests Exist
+## Test Structure
 
-There are 3 small groups of tests:
+Tests are grouped into 3 small parts:
 
 - Unit tests
-  These cover helper functions such as formatting, labels, and filtering.
+  Helper logic such as formatting, labels, and filtering.
 
 - Component tests
-  These cover isolated UI pieces such as cards and modals with simple props.
+  Small UI pieces such as cards, charts, and modals.
 
 - App-level tests
-  These cover the main `App` component with mocked API responses, so no real backend is required.
+  The main `App` component with mocked API responses.
 
-## Where Tests Live
-
-Main places to look:
+Main test locations:
 
 - `src/lib/*.test.ts`
   Helper tests
@@ -78,54 +86,65 @@ Main places to look:
 - `src/test/mockFetch.ts`
   Shared fetch mocking helper
 
-## How API Mocking Works
+## Mocking
 
 The tests do not call the real backend.
 
-Instead, they replace `fetch(...)` with mocked responses inside the test environment.
+Instead, app-level tests replace `fetch(...)` with mocked responses.
 
-Example flow:
+Example:
 
 - app asks for `/api/current`
-- test returns mocked market data
+- test returns fake market data
 - app asks for `/api/prices`
-- test returns mocked price data
+- test returns fake price data
 
-This keeps the tests:
+Shared fetch mocking lives in:
 
-- fast
+- `src/test/mockFetch.ts`
+
+This keeps tests:
+
 - local
+- fast
 - independent from VMs, Docker, and backend services
 
-## How To Debug A Failing Test
+## Troubleshooting
 
-If a test fails:
+### Missing browser APIs in jsdom
 
-1. Run the tests again:
+Some UI tests use browser-like APIs that do not fully exist in the test environment.
+
+Examples:
+
+- `ResizeObserver`
+- element size/layout APIs used by chart components
+
+These are handled in:
+
+- `src/test/setup.ts`
+
+That setup file adds small test-only mocks so chart and UI tests can run in jsdom.
+
+### A test fails
+
+Start with the first real error message.
+
+Then check:
+
+1. which test file failed
+2. what the test expected
+3. what was actually rendered
+
+Run the tests again with:
 
 ```bash
 npm run test:run
 ```
 
-2. Read the first real error message.
-   Start with the first relevant error message before reading the full stack output.
-
-3. Check which file failed.
-   Example:
-
-```text
-src/components/PriceSummaryCard.test.tsx
-```
-
-4. Compare:
-   what the test expected
-   and what the rendered output actually contains
-
-5. If the failure is about UI text, verify the rendered output before changing application code.
-
 ## Useful Extra Commands
 
-Run the TypeScript check:
+Type-check the frontend:
 
 ```bash
 npm run lint
@@ -136,5 +155,3 @@ Build the frontend:
 ```bash
 npm run build
 ```
-
-These are useful verification steps before committing.
