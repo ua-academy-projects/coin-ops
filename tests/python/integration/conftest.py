@@ -14,17 +14,29 @@ from testcontainers.postgres import PostgresContainer
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BOOTSTRAP_SCRIPT_PATH = REPO_ROOT / "tests" / "python" / "integration" / "postgres_bootstrap.sh"
+DEFAULT_TEST_RUNTIME_POSTGRES_IMAGE = (
+    "quay.io/tembo/pg16-pgmq@sha256:7f80d046257d585d1af9d19cf28bd355a4b854b0a7d643c02ebbe6b84457868a"
+)
 TEST_RUNTIME_POSTGRES_IMAGE = os.environ.get(
     "COINOPS_TEST_POSTGRES_IMAGE",
-    "quay.io/tembo/pg16-pgmq",
+    DEFAULT_TEST_RUNTIME_POSTGRES_IMAGE,
 )
 RESTORED_SIGNALS = tuple(
     sig for sig in (signal.SIGINT, getattr(signal, "SIGTERM", None)) if sig is not None
 )
 
-# Ryuk currently fails to expose its control port on this Windows Docker setup,
-# which prevents the actual PostgreSQL test container from starting.
-testcontainers_config.ryuk_disabled = True
+
+def _should_disable_ryuk() -> bool:
+    override = os.environ.get("COINOPS_TESTCONTAINERS_DISABLE_RYUK")
+    if override is not None:
+        return override.lower() in {"1", "true", "yes", "on"}
+
+    # Ryuk currently fails to expose its control port on this Windows Docker setup,
+    # which prevents the actual PostgreSQL test container from starting.
+    return os.name == "nt"
+
+
+testcontainers_config.ryuk_disabled = _should_disable_ryuk()
 
 
 def load_module(relative_path: str, env: dict[str, str]):
