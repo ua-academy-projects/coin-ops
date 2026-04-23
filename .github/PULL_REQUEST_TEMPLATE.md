@@ -4,7 +4,7 @@ Closes #___
 Use a Conventional Commit style PR title when this change can reach `main`:
 - `fix: ...` for patch releases
 - `feat: ...` for minor releases
-- `feat!: ...` or `BREAKING CHANGE:` for major releases
+- `feat!: ...` or `fix!: ...` for major releases; put `BREAKING CHANGE:` in the commit body/footer when extra explanation is needed
 
 **Change summary**
 - 
