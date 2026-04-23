@@ -107,7 +107,11 @@ services:
       history-api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost/health >/dev/null || exit 1"]
+      # Hit 127.0.0.1 explicitly: nginx listens on IPv4 only by default, and
+      # BusyBox wget inside the container resolves `localhost` to ::1 first,
+      # which would yield a spurious "connection refused".
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health >/dev/null || exit 1"]
       interval: 3s
       timeout: 3s
       retries: 10
+      start_period: 5s
