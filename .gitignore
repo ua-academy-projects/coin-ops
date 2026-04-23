@@ -42,6 +42,11 @@ coin-ops-intelligence.zip
 # Local TLS certificates/keys generated for mkcert demos
 *.pem
 
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
 # Personal notes — not for the repo
 docs/interview-notes.md
 interview-notes.md
