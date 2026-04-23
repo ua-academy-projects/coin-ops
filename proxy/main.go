@@ -614,6 +614,7 @@ func (s *Server) handleGetState(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(val))
 	}
+}
 
 func (s *Server) handlePostState(w http.ResponseWriter, r *http.Request) {
 	sid := r.URL.Query().Get("sid")
