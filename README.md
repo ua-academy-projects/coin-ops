@@ -162,6 +162,8 @@ Current branch and publishing model:
 - `dev` publishes moving `dev-latest`
 - `vX.Y.Z` publishes immutable release tags
 
+Release tags are automated from Conventional Commit style squash merge titles on `main`. See [Release Automation](docs/release-automation.md) for the version bump rules and maintainer workflow.
+
 ## Public Gateway and TLS
 
 Node-03 is the browser-facing gateway. It serves the React UI and reverse-proxies the backend paths:
@@ -277,6 +279,20 @@ Queue-side PostgreSQL runtime assets:
 psql "$DATABASE_URL" -f runtime/00_run_all.sql
 python runtime/runtime_consumer.py
 ```
+
+Fast Python unit tests for both the current `external` path and the PostgreSQL runtime target:
+
+```bash
+cd <repo-root>
+python -m venv venv
+source venv/bin/activate
+pip install -r history/requirements-dev.txt
+python -m pytest tests/python/unit
+```
+
+If you are already in `history/`, either `cd ..` first or run `python -m pytest ../tests/python/unit`.
+
+The fast `pytest` suite lives under `tests/python/unit`. Keep PostgreSQL-backed integration coverage separate from these unit tests.
 
 ## External Data Sources
 

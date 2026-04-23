@@ -56,3 +56,6 @@ database_url: "postgresql://{{ db_user }}:{{ db_password }}@localhost:5432/{{ db
 history_database_url: "postgresql://{{ db_user }}:{{ db_password }}@postgres:5432/{{ db_name }}"
 proxy_database_url: "postgresql://{{ db_user }}:{{ db_password }}@172.31.1.10:5432/{{ db_name }}"
 redis_url: "redis://127.0.0.1:6379/0"
+
+# ── Runtime backend ──────────────────────────────────────────
+runtime_backend: "{{ lookup('env', 'RUNTIME_BACKEND') | default('external', true) }}"
