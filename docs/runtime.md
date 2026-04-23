@@ -71,3 +71,15 @@ Seven `PASS` notices confirm that:
 - All three `runtime-*` jobs are registered in `cron.job` and active.
 
 A single `FAIL` raises an exception and stops the script.
+
+## Known behaviour
+
+- `runtime-dlq-reap` (nightly at 03:00 UTC) calls `runtime.dlq_reap_expired()`,
+  which is defined on the queue side of the runtime layer
+  (`runtime/05_dlq.sql`). pg_cron stores scheduled commands as plain text and
+  does not validate them at schedule time, so the job is registered
+  successfully regardless of whether the function exists — only the firing
+  will error if it is missing. With the full bootstrap applied via
+  `runtime/00_run_all.sql` the function is present and the job succeeds; the
+  caveat is documented here in case the cache layer is ever bootstrapped in
+  isolation.
