@@ -3,8 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from conftest import ConnectionSpy
-from tests.python._helpers import ChannelSpy
+from tests.python._helpers import ChannelSpy, ConnectionSpy
 
 
 def test_market_messages_route_to_market_insert(history_consumer_module, monkeypatch):
