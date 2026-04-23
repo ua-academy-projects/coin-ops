@@ -12,7 +12,6 @@
     - name: Check .env vars are exported
       assert:
         that:
-          - lookup('env', 'RABBITMQ_PASSWORD') != ''
           - lookup('env', 'DB_PASSWORD') != ''
           - lookup('env', 'SSH_KEY_PATH') != ''
           - lookup('env', 'RUNTIME_BACKEND') in ['', 'external', 'postgres']

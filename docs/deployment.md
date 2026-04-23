@@ -6,11 +6,11 @@ Three Hyper-V VMs running Ubuntu 24.04 Server (no GUI):
 
 | Hostname | Static IP | Services |
 |----------|-----------|---------|
-| softserve-node-01 | 172.31.1.10 | PostgreSQL · RabbitMQ · History Consumer · History API |
-| softserve-node-02 | 172.31.1.11 | Proxy Service (Go) · Redis |
+| softserve-node-01 | 172.31.1.10 | PostgreSQL · History Consumer · History API |
+| softserve-node-02 | 172.31.1.11 | Proxy Service (Go) |
 | softserve-node-03 | 172.31.1.12 | Web UI (nginx) |
 
-node-01 consolidates the queue, database, and history service because only 3 VMs are available. The ТЗ marks VM4 (queue) and VM5 (DB) as optional — this is within spec.
+node-01 consolidates the database and history service because only 3 VMs are available. The ТЗ marks VM4 (queue) and VM5 (DB) as optional — this is within spec.
 
 Gateway: `172.31.0.1`. Subnet: `/20`. All VMs use static IPs set via netplan.
 
@@ -67,9 +67,10 @@ git checkout Shabat
 
 # Copy and fill in credentials
 cp .env.example .env
-nano ansible/inventory   # confirm IPs, set rabbitmq_password and db_password
+nano .env   # confirm DB_PASSWORD, SSH_KEY_PATH, RUNTIME_BACKEND
 
 # Install packages on all VMs (idempotent)
+source .env
 ansible-playbook -i ansible/inventory ansible/provision.yml
 
 # Deploy all services
@@ -82,10 +83,11 @@ Open browser → `http://172.31.1.12` → dashboard is running.
 
 ```bash
 git push
+source .env
 ansible-playbook -i ansible/inventory ansible/deploy.yml
 ```
 
-`deploy.yml` syncs source files, rebuilds the Go binary, restarts services via systemd.
+`deploy.yml` pulls updated container images and restarts services via Docker Compose.
 
 ## Rebuilding a Destroyed VM
 
@@ -93,6 +95,7 @@ ansible-playbook -i ansible/inventory ansible/deploy.yml
 # 1. Fix static IP (one-time per VM — see blockers.md)
 
 # 2. Re-provision and re-deploy
+source .env
 ansible-playbook -i ansible/inventory ansible/provision.yml
 ansible-playbook -i ansible/inventory ansible/deploy.yml
 ```
@@ -101,55 +104,44 @@ ansible-playbook -i ansible/inventory ansible/deploy.yml
 
 ### provision.yml
 
-| VM | Packages installed |
-|----|--------------------|
-| node-01 | postgresql, postgresql-contrib, rabbitmq-server, python3, python3-venv, python3-pip, python3-psycopg2 |
-| node-02 | golang-go, redis-server |
-| node-03 | nginx |
-
-Also creates the PostgreSQL database/user and RabbitMQ user during provisioning.
+Installs Docker and common packages on all VMs. Creates data directories for PostgreSQL on node-01.
 
 ### deploy.yml (per service)
 
-**Proxy (node-02):**
-1. Creates `cognitor-proxy` system user
-2. Syncs Go source to `/opt/cognitor/proxy/`
-3. Runs `go build -mod=mod -o proxy .` on the VM
-4. Writes `/etc/cognitor/proxy.env` (secrets, injected from inventory)
-5. Writes `/etc/systemd/system/cognitor-proxy.service`
-6. Reloads systemd, restarts service
-7. Polls `/health` endpoint to confirm service is responding
-
 **History (node-01):**
-1. Creates `cognitor-history` system user
-2. Syncs Python source to `/opt/cognitor/history/`
-3. Creates venv at `/opt/cognitor/history/venv/` and installs `requirements.txt`
-4. Writes `/etc/cognitor/history.env`
-5. Writes two systemd units: `cognitor-history-consumer.service` and `cognitor-history-api.service`
-6. Reloads and restarts both
+1. Stops legacy host services (if present)
+2. Writes `/etc/cognitor/history.env` (secrets from `.env`)
+3. Renders Docker Compose file from template
+4. Starts PostgreSQL first, waits for readiness
+5. Applies runtime schema
+6. Starts all containers (`postgres`, `history-consumer`, `history-api`)
 7. Polls `/health` on history-api to confirm
 
+**Proxy (node-02):**
+1. Stops legacy host services (if present)
+2. Writes `/etc/cognitor/proxy.env` (secrets from `.env`)
+3. Renders Docker Compose file from template
+4. Pulls and starts proxy container
+5. Polls `/health` endpoint to confirm service is responding
+
 **UI (node-03):**
-1. Copies `ui/index.html` to `/var/www/coin-ops/`
-2. Copies `ui/nginx.conf` to `/etc/nginx/sites-available/coin-ops`
-3. Enables site, disables default site
-4. Reloads nginx
+1. Renders Docker Compose file from template
+2. Pulls and starts UI container
+3. Polls health endpoint to confirm
 
 ## Service Management
 
 ```bash
-# Check service status
-ssh vagrant@172.31.1.11 sudo systemctl status cognitor-proxy
-ssh vagrant@172.31.1.10 sudo systemctl status cognitor-history-consumer
-ssh vagrant@172.31.1.10 sudo systemctl status cognitor-history-api
+# Check container status
+ssh vagrant@172.31.1.11 docker compose -f /opt/cognitor/proxy/compose.yaml ps
+ssh vagrant@172.31.1.10 docker compose -f /opt/cognitor/history/compose.yaml ps
 
 # Follow logs
-ssh vagrant@172.31.1.11 sudo journalctl -u cognitor-proxy -f
-ssh vagrant@172.31.1.10 sudo journalctl -u cognitor-history-consumer -f
-ssh vagrant@172.31.1.10 sudo journalctl -u cognitor-history-api -f
+ssh vagrant@172.31.1.11 docker compose -f /opt/cognitor/proxy/compose.yaml logs -f proxy
+ssh vagrant@172.31.1.10 docker compose -f /opt/cognitor/history/compose.yaml logs -f history-consumer
 
 # Restart a service
-ssh vagrant@172.31.1.10 sudo systemctl restart cognitor-history-consumer
+ssh vagrant@172.31.1.10 docker compose -f /opt/cognitor/history/compose.yaml restart history-consumer
 ```
 
 ## Secrets Management
@@ -158,18 +150,13 @@ Secrets live in:
 - `/etc/cognitor/proxy.env` on node-02
 - `/etc/cognitor/history.env` on node-01
 
-Both files are mode `0640`, owned by the respective service user. Ansible writes them from `ansible/inventory` variables. **Never commit real credentials to git** — `ansible/inventory` contains only the structure; override passwords before running.
+Both files are mode `0640`, owned by root. Ansible writes them from environment variables loaded via `source .env`. **Never commit real credentials to git** — `.env` is gitignored.
 
 ## Port Summary
 
 | VM | Port | Service |
 |----|------|---------|
 | node-01 | 5432 | PostgreSQL |
-| node-01 | 5672 | RabbitMQ AMQP |
-| node-01 | 15672 | RabbitMQ Management UI (optional) |
 | node-01 | 8000 | History API |
 | node-02 | 8080 | Proxy Service |
-| node-02 | 6379 | Redis (localhost only — not accessible externally) |
 | node-03 | 80 | Web UI (nginx) |
-
-Redis on node-02 binds to 127.0.0.1 by default. No UFW rule opens port 6379 externally — only the proxy process on node-02 can reach it.

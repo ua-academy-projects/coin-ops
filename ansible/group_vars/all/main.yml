@@ -8,11 +8,9 @@ ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
 ansible_ssh_private_key_file: "{{ lookup('env', 'SSH_KEY_PATH') | expanduser }}"
 
 # ── Passwords (loaded from .env) ──────────────────────────────
-rabbitmq_password: "{{ lookup('env', 'RABBITMQ_PASSWORD') }}"
 db_password: "{{ lookup('env', 'DB_PASSWORD') }}"
 
 # ── Service accounts ──────────────────────────────────────────
-rabbitmq_user: cognitor
 db_name: cognitor
 db_user: cognitor
 runtime_backend: "{{ lookup('env', 'RUNTIME_BACKEND') | default('external', true) }}"
@@ -51,8 +49,6 @@ registry_username: "{{ lookup('env', 'GHCR_USERNAME') | default('', true) }}"
 registry_token: "{{ lookup('env', 'GHCR_TOKEN') | default('', true) }}"
 
 # ── Derived connection strings ────────────────────────────────
-rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@172.31.1.10:5672/"
 database_url: "postgresql://{{ db_user }}:{{ db_password }}@localhost:5432/{{ db_name }}"
 history_database_url: "postgresql://{{ db_user }}:{{ db_password }}@postgres:5432/{{ db_name }}"
 proxy_database_url: "postgresql://{{ db_user }}:{{ db_password }}@172.31.1.10:5432/{{ db_name }}"
-redis_url: "redis://127.0.0.1:6379/0"

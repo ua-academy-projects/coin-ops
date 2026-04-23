@@ -1,3 +1,5 @@
+**Note:** This guide was written for the original `external` runtime path (RabbitMQ + Redis). The project has since migrated to a PostgreSQL-only runtime. Sections about RabbitMQ and Redis no longer reflect the current deployment. A full rewrite is tracked separately.
+
 # Infrastructure Guide
 
 An educational walkthrough of how this system is put together and why each piece exists. Written for DevOps interns who have built apps but not yet run a distributed system across multiple machines.

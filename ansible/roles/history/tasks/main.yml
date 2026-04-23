@@ -52,7 +52,6 @@
     enabled: no
   loop:
     - postgresql
-    - rabbitmq-server
     - cognitor-history-consumer
     - cognitor-history-api
   failed_when: false
@@ -121,7 +120,7 @@
     chdir: /opt/cognitor/history
 
 - name: Start history dependencies first
-  command: docker compose -f /opt/cognitor/history/compose.yaml up -d postgres rabbitmq
+  command: docker compose -f /opt/cognitor/history/compose.yaml up -d postgres 
   args:
     chdir: /opt/cognitor/history
 
