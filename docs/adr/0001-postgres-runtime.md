@@ -3,7 +3,7 @@
 - **Deciders**: Team consensus
 - **Context reference**: Issue #8
 ## 1. Context
-Today the system runs two auxiliary services next to Postgres, plus an in-process cache inside the Go proxy:
+The system currently runs two auxiliary services next to Postgres, plus an in-process cache inside the Go proxy:
 
 | Component | Role | Pain |
 |---|---|---|
@@ -37,7 +37,7 @@ Postgres is already our system of record. Moving transport and cache inside it c
 
 ## 3. Queue API
 
-All functions in schema `runtime`, `SECURITY DEFINER`. Signatures match `runtime/02_wrappers.sql` and `runtime/05_dlq.sql` on `postgres-runtime-queue`.
+All functions in schema `runtime`, `SECURITY DEFINER`. Signatures match `runtime/02_wrappers.sql` and `runtime/05_dlq.sql`, merged on `dev` via PR #23 (together with `00_run_all.sql`, `01_schema.sql`, `03_notify.sql`, `04_advisory.sql`, and `runtime/tests/test_runtime.sql`). No caller on `dev` invokes these functions yet; the proxy/consumer switch is the separate rollout described in §4–§5.
 
 ```sql
 -- Publish
@@ -89,13 +89,20 @@ Single JSONB envelope, routed by top-level `type`:
 
 ## 4. How the proxy will call the queue
 
-1. Replace `channel.Publish(...)` in `proxy/main.go` with `SELECT runtime.enqueue_event($1::jsonb)` over `pgx`.
-2. Payload shape unchanged — the existing history consumer accepts it as-is.
-3. `RABBITMQ_URL` is dropped; `DATABASE_URL` (already used by history) is the single transport credential.
+On `dev`, the proxy currently dials `RABBITMQ_URL` unconditionally and publishes `market` / `price` JSON via `channel.Publish` on the `market_events` queue (`proxy/main.go`). The target cut-over adds a `RUNTIME_BACKEND` (`external` | `postgres`) selector at startup:
+
+- **`external` mode** (default until `postgres` is verified) — keeps `RABBITMQ_URL` and the current `channel.Publish(...)` path. This is current `dev` behavior, preserved intentionally for the staged rollout in #9/#10/#11.
+- **`postgres` mode** — uses `DATABASE_URL` and `SELECT runtime.enqueue_event($1::jsonb)` over `pgx` instead of AMQP. Payload shape is unchanged, so the existing history consumer accepts it as-is.
+
+`RABBITMQ_URL` stays configured through the `external` phase and is removed from deployment only after `postgres` mode is verified end-to-end in production — not in the release that first ships the branch.
 
 ## 5. How the consumer will call the queue
 
-Reference implementation: `runtime/runtime_consumer.py` on `postgres-runtime-queue`.
+The deployed consumer on `node-01` is currently `history/consumer.py` — RabbitMQ-backed, routes messages by `type` into `market_snapshots` / `price_snapshots` with `ON CONFLICT DO NOTHING`. Ansible on `dev` deploys only this path. The replacement — `runtime/runtime_consumer.py`, merged on `dev` via PR #23 — reads from `pgmq` but is not deployed.
+
+Under the `RUNTIME_BACKEND` selector from §4, Ansible will deploy `history/consumer.py` in `external` mode and `runtime/runtime_consumer.py` in `postgres` mode. Both paths write idempotently to the same snapshot tables, so the switch is a deployment-time choice with no schema or data migration.
+
+Reference flow (`runtime/runtime_consumer.py`):
 
 ```text
 main loop (defaults: BATCH=10, VT=30s, MAX_RETRIES=3, LISTEN_TIMEOUT=5s):
@@ -116,6 +123,8 @@ Crash recovery: systemd `Restart=on-failure`. The advisory lock dies with the se
 ---
 
 ## 6. Cache & session API
+
+This section defines the accepted target design. None of the SQL below is on `dev` yet; implementation is tracked by #18 on branch `feature/postgres-runtime-cache`. On current `dev`, whales and prices live in the proxy's in-process Go cache (`Server.cache` guarded by `sync.RWMutex` in `proxy/main.go`, refreshed every 5 min and 10 s respectively), and Redis on `node-02` holds only `/state` sessions (`session:{sid}`, 24 h TTL).
 
 ### Tables
 
@@ -217,22 +226,26 @@ Jobs are scheduled with `cron.schedule_in_database(..., current_database())` so 
 
 ## 7. How the proxy will call the cache
 
-| Today (Redis) | After cut-over |
+The "Current" column maps the actual call sites in `proxy/main.go` on `dev`; the "After" column is the target under `RUNTIME_BACKEND=postgres`.
+
+| Current (on `dev`) | After postgres cut-over |
 |---|---|
-| `rdb.Get(ctx, "whales")` (5 min) | `runtime.cache_get('whales')` |
-| `rdb.Set(ctx, "whales", json, 5*time.Minute)` | `runtime.cache_set('whales', $1::jsonb, '5 minutes')` |
-| `rdb.Get/Set(ctx, "prices:btc-eth-uah", …, 60 s)` | `runtime.cache_get/set('prices:btc-eth-uah', …, '60 seconds')` |
-| `rdb.Get(ctx, "session:"+sid)` | `runtime.session_get($1)` |
+| `s.cache.whales` — in-process Go slice, refreshed every 5 min under `sync.RWMutex` (`proxy/main.go`) | `runtime.cache_get / cache_set('whales', …, '5 minutes')` |
+| `s.cache.prices` — in-process Go struct, refreshed every 10 s under `sync.RWMutex` (`proxy/main.go`) | `runtime.cache_get / cache_set('prices:btc-eth-uah', …, '60 seconds')` |
+| `s.cache.markets` — in-process, 60 s refresh | Remains in proxy memory; not part of this migration |
+| `rdb.Get(ctx, "session:"+sid)` — Redis, 24 h TTL (`proxy/main.go` `/state` handler) | `runtime.session_get($1)` |
 | `rdb.Set(ctx, "session:"+sid, json, 24 h)` | `runtime.session_set($1, $2::jsonb, '24 hours')` |
 | Redis `Ping` health check | `SELECT 1` on the same `DATABASE_URL` |
 
-`REDIS_URL` is retired in the same release that ships the cache cut-over.
+Note the asymmetry: **whales and prices move from in-process memory into `runtime.cache`** (they were never in Redis), while **only `/state` sessions move off Redis**. Markets stay in proxy memory regardless.
+
+**Staged cut-over.** The same `RUNTIME_BACKEND` flag from §4 governs the cache/session path: in `external` mode the proxy keeps the in-process cache and Redis sessions; in `postgres` mode it calls `runtime.cache_*` / `runtime.session_*`. `REDIS_URL` stays configured through the `external` phase and is removed from deployment only after `postgres`-mode session reads/writes are verified in production.
 
 ---
 
 ## 8. Limits vs RabbitMQ / Redis
 
-| Dimension | Postgres runtime (this ADR) | RabbitMQ (today) | Redis (today) |
+| Dimension | Postgres runtime (this ADR) | RabbitMQ (current) | Redis (current) |
 |---|---|---|---|
 | **Transport — ordering** | FIFO per queue | FIFO per queue | FIFO (lists) |
 | **Transport — persistence** | WAL-durable (pgmq) | Durable queues with fsync | AOF best-effort |
@@ -253,7 +266,9 @@ Our workload sits far below every ceiling here — a few events/sec, a handful o
 
 ## 9. Operational notes
 
-1. **Base image.** `node-01` Postgres runs a custom image:
+The items below describe the infrastructure changes that land with the `RUNTIME_BACKEND=postgres` rollout. None of them are on `dev` yet: Ansible provisions stock Postgres on `node-01` alongside RabbitMQ, does not apply `runtime/00_run_all.sql`, and does not schedule `pg_cron` jobs.
+
+1. **Base image.** `node-01` Postgres will run a custom image:
 
   ```Dockerfile
   FROM quay.io/tembo/pg16-pgmq:latest
@@ -267,7 +282,7 @@ Our workload sits far below every ceiling here — a few events/sec, a handful o
   
 2. Published under our own registry; Ansible/Terraform rollout tracked as an infra follow-up.
 3. **Extensions.** Bootstrap SQL runs `CREATE EXTENSION IF NOT EXISTS pgmq; CREATE EXTENSION IF NOT EXISTS pg_cron;`.
-4. **Rollback.** If the proxy cut-over misbehaves, dual-publish to RabbitMQ and pgmq / dual-write to Redis and `runtime.cache` for one release, then revert the proxy. No event-schema migration is required.
+4. **Staged verification and rollback.** The `RUNTIME_BACKEND=external|postgres` flag from §4/§7 is the primary mechanism for staged rollout *and* rollback: environments stay on `external` (RabbitMQ + Redis + in-process cache) until `postgres` is verified, and fall back by flipping the flag. For higher confidence during the cut-over release, the proxy may dual-publish to RabbitMQ and pgmq / dual-write to Redis and `runtime.cache` for a bounded window — no event-schema migration is required either way.
 
 ---
 
