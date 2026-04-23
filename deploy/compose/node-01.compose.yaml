@@ -4,6 +4,8 @@ services:
     restart: unless-stopped
     env_file:
       - /etc/cognitor/history.env
+    ports:
+      - "{{ postgres_bind_ip }}:5432:5432"
     volumes:
       - /var/lib/coin-ops/postgres:/var/lib/postgresql/data
     healthcheck:

@@ -20,6 +20,7 @@ runtime_backend: "{{ lookup('env', 'RUNTIME_BACKEND') | default('external', true
 # ── Ports ────────────────────────────────────────────────────
 proxy_port: 8080
 history_port: 8000
+postgres_bind_ip: "{{ hostvars[groups['history'][0]].ansible_host }}"
 
 # Public entrypoint / TLS
 # Browser-facing domain served by node-03. For local labs, add this to hosts:
@@ -54,7 +55,6 @@ registry_token: "{{ lookup('env', 'GHCR_TOKEN') | default('', true) }}"
 rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@172.31.1.10:5672/"
 database_url: "postgresql://{{ db_user }}:{{ db_password }}@localhost:5432/{{ db_name }}"
 history_database_url: "postgresql://{{ db_user }}:{{ db_password }}@postgres:5432/{{ db_name }}"
-proxy_database_url: "postgresql://{{ db_user }}:{{ db_password }}@172.31.1.10:5432/{{ db_name }}"
+proxy_database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ postgres_bind_ip }}:5432/{{ db_name }}"
 redis_url: "redis://127.0.0.1:6379/0"
-
 
