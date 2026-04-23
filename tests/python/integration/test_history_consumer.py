@@ -1,29 +1,17 @@
 import json
 from datetime import datetime, timezone
+from psycopg2 import sql
 from types import SimpleNamespace
 
 import pytest
-
-
-class ChannelSpy:
-    def __init__(self):
-        self.acks = []
-        self.nacks = []
-        self.published = []
-
-    def basic_ack(self, delivery_tag):
-        self.acks.append(delivery_tag)
-
-    def basic_nack(self, delivery_tag, requeue):
-        self.nacks.append((delivery_tag, requeue))
-
-    def basic_publish(self, *args, **kwargs):
-        self.published.append((args, kwargs))
+from tests.python._helpers import ChannelSpy
 
 
 def _count_rows(db_conn, table_name: str) -> int:
     with db_conn.cursor() as cur:
-        cur.execute(f"SELECT COUNT(*) AS count FROM {table_name}")
+        cur.execute(
+            sql.SQL("SELECT COUNT(*) AS count FROM {}").format(sql.Identifier(table_name))
+        )
         return int(cur.fetchone()["count"])
 
 
@@ -34,17 +22,20 @@ def test_init_schema_creates_expected_tables(history_consumer_module, db_conn):
         cur.execute("DROP TABLE IF EXISTS market_snapshots CASCADE")
         cur.execute("DROP TABLE IF EXISTS price_snapshots CASCADE")
     db_conn.commit()
+    try:
+        history_consumer_module.init_schema(db_conn)
 
-    history_consumer_module.init_schema(db_conn)
+        with db_conn.cursor() as cur:
+            cur.execute("SELECT to_regclass('public.market_snapshots') AS market_snapshots")
+            market_table = cur.fetchone()["market_snapshots"]
+            cur.execute("SELECT to_regclass('public.price_snapshots') AS price_snapshots")
+            price_table = cur.fetchone()["price_snapshots"]
 
-    with db_conn.cursor() as cur:
-        cur.execute("SELECT to_regclass('public.market_snapshots') AS market_snapshots")
-        market_table = cur.fetchone()["market_snapshots"]
-        cur.execute("SELECT to_regclass('public.price_snapshots') AS price_snapshots")
-        price_table = cur.fetchone()["price_snapshots"]
-
-    assert market_table == "market_snapshots"
-    assert price_table == "price_snapshots"
+        assert market_table == "market_snapshots"
+        assert price_table == "price_snapshots"
+    finally:
+        # Ensure following tests always run with the expected schema.
+        history_consumer_module.init_schema(db_conn)
 
 
 def test_market_snapshot_persisted_via_execute_with_reconnect(history_consumer_module, db_conn):
