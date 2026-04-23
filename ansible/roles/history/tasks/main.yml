@@ -94,6 +94,14 @@
     group: root
     mode: '0644'
 
+- name: Copy runtime SQL schema files
+  copy:
+    src: "{{ playbook_dir }}/../runtime/"
+    dest: /opt/cognitor/history/runtime/
+    owner: root
+    group: root
+    mode: '0644'
+
 - name: Render compose file
   template:
     src: "{{ playbook_dir }}/../deploy/compose/node-01.compose.yaml"
@@ -151,7 +159,26 @@
   shell: "docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres psql -U {{ db_user }} -d {{ db_name }} < /opt/cognitor/history/schema.sql"
   args:
     chdir: /opt/cognitor/history
-  changed_when: false
+  register: schema_result
+  changed_when: schema_result.rc != 0
+
+- name: Apply runtime queue and session schema
+  shell: >
+    cat
+    /opt/cognitor/history/runtime/01_schema.sql
+    /opt/cognitor/history/runtime/02_wrappers.sql
+    /opt/cognitor/history/runtime/03_notify.sql
+    /opt/cognitor/history/runtime/04_advisory.sql
+    /opt/cognitor/history/runtime/05_dlq.sql
+    /opt/cognitor/history/runtime/06_cache_schema.sql
+    /opt/cognitor/history/runtime/07_cache_wrappers.sql
+    /opt/cognitor/history/runtime/08_cron.sql
+    | docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres psql -U {{ db_user }} -d {{ db_name }}
+  args:
+    chdir: /opt/cognitor/history
+  register: runtime_schema_result
+  changed_when: runtime_schema_result.rc != 0
+  when: runtime_backend == "postgres"
 
 - name: Mark legacy PostgreSQL migration complete
   file:

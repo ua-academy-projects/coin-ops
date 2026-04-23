@@ -680,21 +680,6 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	runtimeBackend := os.Getenv("RUNTIME_BACKEND")
-    if runtimeBackend == "" {
-    runtimeBackend = "external"
-    }
-
-    log.Printf("Runtime backend: %s", runtimeBackend)
-
-	switch runtimeBackend {
-    case "postgres":
-    	log.Println("POSTGRES runtime mode (not implemented yet)")
-    case "external":
-    	log.Println("EXTERNAL runtime mode")
-    default:
-    log.Printf("Unknown runtime mode: %s, fallback to external", runtimeBackend)
-}
 
 	srv := &Server{backend: backend}
 
