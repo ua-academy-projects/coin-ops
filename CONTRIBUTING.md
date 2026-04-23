@@ -38,6 +38,7 @@ Run these if you changed anything under `ui-react/`:
 cd ui-react
 npm ci                # clean install (or npm install if no lockfile changes)
 npm run lint          # tsc --noEmit — catches type errors
+npm run test          # vitest — catches logic/rendering issues
 npm run build         # production Vite build — catches import/bundling issues
 ```
 
@@ -66,6 +67,7 @@ cd history
 pip install -r requirements.txt ruff   # ensure deps + linter are available
 ruff check .                           # lint (default Ruff rules, no local config)
 python -m py_compile main.py consumer.py   # syntax verification
+pytest tests/                          # run unit tests
 ```
 
 If you add new `.py` files, include them in the `py_compile` step.
@@ -97,6 +99,11 @@ no errors is sufficient — you don't have to push or run the image.
 If your change spans multiple services or touches the `runtime/` directory:
 
 - Make sure **all** affected service checks above pass.
+- Run the PostgreSQL integration tests if you changed the `runtime/` schema or queue logic:
+  ```bash
+  psql -d coin_ops -f runtime/00_run_all.sql
+  psql -d coin_ops -f runtime/tests/test_runtime.sql
+  ```
 - If the change alters the data flow between services (proxy → queue →
   consumer → API → UI), it should be exercised through the local deployment
   workflow or the full VM environment before merging.

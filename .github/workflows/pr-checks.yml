@@ -34,6 +34,9 @@ jobs:
       - name: Run lint
         run: npm run lint
 
+      - name: Run tests
+        run: npm run test
+
       - name: Build frontend
         run: npm run build
 
@@ -88,6 +91,9 @@ jobs:
       - name: Check Python syntax
         run: python -m py_compile main.py consumer.py
 
+      - name: Run Pytest
+        run: python -m pytest tests/
+
   docker:
     name: Docker
     runs-on: ubuntu-latest
@@ -121,3 +127,33 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           push: false
+
+  postgres-integration:
+    name: PostgreSQL Integration Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: quay.io/tembo/pg16-pgmq:latest
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: coin_ops
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Bootstrap schema and run tests
+        env:
+          PGPASSWORD: password
+        run: |
+          psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d coin_ops -f runtime/00_run_all.sql
+          psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d coin_ops -f runtime/tests/test_runtime.sql
