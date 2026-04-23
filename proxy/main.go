@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/redis/go-redis/v9"
 )
@@ -130,10 +131,12 @@ type PriceEvent struct {
 // ---- Server ----
 
 type Server struct {
-	ch    *amqp.Channel
-	chMu  sync.Mutex
-	rdb   *redis.Client
-	cache struct {
+	ch      *amqp.Channel
+	chMu    sync.Mutex
+	rdb     *redis.Client
+	db      *pgxpool.Pool
+	backend string
+	cache   struct {
 		sync.RWMutex
 		markets []MarketSnapshot
 		whales  []Whale
@@ -156,6 +159,13 @@ func connectRabbitMQ(url string) *amqp.Connection {
 	}
 }
 
+func (s *Server) pgEnqueue(body []byte) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := s.db.Exec(ctx, "SELECT runtime.enqueue_event($1::jsonb)", body)
+	return err
+}
+
 func (s *Server) publishPriceEvent(coin string, priceUsd, change24h float64, fetchedAt time.Time) error {
 	evt := PriceEvent{
 		Type:      "price",
@@ -168,6 +178,11 @@ func (s *Server) publishPriceEvent(coin string, priceUsd, change24h float64, fet
 	if err != nil {
 		return err
 	}
+
+	if s.backend == "postgres" {
+		return s.pgEnqueue(body)
+	}
+
 	s.chMu.Lock()
 	defer s.chMu.Unlock()
 	return s.ch.Publish("", queueName, false, false, amqp.Publishing{
@@ -182,6 +197,11 @@ func (s *Server) publish(snap MarketSnapshot) error {
 	if err != nil {
 		return err
 	}
+
+	if s.backend == "postgres" {
+		return s.pgEnqueue(body)
+	}
+
 	s.chMu.Lock()
 	defer s.chMu.Unlock()
 	return s.ch.Publish("", queueName, false, false, amqp.Publishing{
@@ -566,21 +586,34 @@ func (s *Server) handleGetState(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 
-	val, err := s.rdb.Get(ctx, "session:"+sid).Result()
-	if err == redis.Nil {
-		// No state stored yet for this session — return empty object so
-		// callers don't need to special-case 404 vs. empty state.
+	if s.backend == "postgres" {
+		var val []byte
+		err := s.db.QueryRow(ctx, "SELECT runtime.session_get($1)", sid).Scan(&val)
+		if err != nil {
+			http.Error(w, "state unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		if val == nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte("{}"))
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte("{}"))
-		return
+		w.Write(val)
+	} else {
+		val, err := s.rdb.Get(ctx, "session:"+sid).Result()
+		if err == redis.Nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte("{}"))
+			return
+		}
+		if err != nil {
+			http.Error(w, "state unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(val))
 	}
-	if err != nil {
-		http.Error(w, "state unavailable", http.StatusServiceUnavailable)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(val))
 }
 
 func (s *Server) handlePostState(w http.ResponseWriter, r *http.Request) {
@@ -608,9 +641,17 @@ func (s *Server) handlePostState(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 
-	if err := s.rdb.Set(ctx, "session:"+sid, string(body), 24*time.Hour).Err(); err != nil {
-		http.Error(w, "state unavailable", http.StatusServiceUnavailable)
-		return
+	if s.backend == "postgres" {
+		_, pgErr := s.db.Exec(ctx, "SELECT runtime.session_set($1, $2::jsonb, '24 hours')", sid, body)
+		if pgErr != nil {
+			http.Error(w, "state unavailable", http.StatusServiceUnavailable)
+			return
+		}
+	} else {
+		if err := s.rdb.Set(ctx, "session:"+sid, string(body), 24*time.Hour).Err(); err != nil {
+			http.Error(w, "state unavailable", http.StatusServiceUnavailable)
+			return
+		}
 	}
 }
 
@@ -628,48 +669,67 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 // ---- main ----
 
 func main() {
-	rabbitURL := os.Getenv("RABBITMQ_URL")
-	if rabbitURL == "" {
-		rabbitURL = "amqp://guest:guest@localhost:5672/"
+	backend := os.Getenv("RUNTIME_BACKEND")
+	if backend == "" {
+		backend = "external"
 	}
+	dbURL := os.Getenv("DATABASE_URL")
+	log.Printf("Runtime backend: %s", backend)
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	conn := connectRabbitMQ(rabbitURL)
-	defer conn.Close()
+	srv := &Server{backend: backend}
 
-	ch, err := conn.Channel()
-	if err != nil {
-		log.Fatalf("open channel: %v", err)
-	}
-	defer ch.Close()
+	switch backend {
+	case "postgres":
+		if dbURL == "" {
+			log.Fatal("DATABASE_URL is required when RUNTIME_BACKEND=postgres")
+		}
+		pool, err := pgxpool.New(context.Background(), dbURL)
+		if err != nil {
+			log.Fatalf("connect postgres: %v", err)
+		}
+		defer pool.Close()
+		srv.db = pool
+		log.Println("Connected to PostgreSQL (postgres mode)")
 
-	if _, err := ch.QueueDeclare(queueName, true, false, false, false, nil); err != nil {
-		log.Fatalf("declare queue: %v", err)
-	}
+	default: // "external" — current RabbitMQ + Redis behavior
+		rabbitURL := os.Getenv("RABBITMQ_URL")
+		if rabbitURL == "" {
+			rabbitURL = "amqp://guest:guest@localhost:5672/"
+		}
+		conn := connectRabbitMQ(rabbitURL)
+		defer conn.Close()
+		ch, err := conn.Channel()
+		if err != nil {
+			log.Fatalf("open channel: %v", err)
+		}
+		defer ch.Close()
+		if _, err := ch.QueueDeclare(queueName, true, false, false, false, nil); err != nil {
+			log.Fatalf("declare queue: %v", err)
+		}
+		srv.ch = ch
 
-	srv := &Server{ch: ch}
-
-	redisURL := os.Getenv("REDIS_URL")
-	if redisURL == "" {
-		redisURL = "redis://localhost:6379/0"
+		redisURL := os.Getenv("REDIS_URL")
+		if redisURL == "" {
+			redisURL = "redis://localhost:6379/0"
+		}
+		redisOpts, err := redis.ParseURL(redisURL)
+		if err != nil {
+			log.Fatalf("parse redis url: %v", err)
+		}
+		srv.rdb = redis.NewClient(redisOpts)
+		pingCtx, pingCancel := context.WithTimeout(context.Background(), 3*time.Second)
+		if pingErr := srv.rdb.Ping(pingCtx).Err(); pingErr != nil {
+			log.Printf("Warning: Redis not reachable: %v — /state will return 503", pingErr)
+		} else {
+			log.Println("Connected to Redis")
+		}
+		pingCancel()
 	}
-	redisOpts, err := redis.ParseURL(redisURL)
-	if err != nil {
-		log.Fatalf("parse redis url: %v", err)
-	}
-	srv.rdb = redis.NewClient(redisOpts)
-
-	// Verify Redis is reachable (non-fatal — state endpoints will return 503 if down)
-	pingCtx, pingCancel := context.WithTimeout(context.Background(), 3*time.Second)
-	if pingErr := srv.rdb.Ping(pingCtx).Err(); pingErr != nil {
-		log.Printf("Warning: Redis not reachable: %v — /state will return 503", pingErr)
-	} else {
-		log.Println("Connected to Redis")
-	}
-	pingCancel()
 
 	// Populate market cache immediately, then refresh independently of UI requests.
 	go func() {
