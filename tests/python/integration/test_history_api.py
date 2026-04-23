@@ -110,6 +110,7 @@ def test_get_history_filters_by_category(api_client, db_conn):
         fetched_at=datetime(2026, 4, 23, 12, 1, tzinfo=timezone.utc),
     )
 
+    # Query uses a different case to verify ILIKE behavior.
     response = api_client.get("/history?limit=10&category=Sport")
     body = response.json()
 
