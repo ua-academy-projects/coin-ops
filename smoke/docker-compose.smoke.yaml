@@ -58,9 +58,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    # The proxy image is `scratch` (no shell, no wget), so a container-level
-    # healthcheck is not practical. The smoke script polls /health from the
-    # host through the gateway instead.
+        
 
   history-api:
     build:
