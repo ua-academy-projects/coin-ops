@@ -159,6 +159,13 @@ func connectRabbitMQ(url string) *amqp.Connection {
 	}
 }
 
+func (s *Server) pgEnqueue(body []byte) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := s.db.Exec(ctx, "SELECT runtime.enqueue_event($1::jsonb)", body)
+	return err
+}
+
 func (s *Server) publishPriceEvent(coin string, priceUsd, change24h float64, fetchedAt time.Time) error {
 	evt := PriceEvent{
 		Type:      "price",
@@ -173,10 +180,7 @@ func (s *Server) publishPriceEvent(coin string, priceUsd, change24h float64, fet
 	}
 
 	if s.backend == "postgres" {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_, err := s.db.Exec(ctx, "SELECT runtime.enqueue_event($1::jsonb)", body)
-		return err
+		return s.pgEnqueue(body)
 	}
 
 	s.chMu.Lock()
@@ -195,10 +199,7 @@ func (s *Server) publish(snap MarketSnapshot) error {
 	}
 
 	if s.backend == "postgres" {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_, err := s.db.Exec(ctx, "SELECT runtime.enqueue_event($1::jsonb)", body)
-		return err
+		return s.pgEnqueue(body)
 	}
 
 	s.chMu.Lock()
@@ -588,29 +589,31 @@ func (s *Server) handleGetState(w http.ResponseWriter, r *http.Request) {
 	if s.backend == "postgres" {
 		var val []byte
 		err := s.db.QueryRow(ctx, "SELECT runtime.session_get($1)", sid).Scan(&val)
-		if err != nil || val == nil {
+		if err != nil {
+			http.Error(w, "state unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		if val == nil {
 			w.Header().Set("Content-Type", "application/json")
 			w.Write([]byte("{}"))
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(val)
-		return
-	}
-
-	val, err := s.rdb.Get(ctx, "session:"+sid).Result()
-	if err == redis.Nil {
+	} else {
+		val, err := s.rdb.Get(ctx, "session:"+sid).Result()
+		if err == redis.Nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte("{}"))
+			return
+		}
+		if err != nil {
+			http.Error(w, "state unavailable", http.StatusServiceUnavailable)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte("{}"))
-		return
+		w.Write([]byte(val))
 	}
-	if err != nil {
-		http.Error(w, "state unavailable", http.StatusServiceUnavailable)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(val))
-}
 
 func (s *Server) handlePostState(w http.ResponseWriter, r *http.Request) {
 	sid := r.URL.Query().Get("sid")
@@ -681,6 +684,9 @@ func main() {
 
 	switch backend {
 	case "postgres":
+		if dbURL == "" {
+			log.Fatal("DATABASE_URL is required when RUNTIME_BACKEND=postgres")
+		}
 		pool, err := pgxpool.New(context.Background(), dbURL)
 		if err != nil {
 			log.Fatalf("connect postgres: %v", err)
