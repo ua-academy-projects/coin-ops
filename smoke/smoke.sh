@@ -54,8 +54,10 @@ declare -a CHECKS=(
   "check_history_read_path|History read-path: GET /history-api/history returns JSON array"
 )
 
-declare -A CHECK_RESULTS=()
-declare -a CHECK_ORDER=()
+# Parallel indexed arrays — macOS still ships bash 3.2, which does not
+# support associative arrays (`declare -A`).
+CHECK_LABELS=()
+CHECK_STATUSES=()
 
 # ── wait helpers ────────────────────────────────────────────────────────────
 wait_for_url() {
@@ -198,26 +200,27 @@ cmd_check() {
     local fn="${spec%%|*}"; local label="${spec#*|}"
     total=$((total + 1))
     step "$label"
+    CHECK_LABELS+=("$label")
     if "$fn"; then
       pass "$label"
-      CHECK_RESULTS["$label"]="PASS"
+      CHECK_STATUSES+=("PASS")
     else
       fail "$label"
-      CHECK_RESULTS["$label"]="FAIL"
+      CHECK_STATUSES+=("FAIL")
       failed=$((failed + 1))
     fi
-    CHECK_ORDER+=("$label")
     echo
   done
 
   echo "${C_BLUE}── summary ──${C_RESET}"
-  for label in "${CHECK_ORDER[@]}"; do
-    local r="${CHECK_RESULTS[$label]}"
-    if [[ "$r" == "PASS" ]]; then
-      echo "  ${C_GREEN}PASS${C_RESET}  $label"
+  local i=0
+  while (( i < ${#CHECK_LABELS[@]} )); do
+    if [[ "${CHECK_STATUSES[$i]}" == "PASS" ]]; then
+      echo "  ${C_GREEN}PASS${C_RESET}  ${CHECK_LABELS[$i]}"
     else
-      echo "  ${C_RED}FAIL${C_RESET}  $label"
+      echo "  ${C_RED}FAIL${C_RESET}  ${CHECK_LABELS[$i]}"
     fi
+    i=$((i + 1))
   done
   echo
   if (( failed == 0 )); then
