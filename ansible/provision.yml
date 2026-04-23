@@ -19,7 +19,8 @@
         fail_msg: |
           Required environment variables are not set or RUNTIME_BACKEND is invalid.
           Run:  source .env
-          Supported runtime backends: external, postgres.
+          RUNTIME_BACKEND may be empty and will default to external.
+          Supported explicit runtime backends: external, postgres.
           Then retry: ansible-playbook -i ansible/inventory ansible/provision.yml
 
 - name: Common setup — all nodes

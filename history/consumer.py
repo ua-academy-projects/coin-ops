@@ -25,7 +25,7 @@ DATABASE_URL = os.environ["DATABASE_URL"]
 QUEUE_NAME = "market_events"
 DEAD_QUEUE_NAME = "market_events_dead_letter"
 
-RUNTIME_BACKEND = os.environ.get("RUNTIME_BACKEND", "external")
+RUNTIME_BACKEND = (os.environ.get("RUNTIME_BACKEND") or "external").strip()
 POSTGRES_BATCH_SIZE = int(os.environ.get("POSTGRES_BATCH_SIZE", "100"))
 POSTGRES_VISIBILITY_TIMEOUT = int(os.environ.get("POSTGRES_VISIBILITY_TIMEOUT", "30"))
 

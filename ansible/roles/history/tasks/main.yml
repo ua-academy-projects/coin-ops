@@ -107,6 +107,12 @@
     src: "{{ playbook_dir }}/../deploy/compose/node-01.compose.yaml"
     dest: /opt/cognitor/history/compose.yaml
 
+- name: Validate history compose configuration
+  command: docker compose -f /opt/cognitor/history/compose.yaml config -q
+  args:
+    chdir: /opt/cognitor/history
+  changed_when: false
+
 - name: Stop PostgreSQL before repairing data directory ownership
   command: docker compose -f /opt/cognitor/history/compose.yaml stop postgres
   args:
@@ -129,7 +135,9 @@
     chdir: /opt/cognitor/history
 
 - name: Start history dependencies first
-  command: docker compose -f /opt/cognitor/history/compose.yaml up -d postgres rabbitmq
+  command: >-
+    docker compose -f /opt/cognitor/history/compose.yaml up -d
+    postgres{% if runtime_backend == "external" %} rabbitmq{% endif %}
   args:
     chdir: /opt/cognitor/history
 
@@ -156,28 +164,44 @@
     - not host_postgres_migration_marker.stat.exists
 
 - name: Apply PostgreSQL runtime schema before app startup
-  shell: "docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres psql -U {{ db_user }} -d {{ db_name }} < /opt/cognitor/history/schema.sql"
+  shell: >-
+    docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres
+    psql -v ON_ERROR_STOP=1 -U {{ db_user }} -d {{ db_name }}
+    < /opt/cognitor/history/schema.sql
   args:
     chdir: /opt/cognitor/history
   register: schema_result
-  changed_when: schema_result.rc != 0
+  changed_when: false
+
+- name: Persist runtime application role before wrapper bootstrap
+  command: >-
+    docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres
+    psql -v ON_ERROR_STOP=1 -U {{ db_user }} -d {{ db_name }}
+    -c "ALTER DATABASE {{ db_name }} SET runtime.app_role = '{{ db_user }}';"
+  args:
+    chdir: /opt/cognitor/history
+  register: runtime_app_role_result
+  changed_when: false
+  when: runtime_backend == "postgres"
 
 - name: Apply runtime queue and session schema
-  shell: >
-    cat
-    /opt/cognitor/history/runtime/01_schema.sql
-    /opt/cognitor/history/runtime/02_wrappers.sql
-    /opt/cognitor/history/runtime/03_notify.sql
-    /opt/cognitor/history/runtime/04_advisory.sql
-    /opt/cognitor/history/runtime/05_dlq.sql
-    /opt/cognitor/history/runtime/06_cache_schema.sql
-    /opt/cognitor/history/runtime/07_cache_wrappers.sql
-    /opt/cognitor/history/runtime/08_cron.sql
-    | docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres psql -U {{ db_user }} -d {{ db_name }}
+  shell: |
+    (
+      printf "%s\n" "SET runtime.app_role = '{{ db_user }}';"
+      cat \
+        /opt/cognitor/history/runtime/01_schema.sql \
+        /opt/cognitor/history/runtime/02_wrappers.sql \
+        /opt/cognitor/history/runtime/03_notify.sql \
+        /opt/cognitor/history/runtime/04_advisory.sql \
+        /opt/cognitor/history/runtime/05_dlq.sql \
+        /opt/cognitor/history/runtime/06_cache_schema.sql \
+        /opt/cognitor/history/runtime/07_cache_wrappers.sql \
+        /opt/cognitor/history/runtime/08_cron.sql
+    ) | docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres psql -v ON_ERROR_STOP=1 -U {{ db_user }} -d {{ db_name }}
   args:
     chdir: /opt/cognitor/history
   register: runtime_schema_result
-  changed_when: runtime_schema_result.rc != 0
+  changed_when: false
   when: runtime_backend == "postgres"
 
 - name: Mark legacy PostgreSQL migration complete

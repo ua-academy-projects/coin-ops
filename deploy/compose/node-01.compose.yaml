@@ -12,6 +12,7 @@ services:
       timeout: 5s
       retries: 5
 
+{% if runtime_backend == "external" %}
   rabbitmq:
     image: rabbitmq:3-alpine
     restart: unless-stopped
@@ -26,6 +27,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+{% endif %}
 
   history-consumer:
     image: "{{ history_consumer_image }}"
@@ -35,8 +37,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+{% if runtime_backend == "external" %}
       rabbitmq:
         condition: service_healthy
+{% endif %}
 
   history-api:
     image: "{{ history_api_image }}"
