@@ -27,7 +27,9 @@ Use these PR titles or squash merge commit titles:
 | Bug fix | `fix: correct history API status code` | patch, for example `v1.2.3` -> `v1.2.4` |
 | Compatible feature | `feat: add price history endpoint` | minor, for example `v1.2.3` -> `v1.3.0` |
 | Breaking change | `feat!: change public API response shape` | major, for example `v1.2.3` -> `v2.0.0` |
-| Breaking change footer | `BREAKING CHANGE: response format changed` | major |
+| Breaking change footer | Title: `feat: change public API response`; footer: `BREAKING CHANGE: response format changed` | major |
+
+`BREAKING CHANGE:` is not used as the PR title by itself. Use a Conventional Commit header such as `feat!:` or `fix!:` for the PR title or squash merge title, and put `BREAKING CHANGE:` in the commit body/footer when extra explanation is needed.
 
 Non-release changes such as `docs:`, `chore:`, `ci:`, and `test:` can appear in the changelog configuration, but they do not trigger a release by themselves.
 
