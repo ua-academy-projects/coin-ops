@@ -220,7 +220,11 @@ SELECT cron.schedule_in_database('runtime-dlq-reap',     '0 3 * * *',
                                  $$SELECT runtime.dlq_reap_expired('30 days')$$, current_database());
 ```
 
-Jobs are scheduled with `cron.schedule_in_database(..., current_database())` so they run against the application database regardless of how `cron.database_name` is configured in `postgresql.conf`. They are registered by `runtime/` bootstrap SQL, so a fresh DB boot autostarts them — no manual step required after a restore or a new environment spin-up.
+**Launcher vs. execution database — a required invariant.** `pg_cron` runs a single launcher background worker that reads job metadata from exactly one database, the one named by `cron.database_name` in `postgresql.conf` (default: `postgres`). `cron.schedule_in_database(..., current_database())` only changes the database the *command body* executes in; it does not change which database the launcher watches. Installing `pg_cron` in the application database without also setting `cron.database_name` to that same database therefore registers jobs successfully in `cron.job` but never fires them. The invariant this design depends on is:
+
+> `pg_cron` MUST be installed in the application database, AND `cron.database_name` MUST be set to that same database.
+
+Both conditions are enforced at the image layer (`shared_preload_libraries = 'pg_cron,pgmq'` and `cron.database_name = 'cognitor'` in `postgresql.conf`, see §9.1). With the invariant held, a fresh DB boot autostarts the reapers from the bootstrap SQL with no manual step. Smoke test 15 in `runtime/tests/test_runtime.sql` inserts an expired sentinel row and fails if it is not physically reaped within ~90 s, which is the end-to-end check that catches any misconfiguration of this invariant.
 
 ---
 
@@ -275,8 +279,11 @@ The items below describe the infrastructure changes that land with the `RUNTIME_
   RUN apt-get update \
    && apt-get install -y postgresql-16-cron \
    && rm -rf /var/lib/apt/lists/*
-  # pg_cron must be preloaded; pgmq is already set by the base.
-  RUN echo "shared_preload_libraries = 'pg_cron,pgmq'" >> /usr/share/postgresql/postgresql.conf.sample
+  # pg_cron must be preloaded; pgmq is already set by the base. The launcher
+  # bgworker binds to exactly one DB (see §6) so cron.database_name must be
+  # pinned to the application DB here — jobs registered elsewhere are inert.
+  RUN printf "shared_preload_libraries = 'pg_cron,pgmq'\ncron.database_name = 'cognitor'\n" \
+      >> /usr/share/postgresql/postgresql.conf.sample
   ENV POSTGRES_DB=cognitor
   ```
   
