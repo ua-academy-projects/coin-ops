@@ -12,7 +12,11 @@ from testcontainers.postgres import PostgresContainer
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-HISTORY_SCHEMA_PATH = REPO_ROOT / "history" / "schema.sql"
+BOOTSTRAP_SCRIPT_PATH = REPO_ROOT / "tests" / "python" / "integration" / "postgres_bootstrap.sh"
+TEST_RUNTIME_POSTGRES_IMAGE = os.environ.get(
+    "COINOPS_TEST_POSTGRES_IMAGE",
+    "quay.io/tembo/pg16-pgmq",
+)
 RESTORED_SIGNALS = tuple(
     sig for sig in (signal.SIGINT, getattr(signal, "SIGTERM", None)) if sig is not None
 )
@@ -50,22 +54,22 @@ def _normalize_connection_url(url: str) -> str:
 
 @pytest.fixture(scope="session")
 def database_url():
-    with PostgresContainer("postgres:16-alpine") as postgres:
+    postgres = (
+        PostgresContainer(
+            TEST_RUNTIME_POSTGRES_IMAGE,
+            username="coinops",
+            password="test",
+            dbname="coinops",
+        )
+        .with_volume_mapping(REPO_ROOT.as_posix(), "/repo", mode="ro")
+        .with_volume_mapping(
+            BOOTSTRAP_SCRIPT_PATH.as_posix(),
+            "/docker-entrypoint-initdb.d/10-coinops-bootstrap.sh",
+            mode="ro",
+        )
+    )
+    with postgres:
         yield _normalize_connection_url(postgres.get_connection_url())
-
-
-@pytest.fixture(scope="session", autouse=True)
-def _apply_schema(database_url):
-    with open(HISTORY_SCHEMA_PATH, encoding="utf-8") as schema_file:
-        ddl = schema_file.read()
-
-    conn = psycopg2.connect(database_url)
-    try:
-        with conn.cursor() as cur:
-            cur.execute(ddl)
-        conn.commit()
-    finally:
-        conn.close()
 
 
 @pytest.fixture
@@ -96,6 +100,29 @@ def _clean_tables(database_url):
                 RESTART IDENTITY CASCADE
                 """
             )
+            cur.execute("DELETE FROM runtime.dead_letter_audit")
+            cur.execute("DELETE FROM runtime.event_retry")
+            cur.execute(
+                """
+                DO $$
+                DECLARE
+                    table_name text;
+                BEGIN
+                    FOREACH table_name IN ARRAY ARRAY[
+                        'public.q_events',
+                        'public.q_events_dlq',
+                        'pgmq.q_events',
+                        'pgmq.q_events_dlq'
+                    ]
+                    LOOP
+                        IF to_regclass(table_name) IS NOT NULL THEN
+                            EXECUTE 'TRUNCATE TABLE ' || table_name || ' RESTART IDENTITY';
+                        END IF;
+                    END LOOP;
+                END
+                $$;
+                """
+            )
         conn.commit()
     finally:
         conn.close()
@@ -107,14 +134,18 @@ def history_api_module(database_url):
 
 
 @pytest.fixture(scope="session")
-def history_consumer_module(database_url):
-    return load_module(
-        "history/consumer.py",
-        {
-            "DATABASE_URL": database_url,
-            "RABBITMQ_URL": "amqp://guest:guest@localhost:5672/",
-        },
-    )
+def runtime_consumer_module(database_url):
+    return load_module("runtime/runtime_consumer.py", {"DATABASE_URL": database_url})
+
+
+@pytest.fixture
+def runtime_db_conn(database_url):
+    conn = psycopg2.connect(database_url)
+    conn.autocommit = True
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
 @pytest.fixture

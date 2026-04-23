@@ -79,6 +79,9 @@ python -m pytest tests/python/integration -v
 ```
 
 These integration tests use an ephemeral PostgreSQL container (Docker required) and are intentionally separate from the fast unit suite.
+They bootstrap both `history/schema.sql` and `runtime/00_run_all.sql`, then exercise `history/main.py` plus the queue-side PostgreSQL consumer in `runtime/runtime_consumer.py`.
+
+Use `psql "$DATABASE_URL" -f runtime/tests/test_runtime.sql` separately when you need the broader runtime smoke coverage, including cache/session `pg_cron` behavior.
 
 ### Docker Images
 
