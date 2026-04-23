@@ -97,6 +97,10 @@ no errors is sufficient — you don't have to push or run the image.
 If your change spans multiple services or touches the `runtime/` directory:
 
 - Make sure **all** affected service checks above pass.
+- Run the smoke suite (`./smoke/smoke.sh`) — it boots the whole stack on
+  Compose and verifies the gateway, proxy, and history read path. See
+  [docs/smoke-suite.md](docs/smoke-suite.md) for what it covers and when to
+  use it.
 - If the change alters the data flow between services (proxy → queue →
   consumer → API → UI), it should be exercised through the local deployment
   workflow or the full VM environment before merging.
