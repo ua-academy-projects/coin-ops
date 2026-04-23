@@ -278,6 +278,17 @@ psql "$DATABASE_URL" -f runtime/00_run_all.sql
 python runtime/runtime_consumer.py
 ```
 
+Fast Python unit tests for both the current `external` path and the PostgreSQL runtime target:
+
+```bash
+python -m venv venv
+source venv/bin/activate
+pip install -r history/requirements-dev.txt
+pytest
+```
+
+The fast `pytest` suite lives under `tests/python/unit`. Keep PostgreSQL-backed integration coverage separate from these unit tests.
+
 ## External Data Sources
 
 | Source | Data |
