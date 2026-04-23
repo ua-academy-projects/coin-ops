@@ -34,6 +34,13 @@ import {
   Area
 } from 'recharts';
 import { cn } from '@/src/lib/utils';
+import {
+  filterMarkets,
+  formatChartTime,
+  formatCompactCurrency,
+  getMarketCategoryLabel,
+  normalizeHistoryPoint,
+} from '@/src/lib/dashboard-helpers';
 import { MarketSnapshot, Whale, HistoryPoint, Prices, PriceHistory } from './types';
 import { PROXY_URL, HISTORY_URL, REFRESH_MS, PRICES_REFRESH_MS } from './config';
 
@@ -48,42 +55,6 @@ function getSessionId(): string {
   const id = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36);
   document.cookie = `coinops_sid=${id}; max-age=86400; path=/`;
   return id;
-}
-
-function getMarketCategoryLabel(market: MarketSnapshot): string {
-  const explicitCategory = market.category?.trim();
-  if (explicitCategory) return explicitCategory;
-
-  const source = `${market.question} ${market.slug}`.toLowerCase();
-
-  if (/(bitcoin|btc|ethereum|eth|solana|sol|crypto|doge|xrp|token|coin|polymarket)/.test(source)) {
-    return 'Crypto';
-  }
-  if (/(trump|biden|election|president|senate|house|democrat|republican|vote|politic)/.test(source)) {
-    return 'Politics';
-  }
-  if (/(iran|israel|russia|ukraine|war|ceasefire|conflict|china|taiwan|nato|us conflict)/.test(source)) {
-    return 'Geopolitics';
-  }
-  if (/(fed|inflation|cpi|rate cut|recession|economy|gdp|tariff)/.test(source)) {
-    return 'Macro';
-  }
-  if (/(nba|nfl|mlb|nhl|soccer|football|tennis|f1|formula 1|playoff|championship)/.test(source)) {
-    return 'Sports';
-  }
-
-  return 'Uncategorized';
-}
-
-function normalizeHistoryPoint(point: HistoryPoint) {
-  const yesPrice = Math.max(0, Math.min(1, point.yes_price));
-  const noPrice = Math.max(0, Math.min(1, 1 - yesPrice));
-
-  return {
-    ...point,
-    yes_price: yesPrice,
-    no_price: noPrice,
-  };
 }
 
 export default function App() {
@@ -316,14 +287,7 @@ export default function App() {
   }, [historyData, selectedMarket, timeFilter]);
 
   const filteredMarkets = useMemo(() => {
-    return markets.filter(m => {
-      const normalizedCategory = getMarketCategoryLabel(m);
-      const matchesSearch =
-        m.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        normalizedCategory.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCategory = selectedCategory ? normalizedCategory === selectedCategory : true;
-      return matchesSearch && matchesCategory;
-    });
+    return filterMarkets(markets, searchQuery, selectedCategory);
   }, [markets, searchQuery, selectedCategory]);
 
   const categories = useMemo(() => {
@@ -1143,17 +1107,6 @@ function Badge({ label, variant }: { label: string, variant: 'accent' | 'surface
       {label}
     </span>
   );
-}
-
-function formatCompactCurrency(value: number) {
-  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
-  return value.toFixed(0);
-}
-
-function formatChartTime(value: string) {
-  return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 function HeroCurrencyChart({
