@@ -1,5 +1,6 @@
 import importlib.util
 import os
+import signal
 import uuid
 from pathlib import Path
 
@@ -7,11 +8,15 @@ import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+RESTORED_SIGNALS = tuple(
+    sig for sig in (signal.SIGINT, getattr(signal, "SIGTERM", None)) if sig is not None
+)
 
 
 def load_module(relative_path: str, env: dict[str, str]):
     module_path = REPO_ROOT / relative_path
     previous_values = {key: os.environ.get(key) for key in env}
+    previous_signal_handlers = {sig: signal.getsignal(sig) for sig in RESTORED_SIGNALS}
 
     try:
         for key, value in env.items():
@@ -29,6 +34,9 @@ def load_module(relative_path: str, env: dict[str, str]):
                 os.environ.pop(key, None)
             else:
                 os.environ[key] = old_value
+
+        for sig, handler in previous_signal_handlers.items():
+            signal.signal(sig, handler)
 
 
 def description_from_names(*names: str):

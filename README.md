@@ -281,11 +281,14 @@ python runtime/runtime_consumer.py
 Fast Python unit tests for both the current `external` path and the PostgreSQL runtime target:
 
 ```bash
+cd <repo-root>
 python -m venv venv
 source venv/bin/activate
 pip install -r history/requirements-dev.txt
-pytest
+python -m pytest tests/python/unit
 ```
+
+If you are already in `history/`, either `cd ..` first or run `python -m pytest ../tests/python/unit`.
 
 The fast `pytest` suite lives under `tests/python/unit`. Keep PostgreSQL-backed integration coverage separate from these unit tests.
 
