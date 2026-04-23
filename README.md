@@ -24,7 +24,7 @@ At the same time, the roadmap from the April 20-21, 2026 GitHub issues has alrea
 | Image publishing | `Shabat` -> `shabat-latest`, `dev` -> `dev-latest`, tags -> `vX.Y.Z` | use moving branch tags for integration/demo deploys and tags for pinned releases |
 | Validation | PR checks run on pull requests into `dev` | extend the test pyramid beyond the current baseline over time |
 
-## Current Architecture (`external` runtime path)
+## Architecture (PostgreSQL Runtime)
 
 ```text
 Browser
@@ -37,37 +37,41 @@ node-03
   |                       - fetches Polymarket markets
   |                       - fetches whale leaderboard/positions
   |                       - fetches BTC/ETH and USD/UAH
-  |                       - stores session JSON in Redis
-  |                       - publishes market/price events to RabbitMQ
+  |                       - stores session JSON in PostgreSQL (UNLOGGED table)
+  |                       - publishes market/price events to PostgreSQL (pgmq/runtime API)
   |
   +-- /history-api ---> node-01 history-api container :8000
                           - reads PostgreSQL history tables
 
 node-01
-  postgres container
-  rabbitmq container
+  postgres container (data + queue + cache + session runtime)
   history-consumer container
-    - consumes `market_events`
+    - consumes `market_events` via PostgreSQL runtime API
     - writes `market_snapshots` and `price_snapshots`
 
 node-02
-  redis container
+  (Redis is removed or disabled in `postgres` mode)
 ```
+
+> **Note:** The runtime mode is now PostgreSQL-native (`RUNTIME_BACKEND=postgres`). The legacy mode using RabbitMQ and Redis (`RUNTIME_BACKEND=external`) is kept as a fallback.
+> -> See `docs/architecture.md` for details.
+> -> See `docs/adr/0001-postgres-runtime.md` for design decisions.
 
 | VM | IP | Runtime services |
 | --- | --- | --- |
-| node-01 | `172.31.1.10` | PostgreSQL, RabbitMQ, history consumer, history API |
-| node-02 | `172.31.1.11` | Go proxy, Redis |
+| node-01 | `172.31.1.10` | PostgreSQL, history consumer, history API |
+| node-02 | `172.31.1.11` | Go proxy |
 | node-03 | `172.31.1.12` | nginx gateway, React SPA |
+
 
 ## Current Data Flow
 
 | Path | Flow | Purpose |
 | --- | --- | --- |
 | Live path | Browser -> `/api` -> Go proxy -> external APIs -> Browser | fast live market data |
-| Write path | Go proxy -> RabbitMQ -> Python consumer -> PostgreSQL | async persistence |
+| Write path | Go proxy -> PostgreSQL (pgmq) -> Python consumer -> PostgreSQL | async persistence |
 | History path | Browser -> `/history-api` -> FastAPI -> PostgreSQL -> Browser | chart time series |
-| Session path | Browser -> `/api/state` -> Redis | short-lived UI state |
+| Session path | Browser -> `/api/state` -> PostgreSQL (UNLOGGED) | short-lived UI state |
 
 The browser does not call `172.31.1.10:8000` or `172.31.1.11:8080` directly. Node-03 keeps the frontend same-origin by reverse-proxying `/api` and `/history-api`.
 
@@ -80,14 +84,14 @@ The browser does not call `172.31.1.10:8000` or `172.31.1.11:8080` directly. Nod
 - GHCR publishing for `dev-latest` exists in `.github/workflows/docker-images.yml`
 - PostgreSQL queue-side runtime SQL and `runtime_consumer.py` exist under `runtime/`
 
-### Still in progress
+### Completed migrations
 
-- adding `RUNTIME_BACKEND=external|postgres` wiring to proxy and consumer startup paths
-- switching proxy event publishing from RabbitMQ to `runtime.enqueue_event(...)`
-- switching deployed consumption from `history/consumer.py` to `runtime/runtime_consumer.py`
-- wiring runtime schema/bootstrap into Ansible and Compose
-- moving Redis-backed session/cache behavior into PostgreSQL runtime primitives
-- removing RabbitMQ and Redis only after the PostgreSQL runtime path is verified
+- added `RUNTIME_BACKEND=external|postgres` wiring to proxy and consumer startup paths
+- switched proxy event publishing from RabbitMQ to `runtime.enqueue_event(...)`
+- switched deployed consumption from `history/consumer.py` to `runtime/runtime_consumer.py`
+- wired runtime schema/bootstrap into Ansible and Compose
+- moved Redis-backed session/cache behavior into PostgreSQL runtime primitives
+- deprecated RabbitMQ and Redis as primary dependencies
 
 ## Tech Stack
 
@@ -95,10 +99,10 @@ The browser does not call `172.31.1.10:8000` or `172.31.1.11:8080` directly. Nod
 | --- | --- |
 | Frontend | React, Vite, TypeScript, Tailwind, Recharts |
 | Live gateway | Go |
-| History API and current consumer | Python, FastAPI, pika |
-| Queue | RabbitMQ for the default deployed path; `pgmq` queue assets merged under `runtime/` |
+| History API and current consumer | Python, FastAPI, pgmq (pika for fallback) |
+| Queue | PostgreSQL `pgmq` (RabbitMQ for fallback) |
 | Database | PostgreSQL |
-| Session/runtime state | Redis today, PostgreSQL runtime consolidation planned |
+| Session/runtime state | PostgreSQL `UNLOGGED` tables (Redis for fallback) |
 | Containers | Docker, Docker Compose |
 | Infrastructure | Terraform for VM provisioning, Ansible for deployment |
 | Web server | nginx |
