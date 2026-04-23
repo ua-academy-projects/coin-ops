@@ -81,7 +81,7 @@ $$;
 CREATE OR REPLACE VIEW runtime.queue_depth AS
 SELECT
     queue_name,
-    msg_count,
+    queue_visible_length AS msg_count,
     newest_msg_age_sec,
     oldest_msg_age_sec,
     total_messages

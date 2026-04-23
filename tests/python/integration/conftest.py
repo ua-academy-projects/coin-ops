@@ -8,6 +8,7 @@ import psycopg2
 import psycopg2.extras
 import pytest
 from fastapi.testclient import TestClient
+from testcontainers.core import testcontainers_config
 from testcontainers.postgres import PostgresContainer
 
 
@@ -20,6 +21,10 @@ TEST_RUNTIME_POSTGRES_IMAGE = os.environ.get(
 RESTORED_SIGNALS = tuple(
     sig for sig in (signal.SIGINT, getattr(signal, "SIGTERM", None)) if sig is not None
 )
+
+# Ryuk currently fails to expose its control port on this Windows Docker setup,
+# which prevents the actual PostgreSQL test container from starting.
+testcontainers_config.ryuk_disabled = True
 
 
 def load_module(relative_path: str, env: dict[str, str]):
