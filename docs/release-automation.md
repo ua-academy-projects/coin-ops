@@ -45,7 +45,11 @@ Non-release changes such as `docs:`, `chore:`, `ci:`, and `test:` can appear in 
 
 The release workflow uses the default GitHub Actions token provided by the repository. No extra repository secret is required for the initial setup.
 
-If a tag created by the release workflow does not trigger the Docker image workflow, maintainers can revisit this and switch release-please to a GitHub App token or Personal Access Token. That is only needed if GitHub suppresses follow-up workflow runs from tags created by the default token.
+Tags created by the default `GITHUB_TOKEN` do not trigger new workflow runs from `push` events. This is expected GitHub behavior that prevents recursive workflow loops.
+
+To keep release automation secret-free, the release workflow explicitly dispatches the existing Docker image workflow with `workflow_dispatch` after release-please creates a `vX.Y.Z` tag. The Docker workflow already supports `workflow_dispatch` and tag refs, so it can publish the versioned images for that release tag.
+
+If maintainers later prefer natural tag-triggered Docker publishing instead of explicit dispatch, release-please can be switched to a GitHub App token or Personal Access Token.
 
 ## Existing Docker Compatibility
 

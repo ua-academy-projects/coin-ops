@@ -8,8 +8,8 @@ on:
 
 permissions:
   contents: write
-  issues: write
   pull-requests: write
+  actions: write
 
 jobs:
   release:
@@ -24,6 +24,13 @@ jobs:
           target-branch: main
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      - name: Dispatch Docker image workflow for release tag
+        if: ${{ steps.release.outputs.release_created == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag_name }}
+        run: gh workflow run docker-images.yml --ref "${RELEASE_TAG}"
 
       - name: Show release result
         run: |
