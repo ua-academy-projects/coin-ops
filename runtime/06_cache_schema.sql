@@ -2,9 +2,16 @@
 -- runtime/06_cache_schema.sql
 -- UNLOGGED cache + session tables and the pg_cron extension.
 --
--- Replaces Redis responsibilities from the proxy:
---   • whales / prices caches → runtime.cache
---   • session KV (session:{sid}) → runtime.session
+-- Purpose:
+--   • runtime.cache   — generic TTL key/value store for future callers that
+--                       need a shared, crash-truncated cache. NOT a drop-in
+--                       replacement for the proxy's whales/prices caches:
+--                       those live in sync.RWMutex-guarded memory in
+--                       proxy/main.go today, and moving them into Postgres
+--                       is out of scope for #18.
+--   • runtime.session — replaces the proxy's only current Redis use, the
+--                       `session:{sid}` KV written by /state (see
+--                       proxy/main.go handleGetState / handlePostState).
 --
 -- UNLOGGED is deliberate — cache rows should disappear on crash (same
 -- semantics as Redis without AOF). Durable rows belong elsewhere.

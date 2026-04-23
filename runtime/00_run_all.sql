@@ -11,9 +11,12 @@
 --     or pgmq and pg_cron must already be installed by a superuser.
 --   • Run as a role that owns (or can create objects in) the target database.
 --   • shared_preload_libraries must include 'pg_cron,pgmq' in postgresql.conf.
---   • Before running, set the application role via the GUC, 
---     e.g. ALTER DATABASE <db> SET runtime.app_role = 'cognitor_app'; 
---     otherwise [7/8] runs the REVOKE, skips the GRANT, and the proxy will 
+--   • cron.database_name in postgresql.conf must point at THIS database —
+--     the pg_cron launcher bgworker binds to exactly one DB, so jobs
+--     registered anywhere else are inert. See docs/runtime.md.
+--   • Before running, set the application role via the GUC,
+--     e.g. ALTER DATABASE <db> SET runtime.app_role = 'cognitor_app';
+--     otherwise [7/8] runs the REVOKE, skips the GRANT, and the proxy will
 --     get permission-denied at runtime.
 -- =============================================================================
 

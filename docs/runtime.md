@@ -20,12 +20,26 @@ with:
 
 ```conf
 shared_preload_libraries = 'pg_cron,pgmq'
-cron.database_name       = 'cognitor'   # optional — jobs pin themselves via schedule_in_database
+cron.database_name       = 'cognitor'   # required — launcher bgworker binds to exactly this DB
 ```
 
 `shared_preload_libraries` can only be changed via `postgresql.conf` (or
 an equivalent `-c` command-line flag) and requires a server restart;
 `CREATE EXTENSION` alone is not enough.
+
+### Why `cron.database_name` is not optional
+
+pg_cron ships as two moving parts: the `cron` schema (holding `cron.job`,
+the functions, etc.) lives in whichever database the extension was
+installed in, but the **launcher** is a single bgworker process that
+connects to exactly one database — the one named by `cron.database_name`.
+If that GUC points at a DB that does not have `pg_cron` installed,
+`cron.job` rows register successfully from anywhere, but nothing ever
+fires. Our jobs use `cron.schedule_in_database(..., current_database())`,
+which only pins the *execution* database of each job body; it does not
+change which DB the launcher watches. So on this project both must align:
+install `pg_cron` in `cognitor` and set `cron.database_name = 'cognitor'`.
+Smoke test 15 catches this misconfiguration end-to-end.
 
 ## One-time bootstrap
 
@@ -61,7 +75,7 @@ must be run from the repo root.
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f runtime/tests/test_runtime.sql
 ```
 
-Seven `PASS` notices confirm that:
+Eight `PASS` notices confirm that:
 
 - `cache_set` / `cache_get` / `cache_delete` round-trip correctly.
 - `cache_get` filters expired rows before the reaper runs.
@@ -69,8 +83,12 @@ Seven `PASS` notices confirm that:
 - `runtime.session_*` round-trip correctly.
 - `runtime.cache` and `runtime.session` are both `UNLOGGED`.
 - All three `runtime-*` jobs are registered in `cron.job` and active.
+- `runtime-cache-reap` actually fires — an already-expired sentinel row is
+  physically deleted by the pg_cron launcher within ~90 s (test 15).
 
-A single `FAIL` raises an exception and stops the script.
+A single `FAIL` raises an exception and stops the script. Test 15 adds
+up to ~90 s of wall time because it polls for the reaper to run; the
+other tests complete in under a second combined.
 
 ## Known behaviour
 

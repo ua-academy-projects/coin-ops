@@ -405,4 +405,49 @@ BEGIN
 END;
 $$;
 
+-- ── Test 15: runtime-cache-reap fires end-to-end ────────────────────────────
+-- Test 14 only proves jobs are registered in cron.job. That is not enough:
+-- pg_cron's launcher bgworker binds to `cron.database_name`, and if that GUC
+-- points at a different DB from the one holding the `runtime` schema the jobs
+-- are registered but never execute. This test inserts an already-expired
+-- sentinel row and waits up to ~90s for the reaper to physically delete it,
+-- which exercises the full launcher → scheduler → cache_reap() → DELETE path.
+DO $$
+DECLARE
+    v_key       TEXT := '__smoke_reap_' || gen_random_uuid()::TEXT;
+    v_deadline  TIMESTAMPTZ := clock_timestamp() + INTERVAL '90 seconds';
+    v_gone      BOOLEAN := FALSE;
+    v_elapsed   INTERVAL;
+    v_started   TIMESTAMPTZ := clock_timestamp();
+BEGIN
+    INSERT INTO runtime.cache (key, value, expires_at)
+    VALUES (v_key, '{"smoke":true}'::JSONB, NOW() - INTERVAL '1 minute');
+
+    IF NOT EXISTS (SELECT 1 FROM runtime.cache WHERE key = v_key) THEN
+        RAISE EXCEPTION 'FAIL test15: sentinel row % not present after INSERT', v_key;
+    END IF;
+
+    WHILE clock_timestamp() < v_deadline LOOP
+        PERFORM pg_sleep(5);
+        IF NOT EXISTS (SELECT 1 FROM runtime.cache WHERE key = v_key) THEN
+            v_gone := TRUE;
+            EXIT;
+        END IF;
+    END LOOP;
+
+    v_elapsed := clock_timestamp() - v_started;
+
+    IF NOT v_gone THEN
+        -- Clean up before failing so a re-run of the suite is not polluted.
+        DELETE FROM runtime.cache WHERE key = v_key;
+        RAISE EXCEPTION
+            'FAIL test15: runtime-cache-reap did not remove sentinel % within %; '
+            'check that cron.database_name points at the DB holding the runtime schema',
+            v_key, v_elapsed;
+    END IF;
+
+    RAISE NOTICE 'PASS test15: runtime-cache-reap fired end-to-end in %', v_elapsed;
+END;
+$$;
+
 \echo '=== all tests passed ==='

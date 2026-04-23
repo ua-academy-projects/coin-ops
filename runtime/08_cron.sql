@@ -10,12 +10,14 @@
 -- Idempotent: each job is unscheduled (if present) before being rescheduled,
 -- so re-running this file never duplicates jobs.
 --
--- Database targeting: pg_cron jobs execute against a single database set by
--- `cron.database_name` in postgresql.conf (default: 'postgres'). Since the
--- `runtime` schema lives in the application database, we use
--- `cron.schedule_in_database(jobname, schedule, command, current_database())`
--- so the jobs run where the functions actually exist, regardless of how
--- pg_cron's default is configured.
+-- Database targeting: pg_cron runs a single launcher bgworker that binds to
+-- the database named by `cron.database_name` (default: 'postgres'). The
+-- extension, and therefore `cron.job`, must live in that database — nothing
+-- fires otherwise. `cron.schedule_in_database(..., current_database())` only
+-- pins the *execution* DB of each job body; it does NOT remove the need to
+-- point the launcher at the DB where pg_cron is installed. In this project
+-- that DB is `cognitor`, so `cron.database_name = 'cognitor'` is required,
+-- not optional. See docs/runtime.md for the full postgresql.conf block.
 --
 -- Ordering note: runtime-dlq-reap references runtime.dlq_reap_expired(), which
 -- is defined in 05_dlq.sql (queue branch). pg_cron stores the command body as
