@@ -1,23 +1,36 @@
 -- =============================================================================
 -- runtime/00_run_all.sql
--- Bootstrap script for the runtime cache/session layer.
+-- Master bootstrap script. Runs all runtime SQL files in order.
 -- Use this for a fresh install or after a clean wipe.
 --
 -- Usage:
 --   psql $DATABASE_URL -f runtime/00_run_all.sql
 --
 -- Requirements:
---   • The executing role must have CREATE EXTENSION privilege (for pg_cron),
---     or the extension must already be installed by a superuser.
---   • shared_preload_libraries must include 'pg_cron,pgmq' in postgresql.conf
---     (see ADR §9).
---
--- Merge note:
---   This branch (feature/postgres-runtime-cache) ships [6/8] … [8/8] only.
---   The queue branch (postgres-runtime-queue) owns [1/5] … [5/5]. When both
---   branches converge on dev, concatenate this file with queue's 00_run_all.sql
---   — queue lines first, cache lines after — and update the counters to /8.
+--   • The executing role must have CREATE EXTENSION privilege, 
+--     or pgmq and pg_cron must already be installed by a superuser.
+--   • Run as a role that owns (or can create objects in) the target database.
+--   • shared_preload_libraries must include 'pg_cron,pgmq' in postgresql.conf.
+--   • Before running, set the application role via the GUC, 
+--     e.g. ALTER DATABASE <db> SET runtime.app_role = 'cognitor_app'; 
+--     otherwise [7/8] runs the REVOKE, skips the GRANT, and the proxy will 
+--     get permission-denied at runtime.
 -- =============================================================================
+
+\echo '>>> [1/8] runtime schema + pgmq + tables'
+\i runtime/01_schema.sql
+
+\echo '>>> [2/8] queue wrappers (enqueue / claim / ack / fail)'
+\i runtime/02_wrappers.sql
+
+\echo '>>> [3/8] LISTEN/NOTIFY trigger + queue_depth view'
+\i runtime/03_notify.sql
+
+\echo '>>> [4/8] advisory lock helpers'
+\i runtime/04_advisory.sql
+
+\echo '>>> [5/8] DLQ management functions'
+\i runtime/05_dlq.sql
 
 \echo '>>> [6/8] cache/session schema + pg_cron extension'
 \i runtime/06_cache_schema.sql
@@ -28,5 +41,6 @@
 \echo '>>> [8/8] pg_cron schedules'
 \i runtime/08_cron.sql
 
-\echo '>>> runtime cache/session bootstrap complete.'
+\echo '>>> runtime bootstrap complete.'
+\echo '    Verify with: SELECT * FROM runtime.queue_depth;'
 \echo '    Verify with: SELECT jobname, schedule, active FROM cron.job WHERE jobname LIKE ''runtime-%'';'

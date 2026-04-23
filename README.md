@@ -1,68 +1,93 @@
 # Coin-Ops
 
-Coin-Ops is a distributed Polymarket intelligence dashboard. It shows live markets, BTC/ETH prices, USD/UAH, whale-style position data, and historical probability charts across a small three-VM deployment.
+Coin-Ops is a distributed Polymarket dashboard deployed across three VMs. The default deployed path on `dev` is still a containerized React + Go + Python system that uses RabbitMQ for asynchronous ingestion and Redis for short-lived UI session state.
 
-The project is intentionally not a single web app. It separates live aggregation, async ingestion, historical storage, and UI delivery so the architecture is easy to reason about and easy to demonstrate.
+At the same time, the roadmap from the April 20-21, 2026 GitHub issues has already started landing on `dev`:
 
-**[📚 Read the Documentation](docs/)** | **[🤝 How to Contribute](CONTRIBUTING.md)**
+- `dev` is the integration branch for team PRs
+- PR validation now runs on pull requests into `dev`
+- pushes to `dev` now publish `dev-latest` images
+- queue-side PostgreSQL runtime assets are present under `runtime/`
+- the full proxy/consumer/deploy cutover behind `RUNTIME_BACKEND=external|postgres` is still pending
+- RabbitMQ and Redis are still part of the default deployment until that cutover is verified
 
-## Quick Start
-1.  **Clone the repository**:
-    ```bash
-    git clone https://github.com/ua-academy-projects/coin-ops.git
-    cd coin-ops
-    ```
-2.  **Launch Docker Stack**:
-    ```bash
-    docker compose up -d
-    ```
-3.  **Open the UI**:
-    Open [http://localhost:5000](http://localhost:5000) (or the mapped Compose port) in your browser.
+**[Read the Documentation](docs/)** | **[How to Contribute](CONTRIBUTING.md)**
 
-## Architecture
+## Status Snapshot
 
-```mermaid
-flowchart TB
-    Browser[Browser<br/>React/Vite SPA]
-    
-    subgraph node02 [node-02]
-        direction TB
-        Proxy[Go proxy :8080<br/>- Polymarket markets<br/>- Whale positions<br/>- BTC/ETH from CoinGecko<br/>- USD/UAH from NBU<br/>- UI state via Redis<br/>- Publishes to RabbitMQ]
-        Redis[(Redis<br/>short-lived UI state)]
-    end
-    
-    subgraph node01 [node-01]
-        direction TB
-        API[FastAPI history :8000<br/>- Reads PostgreSQL<br/>- Returns time series]
-        Consumer[Python history consumer<br/>- Consumes RabbitMQ<br/>- Writes PostgreSQL<br/>- Idempotent inserts]
-        DB[(PostgreSQL<br/>market/price/whale snapshots)]
-    end
+| Topic | Current repo state on `dev` | Next planned step |
+| --- | --- | --- |
+| Runtime backend | Default deployed path is `external`: RabbitMQ queue + Redis session state | Add service/deploy switching so proxy and consumer can run in `postgres` mode |
+| Runtime queue assets | `runtime/` already contains `pgmq` queue SQL, DLQ, `LISTEN/NOTIFY`, advisory locks, and `runtime_consumer.py` | Wire proxy and deployment to use those assets |
+| Frontend contract | same-origin `/api` and `/history-api` | keep the same HTTP contract while backend internals change |
+| Deployment shape | Docker Compose on three VMs via Ansible | keep the three-VM story during the migration |
+| Image publishing | `Shabat` -> `shabat-latest`, `dev` -> `dev-latest`, tags -> `vX.Y.Z` | use moving branch tags for integration/demo deploys and tags for pinned releases |
+| Validation | PR checks run on pull requests into `dev` | extend the test pyramid beyond the current baseline over time |
 
-    Browser -->|live data| Proxy
-    Browser -->|history charts| API
-    
-    Proxy -.->|state| Redis
-    Proxy -->|AMQP publish| Consumer
-    
-    API -->|SELECT| DB
-    Consumer -->|writes| DB
+## Current Architecture (`external` runtime path)
+
+```text
+Browser
+  |
+  v
+node-03
+  ui container (nginx + React SPA)
+  |
+  +-- /api -----------> node-02 proxy container :8080
+  |                       - fetches Polymarket markets
+  |                       - fetches whale leaderboard/positions
+  |                       - fetches BTC/ETH and USD/UAH
+  |                       - stores session JSON in Redis
+  |                       - publishes market/price events to RabbitMQ
+  |
+  +-- /history-api ---> node-01 history-api container :8000
+                          - reads PostgreSQL history tables
+
+node-01
+  postgres container
+  rabbitmq container
+  history-consumer container
+    - consumes `market_events`
+    - writes `market_snapshots` and `price_snapshots`
+
+node-02
+  redis container
 ```
 
-| VM | IP | Runs |
+| VM | IP | Runtime services |
 | --- | --- | --- |
 | node-01 | `172.31.1.10` | PostgreSQL, RabbitMQ, history consumer, history API |
 | node-02 | `172.31.1.11` | Go proxy, Redis |
-| node-03 | `172.31.1.12` | nginx, React SPA |
+| node-03 | `172.31.1.12` | nginx gateway, React SPA |
 
-## Data Flow
+## Current Data Flow
 
 | Path | Flow | Purpose |
 | --- | --- | --- |
-| Live path | Browser -> Go proxy -> external APIs -> Browser | Fast current market data |
-| Write path | Go proxy -> RabbitMQ -> Python consumer -> PostgreSQL | Async persistence |
-| History path | Browser -> FastAPI -> PostgreSQL -> Browser | Chart time series |
+| Live path | Browser -> `/api` -> Go proxy -> external APIs -> Browser | fast live market data |
+| Write path | Go proxy -> RabbitMQ -> Python consumer -> PostgreSQL | async persistence |
+| History path | Browser -> `/history-api` -> FastAPI -> PostgreSQL -> Browser | chart time series |
+| Session path | Browser -> `/api/state` -> Redis | short-lived UI state |
 
-The proxy does not write directly to PostgreSQL. It publishes events into RabbitMQ, and the consumer owns database writes. That keeps the live request path independent from database latency.
+The browser does not call `172.31.1.10:8000` or `172.31.1.11:8080` directly. Node-03 keeps the frontend same-origin by reverse-proxying `/api` and `/history-api`.
+
+## Roadmap Status
+
+### Already adopted on `dev`
+
+- `dev` is the intended integration branch
+- PR checks exist in `.github/workflows/pr-checks.yml`
+- GHCR publishing for `dev-latest` exists in `.github/workflows/docker-images.yml`
+- PostgreSQL queue-side runtime SQL and `runtime_consumer.py` exist under `runtime/`
+
+### Still in progress
+
+- adding `RUNTIME_BACKEND=external|postgres` wiring to proxy and consumer startup paths
+- switching proxy event publishing from RabbitMQ to `runtime.enqueue_event(...)`
+- switching deployed consumption from `history/consumer.py` to `runtime/runtime_consumer.py`
+- wiring runtime schema/bootstrap into Ansible and Compose
+- moving Redis-backed session/cache behavior into PostgreSQL runtime primitives
+- removing RabbitMQ and Redis only after the PostgreSQL runtime path is verified
 
 ## Tech Stack
 
@@ -70,13 +95,13 @@ The proxy does not write directly to PostgreSQL. It publishes events into Rabbit
 | --- | --- |
 | Frontend | React, Vite, TypeScript, Tailwind, Recharts |
 | Live gateway | Go |
-| History API and consumer | Python, FastAPI, pika |
-| Queue | RabbitMQ |
+| History API and current consumer | Python, FastAPI, pika |
+| Queue | RabbitMQ for the default deployed path; `pgmq` queue assets merged under `runtime/` |
 | Database | PostgreSQL |
-| Cache | Redis |
+| Session/runtime state | Redis today, PostgreSQL runtime consolidation planned |
 | Containers | Docker, Docker Compose |
-| Infrastructure | Terraform for Hyper-V VMs, Ansible for provisioning/deploy |
-| Web server | nginx inside the UI container |
+| Infrastructure | Terraform for VM provisioning, Ansible for deployment |
+| Web server | nginx |
 
 ## Repository Layout
 
@@ -84,9 +109,11 @@ The proxy does not write directly to PostgreSQL. It publishes events into Rabbit
 .
 |-- ansible/          # provisioning and deployment automation
 |-- deploy/compose/   # per-node Docker Compose stacks
+|-- docs/             # architecture, deployment, and runbook notes
 |-- history/          # FastAPI history API, RabbitMQ consumer, schema
 |-- proxy/            # Go live-data proxy
-|-- terraform/        # Hyper-V VM and network provisioning
+|-- runtime/          # PostgreSQL runtime queue SQL and pgmq-backed consumer assets
+|-- terraform/        # VM and network provisioning
 |-- ui/               # legacy static UI
 `-- ui-react/         # main React/Vite frontend
 ```
@@ -98,40 +125,46 @@ Each application service has its own Dockerfile.
 | Image | Dockerfile | Runtime shape |
 | --- | --- | --- |
 | Go proxy | `proxy/Dockerfile` | multi-stage build, `golang:1.22-alpine` builder, `scratch` runtime |
-| History API | `history/Dockerfile.api` | `python:3.12-slim-bookworm`, non-root user |
-| History consumer | `history/Dockerfile.consumer` | `python:3.12-slim-bookworm`, non-root user |
+| History API | `history/Dockerfile.api` | `python:3.12-slim-bookworm` |
+| History consumer | `history/Dockerfile.consumer` | `python:3.12-slim-bookworm` |
 | UI | `ui-react/Dockerfile` | `node:22-bookworm-slim` builder, `nginx:alpine` runtime |
 
-Official images are used for PostgreSQL, RabbitMQ, and Redis.
+Official images are still used for PostgreSQL, RabbitMQ, and Redis. The queue-side PostgreSQL runtime SQL assumes `pgmq` is available in PostgreSQL, but the default deployment has not been switched over to that path yet.
 
-## Registry Deployment Model
+## Deployment Model
 
-Application images are built once by GitHub Actions and pushed to GitHub Container Registry:
+Application images are built by GitHub Actions and pushed to GitHub Container Registry.
 
 ```text
 push to Shabat
-  -> GitHub Actions builds Docker images
-  -> images are pushed to ghcr.io/ua-academy-projects/coin-ops-<service>
-  -> Ansible renders per-node Compose files
-  -> Docker Compose pulls images by tag
-  -> docker compose up -d starts containers
+  -> publish shabat-latest
+
+push to dev
+  -> publish dev-latest
+
+push tag vX.Y.Z
+  -> publish immutable release images
+
+Ansible deploy
+  -> renders per-node Compose files and env files
+  -> Docker Compose pulls tagged images
+  -> containers start on node-01, node-02, and node-03
 ```
 
-The VMs do not need application source code for deployment. They only need Docker, Compose files, runtime env files, and network access to GHCR. The default tag is `shabat-latest`; set `IMAGE_TAG=<commit-sha>` or `IMAGE_TAG=vX.Y.Z` for immutable rollouts or rollback.
+## Branches and Release Tags
 
-SemVer Git tags (`v0.1.0`, `v0.2.0`, etc.) trigger the same image build workflow and publish matching GHCR image tags. Branch pushes still publish `shabat-latest` for quick demos.
+Current branch and publishing model:
 
-Version numbers follow SemVer:
-
-```text
-vMAJOR.MINOR.PATCH
-```
-
-Use `PATCH` for fixes only, for example `v0.1.0 -> v0.1.1`. Use `MINOR` for compatible new capabilities, for example `v0.1.0 -> v0.2.0`. Use `MAJOR` for breaking changes, for example `v1.4.2 -> v2.0.0`. This project starts at `v0.1.0` because it is the first stable baseline before a formal `v1.0.0` release.
+- `feature/*` -> PR -> `dev`
+- `dev` is the integration branch
+- `main` remains stable/release-oriented
+- `Shabat` publishes moving `shabat-latest`
+- `dev` publishes moving `dev-latest`
+- `vX.Y.Z` publishes immutable release tags
 
 ## Public Gateway and TLS
 
-Node-03 is the browser-facing gateway. It serves the React UI and reverse-proxies same-origin backend paths:
+Node-03 is the browser-facing gateway. It serves the React UI and reverse-proxies the backend paths:
 
 ```text
 https://coinops.test/              -> React UI
@@ -145,15 +178,23 @@ For local lab HTTPS, keep `APP_DOMAIN=coinops.test`, `TLS_MODE=selfsigned`, and 
 172.31.1.12 coinops.test
 ```
 
-The self-signed certificate will show a browser trust warning. For a real domain, point DNS to node-03 and replace the self-signed cert with a trusted certificate using `TLS_MODE=provided`; the UI node expects `/etc/cognitor/tls/coinops.crt` and `/etc/cognitor/tls/coinops.key`.
-
 ## Secrets and Runtime Configuration
 
-Secrets are not baked into Docker images. Ansible writes root-owned env files on the VMs under `/etc/cognitor/`, and Docker Compose injects those values at container startup with `env_file`.
+Secrets are not baked into images. Ansible writes root-owned env files on the VMs under `/etc/cognitor/`, and Docker Compose injects those values at container startup with `env_file`.
 
-This keeps images environment-agnostic and safe to publish. For this project scale, host env files are a reasonable tradeoff. In a larger production system, this would usually move to Vault, a cloud secrets manager, Docker Swarm secrets, or Kubernetes secrets.
+Current runtime env highlights:
 
-## Deployment
+- proxy: `RABBITMQ_URL`, `REDIS_URL`, `PORT`
+- history: `DATABASE_URL`, `RABBITMQ_URL`, `POSTGRES_*`, `PORT`
+- ui: `PROXY_URL=/api`, `HISTORY_URL=/history-api`
+
+Pending full PostgreSQL runtime mode still adds:
+
+- `RUNTIME_BACKEND=external|postgres`
+- proxy `DATABASE_URL`
+- runtime schema/bootstrap in deployment before app containers start
+
+## Deployment Commands
 
 Prepare environment variables first:
 
@@ -186,58 +227,17 @@ Deploy application containers:
 ansible-playbook -i ansible/inventory ansible/deploy.yml
 ```
 
-This deploys the moving branch image tag by default:
-
-```text
-IMAGE_TAG=shabat-latest
-```
-
-Use this for active demos after pushing to the `Shabat` branch. GitHub Actions rebuilds `shabat-latest`, and Ansible pulls that current image.
-
-If GHCR packages are private, export registry credentials first. The token only needs package read access:
+Current moving-tag deploys:
 
 ```bash
-export GHCR_USERNAME=<github-username>
-export GHCR_TOKEN=<github-token-with-read-packages>
-ansible-playbook -i ansible/inventory ansible/deploy.yml
+IMAGE_TAG=shabat-latest ansible-playbook -i ansible/inventory ansible/deploy.yml
+IMAGE_TAG=dev-latest ansible-playbook -i ansible/inventory ansible/deploy.yml
 ```
 
-Deploy a stable release tag:
+Pinned release deploy:
 
 ```bash
 IMAGE_TAG=v0.1.0 ansible-playbook -i ansible/inventory ansible/deploy.yml
-```
-
-Use this for production-style deploys. `v0.1.0` is immutable: it points to the exact image built from the `v0.1.0` Git tag. Rollback is the same operation with an older tag, for example `IMAGE_TAG=v0.0.9`.
-
-Deploy an exact commit image when debugging or proving reproducibility:
-
-```bash
-IMAGE_TAG=<full-commit-sha> ansible-playbook -i ansible/inventory ansible/deploy.yml
-```
-
-Live demo release flow:
-
-```bash
-# 1. Push the current branch so shabat-latest images build
-git push origin Shabat
-
-# 2. Create a visible SemVer release tag from the current commit
-git tag -a v0.1.0 -m "Release v0.1.0"
-git push origin v0.1.0
-
-# 3. Wait for GitHub Actions to finish publishing GHCR images
-
-# 4. Deploy the pinned release
-IMAGE_TAG=v0.1.0 ansible-playbook -i ansible/inventory ansible/deploy.yml
-```
-
-If the tag already exists, do not recreate it during the demo. Either deploy the existing tag or create the next version, for example `v0.1.1` for a small fix or `v0.2.0` for new sprint work.
-
-Deploy only one node:
-
-```bash
-ansible-playbook -i ansible/inventory ansible/deploy.yml --limit softserve-node-02
 ```
 
 ## Local Development
@@ -271,6 +271,13 @@ python main.py
 python consumer.py
 ```
 
+Queue-side PostgreSQL runtime assets:
+
+```bash
+psql "$DATABASE_URL" -f runtime/00_run_all.sql
+python runtime/runtime_consumer.py
+```
+
 ## External Data Sources
 
 | Source | Data |
@@ -282,8 +289,7 @@ python consumer.py
 
 These are public unauthenticated APIs, so live behavior depends on upstream availability and rate limits.
 
-## Operational Notes
+## More Detail
 
-The deployment is safe to re-run. Ansible stops legacy host services, removes old synced source directories, renders current Compose files, pulls registry images, starts containers, waits for health endpoints, and prunes dangling images.
-
-Persistent data is stored on VM-mounted host paths under `/var/lib/coin-ops/`, not inside disposable container layers.
+- [docs/architecture.md](docs/architecture.md) explains the current deployed path versus the PostgreSQL runtime target.
+- [docs/runtime-queue-architecture.md](docs/runtime-queue-architecture.md) focuses on the queue-side PostgreSQL runtime design and its current status on `dev`.
