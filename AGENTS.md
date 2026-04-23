@@ -48,7 +48,7 @@ Use TypeScript for React UI code and keep components in `ui-react/src/`. Prefer 
 
 ## Testing Guidelines
 
-There is no full automated test suite yet. Minimum verification before committing UI changes is `npm run lint` and `npm run build` in `ui-react/`. For Go changes, run `go test ./...` or `make build` from `proxy/`. For deployment changes, prefer Ansible dry-run/checks where practical and inspect affected Compose files manually.
+There is no full automated test suite yet. Minimum verification before committing UI changes is `npm run lint` and `npm run build` in `ui-react/`. For Go changes, run `go test ./...` (or `go test -v -race ./...` when touching concurrency/state behavior) and `go build ./...` from `proxy/`. For deployment changes, prefer Ansible dry-run/checks where practical and inspect affected Compose files manually.
 
 ## Commit & Pull Request Guidelines
 
