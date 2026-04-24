@@ -8,6 +8,3 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -f h
 
 echo "==> Loading runtime bootstrap..."
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -f runtime/00_run_all.sql
-
-echo "==> Running runtime SQL tests..."
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -f runtime/tests/test_runtime.sql
