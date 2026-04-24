@@ -75,6 +75,21 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Debug Postgres Crash (Smoke Test)
+        run: |
+          docker run --name debug-postgres -d \
+            -e POSTGRES_USER=coinops \
+            -e POSTGRES_PASSWORD=test \
+            -e POSTGRES_DB=coinops \
+            -v ${{ github.workspace }}:/repo:ro \
+            -v ${{ github.workspace }}/tests/python/integration/postgres_bootstrap.sh:/docker-entrypoint-initdb.d/10-coinops-bootstrap.sh:ro \
+            quay.io/tembo/pg16-pgmq@sha256:7f80d046257d585d1af9d19cf28bd355a4b854b0a7d643c02ebbe6b84457868a \
+            postgres -c cron.database_name=coinops
+          
+          sleep 10
+          docker logs debug-postgres
+          docker rm -f debug-postgres || true
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:

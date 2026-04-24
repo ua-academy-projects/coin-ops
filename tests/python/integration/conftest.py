@@ -86,16 +86,8 @@ def database_url():
         )
         .with_command(["postgres", "-c", "cron.database_name=coinops"])
     )
-    try:
-        with postgres:
-            yield _normalize_connection_url(postgres.get_connection_url())
-    except Exception as e:
-        print("\n=== POSTGRES CONTAINER LOGS ===")
-        print(postgres.get_logs()[0].decode("utf-8") if postgres.get_logs()[0] else "No stdout")
-        print("=== STDERR ===")
-        print(postgres.get_logs()[1].decode("utf-8") if postgres.get_logs()[1] else "No stderr")
-        print("===============================\n")
-        raise e
+    with postgres:
+        yield _normalize_connection_url(postgres.get_connection_url())
 
 
 @pytest.fixture
