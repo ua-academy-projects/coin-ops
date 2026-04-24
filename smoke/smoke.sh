@@ -72,6 +72,20 @@ wait_for_url() {
   return 1
 }
 
+# Poll the gateway until the upstream routes are answering 200. `docker compose
+# up --wait` only blocks on services that declare a `healthcheck:`. The Go
+# proxy runs from a `scratch` image (no shell/wget/nc available for a
+# container-level probe) and `history-consumer` is a queue worker with no HTTP
+# surface, so both are gated only by `service_started`. Without this readiness
+# loop, a raw curl immediately after `compose up --wait` can race the proxy's
+# bind on :8080 and get a 502 from the gateway.
+wait_for_gateway_ready() {
+  wait_for_url "$GATEWAY_URL/health"              "gateway"                   || return 1
+  wait_for_url "$GATEWAY_URL/api/health"          "proxy through gateway"     || return 1
+  wait_for_url "$GATEWAY_URL/history-api/health"  "history-api through gateway" || return 1
+  return 0
+}
+
 # ── checks ─────────────────────────────────────────────────────────────────
 check_stack_healthy() {
   # All services with a healthcheck must be 'healthy'; services without one
@@ -173,7 +187,12 @@ check_history_read_path() {
 cmd_up() {
   step "Building and starting stack (project=$PROJECT_NAME)"
   compose up -d --build --wait --wait-timeout "$WAIT_TIMEOUT"
-  pass "stack is up"
+  step "Waiting for gateway-proxied routes to answer"
+  wait_for_gateway_ready || {
+    fail "gateway was reachable but upstream routes never became ready"
+    return 1
+  }
+  pass "stack is up and gateway routes are ready"
 }
 
 cmd_down() {
@@ -187,13 +206,10 @@ cmd_logs() {
 }
 
 cmd_check() {
-  # Poll the externally-visible endpoints before running the check matrix.
-  # `docker compose up --wait` only waits for container-level health; the
-  # proxy runs on scratch and has no healthcheck, so there's a small window
-  # after its container is "running" but before :8080 is accepting traffic.
-  wait_for_url "$GATEWAY_URL/health" "gateway" || return 1
-  wait_for_url "$GATEWAY_URL/api/health" "proxy through gateway" || return 1
-  wait_for_url "$GATEWAY_URL/history-api/health" "history-api through gateway" || return 1
+  # `cmd_up` already runs this readiness probe, but `cmd_check` is also invoked
+  # standalone against a stack the user brought up manually, so re-run it here.
+  # On an already-ready stack this costs one curl per route.
+  wait_for_gateway_ready || return 1
 
   local total=0 failed=0
   for spec in "${CHECKS[@]}"; do

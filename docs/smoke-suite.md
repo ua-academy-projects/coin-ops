@@ -35,8 +35,17 @@ is slower and more fragile than the per-service unit checks already in
 
 The flows the team agreed to cover are deliberately narrow:
 
-1. **Stack startup** — `docker compose up -d --wait` brings every service to
-   a healthy state within the configured timeout.
+1. **Stack startup** — `docker compose up -d --wait` returns when every service
+   that declares a `healthcheck:` is healthy (PostgreSQL, RabbitMQ, Redis,
+   history-api, gateway). The Go `proxy` runs from a `scratch` image with no
+   shell/`wget`/`nc` available for a container-level probe, and
+   `history-consumer` is a queue worker with no HTTP surface — both are gated
+   only by `service_started`, so a raw `curl` through the gateway can briefly
+   race the proxy's bind on `:8080` and get a 502. The `./smoke.sh up` wrapper
+   closes that window by polling the gateway's `/health`, `/api/health`, and
+   `/history-api/health` until they return 200 before it hands control back.
+   Prefer `./smoke.sh up` / `./smoke.sh check` over raw `docker compose up` for
+   any manual poking.
 2. **Proxy `/health`** — returns 200 and a JSON body with a `status` field,
    reached through the gateway at `/api/health`.
 3. **History API `/health`** — same, through the gateway at
@@ -116,9 +125,10 @@ if port 18080 is taken.
 
 ### Timeouts
 
-`docker compose up --wait` waits up to 180 seconds for the stack to become
-healthy. Override with `SMOKE_WAIT_TIMEOUT=300 ./smoke/smoke.sh` on slower
-machines or first runs where images still need to build.
+`SMOKE_WAIT_TIMEOUT` (default `180` seconds) is the deadline for both
+`docker compose up --wait` and the subsequent gateway-route readiness probe.
+Override with `SMOKE_WAIT_TIMEOUT=300 ./smoke/smoke.sh` on slower machines or
+first runs where images still need to build.
 
 ## Files
 
