@@ -1,20 +1,50 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# coin-ops UI
 
-# Run and deploy your AI Studio app
+React + Vite + TypeScript frontend for the Coin-Ops Polymarket dashboard.
 
-This contains everything you need to run your app locally.
+## Prerequisites
 
-View your app in AI Studio: https://ai.studio/apps/f9f4bcc7-c9d0-4e81-96b1-871cef19125e
+- Node.js 22+
+- Go proxy running on `:8080` (see `proxy/`)
+- FastAPI history service running on `:8000` (see `history/`)
 
-## Run Locally
+## Quick start
 
-**Prerequisites:**  Node.js
+```bash
+cd ui-react
+npm install
+npm run dev
+```
+
+Opens at `http://localhost:3000`. The dev server proxies API requests to the local backend services.
+
+## Environment variables
+
+By default the dev server proxies to `localhost`. Override with env vars:
+
+| Variable | Default | Description |
+|---|---|---|
+| `PROXY_HOST` | `http://172.31.1.11:8080` | Go proxy host |
+| `PROXY_PORT` | `8080` | Go proxy port |
+| `HISTORY_HOST` | `http://172.31.1.11:8080` | FastAPI host |
+| `HISTORY_PORT` | `8000` | FastAPI port |
 
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Commands
+
+| Command | Description |
+|---|---|
+| `npm run dev` | Dev server on `:3000` with hot reload |
+| `npm run lint` | TypeScript type check |
+| `npm run preview` | Preview the production build locally |
+
+## API contract
+
+The UI talks to two services through Vite's dev proxy:
+
+| Prefix | Service | Endpoints used |
+|---|---|---|
+| `/api` | Go proxy | `/current`, `/whales`, `/prices`, `/state`, `/health` |
+| `/history-api` | FastAPI | `/history`, `/history/{slug}`, `/prices/history/{coin}`, `/health` |
+
+Both `RUNTIME_BACKEND=external` and `RUNTIME_BACKEND=postgres` expose the same HTTP contract — the UI works against either mode without changes.
