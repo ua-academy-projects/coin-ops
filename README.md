@@ -294,6 +294,20 @@ If you are already in `history/`, either `cd ..` first or run `python -m pytest 
 
 The fast `pytest` suite lives under `tests/python/unit`. Keep PostgreSQL-backed integration coverage separate from these unit tests.
 
+PostgreSQL-backed integration tests for `history/main.py` and the queue-side PostgreSQL consumer in `runtime/runtime_consumer.py` (requires Docker):
+
+```bash
+cd <repo-root>
+python -m venv venv
+source venv/bin/activate
+pip install -r history/requirements-dev.txt
+python -m pytest tests/python/integration -v
+```
+
+These integration tests boot an ephemeral runtime-ready PostgreSQL container (`quay.io/tembo/pg16-pgmq@sha256:7f80d046257d585d1af9d19cf28bd355a4b854b0a7d643c02ebbe6b84457868a` by default, override with `COINOPS_TEST_POSTGRES_IMAGE`), apply `history/schema.sql` plus `runtime/00_run_all.sql`, and validate real history read/write behavior through the actual PostgreSQL queue path.
+
+They do not replace the broader runtime smoke tests in `runtime/tests/test_runtime.sql`; cache/session `pg_cron` coverage still lives there.
+
 ## External Data Sources
 
 | Source | Data |

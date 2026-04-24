@@ -30,6 +30,7 @@ cd proxy
 make build    # cross-compile → proxy-linux (GOOS=linux GOARCH=amd64)
 make run      # local run
 make tidy     # go mod tidy
+go test ./... # fast unit tests (no Docker/Redis/RabbitMQ/PostgreSQL required)
 ```
 
 ### UI (React)

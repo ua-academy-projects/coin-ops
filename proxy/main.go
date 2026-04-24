@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -134,8 +135,9 @@ type Server struct {
 	ch      *amqp.Channel
 	chMu    sync.Mutex
 	rdb     *redis.Client
-	db      *pgxpool.Pool
+	db      stateDB
 	backend string
+	state   StateStore
 	cache   struct {
 		sync.RWMutex
 		markets []MarketSnapshot
@@ -589,34 +591,20 @@ func (s *Server) handleGetState(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 
-	if s.backend == "postgres" {
-		var val []byte
-		err := s.db.QueryRow(ctx, "SELECT runtime.session_get($1)", sid).Scan(&val)
-		if err != nil {
-			http.Error(w, "state unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		if val == nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte("{}"))
-			return
-		}
+	val, err := s.state.GetState(ctx, sid)
+	if errors.Is(err, ErrStateNotFound) {
+		// No state stored yet for this session — return empty object so
+		// callers don't need to special-case 404 vs. empty state.
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(val)
-	} else {
-		val, err := s.rdb.Get(ctx, "session:"+sid).Result()
-		if err == redis.Nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte("{}"))
-			return
-		}
-		if err != nil {
-			http.Error(w, "state unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(val))
+		w.Write([]byte("{}"))
+		return
 	}
+	if err != nil {
+		http.Error(w, "state unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(val)
 }
 
 func (s *Server) handlePostState(w http.ResponseWriter, r *http.Request) {
@@ -644,17 +632,9 @@ func (s *Server) handlePostState(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 
-	if s.backend == "postgres" {
-		_, pgErr := s.db.Exec(ctx, "SELECT runtime.session_set($1, $2::jsonb, '24 hours')", sid, body)
-		if pgErr != nil {
-			http.Error(w, "state unavailable", http.StatusServiceUnavailable)
-			return
-		}
-	} else {
-		if err := s.rdb.Set(ctx, "session:"+sid, string(body), 24*time.Hour).Err(); err != nil {
-			http.Error(w, "state unavailable", http.StatusServiceUnavailable)
-			return
-		}
+	if err := s.state.SetState(ctx, sid, body); err != nil {
+		http.Error(w, "state unavailable", http.StatusServiceUnavailable)
+		return
 	}
 }
 
@@ -697,6 +677,7 @@ func main() {
 		}
 		defer pool.Close()
 		srv.db = pool
+		srv.state = &postgresStateStore{db: pool}
 		log.Println("Connected to PostgreSQL (postgres mode)")
 
 	default: // "external" — current RabbitMQ + Redis behavior
@@ -725,6 +706,7 @@ func main() {
 			log.Fatalf("parse redis url: %v", err)
 		}
 		srv.rdb = redis.NewClient(redisOpts)
+		srv.state = &redisStateStore{c: srv.rdb}
 		pingCtx, pingCancel := context.WithTimeout(context.Background(), 3*time.Second)
 		if pingErr := srv.rdb.Ping(pingCtx).Err(); pingErr != nil {
 			log.Printf("Warning: Redis not reachable: %v — /state will return 503", pingErr)
@@ -733,7 +715,6 @@ func main() {
 		}
 		pingCancel()
 	}
-
 	// Populate market cache immediately, then refresh independently of UI requests.
 	go func() {
 		srv.fetchAndUpdateMarkets()

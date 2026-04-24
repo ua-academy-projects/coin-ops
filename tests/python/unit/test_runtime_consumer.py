@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from conftest import ConnectionSpy, description_from_names
+from tests.python._helpers import ConnectionSpy, description_from_names
 
 
 def test_process_message_routes_market_payload_and_acks(runtime_consumer_module):

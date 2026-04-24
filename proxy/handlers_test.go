@@ -250,7 +250,7 @@ func TestHandleGetState(t *testing.T) {
 		if rr.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
 		}
-		if strings.TrimSpace(rr.Body.String()) != `{}` {
+		if strings.TrimSpace(rr.Body.String()) != "{}" {
 			t.Fatalf("body = %q, want {}", strings.TrimSpace(rr.Body.String()))
 		}
 	})

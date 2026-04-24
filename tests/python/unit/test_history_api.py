@@ -1,6 +1,6 @@
 import pytest
 
-from conftest import ConnectionSpy
+from tests.python._helpers import ConnectionSpy
 
 
 def test_get_history_without_category_uses_recent_query(history_main_module, monkeypatch):
