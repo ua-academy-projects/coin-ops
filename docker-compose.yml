@@ -73,7 +73,7 @@ services:
       RABBITMQ_URL: amqp://cognitor:changeme@rabbitmq:5672/
       REDIS_URL: redis://redis:6379/0
       PORT: "8080"
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://cognitor:changeme@postgres:5432/cognitor}
       RUNTIME_BACKEND: ${RUNTIME_BACKEND:-external}
     ports:
       - "8080:8080"

@@ -205,6 +205,21 @@ cp .env.example .env
 source .env
 ```
 
+For the local root `docker compose` flow, use a plain Compose `.env` file instead of shell `export`s:
+
+```bash
+cp .env.compose.example .env
+docker compose up --build
+```
+
+Switch local runtime mode by editing `.env`:
+
+```env
+RUNTIME_BACKEND=external
+# or
+RUNTIME_BACKEND=postgres
+```
+
 Install pinned Ansible collections:
 
 ```bash
