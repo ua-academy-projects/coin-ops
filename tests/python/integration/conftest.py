@@ -84,6 +84,7 @@ def database_url():
             "/docker-entrypoint-initdb.d/10-coinops-bootstrap.sh",
             mode="ro",
         )
+        .with_command("postgres -c cron.database_name=coinops")
     )
     with postgres:
         yield _normalize_connection_url(postgres.get_connection_url())
