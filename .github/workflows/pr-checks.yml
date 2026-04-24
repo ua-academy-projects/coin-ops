@@ -89,7 +89,7 @@ jobs:
             -v "${{ github.workspace }}:/repo:ro" \
             -v "${{ github.workspace }}/tests/python/integration/postgres_bootstrap.sh:/docker-entrypoint-initdb.d/10-coinops-bootstrap.sh:ro" \
             coinops-postgres-runtime:latest \
-            -c shared_preload_libraries='pg_cron,pgmq' \
+            -c shared_preload_libraries='pg_cron' \
             -c cron.database_name='coinops')
             
           echo "Container ID: $CONTAINER_ID"
