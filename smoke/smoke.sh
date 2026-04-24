@@ -11,8 +11,9 @@
 #   ./smoke.sh check        # run checks against an already-running stack
 #   ./smoke.sh down         # stop and remove the stack
 #   ./smoke.sh logs [svc]   # tail logs (all services or just <svc>)
+#   ./smoke.sh postgres-runtime [up|check|down|logs]
 #
-# Flags (default mode only):
+# Flags:
 #   --keep   don't tear the stack down after checks pass (useful for debugging)
 
 set -euo pipefail
@@ -22,6 +23,7 @@ COMPOSE_FILE="${SCRIPT_DIR}/docker-compose.smoke.yaml"
 GATEWAY_URL="${SMOKE_GATEWAY_URL:-http://localhost:18080}"
 WAIT_TIMEOUT="${SMOKE_WAIT_TIMEOUT:-180}"
 PROJECT_NAME="coin-ops-smoke"
+SUITE_NAME="external"
 
 # ── output helpers ──────────────────────────────────────────────────────────
 if [[ -t 1 ]]; then
@@ -42,10 +44,38 @@ compose() {
   docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" "$@"
 }
 
+configure_suite() {
+  local suite="$1"
+  case "$suite" in
+    external)
+      SUITE_NAME="external"
+      COMPOSE_FILE="${SCRIPT_DIR}/docker-compose.smoke.yaml"
+      GATEWAY_URL="${SMOKE_GATEWAY_URL:-http://localhost:18080}"
+      PROJECT_NAME="coin-ops-smoke"
+      CHECKS=("${EXTERNAL_CHECKS[@]}")
+      ;;
+    postgres-runtime)
+      SUITE_NAME="postgres-runtime"
+      COMPOSE_FILE="${SCRIPT_DIR}/docker-compose.postgres-runtime.yaml"
+      GATEWAY_URL="${SMOKE_GATEWAY_URL:-http://localhost:18081}"
+      PROJECT_NAME="coin-ops-postgres-smoke"
+      CHECKS=("${POSTGRES_RUNTIME_CHECKS[@]}")
+      ;;
+    *)
+      echo "unknown smoke suite: $suite" >&2
+      exit 2
+      ;;
+  esac
+}
+
+postgres_psql() {
+  compose exec -T postgres psql -v ON_ERROR_STOP=1 -U cognitor -d cognitor "$@"
+}
+
 # ── check registry ──────────────────────────────────────────────────────────
 # Each check is a function that returns 0 (pass) / non-zero (fail).
 # Register them in CHECKS to have them appear in the summary.
-declare -a CHECKS=(
+declare -a EXTERNAL_CHECKS=(
   "check_stack_healthy|Stack services are healthy"
   "check_proxy_health|Proxy /health responds 200"
   "check_history_health|History API /health responds 200"
@@ -53,6 +83,19 @@ declare -a CHECKS=(
   "check_ui_to_backend|UI → backend: GET /api/prices returns JSON"
   "check_history_read_path|History read-path: GET /history-api/history returns JSON array"
 )
+
+declare -a POSTGRES_RUNTIME_CHECKS=(
+  "check_stack_healthy|Stack services are healthy"
+  "check_no_external_brokers|RabbitMQ and Redis are absent"
+  "check_postgres_runtime_extensions|PostgreSQL runtime extensions are installed"
+  "check_proxy_health|Proxy /health responds 200"
+  "check_history_health|History API /health responds 200"
+  "check_gateway_health|Gateway /health responds 200"
+  "check_postgres_state_path|Postgres runtime /state write-read works"
+  "check_runtime_queue_to_history|Postgres queue event reaches history API"
+)
+
+declare -a CHECKS=("${EXTERNAL_CHECKS[@]}")
 
 # Parallel indexed arrays — macOS still ships bash 3.2, which does not
 # support associative arrays (`declare -A`).
@@ -175,17 +218,84 @@ check_history_read_path() {
   return 0
 }
 
-# ── runtime write/read (documented as pending) ──────────────────────────────
-# The PostgreSQL runtime path (RUNTIME_BACKEND=postgres, pgmq-backed queue) is
-# not yet wired into the deployed stack per the roadmap in README.md. The
-# acceptance criteria for this suite say this check is conditional on that
-# work being available. When it lands, add a runtime check here and register
-# it in CHECKS. Until then see runtime/tests/test_runtime.sql for the SQL-level
-# acceptance tests that can be run standalone against a pgmq-enabled database.
+check_no_external_brokers() {
+  local services
+  services="$(compose config --services)"
+  if grep -Eq '^(rabbitmq|redis)$' <<<"$services"; then
+    fail "postgres-runtime smoke config still contains rabbitmq or redis"
+    return 1
+  fi
+  info "compose services: $(tr '\n' ' ' <<<"$services")"
+  return 0
+}
+
+check_postgres_runtime_extensions() {
+  local extensions
+  extensions="$(postgres_psql -Atc "SELECT string_agg(extname, ',' ORDER BY extname) FROM pg_extension WHERE extname IN ('pg_cron', 'pgmq');")"
+  if [[ "$extensions" != "pg_cron,pgmq" ]]; then
+    fail "expected pg_cron,pgmq extensions, got: ${extensions:-none}"
+    return 1
+  fi
+  info "extensions: $extensions"
+  return 0
+}
+
+check_postgres_state_path() {
+  local sid="smoke_state_123"
+  local body status
+
+  status="$(curl -fsS --max-time 10 -o /dev/null -w '%{http_code}' \
+    -X POST "$GATEWAY_URL/api/state?sid=$sid" \
+    -H 'Content-Type: application/json' \
+    --data '{"active_tab":"postgres-runtime","source":"smoke"}')" || {
+      fail "POST /api/state failed"
+      return 1
+    }
+  [[ "$status" == "200" ]] || { fail "POST /api/state status=$status"; return 1; }
+
+  body="$(curl -fsS --max-time 10 -w '\n%{http_code}' "$GATEWAY_URL/api/state?sid=$sid")" || {
+    fail "GET /api/state failed"
+    return 1
+  }
+  status="${body##*$'\n'}"; body="${body%$'\n'*}"
+  [[ "$status" == "200" ]] || { fail "GET /api/state status=$status"; return 1; }
+  grep -q '"active_tab":"postgres-runtime"' <<<"$body" || {
+    fail "GET /api/state did not return saved postgres state: $body"
+    return 1
+  }
+  info "state round-trip body: $body"
+  return 0
+}
+
+check_runtime_queue_to_history() {
+  local slug fetched_at payload body status deadline
+  slug="smoke-runtime-${RANDOM:-0}-$(date -u +%Y%m%d%H%M%S)"
+  fetched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  payload="{\"type\":\"market\",\"question\":\"Smoke runtime queue\",\"slug\":\"$slug\",\"yes_price\":0.64,\"no_price\":0.36,\"volume_24h\":42.0,\"category\":\"smoke\",\"end_date\":null,\"fetched_at\":\"$fetched_at\"}"
+
+  postgres_psql -Atc "SELECT runtime.enqueue_event('$payload'::jsonb);" >/dev/null || {
+    fail "runtime.enqueue_event failed"
+    return 1
+  }
+
+  deadline=$((SECONDS + 45))
+  while (( SECONDS < deadline )); do
+    body="$(curl -fsS --max-time 10 -w '\n%{http_code}' "$GATEWAY_URL/history-api/history/$slug?limit=1" 2>/dev/null || true)"
+    status="${body##*$'\n'}"; body="${body%$'\n'*}"
+    if [[ "$status" == "200" && "${body:0:1}" == "[" ]] && grep -q "$slug" <<<"$body"; then
+      info "history row visible for slug=$slug"
+      return 0
+    fi
+    sleep 2
+  done
+
+  fail "history API did not expose queued runtime event for slug=$slug"
+  return 1
+}
 
 # ── orchestration ──────────────────────────────────────────────────────────
 cmd_up() {
-  step "Building and starting stack (project=$PROJECT_NAME)"
+  step "Building and starting $SUITE_NAME stack (project=$PROJECT_NAME)"
   compose up -d --build --wait --wait-timeout "$WAIT_TIMEOUT"
   step "Waiting for gateway-proxied routes to answer"
   wait_for_gateway_ready || {
@@ -210,6 +320,9 @@ cmd_check() {
   # standalone against a stack the user brought up manually, so re-run it here.
   # On an already-ready stack this costs one curl per route.
   wait_for_gateway_ready || return 1
+
+  CHECK_LABELS=()
+  CHECK_STATUSES=()
 
   local total=0 failed=0
   for spec in "${CHECKS[@]}"; do
@@ -250,9 +363,22 @@ cmd_check() {
 
 # ── main ───────────────────────────────────────────────────────────────────
 main() {
-  local mode="${1:-all}"
+  local suite="external"
+  local mode="all"
   local keep=0
-  shift || true
+
+  if [[ "${1:-}" == "postgres-runtime" ]]; then
+    suite="postgres-runtime"
+    shift || true
+  fi
+
+  configure_suite "$suite"
+
+  if [[ -n "${1:-}" && "${1:-}" != --* ]]; then
+    mode="$1"
+    shift || true
+  fi
+
   for a in "$@"; do
     [[ "$a" == "--keep" ]] && keep=1
   done
@@ -282,7 +408,7 @@ main() {
       fi
       ;;
     *)
-      echo "usage: $0 [up|check|down|logs|all] [--keep]" >&2
+      echo "usage: $0 [postgres-runtime] [up|check|down|logs|all] [--keep]" >&2
       exit 2
       ;;
   esac

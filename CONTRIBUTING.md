@@ -114,6 +114,8 @@ If your change spans multiple services or touches the `runtime/` directory:
   Compose and verifies the gateway, proxy, and history read path. See
   [docs/smoke-suite.md](docs/smoke-suite.md) for what it covers and when to
   use it.
+- If the change touches `RUNTIME_BACKEND=postgres`, runtime SQL, or removal of
+  RabbitMQ/Redis, also run `./smoke/smoke.sh postgres-runtime`.
 - If the change alters the data flow between services (proxy → queue →
   consumer → API → UI), it should be exercised through the local deployment
   workflow or the full VM environment before merging.

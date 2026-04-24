@@ -58,15 +58,26 @@ The flows the team agreed to cover are deliberately narrow:
    gateway returns 200 and a JSON array (empty is acceptable; the check is
    that the API can reach PostgreSQL and execute the query).
 
+The suite also has a PostgreSQL-runtime mode:
+
+```bash
+./smoke/smoke.sh postgres-runtime
+```
+
+That mode boots a second Compose stack on `http://localhost:18081` with
+`RUNTIME_BACKEND=postgres`, a pgmq/pg_cron-capable PostgreSQL image, and no
+RabbitMQ or Redis services. In addition to health checks, it verifies:
+
+1. `pgmq` and `pg_cron` are installed.
+2. `/api/state` writes and reads through PostgreSQL session wrappers.
+3. A direct `runtime.enqueue_event(...)` call is consumed by
+   `history-consumer` and becomes readable through the history API.
+
 ### Deliberately out of scope
 
-- **PostgreSQL runtime write/read (pgmq).** The `RUNTIME_BACKEND=postgres`
-  cutover is still pending on `dev` (see the roadmap in `README.md` and
-  `docs/runtime-queue-architecture.md`). When it lands, add a runtime check
-  to `smoke.sh` and register it in the `CHECKS` array. The SQL-level
-  acceptance tests in `runtime/tests/test_runtime.sql` stay as-is; they run
-  standalone against a pgmq-enabled PostgreSQL instance and are not part of
-  this suite today.
+- **Full Ansible / three-VM deployment.** PostgreSQL-runtime mode checks the
+  same runtime contract locally, but it does not replace a VM-level Ansible
+  deployment when deployment templates or inventory behavior change.
 - **Full UI rendering and end-to-end user journeys.** The smoke gateway
   serves a tiny placeholder page at `/`, not the built React bundle. Browser
   flows belong in a future dedicated UI/E2E layer, not here.
@@ -93,6 +104,12 @@ From the repo root:
 ./smoke/smoke.sh check       # run checks against an already-running stack
 ./smoke/smoke.sh logs        # tail logs (add a service name for just one)
 ./smoke/smoke.sh down        # stop and remove the stack
+
+./smoke/smoke.sh postgres-runtime          # postgres mode: up → check → down
+./smoke/smoke.sh postgres-runtime --keep   # leave postgres-mode stack running
+./smoke/smoke.sh postgres-runtime up
+./smoke/smoke.sh postgres-runtime check
+./smoke/smoke.sh postgres-runtime down
 ```
 
 On success the script exits 0 and prints a summary:
@@ -118,10 +135,12 @@ On failure the stack is left running so you can inspect it:
 
 ### Ports
 
-The stack exposes **only** the gateway on the host at `http://localhost:18080`.
-Proxy, history API, PostgreSQL, RabbitMQ, and Redis are reachable only on the
-internal compose network. Override with `SMOKE_GATEWAY_URL=... ./smoke/smoke.sh`
-if port 18080 is taken.
+The external-mode stack exposes **only** the gateway on the host at
+`http://localhost:18080`. The postgres-runtime stack uses
+`http://localhost:18081` so both modes can be inspected independently. Proxy,
+history API, PostgreSQL, RabbitMQ, and Redis are reachable only on the internal
+compose network. Override with `SMOKE_GATEWAY_URL=... ./smoke/smoke.sh` if the
+default port is taken.
 
 ### Timeouts
 
@@ -135,11 +154,15 @@ first runs where images still need to build.
 ```
 smoke/
 ├── docker-compose.smoke.yaml   # single-host stack
+├── docker-compose.postgres-runtime.yaml
+├── postgres-runtime-bootstrap.sh
 ├── nginx.smoke.conf            # gateway routes for smoke
 ├── env/
 │   ├── postgres.env            # throwaway credentials (smoketest only)
 │   ├── rabbitmq.env
 │   ├── proxy.env
+│   ├── proxy.postgres.env
+│   ├── history.postgres.env
 │   └── history.env
 └── smoke.sh                    # orchestrator + checks
 ```
