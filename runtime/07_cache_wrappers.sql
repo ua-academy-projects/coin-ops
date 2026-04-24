@@ -61,7 +61,7 @@ BEGIN
     INTO   v_value
     FROM   runtime.cache
     WHERE  key        = p_key
-      AND  expires_at > NOW();
+      AND  expires_at > clock_timestamp();
 
     RETURN v_value;
 END;
@@ -104,7 +104,7 @@ BEGIN
     -- Use <= to match cache_get's strict `expires_at > NOW()`: a row with
     -- expires_at exactly equal to NOW() is invisible to readers and should
     -- be reaped in the same tick.
-    DELETE FROM runtime.cache WHERE expires_at <= NOW();
+    DELETE FROM runtime.cache WHERE expires_at <= clock_timestamp();
     GET DIAGNOSTICS v_rows = ROW_COUNT;
     RETURN v_rows;
 END;
@@ -153,7 +153,7 @@ BEGIN
     INTO   v_data
     FROM   runtime.session
     WHERE  sid        = p_sid
-      AND  expires_at > NOW();
+      AND  expires_at > clock_timestamp();
 
     RETURN v_data;
 END;
@@ -193,7 +193,7 @@ AS $$
 DECLARE
     v_rows INT;
 BEGIN
-    DELETE FROM runtime.session WHERE expires_at <= NOW();
+    DELETE FROM runtime.session WHERE expires_at <= clock_timestamp();
     GET DIAGNOSTICS v_rows = ROW_COUNT;
     RETURN v_rows;
 END;
