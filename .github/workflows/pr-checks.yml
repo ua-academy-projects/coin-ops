@@ -34,6 +34,9 @@ jobs:
       - name: Run lint
         run: npm run lint
 
+      - name: Run tests
+        run: npm run test --if-present
+
       - name: Build frontend
         run: npm run build
 
@@ -80,13 +83,21 @@ jobs:
       - name: Install dependencies and Ruff
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt ruff
+          pip install -r requirements.txt -r requirements-dev.txt ruff
 
       - name: Run Ruff
         run: ruff check .
 
       - name: Check Python syntax
         run: python -m py_compile main.py consumer.py
+
+      - name: Run unit tests
+        working-directory: .
+        run: python -m pytest tests/python/unit -v
+
+      - name: Run integration tests
+        working-directory: .
+        run: python -m pytest tests/python/integration -v
 
   docker:
     name: Docker

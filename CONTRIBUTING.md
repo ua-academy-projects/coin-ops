@@ -116,31 +116,23 @@ If your change spans multiple services or touches the `runtime/` directory:
 
 ---
 
-## When Local Checks Are Enough
+## CI PR Gating Rules
 
-Local verification is sufficient for:
+Pull Requests targeting the `dev` branch are automatically checked by GitHub Actions (`.github/workflows/pr-checks.yml`). 
+The following **fast test suites** run automatically on every pull request and must pass before merging:
 
-- Pure UI changes (styling, component logic, new pages) — lint + build + dev server.
-- Isolated Go proxy changes (new endpoint, caching tweak) — test + build.
-- Isolated Python changes (new history endpoint, consumer logic) — ruff + py_compile.
-- Documentation-only changes — no service checks needed.
-- Dockerfile changes that don't alter runtime behavior — docker build.
+- **Frontend (`ui-react`)**: Unit/component tests (`npm run test`), lint rules, and builds.
+- **Go Proxy (`proxy`)**: Go unit tests (`go test ./...`) and builds.
+- **Python History (`history`)**: Python syntax validation, linting (`ruff`), and unit tests (`pytest tests/python/unit`).
+- **PostgreSQL Integration Tests**: We also automatically run Python integration tests (`pytest tests/python/integration`) on PRs, as they bootstrap quickly thanks to ephemeral Testcontainers PostgreSQL databases.
 
-## When You Still Need VM / Full-Environment Testing
+## When You Still Need Heavier Smoke Checks
 
-Escalate to the full VM-based deployment (`terraform` + `ansible`) when:
+The following validation checks are **too heavy for standard PR gating** or require complex deployment configurations. They remain manual or part of staging workflows rather than blocking PR merges:
 
-- Your change alters **inter-service communication** (API contracts, queue
-  message format, nginx routing).
-- You modify **TLS, domain, or networking** configuration (`APP_DOMAIN`,
-  `TLS_MODE`, port mappings, UFW rules).
-- You change **Ansible playbooks or Terraform resources** that affect VM
-  provisioning or service orchestration.
-- You modify the **database schema** (`history/schema.sql`,
-  `runtime/*.sql`) — verify that migrations apply cleanly against a real
-  PostgreSQL instance.
-- You switch or extend the **runtime backend** (`RUNTIME_BACKEND`) or wire
-  new `runtime/` assets into the deployment.
+- **Full VM-based deployments** (`terraform` + `ansible`): Spinning up virtual machines, setting up Nginx, UFW, or SSL certs.
+- **Inter-service routing tests**: Testing real HTTP/WebSocket traffic traversing through the Go proxy into the History API over production network layers.
+- **End-to-End Runtime DB testing**: Running `runtime/tests/test_runtime.sql` against a live DB, which requires deeper verification of the `pg_cron` subsystem, cache eviction rates, and continuous session tracking.
+- **External Integration Checks**: Anything requiring secrets, third-party wallet nodes, APIs, or physical blockchain node syncs.
 
-If in doubt, mention in your PR description that the change would benefit
-from environment-level verification, and the reviewer can coordinate testing.
+If your change spans multiple services, alters routing contracts, or modifies `pg_cron` jobs in `runtime/*.sql`, coordinate with reviewers to deploy and smoke-test your branch in a staging environment before finalizing the PR.
