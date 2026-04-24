@@ -259,7 +259,89 @@ IMAGE_TAG=v0.1.0 ansible-playbook -i ansible/inventory ansible/deploy.yml
 
 ## Local Development
 
-Frontend:
+The supported local development path is the root `docker-compose.yml` plus the root `Makefile`. This is a developer/testing workflow only. It does not replace the VM-based Terraform + Ansible deployment model used for the three-node environment.
+
+Local mode is intended to help contributors:
+
+- boot the stack quickly on one machine
+- make UI/backend/runtime changes and verify behavior before opening a PR
+- switch between `external` and `postgres` runtime backends without using the full VM flow
+
+Local mode includes these services:
+
+- `postgres`
+- `rabbitmq`
+- `redis`
+- `history-api`
+- `history-consumer`
+- `proxy`
+- `ui`
+
+Start the local stack:
+
+```bash
+cp .env.compose.example .env
+make local-up
+```
+
+Open the app at `http://localhost:5000`.
+
+Common local commands:
+
+```bash
+make local-logs
+make local-ps
+make local-down
+make local-restart
+make local-config
+```
+
+Switch runtime backend in local mode by editing `.env`:
+
+```env
+RUNTIME_BACKEND=external
+# or
+RUNTIME_BACKEND=postgres
+```
+
+Then recreate the stack:
+
+```bash
+make local-restart
+```
+
+What local mode covers:
+
+- frontend to backend wiring through `/api` and `/history-api`
+- local verification of UI, proxy, history API, consumer, and runtime changes
+- local verification of `RUNTIME_BACKEND=external|postgres`
+
+What still requires the VM environment:
+
+- Terraform provisioning
+- Ansible deploy/provision behavior on real nodes
+- three-VM networking and per-node Compose layout
+- browser-facing node-03 gateway behavior in the real deployment topology
+- VM-level TLS, routing, and host integration issues
+
+Common troubleshooting:
+
+```bash
+make local-config
+make local-ps
+docker compose logs proxy
+docker compose logs history-api
+docker compose logs history-consumer
+```
+
+Notes:
+
+- `external` mode still depends on public upstream APIs such as Polymarket Gamma, CoinGecko, and NBU.
+- local Compose is a convenience workflow for contributors; it is not the production/deployment architecture.
+
+You can still run individual services directly when needed.
+
+Frontend only:
 
 ```bash
 cd ui-react
