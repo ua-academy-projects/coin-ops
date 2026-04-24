@@ -1,0 +1,115 @@
+# Self-contained single-host stack for the smoke suite.
+#
+# This is NOT the production deployment shape (that stays three VMs driven by
+# Ansible, see deploy/compose/*). The goal here is to give the smoke script a
+# reproducible target it can bring up on any developer laptop or CI runner with
+# just `docker compose`.
+#
+# Key differences vs. the deployed stacks:
+#   - everything runs on one Docker network under one compose project
+#   - services are addressed by container name (postgres, rabbitmq, redis, ...)
+#   - only the nginx gateway is exposed to the host (port 18080)
+#   - images are built from the local Dockerfiles, not pulled from GHCR
+#   - PostgreSQL is seeded from history/schema.sql on first start
+
+name: coin-ops-smoke
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    env_file:
+      - env/postgres.env
+    volumes:
+      - ../history/schema.sql:/docker-entrypoint-initdb.d/10-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  rabbitmq:
+    image: rabbitmq:3-alpine
+    env_file:
+      - env/rabbitmq.env
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  proxy:
+    build:
+      context: ../proxy
+      dockerfile: Dockerfile
+    env_file:
+      - env/proxy.env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+        
+
+  history-api:
+    build:
+      context: ../history
+      dockerfile: Dockerfile.api
+    env_file:
+      - env/history.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python -c "import urllib.request,sys;
+          sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health',timeout=2).status==200 else 1)"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  history-consumer:
+    build:
+      context: ../history
+      dockerfile: Dockerfile.consumer
+    env_file:
+      - env/history.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    # Consumer has no HTTP endpoint; we rely on container start + logs.
+
+  gateway:
+    image: nginx:alpine
+    ports:
+      - "18080:80"
+    volumes:
+      - ./nginx.smoke.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      proxy:
+        condition: service_started
+      history-api:
+        condition: service_healthy
+    healthcheck:
+      # Hit 127.0.0.1 explicitly: nginx listens on IPv4 only by default, and
+      # BusyBox wget inside the container resolves `localhost` to ::1 first,
+      # which would yield a spurious "connection refused".
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health >/dev/null || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 5s

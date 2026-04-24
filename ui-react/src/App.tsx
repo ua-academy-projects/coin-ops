@@ -33,7 +33,17 @@ import {
   AreaChart,
   Area
 } from 'recharts';
+import { HeroCurrencyChart } from '@/src/components/HeroCurrencyChart';
+import { MarketCard } from '@/src/components/MarketCard';
+import { PriceChartModal } from '@/src/components/PriceChartModal';
+import { PriceSummaryCard } from '@/src/components/PriceSummaryCard';
 import { cn } from '@/src/lib/utils';
+import {
+  filterMarkets,
+  formatCompactCurrency,
+  getMarketCategoryLabel,
+  normalizeHistoryPoint,
+} from '@/src/lib/dashboard-helpers';
 import { MarketSnapshot, Whale, HistoryPoint, Prices, PriceHistory } from './types';
 import { PROXY_URL, HISTORY_URL, REFRESH_MS, PRICES_REFRESH_MS } from './config';
 
@@ -48,42 +58,6 @@ function getSessionId(): string {
   const id = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36);
   document.cookie = `coinops_sid=${id}; max-age=86400; path=/`;
   return id;
-}
-
-function getMarketCategoryLabel(market: MarketSnapshot): string {
-  const explicitCategory = market.category?.trim();
-  if (explicitCategory) return explicitCategory;
-
-  const source = `${market.question} ${market.slug}`.toLowerCase();
-
-  if (/(bitcoin|btc|ethereum|eth|solana|sol|crypto|doge|xrp|token|coin|polymarket)/.test(source)) {
-    return 'Crypto';
-  }
-  if (/(trump|biden|election|president|senate|house|democrat|republican|vote|politic)/.test(source)) {
-    return 'Politics';
-  }
-  if (/(iran|israel|russia|ukraine|war|ceasefire|conflict|china|taiwan|nato|us conflict)/.test(source)) {
-    return 'Geopolitics';
-  }
-  if (/(fed|inflation|cpi|rate cut|recession|economy|gdp|tariff)/.test(source)) {
-    return 'Macro';
-  }
-  if (/(nba|nfl|mlb|nhl|soccer|football|tennis|f1|formula 1|playoff|championship)/.test(source)) {
-    return 'Sports';
-  }
-
-  return 'Uncategorized';
-}
-
-function normalizeHistoryPoint(point: HistoryPoint) {
-  const yesPrice = Math.max(0, Math.min(1, point.yes_price));
-  const noPrice = Math.max(0, Math.min(1, 1 - yesPrice));
-
-  return {
-    ...point,
-    yes_price: yesPrice,
-    no_price: noPrice,
-  };
 }
 
 export default function App() {
@@ -316,14 +290,7 @@ export default function App() {
   }, [historyData, selectedMarket, timeFilter]);
 
   const filteredMarkets = useMemo(() => {
-    return markets.filter(m => {
-      const normalizedCategory = getMarketCategoryLabel(m);
-      const matchesSearch =
-        m.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        normalizedCategory.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCategory = selectedCategory ? normalizedCategory === selectedCategory : true;
-      return matchesSearch && matchesCategory;
-    });
+    return filterMarkets(markets, searchQuery, selectedCategory);
   }, [markets, searchQuery, selectedCategory]);
 
   const categories = useMemo(() => {
@@ -991,69 +958,6 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, labe
   );
 }
 
-interface MarketCardProps {
-  key?: React.Key;
-  market: MarketSnapshot;
-  onClick: () => void;
-}
-
-function MarketCard({ market, onClick }: MarketCardProps) {
-  const categoryLabel = getMarketCategoryLabel(market);
-  const yesPct = (market.yes_price * 100).toFixed(1);
-  const noPct = (market.no_price * 100).toFixed(1);
-
-  return (
-    <motion.div
-      whileHover={{ y: -4 }}
-      onClick={onClick}
-      className="glass rounded-2xl p-5 cursor-pointer group transition-all hover:border-accent/50"
-    >
-      <div className="flex items-start justify-between mb-4">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-accent bg-accent/10 px-2 py-0.5 rounded">
-          {categoryLabel}
-        </span>
-        <div className="flex items-center gap-1 text-muted text-[10px]">
-          <Activity size={12} />
-          <span>{Math.floor(market.volume_24h / 1000)}K Vol</span>
-        </div>
-      </div>
-
-      <h3 className="text-sm font-medium leading-relaxed mb-6 group-hover:text-accent transition-colors line-clamp-2 h-10">
-        {market.question}
-      </h3>
-
-      <div className="space-y-4">
-        <div className="flex items-center justify-between text-xs mb-1">
-          <span className="text-yes font-semibold">YES {yesPct}%</span>
-          <span className="text-no font-semibold">NO {noPct}%</span>
-        </div>
-
-        <div className="h-2 bg-zinc-800 rounded-full overflow-hidden flex">
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${yesPct}%` }}
-            className="h-full bg-yes"
-          />
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${noPct}%` }}
-            className="h-full bg-no"
-          />
-        </div>
-
-        <div className="flex items-center justify-between pt-2 border-t border-border/50">
-          <div className="text-[10px] text-muted">
-            Ends {new Date(market.end_date).toLocaleDateString()}
-          </div>
-          <div className="flex items-center gap-1 text-accent text-[10px] font-bold">
-            ANALYZE <ChevronRight size={12} />
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
 interface WhaleRowProps {
   key?: React.Key;
   whale: Whale;
@@ -1142,272 +1046,6 @@ function Badge({ label, variant }: { label: string, variant: 'accent' | 'surface
     )}>
       {label}
     </span>
-  );
-}
-
-function formatCompactCurrency(value: number) {
-  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
-  return value.toFixed(0);
-}
-
-function formatChartTime(value: string) {
-  return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
-function HeroCurrencyChart({
-  title,
-  data,
-  formatter,
-}: {
-  title: string;
-  data: PriceHistory[];
-  formatter: (value: number) => string;
-}) {
-  const chartData = data.map((point) => ({
-    time: point.fetched_at,
-    price: point.price_usd,
-  }));
-
-  return (
-    <div className="glass-dark rounded-[24px] p-5 min-h-[320px]">
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-muted">Trend</p>
-          <h2 className="text-lg font-semibold mt-1">{title}</h2>
-        </div>
-        <div className="text-right text-xs text-muted">
-          <p>{data.length > 0 ? `${data.length} points` : 'No points yet'}</p>
-        </div>
-      </div>
-
-      {chartData.length === 0 ? (
-        <div className="h-[240px] flex items-center justify-center text-sm text-muted">
-          Waiting for price history.
-        </div>
-      ) : (
-        <ResponsiveContainer width="100%" height={240}>
-          <AreaChart data={chartData} margin={{ top: 10, right: 4, bottom: 20, left: 0 }}>
-            <defs>
-              <linearGradient id="heroCurrencyGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.35} />
-                <stop offset="95%" stopColor="#6366f1" stopOpacity={0.02} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
-            <XAxis
-              dataKey="time"
-              minTickGap={28}
-              tickMargin={10}
-              tickFormatter={formatChartTime}
-              tick={{ fontSize: 11, fill: '#71717a' }}
-              tickLine={false}
-              axisLine={false}
-            />
-            <YAxis
-              domain={['auto', 'auto']}
-              tickFormatter={(value: number) => formatter(value)}
-              tick={{ fontSize: 11, fill: '#71717a' }}
-              tickLine={false}
-              axisLine={false}
-              width={62}
-            />
-            <Tooltip
-              isAnimationActive={false}
-              labelFormatter={(label) => new Date(label).toLocaleString()}
-              formatter={(value: number) => [formatter(value), title]}
-              contentStyle={{
-                backgroundColor: 'rgba(24, 24, 27, 0.92)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: '12px',
-              }}
-            />
-            <Area
-              isAnimationActive={false}
-              activeDot={{ r: 4 }}
-              type="monotone"
-              dataKey="price"
-              stroke="#818cf8"
-              strokeWidth={2}
-              fill="url(#heroCurrencyGradient)"
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      )}
-    </div>
-  );
-}
-
-function PriceSummaryCard({
-  title,
-  symbol,
-  price,
-  change,
-  data,
-  accentClassName,
-  onClick,
-}: {
-  title: string;
-  symbol: string;
-  price?: number;
-  change?: number;
-  data: PriceHistory[];
-  accentClassName: string;
-  onClick: () => void;
-}) {
-  const isPositive = (change ?? 0) >= 0;
-  const chartData = data.map((point) => ({
-    time: point.fetched_at,
-    price: point.price_usd,
-  }));
-  const latestHistoryPrice = data.length > 0 ? data[data.length - 1].price_usd : undefined;
-  const displayPrice = typeof price === 'number' && price > 0 ? price : latestHistoryPrice;
-
-  return (
-    <button
-      onClick={onClick}
-      className="glass rounded-[24px] p-6 text-left overflow-hidden relative group hover:border-accent/40 transition-all"
-    >
-      <div className={cn("absolute inset-0 bg-gradient-to-br opacity-100", accentClassName)} />
-      <div className="relative space-y-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.24em] text-muted">{symbol}</p>
-            <h3 className="text-2xl font-semibold mt-2">{title}</h3>
-          </div>
-          <ChevronRight size={18} className="text-muted group-hover:text-white transition-colors" />
-        </div>
-
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <p className="text-4xl font-bold tracking-tight">
-              {typeof displayPrice === 'number' ? `$${displayPrice.toLocaleString()}` : '--'}
-            </p>
-            <p className={cn("mt-2 text-sm font-medium", isPositive ? "text-yes" : "text-no")}>
-              {typeof change === 'number' ? `${isPositive ? '+' : ''}${change.toFixed(2)}% 24h` : 'No change data'}
-            </p>
-          </div>
-          <div className="text-right text-xs text-zinc-300">
-            <p>Tap for full chart</p>
-          </div>
-        </div>
-
-        <div className="h-32">
-          {chartData.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-sm text-muted">
-              Waiting for price history.
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 8, right: 0, bottom: 4, left: 0 }}>
-                <defs>
-                  <linearGradient id={`priceCardGradient-${symbol}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={isPositive ? '#22c55e' : '#ef4444'} stopOpacity={0.25} />
-                    <stop offset="95%" stopColor={isPositive ? '#22c55e' : '#ef4444'} stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <XAxis hide dataKey="time" />
-                <YAxis hide domain={['auto', 'auto']} />
-                <Tooltip
-                  isAnimationActive={false}
-                  labelFormatter={(label) => new Date(label).toLocaleString()}
-                  formatter={(value: number) => [`$${value.toLocaleString()}`, title]}
-                  contentStyle={{
-                    backgroundColor: 'rgba(24, 24, 27, 0.92)',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    borderRadius: '12px',
-                  }}
-                />
-                <Area
-                  isAnimationActive={false}
-                  activeDot={{ r: 3 }}
-                  type="monotone"
-                  dataKey="price"
-                  stroke={isPositive ? '#22c55e' : '#ef4444'}
-                  strokeWidth={2}
-                  fill={`url(#priceCardGradient-${symbol})`}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-      </div>
-    </button>
-  );
-}
-
-const COIN_LABELS: Record<string, string> = {
-  bitcoin: 'Bitcoin (BTC)',
-  ethereum: 'Ethereum (ETH)',
-  usd_uah: 'USD / UAH',
-};
-
-function PriceChartModal({ coin, data, onClose }: {
-  coin: string;
-  data: PriceHistory[];
-  onClose: () => void;
-}) {
-  const label = COIN_LABELS[coin] ?? coin;
-  const isUAH = coin === 'usd_uah';
-  const chartData = data.map(p => ({
-    time: new Date(p.fetched_at).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-    price: p.price_usd,
-  }));
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="glass rounded-2xl p-6 w-full max-w-2xl mx-4"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold">{label} — Price History</h2>
-          <button
-            className="text-muted hover:text-white transition-colors text-lg leading-none"
-            onClick={onClose}
-          >
-            ✕
-          </button>
-        </div>
-
-        {data.length === 0 ? (
-          <div className="h-48 flex items-center justify-center text-muted text-sm">
-            Loading chart data…
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height={260}>
-            <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 20, left: 4 }}>
-              <defs>
-                <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-              <XAxis dataKey="time" minTickGap={30} tickMargin={10} tick={{ fontSize: 10, fill: '#71717a' }} tickLine={false} axisLine={false} />
-              <YAxis
-                domain={['auto', 'auto']}
-                tick={{ fontSize: 10, fill: '#71717a' }}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={v => isUAH ? `₴${v.toFixed(1)}` : `$${v.toLocaleString()}`}
-                width={isUAH ? 50 : 70}
-              />
-              <Tooltip
-                isAnimationActive={false}
-                contentStyle={{ background: '#0f0f0f', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
-                formatter={(v: number) => [isUAH ? `₴${v.toFixed(2)}` : `$${v.toLocaleString()}`, 'Price']}
-              />
-              <Area isAnimationActive={false} activeDot={{ r: 4 }} type="monotone" dataKey="price" stroke="#6366f1" strokeWidth={2} fill="url(#priceGrad)" dot={false} />
-            </AreaChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-    </div>
   );
 }
 
