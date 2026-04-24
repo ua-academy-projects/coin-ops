@@ -29,51 +29,48 @@
 -- Run after 07_cache_wrappers.sql.
 -- =============================================================================
 
--- ── runtime-cache-reap ───────────────────────────────────────────────────────
 DO $$
 BEGIN
-    PERFORM cron.unschedule(jobid)
-    FROM    cron.job
-    WHERE   jobname = 'runtime-cache-reap';
+    IF EXISTS (
+        SELECT 1 FROM pg_extension WHERE extname = 'pg_cron'
+    ) THEN
+
+        -- ── runtime-cache-reap ───────────────────────────────────────────────────────
+        PERFORM cron.unschedule(jobid)
+        FROM    cron.job
+        WHERE   jobname = 'runtime-cache-reap';
+
+        PERFORM cron.schedule_in_database(
+            'runtime-cache-reap',
+            '* * * * *',
+            $$SELECT runtime.cache_reap()$$,
+            current_database()
+        );
+
+        -- ── runtime-session-reap ─────────────────────────────────────────────────────
+        PERFORM cron.unschedule(jobid)
+        FROM    cron.job
+        WHERE   jobname = 'runtime-session-reap';
+
+        PERFORM cron.schedule_in_database(
+            'runtime-session-reap',
+            '*/5 * * * *',
+            $$SELECT runtime.session_reap()$$,
+            current_database()
+        );
+
+        -- ── runtime-dlq-reap ─────────────────────────────────────────────────────────
+        PERFORM cron.unschedule(jobid)
+        FROM    cron.job
+        WHERE   jobname = 'runtime-dlq-reap';
+
+        PERFORM cron.schedule_in_database(
+            'runtime-dlq-reap',
+            '0 3 * * *',
+            $$SELECT runtime.dlq_reap_expired('30 days')$$,
+            current_database()
+        );
+
+    END IF;
 END;
 $$;
-
-SELECT cron.schedule_in_database(
-    'runtime-cache-reap',
-    '* * * * *',
-    $$SELECT runtime.cache_reap()$$,
-    current_database()
-);
-
--- ── runtime-session-reap ─────────────────────────────────────────────────────
-DO $$
-BEGIN
-    PERFORM cron.unschedule(jobid)
-    FROM    cron.job
-    WHERE   jobname = 'runtime-session-reap';
-END;
-$$;
-
-SELECT cron.schedule_in_database(
-    'runtime-session-reap',
-    '*/5 * * * *',
-    $$SELECT runtime.session_reap()$$,
-    current_database()
-);
-
--- ── runtime-dlq-reap ─────────────────────────────────────────────────────────
--- Requires runtime.dlq_reap_expired() from 05_dlq.sql (queue branch).
-DO $$
-BEGIN
-    PERFORM cron.unschedule(jobid)
-    FROM    cron.job
-    WHERE   jobname = 'runtime-dlq-reap';
-END;
-$$;
-
-SELECT cron.schedule_in_database(
-    'runtime-dlq-reap',
-    '0 3 * * *',
-    $$SELECT runtime.dlq_reap_expired('30 days')$$,
-    current_database()
-);
