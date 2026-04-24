@@ -15,7 +15,7 @@ from testcontainers.postgres import PostgresContainer
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BOOTSTRAP_SCRIPT_PATH = REPO_ROOT / "tests" / "python" / "integration" / "postgres_bootstrap.sh"
 DEFAULT_TEST_RUNTIME_POSTGRES_IMAGE = (
-    "quay.io/tembo/pg16-pgmq@sha256:7f80d046257d585d1af9d19cf28bd355a4b854b0a7d643c02ebbe6b84457868a"
+    "quay.io/tembo/standard-cnpg:16"
 )
 TEST_RUNTIME_POSTGRES_IMAGE = os.environ.get(
     "COINOPS_TEST_POSTGRES_IMAGE",
