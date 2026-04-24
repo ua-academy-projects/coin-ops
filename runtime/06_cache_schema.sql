@@ -29,13 +29,7 @@ CREATE SCHEMA IF NOT EXISTS runtime;
 -- ── pg_cron extension ─────────────────────────────────────────────────────────
 -- Required by 08_cron.sql. The extension must be preloaded via
 --   shared_preload_libraries = 'pg_cron,pgmq'
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'pg_cron') THEN
-    EXECUTE 'CREATE EXTENSION IF NOT EXISTS pg_cron';
-  END IF;
-END
-$$;
+CREATE EXTENSION IF NOT EXISTS pg_cron;
 
 -- ── runtime.cache ─────────────────────────────────────────────────────────────
 -- Generic TTL key/value store. Reads filter on expires_at so stale rows are
