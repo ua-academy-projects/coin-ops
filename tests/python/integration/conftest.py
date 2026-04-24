@@ -76,7 +76,7 @@ def database_url():
             TEST_RUNTIME_POSTGRES_IMAGE,
             username="coinops",
             password="test",
-            dbname="coinops",
+            dbname="postgres",
         )
         .with_volume_mapping(REPO_ROOT.as_posix(), "/repo", mode="ro")
         .with_volume_mapping(
@@ -84,7 +84,6 @@ def database_url():
             "/docker-entrypoint-initdb.d/10-coinops-bootstrap.sh",
             mode="ro",
         )
-        .with_command("postgres -c cron.database_name=coinops")
     )
     with postgres:
         yield _normalize_connection_url(postgres.get_connection_url())
