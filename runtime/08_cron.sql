@@ -31,7 +31,6 @@
 
 DO $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
 
         -- ── runtime-cache-reap ───────────────────────────────────────────────────────
         EXECUTE 'SELECT cron.unschedule(jobid) FROM cron.job WHERE jobname = ''runtime-cache-reap''';

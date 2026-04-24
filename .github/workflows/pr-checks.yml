@@ -75,27 +75,33 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Debug Postgres Crash (Smoke Test v2)
-        run: |
-          CONTAINER_ID=$(docker run -d \
-            --name debug-postgres-v2 \
-            -e POSTGRES_USER=coinops \
-            -e POSTGRES_PASSWORD=test \
-            -e POSTGRES_DB=coinops \
-            -v "${{ github.workspace }}:/repo:ro" \
-            -v "${{ github.workspace }}/tests/python/integration/postgres_bootstrap.sh:/docker-entrypoint-initdb.d/10-coinops-bootstrap.sh:ro" \
-            quay.io/tembo/pg16-pgmq@sha256:7f80d046257d585d1af9d19cf28bd355a4b854b0a7d643c02ebbe6b84457868a)
+      - name: Build custom Postgres image
+        working-directory: .
+        run: docker build -t coinops-postgres-runtime:latest -f tests/python/integration/Dockerfile.pg_sql .
+
+      # - name: Debug Postgres Crash (Smoke Test v2)
+      #   run: |
+      #     CONTAINER_ID=$(docker run -d \
+      #       --name debug-postgres-v2 \
+      #       -e POSTGRES_USER=coinops \
+      #       -e POSTGRES_PASSWORD=test \
+      #       -e POSTGRES_DB=coinops \
+      #       -v "${{ github.workspace }}:/repo:ro" \
+      #       -v "${{ github.workspace }}/tests/python/integration/postgres_bootstrap.sh:/docker-entrypoint-initdb.d/10-coinops-bootstrap.sh:ro" \
+      #       coinops-postgres-runtime:latest \
+      #       -c shared_preload_libraries='pg_cron,pgmq' \
+      #       -c cron.database_name='coinops')
+            
+      #     echo "Container ID: $CONTAINER_ID"
+      #     sleep 15
           
-          echo "Container ID: $CONTAINER_ID"
-          sleep 15
+      #     echo "=== Container Status ==="
+      #     docker inspect $CONTAINER_ID --format='{{.State.Status}} exit={{.State.ExitCode}}'
           
-          echo "=== Container Status ==="
-          docker inspect $CONTAINER_ID --format='{{.State.Status}} exit={{.State.ExitCode}}'
+      #     echo "=== Container Logs ==="
+      #     docker logs $CONTAINER_ID 2>&1 || true
           
-          echo "=== Container Logs ==="
-          docker logs $CONTAINER_ID 2>&1 || true
-          
-          docker rm -f $CONTAINER_ID 2>/dev/null || true
+      #     docker rm -f $CONTAINER_ID 2>/dev/null || true
 
       - name: Set up Python
         uses: actions/setup-python@v5
