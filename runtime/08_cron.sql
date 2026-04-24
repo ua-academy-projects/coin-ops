@@ -59,6 +59,5 @@ BEGIN
             current_database()
         )$q$;
 
-    END IF;
 END;
 $$;
