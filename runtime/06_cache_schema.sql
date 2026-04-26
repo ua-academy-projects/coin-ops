@@ -29,6 +29,7 @@ CREATE SCHEMA IF NOT EXISTS runtime;
 -- ── pg_cron extension ─────────────────────────────────────────────────────────
 -- Required by 08_cron.sql. The extension must be preloaded via
 --   shared_preload_libraries = 'pg_cron,pgmq'
+-- in postgresql.conf (see ADR §9). CREATE EXTENSION only registers it.
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 
 -- ── runtime.cache ─────────────────────────────────────────────────────────────
