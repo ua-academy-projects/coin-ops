@@ -1,9 +1,17 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: "{{ postgres_image }}"
     restart: unless-stopped
     env_file:
       - /etc/cognitor/history.env
+{% if runtime_backend == "postgres" %}
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_cron
+      - -c
+      - cron.database_name={{ db_name }}
+{% endif %}
     ports:
       - "{{ postgres_bind_ip }}:5432:5432"
     volumes:

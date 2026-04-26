@@ -19,7 +19,7 @@ Postgres is already our system of record. Moving transport and cache inside it c
 
 ## 2. Decisions
 ### Shared Infrastructure
-- **Base image**: custom, built from `quay.io/tembo/pg16-pgmq` + `pg_cron`. Tembo's `pg16-pgmq` ships `pgmq` cleanly, but no public Tembo image pairs `pgmq` and `pg_cron` in one layer. We ship a small Dockerfile that adds `postgresql-16-cron` on top and sets `shared_preload_libraries = 'pg_cron,pgmq'`. Alternative considered (`FROM postgres:16` + both extensions via apt) is equivalent effort and loses Tembo's `pgmq` patch level, so we start from the Tembo base.
+- **Base image**: custom, built from Ubuntu PostgreSQL 16 + `pg_cron`, while copying the `pgmq` extension files from Tembo's `pg16-pgmq` image. The Dockerfile reuses the official Postgres entrypoint and remaps the `postgres` user to uid/gid `70` so existing volumes created by `postgres:16-alpine` remain reusable during rollout. `shared_preload_libraries` is pinned to `pg_cron` only; `pgmq` is created via `CREATE EXTENSION`.
 - **Scheduler**: adopt `pg_cron`.
 ### Queue Schema & Functions
 - **Queue engine**: `pgmq`. No custom queue table.
@@ -224,7 +224,7 @@ SELECT cron.schedule_in_database('runtime-dlq-reap',     '0 3 * * *',
 
 > `pg_cron` MUST be installed in the application database, AND `cron.database_name` MUST be set to that same database.
 
-Both conditions are enforced at the image layer (`shared_preload_libraries = 'pg_cron,pgmq'` and `cron.database_name = 'cognitor'` in `postgresql.conf`, see §9.1). With the invariant held, a fresh DB boot autostarts the reapers from the bootstrap SQL with no manual step. Smoke test 15 in `runtime/tests/test_runtime.sql` inserts an expired sentinel row and fails if it is not physically reaped within ~90 s, which is the end-to-end check that catches any misconfiguration of this invariant.
+Both conditions are enforced at the image layer (`shared_preload_libraries = 'pg_cron'` and `cron.database_name = 'cognitor'` in `postgresql.conf`, see §9.1). With the invariant held, a fresh DB boot autostarts the reapers from the bootstrap SQL with no manual step. Smoke test 15 in `runtime/tests/test_runtime.sql` inserts an expired sentinel row and fails if it is not physically reaped within ~90 s, which is the end-to-end check that catches any misconfiguration of this invariant.
 
 ---
 
@@ -275,15 +275,19 @@ The items below describe the infrastructure changes that land with the `RUNTIME_
 1. **Base image.** `node-01` Postgres will run a custom image:
 
   ```Dockerfile
-  FROM quay.io/tembo/pg16-pgmq:latest
+  FROM postgres:16-bookworm AS postgres-entrypoint
+  FROM quay.io/tembo/pg16-pgmq:latest AS tembo-pgmq
+  FROM ubuntu:noble
+
   RUN apt-get update \
-   && apt-get install -y postgresql-16-cron \
+   && apt-get install -y postgresql-16 postgresql-16-cron gosu locales tzdata \
+   && groupmod -g 70 postgres \
+   && usermod -u 70 -g 70 postgres \
    && rm -rf /var/lib/apt/lists/*
-  # pg_cron must be preloaded; pgmq is already set by the base. The launcher
-  # bgworker binds to exactly one DB (see §6) so cron.database_name must be
-  # pinned to the application DB here — jobs registered elsewhere are inert.
-  RUN printf "shared_preload_libraries = 'pg_cron,pgmq'\ncron.database_name = 'cognitor'\n" \
-      >> /usr/share/postgresql/postgresql.conf.sample
+  COPY --from=postgres-entrypoint /usr/local/bin/docker-entrypoint.sh /usr/local/bin/
+  COPY --from=tembo-pgmq /usr/share/postgresql/16/extension/pgmq* /usr/share/postgresql/16/extension/
+  RUN printf "shared_preload_libraries = 'pg_cron'\ncron.database_name = 'cognitor'\n" \
+      >> /usr/share/postgresql/16/postgresql.conf.sample
   ENV POSTGRES_DB=cognitor
   ```
   

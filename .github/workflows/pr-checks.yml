@@ -107,6 +107,9 @@ jobs:
           - service: ui
             context: ./ui-react
             dockerfile: ./ui-react/Dockerfile
+          - service: postgres-runtime
+            context: ./deploy/postgres-runtime
+            dockerfile: ./deploy/postgres-runtime/Dockerfile
 
     steps:
       - name: Checkout code

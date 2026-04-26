@@ -48,6 +48,8 @@ proxy_image: "{{ image_registry }}/coin-ops-proxy:{{ image_tag }}"
 history_api_image: "{{ image_registry }}/coin-ops-history-api:{{ image_tag }}"
 history_consumer_image: "{{ image_registry }}/coin-ops-history-consumer:{{ image_tag }}"
 ui_image: "{{ image_registry }}/coin-ops-ui:{{ image_tag }}"
+postgres_runtime_image: "{{ image_registry }}/coin-ops-postgres-runtime:{{ image_tag }}"
+postgres_image: "{{ postgres_runtime_image if runtime_backend == 'postgres' else 'postgres:16-alpine' }}"
 registry_username: "{{ lookup('env', 'GHCR_USERNAME') | default('', true) }}"
 registry_token: "{{ lookup('env', 'GHCR_TOKEN') | default('', true) }}"
 

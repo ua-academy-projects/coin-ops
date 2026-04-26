@@ -10,7 +10,9 @@
 --   • The executing role must have CREATE EXTENSION privilege, 
 --     or pgmq and pg_cron must already be installed by a superuser.
 --   • Run as a role that owns (or can create objects in) the target database.
---   • shared_preload_libraries must include 'pg_cron,pgmq' in postgresql.conf.
+--   • shared_preload_libraries must include 'pg_cron' in postgresql.conf.
+--     With the current Tembo pg16-pgmq base, pgmq is created as an extension
+--     and is not a preload library.
 --   • cron.database_name in postgresql.conf must point at THIS database —
 --     the pg_cron launcher bgworker binds to exactly one DB, so jobs
 --     registered anywhere else are inert. See docs/runtime.md.
