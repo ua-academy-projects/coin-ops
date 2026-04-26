@@ -64,6 +64,10 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'home' | 'live' | 'history' | 'whales' | 'insights'>('home');
   const [markets, setMarkets] = useState<MarketSnapshot[]>([]);
   const [whales, setWhales] = useState<Whale[]>([]);
+  const [runtimeStatus, setRuntimeStatus] = useState<{ live: boolean; backend: string }>({
+    live: false,
+    backend: 'unknown',
+  });
   const [selectedMarket, setSelectedMarket] = useState<MarketSnapshot | null>(null);
   const [historyData, setHistoryData] = useState<HistoryPoint[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -103,6 +107,24 @@ export default function App() {
       if (res.ok) setPrices(await res.json() as Prices);
     } catch {
       // silent fail — prices are optional
+    }
+  };
+
+  const loadRuntimeStatus = async () => {
+    try {
+      const res = await fetch(PROXY_URL + '/health', LIVE_FETCH_OPTIONS);
+      if (!res.ok) {
+        setRuntimeStatus(current => ({ ...current, live: false }));
+        return;
+      }
+
+      const data = await res.json() as { status?: string; runtime_backend?: string };
+      setRuntimeStatus({
+        live: data.status === 'ok',
+        backend: data.runtime_backend || 'unknown',
+      });
+    } catch {
+      setRuntimeStatus(current => ({ ...current, live: false }));
     }
   };
 
@@ -188,15 +210,18 @@ export default function App() {
     loadData();
     loadPrices();
     loadHomepagePriceHistory();
+    loadRuntimeStatus();
     restoreState(sidRef.current);
     const marketTimer = setInterval(loadData, REFRESH_MS);
     const priceTimer = setInterval(loadPrices, PRICES_REFRESH_MS);
     const homepagePriceTimer = setInterval(loadHomepagePriceHistory, PRICES_REFRESH_MS);
+    const runtimeTimer = setInterval(loadRuntimeStatus, REFRESH_MS);
     const refreshVisibleData = () => {
       if (document.visibilityState !== 'visible') return;
       loadData();
       loadPrices();
       loadHomepagePriceHistory();
+      loadRuntimeStatus();
     };
     window.addEventListener('focus', refreshVisibleData);
     document.addEventListener('visibilitychange', refreshVisibleData);
@@ -204,6 +229,7 @@ export default function App() {
       clearInterval(marketTimer);
       clearInterval(priceTimer);
       clearInterval(homepagePriceTimer);
+      clearInterval(runtimeTimer);
       window.removeEventListener('focus', refreshVisibleData);
       document.removeEventListener('visibilitychange', refreshVisibleData);
     };
@@ -316,6 +342,12 @@ export default function App() {
     return new Date(prices.fetched_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }, [prices]);
 
+  const runtimeBackendLabel = useMemo(() => {
+    if (runtimeStatus.backend === 'postgres') return 'PostgreSQL';
+    if (runtimeStatus.backend === 'external') return 'External';
+    return 'Unknown';
+  }, [runtimeStatus.backend]);
+
   const handleMarketClick = async (market: MarketSnapshot) => {
     setSelectedMarket(market);
     handleTabSwitch('history');
@@ -385,14 +417,21 @@ export default function App() {
         <div className="p-4 border-t border-white/10">
           <div className="glass rounded-xl p-4 space-y-2">
             <div className="flex items-center justify-between text-xs text-muted">
-              <span>Status</span>
+              <span>Runtime Status</span>
               <div className="flex items-center gap-1.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-yes animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
-                <span className="text-yes">Live</span>
+                <div
+                  className={cn(
+                    'w-1.5 h-1.5 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.6)]',
+                    runtimeStatus.live ? 'bg-yes animate-pulse' : 'bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.6)]',
+                  )}
+                />
+                <span className={runtimeStatus.live ? 'text-yes' : 'text-red-400'}>
+                  {runtimeStatus.live ? 'Live' : 'Offline'}
+                </span>
               </div>
             </div>
             <p className="text-[10px] text-muted leading-relaxed">
-              Connected to Polymarket Gamma API v1.2
+              Runtime backend: {runtimeBackendLabel}
             </p>
           </div>
         </div>

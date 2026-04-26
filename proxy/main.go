@@ -533,7 +533,10 @@ func corsMiddlewareWithPost(next http.HandlerFunc) http.HandlerFunc {
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":          "ok",
+		"runtime_backend": s.backend,
+	})
 }
 
 func (s *Server) handleCurrent(w http.ResponseWriter, r *http.Request) {

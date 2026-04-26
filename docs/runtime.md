@@ -13,19 +13,27 @@ The runtime layer depends on two extensions:
 Neither ships in the stock `postgres:16-alpine` image referenced by
 `deploy/compose/node-01.compose.yaml` today, so a custom image is
 required. Per ADR §9.1, the chosen base is
-`quay.io/tembo/pg16-pgmq` with `postgresql-16-cron` layered on top.
+an Ubuntu PostgreSQL 16 runtime with `pg_cron` installed from Ubuntu's
+package repositories and the `pgmq` extension files copied from Tembo's
+`pg16-pgmq` image. The image keeps the `postgres` user on uid/gid `70`
+so existing data volumes created by `postgres:16-alpine` remain reusable
+during the rollout. The project-owned image definition lives at
+`deploy/postgres-runtime/Dockerfile` and is published as
+`coin-ops-postgres-runtime`.
 
 At a minimum, whichever image is used, the Postgres process must start
 with:
 
 ```conf
-shared_preload_libraries = 'pg_cron,pgmq'
+shared_preload_libraries = 'pg_cron'
 cron.database_name       = 'cognitor'   # required — launcher bgworker binds to exactly this DB
 ```
 
 `shared_preload_libraries` can only be changed via `postgresql.conf` (or
 an equivalent `-c` command-line flag) and requires a server restart;
-`CREATE EXTENSION` alone is not enough.
+`CREATE EXTENSION` alone is not enough for `pg_cron`. With the current
+Tembo `pg16-pgmq` base, `pgmq` is loaded by `CREATE EXTENSION pgmq` and
+must not be listed as a preload library.
 
 ### Why `cron.database_name` is not optional
 
@@ -91,6 +99,12 @@ up to ~90 s of wall time because it polls for the reaper to run; the
 other tests complete in under a second combined.
 
 ## Known behaviour
+
+- On the first boot of a fresh data directory, the temporary init server may
+  log one `FATAL: database "cognitor" does not exist` from the `pg_cron`
+  launcher before `POSTGRES_DB` is created. The official entrypoint then
+  creates `cognitor`, restarts PostgreSQL, and the final server starts
+  `pg_cron` normally.
 
 - `runtime-dlq-reap` (nightly at 03:00 UTC) calls `runtime.dlq_reap_expired()`,
   which is defined on the queue side of the runtime layer

@@ -43,6 +43,12 @@
     src: "{{ playbook_dir }}/../deploy/compose/node-02.compose.yaml"
     dest: /opt/cognitor/proxy/compose.yaml
 
+- name: Validate proxy compose configuration
+  command: docker compose -f /opt/cognitor/proxy/compose.yaml config -q
+  args:
+    chdir: /opt/cognitor/proxy
+  changed_when: false
+
 - name: Pull proxy container images
   command: docker compose -f /opt/cognitor/proxy/compose.yaml pull
   args:

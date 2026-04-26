@@ -12,6 +12,7 @@ on:
       - "proxy/**"
       - "history/**"
       - "ui-react/**"
+      - "deploy/postgres-runtime/**"
   workflow_dispatch:
 
 permissions:
@@ -46,6 +47,10 @@ jobs:
             image: coin-ops-ui
             context: ./ui-react
             dockerfile: ./ui-react/Dockerfile
+          - service: postgres-runtime
+            image: coin-ops-postgres-runtime
+            context: ./deploy/postgres-runtime
+            dockerfile: ./deploy/postgres-runtime/Dockerfile
 
     steps:
       - name: Checkout

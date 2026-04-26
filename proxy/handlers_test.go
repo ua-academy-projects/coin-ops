@@ -58,7 +58,7 @@ func TestHandleHealth(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
 	}
-	if strings.TrimSpace(rr.Body.String()) != `{"status":"ok"}` {
+	if strings.TrimSpace(rr.Body.String()) != `{"runtime_backend":"external","status":"ok"}` {
 		t.Fatalf("body = %s", rr.Body.String())
 	}
 }

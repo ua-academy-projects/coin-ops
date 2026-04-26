@@ -1,4 +1,5 @@
 services:
+{% if runtime_backend == "external" %}
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -9,6 +10,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+{% endif %}
 
   proxy:
     image: "{{ proxy_image }}"
@@ -17,6 +19,8 @@ services:
       - "{{ proxy_port }}:{{ proxy_port }}"
     env_file:
       - /etc/cognitor/proxy.env
+{% if runtime_backend == "external" %}
     depends_on:
       redis:
         condition: service_healthy
+{% endif %}

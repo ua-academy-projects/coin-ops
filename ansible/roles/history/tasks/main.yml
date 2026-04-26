@@ -86,10 +86,32 @@
     path: /opt/cognitor/history/history
     state: absent
 
+- name: Copy PostgreSQL runtime schema
+  copy:
+    src: "{{ playbook_dir }}/../history/schema.sql"
+    dest: /opt/cognitor/history/schema.sql
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Copy runtime SQL schema files
+  copy:
+    src: "{{ playbook_dir }}/../runtime/"
+    dest: /opt/cognitor/history/runtime/
+    owner: root
+    group: root
+    mode: '0644'
+
 - name: Render compose file
   template:
     src: "{{ playbook_dir }}/../deploy/compose/node-01.compose.yaml"
     dest: /opt/cognitor/history/compose.yaml
+
+- name: Validate history compose configuration
+  command: docker compose -f /opt/cognitor/history/compose.yaml config -q
+  args:
+    chdir: /opt/cognitor/history
+  changed_when: false
 
 - name: Stop PostgreSQL before repairing data directory ownership
   command: docker compose -f /opt/cognitor/history/compose.yaml stop postgres
@@ -98,12 +120,14 @@
   changed_when: false
   failed_when: false
 
-- name: Repair PostgreSQL data directory ownership for postgres alpine image
+- name: Repair PostgreSQL data directory ownership for selected Postgres image
   file:
     path: /var/lib/coin-ops/postgres
     state: directory
-    owner: 70
-    group: 70
+    # Keep the runtime image on Alpine-compatible uid/gid 70 so existing
+    # postgres volumes can be reused during external -> postgres cutover.
+    owner: '70'
+    group: '70'
     mode: '0700'
     recurse: yes
 
@@ -113,7 +137,9 @@
     chdir: /opt/cognitor/history
 
 - name: Start history dependencies first
-  command: docker compose -f /opt/cognitor/history/compose.yaml up -d postgres rabbitmq
+  command: >-
+    docker compose -f /opt/cognitor/history/compose.yaml up -d
+    postgres{% if runtime_backend == "external" %} rabbitmq{% endif %}
   args:
     chdir: /opt/cognitor/history
 
@@ -138,6 +164,71 @@
   when:
     - legacy_postgres_dump.stat.exists
     - not host_postgres_migration_marker.stat.exists
+
+- name: Apply PostgreSQL runtime schema before app startup
+  shell: >-
+    docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres
+    psql -v ON_ERROR_STOP=1 -U {{ db_user }} -d {{ db_name }}
+    < /opt/cognitor/history/schema.sql
+  args:
+    chdir: /opt/cognitor/history
+  register: schema_result
+  changed_when: false
+
+- name: Persist runtime application role before wrapper bootstrap
+  command: >-
+    docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres
+    psql -v ON_ERROR_STOP=1 -U {{ db_user }} -d {{ db_name }}
+    -c "ALTER DATABASE {{ db_name }} SET runtime.app_role = '{{ db_user }}';"
+  args:
+    chdir: /opt/cognitor/history
+  register: runtime_app_role_result
+  changed_when: false
+  when: runtime_backend == "postgres"
+
+- name: Apply runtime queue and session schema
+  shell: |
+    (
+      printf "%s\n" "SET runtime.app_role = '{{ db_user }}';"
+      cat \
+        /opt/cognitor/history/runtime/01_schema.sql \
+        /opt/cognitor/history/runtime/02_wrappers.sql \
+        /opt/cognitor/history/runtime/03_notify.sql \
+        /opt/cognitor/history/runtime/04_advisory.sql \
+        /opt/cognitor/history/runtime/05_dlq.sql \
+        /opt/cognitor/history/runtime/06_cache_schema.sql \
+        /opt/cognitor/history/runtime/07_cache_wrappers.sql \
+        /opt/cognitor/history/runtime/08_cron.sql
+    ) | docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres psql -v ON_ERROR_STOP=1 -U {{ db_user }} -d {{ db_name }}
+  args:
+    chdir: /opt/cognitor/history
+  register: runtime_schema_result
+  changed_when: false
+  when: runtime_backend == "postgres"
+
+- name: Verify PostgreSQL runtime extensions are installed
+  command: >-
+    docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres
+    psql -v ON_ERROR_STOP=1 -At -U {{ db_user }} -d {{ db_name }}
+    -c "SELECT string_agg(extname, ',' ORDER BY extname) FROM pg_extension WHERE extname IN ('pg_cron', 'pgmq');"
+  args:
+    chdir: /opt/cognitor/history
+  register: runtime_extension_check
+  changed_when: false
+  failed_when: runtime_extension_check.stdout | trim != "pg_cron,pgmq"
+  when: runtime_backend == "postgres"
+
+- name: Verify PostgreSQL runtime cron jobs are registered
+  command: >-
+    docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres
+    psql -v ON_ERROR_STOP=1 -At -U {{ db_user }} -d {{ db_name }}
+    -c "SELECT count(*) FROM cron.job WHERE jobname IN ('runtime-cache-reap', 'runtime-session-reap', 'runtime-dlq-reap') AND active;"
+  args:
+    chdir: /opt/cognitor/history
+  register: runtime_cron_check
+  changed_when: false
+  failed_when: runtime_cron_check.stdout | trim | int != 3
+  when: runtime_backend == "postgres"
 
 - name: Mark legacy PostgreSQL migration complete
   file:

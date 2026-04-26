@@ -15,9 +15,12 @@
           - lookup('env', 'RABBITMQ_PASSWORD') != ''
           - lookup('env', 'DB_PASSWORD') != ''
           - lookup('env', 'SSH_KEY_PATH') != ''
+          - lookup('env', 'RUNTIME_BACKEND') in ['', 'external', 'postgres']
         fail_msg: |
-          Required environment variables are not set.
+          Required environment variables are not set or RUNTIME_BACKEND is invalid.
           Run:  source .env
+          RUNTIME_BACKEND may be empty and will default to external.
+          Supported explicit runtime backends: external, postgres.
           Then retry: ansible-playbook -i ansible/inventory ansible/deploy.yml
 
 - name: Authenticate Docker registry on target nodes
