@@ -205,20 +205,20 @@ cp .env.example .env
 source .env
 ```
 
-For the local root `docker compose` flow, use a plain Compose `.env` file instead of shell `export`s:
+For the local root `docker compose` flow, use a plain Compose `.env` file and the root `Makefile` convenience targets:
 
 ```bash
 cp .env.compose.example .env
+make local-up
+```
+
+Equivalent direct Compose command:
+
+```bash
 docker compose up --build
 ```
 
-Switch local runtime mode by editing `.env`:
-
-```env
-RUNTIME_BACKEND=external
-# or
-RUNTIME_BACKEND=postgres
-```
+This local flow is a developer convenience stack for the default root Compose setup. It does not replace the VM-based Terraform + Ansible deployment flow.
 
 Install pinned Ansible collections:
 
@@ -258,6 +258,25 @@ IMAGE_TAG=v0.1.0 ansible-playbook -i ansible/inventory ansible/deploy.yml
 ```
 
 ## Local Development
+
+Quick local Compose workflow:
+
+```bash
+cp .env.compose.example .env
+make local-up
+```
+
+Open the app at `http://localhost:5000`.
+
+Useful local commands:
+
+```bash
+make local-logs
+make local-ps
+make local-down
+make local-restart
+make local-config
+```
 
 Frontend:
 
