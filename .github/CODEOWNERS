@@ -1,6 +1,6 @@
 # Deploy / CI
 /.github/workflows/ @Leev1tan
-/infra/ @Leev1tan
+/terraform/ @Leev1tan
 
 # SQL
 *.sql @Leev1tan
