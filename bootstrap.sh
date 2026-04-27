@@ -56,6 +56,7 @@ readonly ROLES=(
   "roles/storage.admin"
   "roles/compute.networkAdmin"
   "roles/compute.instanceAdmin.v1"
+  "roles/compute.securityAdmin"
   "roles/serviceusage.serviceUsageAdmin"
   "roles/iam.serviceAccountUser"
 )

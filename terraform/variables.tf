@@ -42,14 +42,8 @@ variable "subnet_cidr" {
   }
 }
 
-variable "vm_name" {
-  description = "Name of the test VM"
-  type        = string
-  default     = "terraform-vm"
-}
-
 variable "machine_type" {
-  description = "Machine type for the test VM"
+  description = "Machine type for all VMs"
   type        = string
   default     = "e2-micro"
 
@@ -67,5 +61,15 @@ variable "environment" {
   validation {
     condition     = contains(["learning", "dev", "staging", "prod"], var.environment)
     error_message = "Environment must be one of: learning, dev, staging, prod."
+  }
+}
+
+variable "ssh_source_ip" {
+  description = "Your public IP address for SSH access to jump host (CIDR format, e.g. 203.0.113.5/32)"
+  type        = string
+
+  validation {
+    condition     = can(cidrnetmask(var.ssh_source_ip))
+    error_message = "SSH source IP must be a valid CIDR block (e.g. 203.0.113.5/32)."
   }
 }
