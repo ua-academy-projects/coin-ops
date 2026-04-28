@@ -1,15 +1,18 @@
 # Coin-Ops
 
-Coin-Ops is a distributed Polymarket dashboard deployed across three VMs. The system uses a PostgreSQL-native runtime architecture, consolidating queue, cache, and session state management directly into PostgreSQL. 
+Coin-Ops is a distributed Polymarket dashboard deployed across three VMs. The system uses a PostgreSQL-native runtime architecture, consolidating queue and session state management directly into PostgreSQL (live market caches remain in-process). 
 
-The roadmap from the April 20-21, 2026 GitHub issues has landed on `dev`:
+The major "Repo Foundation", "PostgreSQL Migration", and "Test Pyramid" phases (April 2026) are successfully completed on `dev`:
 
-- `dev` is the integration branch for team PRs
-- PR validation now runs on pull requests into `dev`
-- pushes to `dev` now publish `dev-latest` images
-- PostgreSQL serves as the unified backend for multiple runtime concerns via the `runtime/` schema
-- the full proxy/consumer/deploy cutover to `RUNTIME_BACKEND=postgres` is complete
-- RabbitMQ and Redis have been deprecated as primary dependencies, though `external` mode remains available as a legacy fallback
+- **Infrastructure:** CI/CD gating, SemVer releases, and local Compose workflows (`make verify`) are fully operational.
+- **Runtime Backend:** Proxy and Consumer services have fully cut over to `RUNTIME_BACKEND=postgres`, consolidating queue and session state natively in PostgreSQL.
+- **Validation:** A comprehensive Test Pyramid is in place, covering unit tests (Go, Python, React), integration tests (PostgreSQL-backed), and end-to-end smoke suites (#44, #46, #47, #49, #50), all wired into CI (#52).
+
+**Current Focus & Next Steps:**
+
+- **Legacy Cleanup:** Physically removing RabbitMQ and Redis completely from infrastructure provisioning (#12, PR #48).
+- **Frontend Porting:** Porting the React frontend to the PostgreSQL-runtime architecture and integrating cross-branch improvements (#14).
+- **Documentation:** Finalizing the migration and demo runbook (#13, PR #51).
 
 **[Read the Documentation](docs/)** | **[How to Contribute](CONTRIBUTING.md)**
 
@@ -17,40 +20,99 @@ The roadmap from the April 20-21, 2026 GitHub issues has landed on `dev`:
 
 | Topic | Current repo state on `dev` | Next planned step |
 | --- | --- | --- |
-| Runtime backend | Default deployed path is `postgres`: queue, cache, and session state consolidated in PostgreSQL | Monitor and optimize PostgreSQL runtime load |
+| Runtime backend | Default deployed path is `postgres`: queue and session state consolidated in PostgreSQL | Monitor and optimize PostgreSQL runtime load |
 | Runtime queue assets | Proxy and consumer use `pgmq` queue SQL, DLQ, and `LISTEN/NOTIFY` via `runtime/` schema | Remove remaining legacy dead code if any |
 | Frontend contract | same-origin `/api` and `/history-api` | keep the same HTTP contract |
 | Deployment shape | Docker Compose on three VMs via Ansible | keep the three-VM story |
 | Image publishing | `Shabat` -> `shabat-latest`, `dev` -> `dev-latest`, tags -> `vX.Y.Z` | use moving branch tags for integration/demo deploys and tags for pinned releases |
 | Validation | PR checks run on pull requests into `dev` | extend the test pyramid beyond the current baseline over time |
 
-## Architecture (PostgreSQL Runtime)
+## Architecture
 
-```text
-Browser
-  |
-  v
-node-03
-  ui container (nginx + React SPA)
-  |
-  +-- /api -----------> node-02 proxy container :8080
-  |                       - fetches Polymarket markets
-  |                       - fetches whale leaderboard/positions
-  |                       - fetches BTC/ETH and USD/UAH
-  |                       - stores session JSON in PostgreSQL (UNLOGGED table)
-  |                       - publishes market/price events to PostgreSQL (pgmq/runtime API)
-  |
-  +-- /history-api ---> node-01 history-api container :8000
-                          - reads PostgreSQL history tables
+```mermaid
+flowchart TD
+    %% Стилі
+    classDef deprecated fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#b71c1c
+    classDef neutral fill:#f3f4f6,stroke:#9ca3af,stroke-width:2px
+    classDef pg_cache fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#e65100
+    classDef pg_queue fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1
+    classDef pg_db fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#1b5e20
 
-node-01
-  postgres container (data + queue + cache + session runtime)
-  history-consumer container
-    - consumes `market_events` via PostgreSQL runtime API
-    - writes `market_snapshots` and `price_snapshots`
+    subgraph Shabat ["Стан: Shabat (Як було)"]
+        direction TB
+        Browser1(Browser)
 
-node-02
-  (Redis is removed or disabled in `postgres` mode)
+        subgraph Node03_1 ["Node-03"]
+            UI1["React UI Gateway"]:::neutral
+        end
+
+        subgraph Node02_1 ["Node-02"]
+            Proxy1["Go Proxy"]:::neutral
+            Redis[("Redis Cache")]:::deprecated
+        end
+
+        subgraph Node01_1 ["Node-01"]
+            HistoryAPI1["Python History API"]:::neutral
+            RabbitMQ[["RabbitMQ Queue"]]:::deprecated
+            Consumer1["pika Consumer"]:::deprecated
+            PGDB1[("PostgreSQL Database")]:::pg_db
+        end
+
+        Browser1 -->|HTTP| UI1
+        UI1 -->|/api| Proxy1
+        UI1 -->|/history-api| HistoryAPI1
+        
+        Proxy1 -->|Read / Write State| Redis
+        Proxy1 -->|Publish Event| RabbitMQ
+        
+        RabbitMQ -->|Consume| Consumer1
+        Consumer1 -->|Write Data| PGDB1
+        
+        HistoryAPI1 -->|Read Data| PGDB1
+    end
+
+    subgraph Dev ["Стан: dev (Як стало)"]
+        direction TB
+        Browser2(Browser)
+
+        subgraph Node03_2 ["Node-03"]
+            UI2["React UI Gateway"]:::neutral
+        end
+
+
+        subgraph Node02_2 ["Node-02"]
+            Proxy2["Go Proxy"]:::neutral
+        end
+
+        subgraph Node01_2 ["Node-01"]
+            HistoryAPI2["Python History API"]:::neutral
+            Consumer2["consumer.py (postgres)"]:::neutral
+            
+            subgraph PostgreSQL ["PostgreSQL Container"]
+                direction TB
+                PGCache[("PSQL: Session<br/>Схема 'runtime.session'")]:::pg_cache
+                PGQueue[("PSQL: Queue<br/>Extension 'pgmq'")]:::pg_queue
+                PGDB2[("PSQL: Database<br/>History Tables")]:::pg_db
+            end
+        end
+
+        subgraph CICD ["CI/CD Automation"]
+            GHA["GitHub Actions:<br/>- PR Checks<br/>- Docker Builds<br/>- SemVer Releases"]:::active
+        end
+
+        Browser2 -->|HTTP| UI2
+        UI2 -->|/api| Proxy2
+        UI2 -->|/history-api| HistoryAPI2
+        
+        Proxy2 -->|Read / Write State| PGCache
+        Proxy2 -->|"enqueue_event()"| PGQueue
+        
+        PGQueue -->|LISTEN / NOTIFY| Consumer2
+        Consumer2 -->|"claim_events()"| PGQueue
+        Consumer2 -->|Write Snapshots| PGDB2
+        
+        HistoryAPI2 -->|Read Data| PGDB2
+    end
 ```
 
 > **Note:** The runtime mode is now PostgreSQL-native (`RUNTIME_BACKEND=postgres`). The legacy mode using RabbitMQ and Redis (`RUNTIME_BACKEND=external`) is kept as a fallback.
@@ -88,9 +150,9 @@ The browser does not call `172.31.1.10:8000` or `172.31.1.11:8080` directly. Nod
 
 - added `RUNTIME_BACKEND=external|postgres` wiring to proxy and consumer startup paths
 - switched proxy event publishing from RabbitMQ to `runtime.enqueue_event(...)`
-- switched deployed consumption from `history/consumer.py` to `runtime/runtime_consumer.py`
+- added PostgreSQL worker routing inside `history/consumer.py` via `RUNTIME_BACKEND`
 - wired runtime schema/bootstrap into Ansible and Compose
-- moved Redis-backed session/cache behavior into PostgreSQL runtime primitives
+- moved Redis-backed session state into PostgreSQL runtime primitives (live caches remain in-process)
 - deprecated RabbitMQ and Redis as primary dependencies
 
 ## Tech Stack

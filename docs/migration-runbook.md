@@ -37,8 +37,8 @@ To migrate an existing deployment from the legacy RabbitMQ/Redis architecture to
    ```
 4. **Verification:**
    - Verify that proxy `/health` is passing.
-   - Verify that `runtime.cache` and `runtime.session` are actively receiving writes.
-   - Verify that the `pgmq` queues (`market_events`, `price_events`) are actively being consumed by checking queue depths.
+   - Verify that `runtime.session` is actively receiving writes.
+   - Verify that the `pgmq` queue (`events`) is actively being consumed by checking queue depths.
 5. **Decommissioning:**
    Once verified, RabbitMQ and Redis containers/services can be safely stopped and removed.
 
