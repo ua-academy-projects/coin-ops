@@ -35,3 +35,15 @@
 `*.env text eol=lf`<br>
 `*.sh text eol=lf`<br>
 `*.sql text eol=lf`
+
+**Важливі змінні середовища (Runtime Backend):**
+
+Для коректної роботи нової архітектури з PostgreSQL як єдиним runtime (замість Redis + RabbitMQ), переконайтеся що у ваших `.env` файлах задані наступні змінні:
+
+```env
+# Вибір бекенду для черг, кешу та сесій
+RUNTIME_BACKEND=postgres    # "postgres" (за замовчуванням) або "external" (RabbitMQ+Redis)
+
+# Рядок підключення до PostgreSQL (обов'язково для RUNTIME_BACKEND=postgres)
+DATABASE_URL=postgresql://user:pass@node-01:5432/cognitor
+```
