@@ -48,6 +48,10 @@ resource "google_compute_firewall" "external_firewall" {
     ports    = ["22"] # Allow SSH traffic from anywhere to external subnet
   }
 
+  allow {
+    protocol = "icmp" # Allow ICMP traffic for ping between subnets
+  }
+
   source_ranges = ["0.0.0.0/0"] # Allow traffic from anywhere to external subnet
   target_tags   = ["jump-host"]
 }
