@@ -1,12 +1,17 @@
-Cloud GCP — Jump Host Infrastructure
-Task
-Deploy 4 VMs on GCP via Terraform:
+# Cloud GCP — Jump Host Infrastructure
 
-3 internal VMs (no public IP)
-1 jump host (public + internal IP, port 22 only)
+
+## Task
+
+Deploy 4 VMs on GCP via Terraform:
+- 3 internal VMs (no public IP)
+- 1 jump host (public + internal IP, port 22 only)
 
 SSH to internal VMs only through the jump host.
-Structure
+
+## Structure
+
+```
 Cloud_GCP/
 ├── docs/
 │   ├── 00-README-task1.md                 # Bootstrap & service account explanation
@@ -21,7 +26,9 @@ Cloud_GCP/
 │   └── terraform.tfvars                   # gitignored — values for variables
 ├── bootstrap.sh                           # One-time GCP project setup script
 └── key.json                               # gitignored — service account credentials
-Docs
+```
 
-Bootstrap & Service Account
-Terraform Jump Host Architecture
+## Docs
+
+- [Bootstrap & Service Account](docs/01-bootstrap-service-account.md)
+- [Terraform Jump Host Architecture](docs/02-terraform-jump-host.md)
