@@ -283,19 +283,6 @@ After deletion, the key file becomes useless even if the teammate still has it.
 
 **DevOps lesson:** Idempotency — running something once or ten times gives the same result. Same concept as Ansible playbooks.
 
-### 2. Cyrillic character in folder name
-
-**Problem:** Folder had a Cyrillic "С" instead of Latin "C". `cd` failed in Git Bash.
-
-**Fix:** Used Tab completion. Renamed folder to Latin characters.
-
-### 3. VS Code and Git Bash in different folders
-
-**Problem:** Two folders with similar names. Edited file in one, ran script from another.
-
-**Fix:** Verified path with `pwd` and file content with `cat` before running.
-
----
 
 ## Secrets & Credentials Rules
 
