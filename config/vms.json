@@ -1,0 +1,52 @@
+{
+    "vms": {
+        "vm-1": {
+            "network": "terraform-network",
+            "subnet": "terraform-network-subnet",
+            "assign_public_ip": false,
+            "tags": [
+                "internal-vm",
+                "terraform-managed"
+            ],
+            "labels": {
+                "role": "internal"
+            }
+        },
+        "vm-2": {
+            "network": "terraform-network",
+            "subnet": "terraform-network-subnet",
+            "assign_public_ip": false,
+            "tags": [
+                "internal-vm",
+                "terraform-managed"
+            ],
+            "labels": {
+                "role": "internal"
+            }
+        },
+        "vm-3": {
+            "network": "terraform-network",
+            "subnet": "terraform-network-subnet",
+            "assign_public_ip": false,
+            "tags": [
+                "internal-vm",
+                "terraform-managed"
+            ],
+            "labels": {
+                "role": "internal"
+            }
+        },
+        "vm-4-jump": {
+            "network": "terraform-network",
+            "subnet": "terraform-network-subnet",
+            "assign_public_ip": true,
+            "tags": [
+                "jump-host",
+                "terraform-managed"
+            ],
+            "labels": {
+                "role": "jump-host"
+            }
+        }
+    }
+}

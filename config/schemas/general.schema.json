@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "general.schema.json",
+  "title": "General Configuration",
+  "description": "General GCP project settings and default values",
+  "type": "object",
+  "required": ["project_id", "region", "zone", "environment"],
+  "additionalProperties": false,
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "description": "GCP Project ID",
+      "minLength": 1
+    },
+    "region": {
+      "type": "string",
+      "description": "Default GCP region",
+      "examples": ["us-central1", "us-east1", "europe-west1"]
+    },
+    "zone": {
+      "type": "string",
+      "description": "Default GCP zone",
+      "examples": ["us-central1-a", "us-central1-b"]
+    },
+    "environment": {
+      "type": "string",
+      "description": "Environment name",
+      "enum": ["learning", "dev", "staging", "prod"]
+    },
+    "default_os": {
+      "type": "string",
+      "description": "Default OS image for VMs",
+      "default": "debian-cloud/debian-12"
+    },
+    "default_machine_type": {
+      "type": "string",
+      "description": "Default machine type for VMs",
+      "enum": ["e2-micro", "e2-small", "e2-medium"],
+      "default": "e2-micro"
+    },
+    "default_disk_size_gb": {
+      "type": "integer",
+      "description": "Default boot disk size in GB",
+      "minimum": 10,
+      "maximum": 200,
+      "default": 10
+    },
+    "default_disk_type": {
+      "type": "string",
+      "description": "Default boot disk type",
+      "enum": ["pd-standard", "pd-balanced", "pd-ssd"],
+      "default": "pd-standard"
+    },
+    "ssh_user": {
+      "type": "string",
+      "description": "SSH username for VM access",
+      "default": "terraform"
+    },
+    "ssh_port": {
+      "type": "integer",
+      "description": "SSH port (non-default for security)",
+      "minimum": 1024,
+      "maximum": 65535,
+      "default": 47832
+    }
+  }
+}

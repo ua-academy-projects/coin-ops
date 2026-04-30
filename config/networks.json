@@ -1,0 +1,14 @@
+{
+    "networks": {
+        "terraform-network": {
+            "description": "Main VPC network managed by Terraform"
+        }
+    },
+    "subnets": {
+        "terraform-network-subnet": {
+            "network": "terraform-network",
+            "cidr": "10.0.0.0/24",
+            "region": "us-central1"
+        }
+    }
+}

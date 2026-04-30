@@ -10,13 +10,20 @@ sa-key.json
 *.tfstate.*
 *.tfvars
 !*.tfvars.example
-.terraform.lock.hcl
 crash.log
 crash.*.log
 override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+
+# Lock file SHOULD be committed (intentionally not ignored):
+# .terraform.lock.hcl
+
+# Linters and tools
+.tflint.d/
+.tfsec/
+*.tfplan
 
 # IDE
 .vscode/
@@ -30,4 +37,4 @@ Thumbs.db
 
 # Backup files
 *.old
-*.bak
+*.bak.vscode/*.code-workspace
