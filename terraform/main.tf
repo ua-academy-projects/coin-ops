@@ -56,48 +56,28 @@ resource "google_compute_firewall" "external_firewall" {
   target_tags   = ["jump-host"]
 }
 
-# Create 3 VMs in the internal subnet without external IP addresses
-resource "google_compute_instance" "internal_vm" {
-  count        = 3
-  name         = "internal-vm-${count.index + 1}"
-  machine_type = "e2-micro"
-  zone         = "${var.region}-a"
-  tags         = ["internal-vm"]
-
-  boot_disk {
-    initialize_params {
-      image = "debian-cloud/debian-12"
-    }
-  }
-
-  network_interface {
-    network    = google_compute_network.vpc_network.id
-    subnetwork = google_compute_subnetwork.internal_subnet.id
-  }
+locals {
+  vm_config = jsondecode(file("${path.module}/config.json"))
 }
 
-# Create Jump host in the external subnet
-resource "google_compute_instance" "jump_host" {
-  name         = "jump-host"
-  machine_type = "e2-micro"
-  zone         = "${var.region}-a"
-  tags         = ["jump-host"]
+module "compute_instances" {
+  source   = "./modules/gcp_manage_instances"
+  for_each = local.vm_config.instances
 
-  metadata_startup_script = <<-EOT
-    sleep 10
-    sudo apt update -y
-    sudo apt upgrade -y
-  EOT
+  name            = each.key
+  zone            = try(each.value.zone, local.vm_config.general.zone)
 
-  boot_disk {
-    initialize_params {
-      image = "debian-cloud/debian-12"
-    }
-  }
+  machine_type    = try(each.value.machine_type, local.vm_config.general.machine_type)
+  vpc_name        = try(each.value.vpc_name, local.vm_config.general.vpc_name) 
+  subnet_name     = try(each.value.subnet_name, local.vm_config.general.subnet_name)
+  has_external_ip = try(each.value.has_external_ip, local.vm_config.general.has_external_ip)
+  tags            = try(each.value.tags, local.vm_config.general.tags)
+  disk_size       = try(each.value.disk_size, local.vm_config.general.disk_size)
+  os_image        = try(each.value.os_image, local.vm_config.general.os_image)
 
-  network_interface {
-    network    = google_compute_network.vpc_network.id
-    subnetwork = google_compute_subnetwork.external_subnet.id
-    access_config {}
-  }
+  depends_on = [
+  google_compute_network.vpc_network,
+  google_compute_subnetwork.external_subnet,
+  google_compute_subnetwork.internal_subnet
+  ]
 }

@@ -1,0 +1,29 @@
+{
+    "general":{
+        "project": "project-6f41102f-c77c-46a3-aac",
+        "zone": "europe-central2-a",
+        "vpc_name": "vpc-network",
+        "disk_size": 10,
+        "machine_type": "e2-micro",
+        "os_image": "debian-cloud/debian-12"
+    },
+    "instances": {
+        "jump-host": {
+            "subnet_name": "external-subnet",
+            "has_external_ip": true,
+            "tags": ["jump-host"]
+        },
+        "private-vm-1": {
+            "subnet_name": "internal-subnet",
+            "has_external_ip": false,
+            "tags": ["internal-vm"],
+            "disk_size": 20
+        },
+        "private-vm-2": {
+            "count": 3,
+            "subnet_name": "internal-subnet",
+            "has_external_ip": false,
+            "tags": ["internal-vm"]
+        }
+    }
+}
