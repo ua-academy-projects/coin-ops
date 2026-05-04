@@ -1,6 +1,5 @@
 {
     "general":{
-        "project": "project-6f41102f-c77c-46a3-aac",
         "zone": "europe-central2-a",
         "vpc_name": "vpc-network",
         "disk_size": 10,
@@ -20,7 +19,6 @@
             "disk_size": 20
         },
         "private-vm-2": {
-            "count": 3,
             "subnet_name": "internal-subnet",
             "has_external_ip": false,
             "tags": ["internal-vm"]

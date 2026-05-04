@@ -34,8 +34,8 @@ resource "google_compute_firewall" "internal_firewall" {
     protocol = "icmp" # Allow ICMP traffic for ping between subnets
   }
 
-  source_tags = ["jump-host"] # Allow traffic from jump host to internal subnet
-  target_tags   = ["internal-vm"] # Apply this rule to internal VMs
+  source_tags = ["jump-host"]   # Allow traffic from jump host to internal subnet
+  target_tags = ["internal-vm"] # Apply this rule to internal VMs
 }
 
 # Create a firewall rule to allow external access to the external subnet
@@ -61,23 +61,13 @@ locals {
 }
 
 module "compute_instances" {
-  source   = "./modules/gcp_manage_instances"
-  for_each = local.vm_config.instances
-
-  name            = each.key
-  zone            = try(each.value.zone, local.vm_config.general.zone)
-
-  machine_type    = try(each.value.machine_type, local.vm_config.general.machine_type)
-  vpc_name        = try(each.value.vpc_name, local.vm_config.general.vpc_name) 
-  subnet_name     = try(each.value.subnet_name, local.vm_config.general.subnet_name)
-  has_external_ip = try(each.value.has_external_ip, local.vm_config.general.has_external_ip)
-  tags            = try(each.value.tags, local.vm_config.general.tags)
-  disk_size       = try(each.value.disk_size, local.vm_config.general.disk_size)
-  os_image        = try(each.value.os_image, local.vm_config.general.os_image)
+  source    = "./modules/gcp_manage_instances"
+  instances = local.vm_config.instances
+  defaults  = local.vm_config.general
 
   depends_on = [
-  google_compute_network.vpc_network,
-  google_compute_subnetwork.external_subnet,
-  google_compute_subnetwork.internal_subnet
+    google_compute_network.vpc_network,
+    google_compute_subnetwork.external_subnet,
+    google_compute_subnetwork.internal_subnet
   ]
 }
