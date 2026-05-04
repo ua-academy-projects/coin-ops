@@ -12,3 +12,13 @@ output "internal_vm_ips" {
   value       = [for vm in google_compute_instance.internal_vm : vm.network_interface[0].network_ip]
   description = "Internal IPs of the 3 private VMs"
 }
+
+output "ssh_port" {
+  value       = var.ssh_port
+  description = "SSH port used by all VMs"
+}
+
+output "ops_user" {
+  value       = var.ops_user
+  description = "Operational user for SSH access"
+}
