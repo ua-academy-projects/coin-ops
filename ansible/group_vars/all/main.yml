@@ -3,9 +3,11 @@
 # Run `source .env` before any ansible-playbook command.
 
 # ── SSH ───────────────────────────────────────────────────────
-ansible_user: vagrant
-ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
-ansible_ssh_private_key_file: "{{ lookup('env', 'SSH_KEY_PATH') | expanduser }}"
+# GCP VM user created by Terraform metadata SSH keys.
+ansible_user: "{{ lookup('env', 'ANSIBLE_USER') | default('terraform', true) }}"
+ansible_ssh_private_key_file: "{{ lookup('env', 'SSH_KEY_PATH') | default('~/.ssh/gcp_jump', true) | expanduser }}"
+
+
 
 # ── Passwords (loaded from .env) ──────────────────────────────
 rabbitmq_password: "{{ lookup('env', 'RABBITMQ_PASSWORD') }}"
@@ -43,7 +45,7 @@ tls_key_path: "{{ tls_cert_dir }}/coinops.key"
 #   IMAGE_TAG=<commit-sha> ansible-playbook -i ansible/inventory ansible/deploy.yml
 image_registry: "{{ lookup('env', 'IMAGE_REGISTRY') | default('ghcr.io/ua-academy-projects', true) }}"
 image_registry_host: "{{ image_registry.split('/')[0] }}"
-image_tag: "{{ lookup('env', 'IMAGE_TAG') | default('shabat-latest', true) }}"
+image_tag: "{{ lookup('env', 'IMAGE_TAG') | default('dev-latest', true) }}"
 proxy_image: "{{ image_registry }}/coin-ops-proxy:{{ image_tag }}"
 history_api_image: "{{ image_registry }}/coin-ops-history-api:{{ image_tag }}"
 history_consumer_image: "{{ image_registry }}/coin-ops-history-consumer:{{ image_tag }}"
@@ -54,7 +56,7 @@ registry_username: "{{ lookup('env', 'GHCR_USERNAME') | default('', true) }}"
 registry_token: "{{ lookup('env', 'GHCR_TOKEN') | default('', true) }}"
 
 # ── Derived connection strings ────────────────────────────────
-rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@172.31.1.10:5672/"
+rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@{{ hostvars[groups['history'][0]].ansible_host }}:5672/"
 database_url: "postgresql://{{ db_user }}:{{ db_password }}@localhost:5432/{{ db_name }}"
 history_database_url: "postgresql://{{ db_user }}:{{ db_password }}@postgres:5432/{{ db_name }}"
 proxy_database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ postgres_bind_ip }}:5432/{{ db_name }}"

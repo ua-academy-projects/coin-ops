@@ -244,6 +244,19 @@ Deploy application containers:
 ansible-playbook -i ansible/inventory ansible/deploy.yml
 ```
 
+GCP deployment uses the shared GCP infrastructure project and a dedicated
+inventory:
+
+```bash
+cp .env.gcp.example .env
+source .env
+ansible-playbook -i ansible/inventory.gcp ansible/provision.yml
+ansible-playbook -i ansible/inventory.gcp ansible/deploy.yml
+```
+
+See [docs/gcp-deployment.md](docs/gcp-deployment.md) for the GCP node mapping,
+verification commands, and domain/HTTPS plan.
+
 Current moving-tag deploys:
 
 ```bash

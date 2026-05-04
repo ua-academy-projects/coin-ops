@@ -1,2 +1,2 @@
 ---
-common_allowed_ports: [22, 8080]
+common_allowed_ports: [47832, 8080]

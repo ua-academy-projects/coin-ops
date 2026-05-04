@@ -1,0 +1,14 @@
+[history]
+vm-1 ansible_host=10.0.0.5 ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyJump=terraform@34.134.179.161:47832'
+
+[proxy]
+vm-2 ansible_host=10.0.0.2 ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyJump=terraform@34.134.179.161:47832'
+
+[ui]
+vm-4-jump ansible_host=34.134.179.161 ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+
+[all:vars]
+ansible_user=terraform
+ansible_port=47832
+ansible_ssh_private_key_file=~/.ssh/gcp_jump
+ansible_python_interpreter=/usr/bin/python3.11
