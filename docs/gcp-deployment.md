@@ -29,10 +29,10 @@ It belongs to the older VM lab flow.
 | --- | --- | --- | --- |
 | history | `vm-1` | `10.0.0.5` | PostgreSQL, RabbitMQ, history API, history consumer |
 | proxy | `vm-2` | `10.0.0.2` | Go proxy, Redis |
-| ui | `vm-4-jump` | `34.134.179.161` | nginx gateway, React UI |
+| ui | `vm-3` | `10.0.0.4` | nginx gateway, React UI |
 
-`vm-1` and `vm-2` are private. Ansible reaches them through `vm-4-jump` using
-SSH `ProxyJump`.
+`vm-1`, `vm-2`, and `vm-3` are private. Ansible reaches them through
+`vm-4-jump` using SSH `ProxyJump`.
 
 ## Environment
 
@@ -92,21 +92,30 @@ Expected responses:
 
 ## HTTPS And Domain Plan
 
-The first GCP deployment runs with:
+The direct-VM smoke deployment can run with:
 
 ```bash
 export TLS_MODE="off"
 export APP_DOMAIN="34.134.179.161"
 ```
 
+The final public setup uses:
+
+```bash
+export TLS_MODE="off"
+export APP_DOMAIN="coinops-kazachuk.pp.ua"
+```
+
+TLS terminates at the GCP HTTPS Load Balancer with a Google-managed
+certificate. The UI container remains HTTP-only on the private backend VM.
+
 For the final public setup:
 
 1. Register the domain.
 2. Move DNS management to Cloudflare.
-3. Point an `A` record to `34.134.179.161`.
-4. Set `APP_DOMAIN` to the real hostname.
-5. Enable TLS with Cloudflare plus an origin certificate or move the public
-   entrypoint to a GCP HTTPS Load Balancer with a managed certificate.
+3. Create the GCP HTTPS Load Balancer with Terraform.
+4. Point Cloudflare `A` records for `@` and `www` to the Load Balancer IP.
+5. Keep the records as DNS-only until the Google-managed certificate is active.
 
 The direct-VM HTTP setup is useful for proving that the application works before
 adding DNS, TLS, and load balancing.
