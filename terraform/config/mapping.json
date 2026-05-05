@@ -1,0 +1,14 @@
+{
+    "instance_sizes": {
+        "gcp": {
+            "small":  "e2-micro",
+            "medium": "e2-standard-2",
+            "large":  "e2-standard-4"
+        },
+        "aws": {
+            "small":  "t3.micro",
+            "medium": "t3.medium",
+            "large":  "t3.large"
+        }
+    }
+}

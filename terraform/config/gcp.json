@@ -1,0 +1,4 @@
+{
+    "zone": "europe-central2-a",
+    "os_image": "debian-cloud/debian-12"
+}

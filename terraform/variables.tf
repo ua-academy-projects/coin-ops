@@ -1,9 +1,41 @@
-variable "project_id" {
-  type        = string
-  description = "The ID of the GCP project"
+variable "enabled_clouds" {
+  type        = set(string)
+  description = "Set of clouds to deploy to. Supported: gcp, aws."
+  default     = ["gcp", "aws"]
+
+  validation {
+    condition = alltrue([
+      for cloud in var.enabled_clouds : contains(["gcp", "aws"], cloud)
+    ])
+    error_message = "Supported clouds: \"gcp\", \"aws\"."
+  }
+
+  validation {
+    condition     = length(var.enabled_clouds) > 0
+    error_message = "At least one cloud must be enabled."
+  }
 }
 
-variable "region" {
+variable "gcp_project_id" {
   type        = string
-  description = "The default GCP region for resources"
+  description = "GCP project ID (required when deploying to GCP)"
+  default     = ""
+}
+
+variable "gcp_region" {
+  type        = string
+  description = "GCP region for resources"
+  default     = "europe-central2"
+}
+
+variable "aws_region" {
+  type        = string
+  description = "AWS region for resources"
+  default     = "eu-north-1"
+}
+
+variable "ssh_public_key_path" {
+  type        = string
+  description = "Path to SSH public key for AWS EC2 instances"
+  default     = "~/.ssh/aws_ec2_key.pub"
 }

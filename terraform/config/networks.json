@@ -1,0 +1,30 @@
+{
+    "vpc_name": "vpc-network",
+    "vpc_cidr": "10.10.0.0/16",
+    "subnets": {
+        "internal": {
+            "cidr": "10.10.1.0/24"
+        },
+        "external": {
+            "cidr": "10.10.2.0/24",
+            "public": true
+        }
+    },
+    "firewall_rules": {
+        "allow-ssh-external": {
+            "protocols": [
+                { "protocol": "tcp", "ports": ["22"] }
+            ],
+            "source_cidrs": ["0.0.0.0/0"],
+            "target_role": "jump-host"
+        },
+        "allow-internal": {
+            "protocols": [
+                { "protocol": "tcp", "ports": ["22"] },
+                { "protocol": "icmp" }
+            ],
+            "source_role": "jump-host",
+            "target_role": "internal-vm"
+        }
+    }
+}

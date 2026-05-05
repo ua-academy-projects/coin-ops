@@ -1,0 +1,23 @@
+{
+    "general": {
+        "instance_size": "small",
+        "disk_size": 10,
+        "has_public_ip": false
+    },
+    "instances": {
+        "jump-host": {
+            "subnet": "external",
+            "has_public_ip": true,
+            "role": "jump-host"
+        },
+        "private-vm-1": {
+            "subnet": "internal",
+            "role": "internal-vm",
+            "disk_size": 20
+        },
+        "private-vm-2": {
+            "subnet": "internal",
+            "role": "internal-vm"
+        }
+    }
+}
