@@ -1,0 +1,160 @@
+---
+- name: Validate required environment variables
+  hosts: localhost
+  connection: local
+  tasks:
+    - name: Check .env vars are exported
+      assert:
+        that:
+          - lookup('env', 'DB_PASSWORD') != ''
+          - lookup('env', 'SSH_KEY_PATH') != ''
+          - lookup('env', 'RUNTIME_BACKEND') in ['', 'external', 'postgres']
+        fail_msg: |
+          Required environment variables are not set or RUNTIME_BACKEND is invalid.
+          Run: source .env
+
+- name: Authenticate Docker registry on cloud nodes
+  hosts: cloud
+  become: yes
+  tasks:
+    - name: Log in to configured container registry
+      community.docker.docker_login:
+        registry_url: "{{ image_registry_host }}"
+        username: "{{ registry_username }}"
+        password: "{{ registry_token }}"
+        reauthorize: true
+      no_log: true
+      when:
+        - registry_username | length > 0
+        - registry_token | length > 0
+
+- name: Deploy private DB/runtime node
+  hosts: db
+  become: yes
+  tasks:
+    - name: Create config directory
+      file:
+        path: /etc/cognitor
+        state: directory
+        owner: root
+        group: root
+        mode: '0750'
+
+    - name: Create deploy directory
+      file:
+        path: /opt/cognitor/cloud-db
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Write DB/runtime environment file
+      template:
+        src: cloud-db.env.j2
+        dest: /etc/cognitor/cloud-db.env
+        owner: root
+        group: root
+        mode: '0640'
+
+    - name: Render DB/runtime compose file
+      template:
+        src: cloud-db.compose.yaml.j2
+        dest: /opt/cognitor/cloud-db/compose.yaml
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Validate DB/runtime compose config
+      command: docker compose -f /opt/cognitor/cloud-db/compose.yaml config -q
+      args:
+        chdir: /opt/cognitor/cloud-db
+      changed_when: false
+
+    - name: Pull DB/runtime images
+      command: docker compose -f /opt/cognitor/cloud-db/compose.yaml pull
+      args:
+        chdir: /opt/cognitor/cloud-db
+
+    - name: Run DB/runtime compose
+      command: docker compose -f /opt/cognitor/cloud-db/compose.yaml up -d --remove-orphans
+      args:
+        chdir: /opt/cognitor/cloud-db
+
+    - name: Wait for PostgreSQL readiness
+      command: docker compose -f /opt/cognitor/cloud-db/compose.yaml exec -T postgres pg_isready -U {{ db_user }} -d {{ db_name }}
+      args:
+        chdir: /opt/cognitor/cloud-db
+      retries: 12
+      delay: 5
+      register: postgres_ready
+      until: postgres_ready.rc == 0
+
+- name: Deploy app nodes behind load balancer
+  hosts: app
+  become: yes
+  tasks:
+    - name: Create config directory
+      file:
+        path: /etc/cognitor
+        state: directory
+        owner: root
+        group: root
+        mode: '0750'
+
+    - name: Create deploy directory
+      file:
+        path: /opt/cognitor/cloud-app
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Write app environment file
+      template:
+        src: cloud-app.env.j2
+        dest: /etc/cognitor/cloud-app.env
+        owner: root
+        group: root
+        mode: '0640'
+
+    - name: Render cloud nginx config
+      template:
+        src: cloud-nginx.conf.j2
+        dest: /opt/cognitor/cloud-app/nginx.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Render app compose file
+      template:
+        src: cloud-app.compose.yaml.j2
+        dest: /opt/cognitor/cloud-app/compose.yaml
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Validate app compose config
+      command: docker compose -f /opt/cognitor/cloud-app/compose.yaml config -q
+      args:
+        chdir: /opt/cognitor/cloud-app
+      changed_when: false
+
+    - name: Pull app images
+      command: docker compose -f /opt/cognitor/cloud-app/compose.yaml pull
+      args:
+        chdir: /opt/cognitor/cloud-app
+
+    - name: Run app compose
+      command: docker compose -f /opt/cognitor/cloud-app/compose.yaml up -d --remove-orphans
+      args:
+        chdir: /opt/cognitor/cloud-app
+
+    - name: Wait for local UI health endpoint
+      uri:
+        url: http://localhost/health
+        method: GET
+        status_code: 200
+      retries: 12
+      delay: 5
+      register: ui_health
+      until: ui_health.status == 200

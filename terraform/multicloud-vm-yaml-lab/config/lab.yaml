@@ -1,0 +1,109 @@
+cloud: aws
+location: eu_central
+
+name_prefix: coinops-lab
+
+ssh:
+  user: vova
+  public_key_path: ~/.ssh/coinops_gcp_jump.pub
+  private_key_path: ~/.ssh/coinops_gcp_jump
+
+clouds:
+  gcp:
+    project_id: coinops-student-leev1tan-001
+  aws:
+    profile: coinops-lab
+
+# Replace these before the HTTPS/DNS apply.
+domain:
+  enabled: true
+  name: coinops.pp.ua
+  cloudflare_zone_id: 48a16dd57c128fb6b341e10dfe8eef6b
+  create_records: true
+
+networks:
+  lab:
+    name: coinops-lab-vpc
+    subnet_name: coinops-lab-subnet
+    cidr: 10.10.0.0/16
+    gcp_subnet_cidr: 10.10.0.0/24
+    public_subnet_cidrs:
+      - 10.10.0.0/24
+      - 10.10.1.0/24
+    private_subnet_cidrs:
+      - 10.10.10.0/24
+      - 10.10.11.0/24
+
+firewall:
+  ssh_source_ranges:
+    - 193.242.163.206/32
+  web_source_ranges:
+    - 0.0.0.0/0
+  allow_icmp_from_bastion: true
+
+defaults:
+  size: micro
+  image: ubuntu_2204
+  disk_size_gb: 10
+  network: lab
+
+roles:
+  bastion:
+    public_ip: true
+    tags: [bastion]
+  app:
+    public_ip: false
+    tags: [app]
+  db:
+    public_ip: false
+    tags: [db]
+
+app:
+  port: 80
+  health_path: /health
+  nodes:
+    bastion: bastion
+    app:
+      - app-1
+      - app-2
+    db: db
+
+catalog:
+  locations:
+    eu_central:
+      gcp:
+        region: europe-central2
+        zone: europe-central2-a
+      aws:
+        region: eu-central-1
+        availability_zones:
+          - eu-central-1a
+          - eu-central-1b
+  sizes:
+    micro:
+      gcp: e2-micro
+      aws: t3.micro
+    small:
+      gcp: e2-small
+      aws: t3.small
+  images:
+    ubuntu_2204:
+      gcp: ubuntu-os-cloud/ubuntu-2204-lts
+      aws:
+        owners:
+          - '099720109477'
+        name_filter: ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*
+
+instances:
+  bastion:
+    role: bastion
+    private_ip: 10.10.0.10
+  app-1:
+    role: app
+    private_ip: 10.10.10.11
+  app-2:
+    role: app
+    private_ip: 10.10.11.11
+  db:
+    role: db
+    private_ip: 10.10.10.20

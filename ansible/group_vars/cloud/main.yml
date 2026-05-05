@@ -1,0 +1,4 @@
+---
+# Cloud security groups are managed by Terraform. Keep host UFW optional and off
+# for cloud VMs to avoid duplicating firewall state and resetting SSH sessions.
+common_manage_ufw: false

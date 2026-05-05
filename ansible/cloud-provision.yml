@@ -1,0 +1,49 @@
+---
+- name: Validate required environment variables
+  hosts: localhost
+  connection: local
+  tasks:
+    - name: Check .env vars are exported
+      assert:
+        that:
+          - lookup('env', 'DB_PASSWORD') != ''
+          - lookup('env', 'SSH_KEY_PATH') != ''
+          - lookup('env', 'RUNTIME_BACKEND') in ['', 'external', 'postgres']
+        fail_msg: |
+          Required environment variables are not set or RUNTIME_BACKEND is invalid.
+          Run: source .env
+
+- name: Common setup and Docker on cloud nodes
+  hosts: cloud
+  become: yes
+  roles:
+    - common
+    - docker
+
+- name: Provision private DB/runtime node
+  hosts: db
+  become: yes
+  tasks:
+    - name: Create PostgreSQL data directory
+      file:
+        path: /var/lib/coin-ops/postgres
+        state: directory
+        owner: 70
+        group: 70
+        mode: '0700'
+
+    - name: Create RabbitMQ data directory
+      file:
+        path: /var/lib/coin-ops/rabbitmq
+        state: directory
+        owner: 999
+        group: 999
+        mode: '0755'
+
+    - name: Create Redis data directory
+      file:
+        path: /var/lib/coin-ops/redis
+        state: directory
+        owner: 999
+        group: 999
+        mode: '0755'
