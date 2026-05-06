@@ -51,6 +51,10 @@ locals {
   nat_destination_cidr = try(local.private_default_route.destination_cidr, "0.0.0.0/0")
   nat_priority         = try(local.private_default_route.priority, 800)
   nat_target_tags      = try(local.private_default_route.target_tags, ["internal-vm"])
+
+  # CIDR of the private subnet — injected into startup script templates.
+  # Derived from networks.json; fallback matches the hardcoded default in the script.
+  private_subnet_cidr = try(local.subnets["internal"].cidr, "10.10.1.0/24")
 }
 
 # GCP
@@ -71,15 +75,16 @@ module "gcp_firewall" {
 }
 
 module "gcp_instances" {
-  count          = local.gcp_enabled ? 1 : 0
-  source         = "./modules/gcp_instances"
-  instances      = local.instances
-  defaults       = local.general
-  cloud_defaults = local.gcp_cfg
-  instance_sizes = local.gcp_instance_sizes
-  network_id     = module.gcp_network[0].network_id
-  subnet_ids     = module.gcp_network[0].subnet_ids
-  ssh_public_key = local.ssh_public_key
+  count               = local.gcp_enabled ? 1 : 0
+  source              = "./modules/gcp_instances"
+  instances           = local.instances
+  defaults            = local.general
+  cloud_defaults      = local.gcp_cfg
+  instance_sizes      = local.gcp_instance_sizes
+  network_id          = module.gcp_network[0].network_id
+  subnet_ids          = module.gcp_network[0].subnet_ids
+  ssh_public_key      = local.ssh_public_key
+  private_subnet_cidr = local.private_subnet_cidr
 
   depends_on = [module.gcp_firewall]
 }
@@ -117,15 +122,16 @@ module "aws_security_groups" {
 }
 
 module "aws_instances" {
-  count          = local.aws_enabled ? 1 : 0
-  source         = "./modules/aws_instances"
-  instances      = local.instances
-  defaults       = local.general
-  cloud_defaults = local.aws_cfg
-  instance_sizes = local.aws_instance_sizes
-  subnet_ids     = module.aws_network[0].subnet_ids
-  sg_ids         = module.aws_security_groups[0].sg_ids
-  ssh_public_key = local.ssh_public_key
+  count               = local.aws_enabled ? 1 : 0
+  source              = "./modules/aws_instances"
+  instances           = local.instances
+  defaults            = local.general
+  cloud_defaults      = local.aws_cfg
+  instance_sizes      = local.aws_instance_sizes
+  subnet_ids          = module.aws_network[0].subnet_ids
+  sg_ids              = module.aws_security_groups[0].sg_ids
+  ssh_public_key      = local.ssh_public_key
+  private_subnet_cidr = local.private_subnet_cidr
 }
 
 module "aws_nat_route" {

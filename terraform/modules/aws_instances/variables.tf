@@ -44,3 +44,9 @@ variable "ssh_public_key" {
   description = "SSH public key content for EC2 key pair."
   default     = ""
 }
+
+variable "private_subnet_cidr" {
+  type        = string
+  description = "CIDR of the private subnet (e.g. 10.10.1.0/24). Injected into startup script templates via templatefile()."
+  default     = ""
+}

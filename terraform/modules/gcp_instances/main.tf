@@ -22,8 +22,8 @@ locals {
   fallback_instances = { "default-vm" = {} }
   source_instances = jsondecode(
     length(var.instances) > 0
-      ? jsonencode(var.instances)
-      : jsonencode(local.fallback_instances)
+    ? jsonencode(var.instances)
+    : jsonencode(local.fallback_instances)
   )
 
   instances = {
@@ -79,7 +79,9 @@ resource "google_compute_instance" "vm" {
       ssh-keys = "${local.ssh_user}:${var.ssh_public_key}"
     } : {},
     each.value.startup_script != "" ? {
-      startup-script = file("${path.root}/${each.value.startup_script}")
+      startup-script = templatefile("${path.root}/${each.value.startup_script}", {
+        private_subnet_cidr = var.private_subnet_cidr
+      })
     } : {}
   )
 }

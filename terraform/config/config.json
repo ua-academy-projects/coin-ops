@@ -10,7 +10,7 @@
             "has_public_ip": true,
             "role": "jump-host",
             "can_ip_forward": true,
-            "startup_script": "scripts/jump-host-init.sh"
+            "startup_script": "scripts/jump-host-init.sh.tpl"
         },
         "app-1": {
             "subnet": "external",

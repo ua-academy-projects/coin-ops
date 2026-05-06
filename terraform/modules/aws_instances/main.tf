@@ -66,7 +66,9 @@ resource "aws_instance" "vm" {
   key_name                    = length(aws_key_pair.deployer) > 0 ? aws_key_pair.deployer[0].key_name : null
   associate_public_ip_address = each.value.has_public_ip
   source_dest_check           = !each.value.can_ip_forward
-  user_data                   = each.value.startup_script != "" ? file("${path.root}/${each.value.startup_script}") : null
+  user_data = each.value.startup_script != "" ? templatefile("${path.root}/${each.value.startup_script}", {
+    private_subnet_cidr = var.private_subnet_cidr
+  }) : null
 
   root_block_device {
     volume_size = each.value.disk_size

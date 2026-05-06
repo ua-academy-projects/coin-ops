@@ -44,3 +44,9 @@ variable "ssh_public_key" {
   description = "SSH public key content for GCP instance metadata. Username is derived from cloud_defaults.ssh_user."
   default     = ""
 }
+
+variable "private_subnet_cidr" {
+  type        = string
+  description = "CIDR of the private subnet (e.g. 10.10.1.0/24). Injected into startup script templates via templatefile()."
+  default     = ""
+}
