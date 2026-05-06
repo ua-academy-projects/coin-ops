@@ -64,3 +64,4 @@ ansible/group_vars/all/secrets.yml
 runtime/__pycache__
 
 ssh_config
+coin-ops_infra_roadmap_120d8424.plan.md

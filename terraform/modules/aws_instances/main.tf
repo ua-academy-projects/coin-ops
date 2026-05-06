@@ -1,9 +1,9 @@
 locals {
   fallback_sizes = {
-    micro = "t3.micro"
-    small = "t3.small"
+    micro  = "t3.micro"
+    small  = "t3.small"
     medium = "m7i-flex.large"
-    large = "c7i-flex.large"
+    large  = "c7i-flex.large"
   }
   sizes = length(var.instance_sizes) > 0 ? var.instance_sizes : local.fallback_sizes
 
@@ -23,8 +23,8 @@ locals {
   fallback_instances = { "default-vm" = {} }
   source_instances = jsondecode(
     length(var.instances) > 0
-      ? jsonencode(var.instances)
-      : jsonencode(local.fallback_instances)
+    ? jsonencode(var.instances)
+    : jsonencode(local.fallback_instances)
   )
 
   instances = {
@@ -59,11 +59,11 @@ resource "aws_key_pair" "deployer" {
 resource "aws_instance" "vm" {
   for_each = local.instances
 
-  ami                    = data.aws_ami.this.id
-  instance_type          = local.sizes[each.value.instance_size]
-  subnet_id              = var.subnet_ids[each.value.subnet]
-  vpc_security_group_ids = each.value.role != "" ? [var.sg_ids[each.value.role]] : []
-  key_name               = length(aws_key_pair.deployer) > 0 ? aws_key_pair.deployer[0].key_name : null
+  ami                         = data.aws_ami.this.id
+  instance_type               = local.sizes[each.value.instance_size]
+  subnet_id                   = var.subnet_ids[each.value.subnet]
+  vpc_security_group_ids      = each.value.role != "" ? [var.sg_ids[each.value.role]] : []
+  key_name                    = length(aws_key_pair.deployer) > 0 ? aws_key_pair.deployer[0].key_name : null
   associate_public_ip_address = each.value.has_public_ip
   source_dest_check           = !each.value.can_ip_forward
   user_data                   = each.value.startup_script != "" ? file("${path.root}/${each.value.startup_script}") : null

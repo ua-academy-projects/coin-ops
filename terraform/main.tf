@@ -5,14 +5,14 @@ locals {
   gcp_cfg  = try(jsondecode(file("${path.module}/config/gcp.json")), {})
   aws_cfg  = try(jsondecode(file("${path.module}/config/aws.json")), {})
 
-  instances      = lookup(local.cfg, "instances", {})
-  general        = lookup(local.cfg, "general", {})
-  subnets        = lookup(local.networks, "subnets", {})
-  firewall_rules = lookup(local.networks, "firewall_rules", {})
-  routing        = lookup(local.networks, "routing", {})
-  security       = lookup(local.networks, "security", {})
-  vpc_name       = lookup(local.networks, "vpc_name", "vpc-network")
-  vpc_cidr       = lookup(local.networks, "vpc_cidr", "10.10.0.0/16")
+  instances             = lookup(local.cfg, "instances", {})
+  general               = lookup(local.cfg, "general", {})
+  subnets               = lookup(local.networks, "subnets", {})
+  firewall_rules        = lookup(local.networks, "firewall_rules", {})
+  routing               = lookup(local.networks, "routing", {})
+  security              = lookup(local.networks, "security", {})
+  vpc_name              = lookup(local.networks, "vpc_name", "vpc-network")
+  vpc_cidr              = lookup(local.networks, "vpc_cidr", "10.10.0.0/16")
   private_default_route = lookup(local.routing, "private_default_route", {})
   egress_cidrs          = lookup(local.security, "egress_cidrs", ["0.0.0.0/0"])
 
@@ -131,11 +131,9 @@ module "aws_instances" {
 module "aws_nat_route" {
   count                    = local.aws_enabled && local.aws_has_jump_host ? 1 : 0
   source                   = "./modules/aws_nat_route"
-  vpc_id                   = module.aws_network[0].vpc_id
-  private_subnet_ids       = module.aws_network[0].private_subnet_ids
+  private_route_table_id   = module.aws_network[0].private_route_table_id
   nat_network_interface_id = module.aws_instances[0].instance_primary_network_interface_ids[local.aws_jump_host_name]
   destination_cidr         = local.nat_destination_cidr
-  route_table_name         = local.nat_route_name
 
   depends_on = [module.aws_instances]
 }

@@ -1,7 +1,7 @@
 {
     "general": {
         "instance_size": "micro",
-        "disk_size": 20,
+        "disk_size": 10,
         "has_public_ip": false
     },
     "instances": {
@@ -22,12 +22,6 @@
             "subnet": "internal",
             "role": "app",
             "instance_size": "small"
-        },
-        "db-1": {
-            "subnet": "internal",
-            "role": "db",
-            "instance_size": "medium",
-            "disk_size": 30
         }
     }
 }
