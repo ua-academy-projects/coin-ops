@@ -1,0 +1,28 @@
+general:
+  region: "eu-central-1"
+  instance_type: "t3.micro"
+  ami: "ami-0084a47cc718c111a"
+  disk_size: 10
+  ssh_port: "9922"
+  ops_user: "marta_ops"
+
+vms:
+  jump-host:
+    tags:
+      - "jump-host"
+    public_ip: true
+
+  internal-vm-1:
+    tags:
+      - "internal"
+    public_ip: false
+
+  internal-vm-2:
+    tags:
+      - "internal"
+    public_ip: false
+
+  internal-vm-3:
+    tags:
+      - "internal"
+    public_ip: false
