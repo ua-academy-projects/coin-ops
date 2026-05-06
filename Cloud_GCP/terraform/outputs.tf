@@ -1,24 +1,22 @@
 output "jump_host_external_ip" {
-  value       = google_compute_instance.jump_host.network_interface[0].access_config[0].nat_ip
   description = "Public IP of the jump host — SSH here first"
+  value       = module.vm["jump-host"].external_ip
 }
 
 output "jump_host_internal_ip" {
-  value       = google_compute_instance.jump_host.network_interface[0].network_ip
   description = "Internal IP of the jump host"
+  value       = module.vm["jump-host"].internal_ip
 }
 
 output "internal_vm_ips" {
-  value       = [for vm in google_compute_instance.internal_vm : vm.network_interface[0].network_ip]
-  description = "Internal IPs of the 3 private VMs"
+  description = "Internal IPs of all internal VMs"
+  value = {
+    for name, vm in module.vm : name => vm.internal_ip
+    if name != "jump-host"
+  }
 }
 
-output "ssh_port" {
-  value       = var.ssh_port
-  description = "SSH port used by all VMs"
-}
-
-output "ops_user" {
-  value       = var.ops_user
-  description = "Operational user for SSH access"
+output "ssh_connection" {
+  description = "SSH command to connect to jump host"
+  value       = "ssh -p ${local.general.ssh_port} ${local.general.ops_user}@${module.vm["jump-host"].external_ip}"
 }

@@ -1,0 +1,30 @@
+general:
+  project_id: "devops-intern-penina"
+  region: "europe-central2"
+  zone: "europe-central2-a"
+  machine_type: "e2-micro"
+  image: "ubuntu-os-cloud/ubuntu-2404-lts-amd64"
+  disk_size: 10
+  ssh_port: "9922"
+  ops_user: "marta_ops"
+
+vms:
+  jump-host:
+    tags:
+      - "jump-host"
+    public_ip: true
+
+  internal-vm-1:
+    tags:
+      - "internal"
+    public_ip: false
+
+  internal-vm-2:
+    tags:
+      - "internal"
+    public_ip: false
+
+  internal-vm-3:
+    tags:
+      - "internal"
+    public_ip: false
