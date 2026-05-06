@@ -1,0 +1,33 @@
+{
+    "general": {
+        "instance_size": "micro",
+        "disk_size": 20,
+        "has_public_ip": false
+    },
+    "instances": {
+        "jump-host": {
+            "subnet": "external",
+            "has_public_ip": true,
+            "role": "jump-host",
+            "can_ip_forward": true,
+            "startup_script": "scripts/jump-host-init.sh"
+        },
+        "app-1": {
+            "subnet": "external",
+            "has_public_ip": true,
+            "role": "app",
+            "instance_size": "micro"
+        },
+        "app-2": {
+            "subnet": "internal",
+            "role": "app",
+            "instance_size": "small"
+        },
+        "db-1": {
+            "subnet": "internal",
+            "role": "db",
+            "instance_size": "medium",
+            "disk_size": 30
+        }
+    }
+}
