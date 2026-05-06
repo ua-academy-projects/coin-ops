@@ -62,3 +62,5 @@ terraform-guide.pdf
 ansible/group_vars/all/*.backup
 ansible/group_vars/all/secrets.yml
 runtime/__pycache__
+
+ssh_config

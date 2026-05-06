@@ -1,6 +1,17 @@
 {
     "vpc_name": "coin-ops-vpc",
     "vpc_cidr": "10.10.0.0/16",
+    "routing": {
+        "private_default_route": {
+            "destination_cidr": "0.0.0.0/0",
+            "priority": 800,
+            "target_tags": ["internal-vm"],
+            "name": "coin-ops-private-default-via-jump"
+        }
+    },
+    "security": {
+        "egress_cidrs": ["0.0.0.0/0"]
+    },
     "subnets": {
         "internal": { "cidr": "10.10.1.0/24" },
         "external": { "cidr": "10.10.2.0/24", "public": true }
@@ -9,6 +20,15 @@
         "allow-ssh-jump-host": {
             "protocols": [{ "protocol": "tcp", "ports": ["22"] }],
             "source_cidrs": ["0.0.0.0/0"],
+            "target_role": "jump-host"
+        },
+        "allow-nat-from-internal-to-jump": {
+            "protocols": [
+                { "protocol": "tcp", "ports": ["1-65535"] },
+                { "protocol": "udp", "ports": ["1-65535"] },
+                { "protocol": "icmp" }
+            ],
+            "source_cidrs": ["10.10.1.0/24"],
             "target_role": "jump-host"
         },
         "allow-http-https-app": {

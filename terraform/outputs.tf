@@ -12,3 +12,8 @@ output "hosts_file" {
   description = "Path to the generated hosts.json used by the Ansible dynamic inventory"
   value       = local_file.hosts.filename
 }
+
+output "ssh_config_file" {
+  description = "Path to generated SSH config with bastion and private hosts"
+  value       = local_file.ssh_config.filename
+}

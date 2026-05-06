@@ -2,6 +2,13 @@ variable "instances" {
   type        = any
   description = "Map of VM instances from config.json (keyed by VM name). If empty, a minimal fallback instance is created."
   default     = {}
+
+  validation {
+    condition = alltrue([
+      for name in keys(var.instances) : can(regex("^[a-z][a-z0-9-]{0,61}[a-z0-9]$", name))
+    ])
+    error_message = "Instance names must start with a lowercase letter, contain only lowercase letters, numbers, and hyphens, and be 2-63 characters long."
+  }
 }
 
 variable "defaults" {

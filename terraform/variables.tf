@@ -1,7 +1,7 @@
 variable "enabled_clouds" {
   type        = set(string)
   description = "Set of clouds to deploy to. Supported: gcp, aws."
-  default     = ["gcp"]
+  default     = ["gcp", "aws"]
 
   validation {
     condition = alltrue([

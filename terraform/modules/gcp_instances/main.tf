@@ -70,6 +70,11 @@ resource "google_compute_instance" "vm" {
   }
 
   metadata = merge(
+    {
+      # Keep SSH auth deterministic: only instance-level keys from Terraform.
+      # This prevents accidental project-level key injection (e.g. gcloud default key).
+      block-project-ssh-keys = "true"
+    },
     var.ssh_public_key != "" ? {
       ssh-keys = "${local.ssh_user}:${var.ssh_public_key}"
     } : {},

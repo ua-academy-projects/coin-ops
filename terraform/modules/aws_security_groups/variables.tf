@@ -8,3 +8,9 @@ variable "firewall_rules" {
   description = "Map of firewall rules from networks.json."
   default     = {}
 }
+
+variable "egress_cidrs" {
+  type        = list(string)
+  description = "Allowed egress CIDRs for all security groups."
+  default     = ["0.0.0.0/0"]
+}

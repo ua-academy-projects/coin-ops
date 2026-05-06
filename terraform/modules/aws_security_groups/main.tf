@@ -21,15 +21,30 @@ locals {
 
   flat_rules = flatten([
     for rule_name, rule in local.rules : [
-      for proto in rule.protocols : {
-        key         = "${rule_name}-${proto.protocol}"
-        target_role = rule.target_role
-        protocol    = proto.protocol
-        from_port   = proto.protocol == "icmp" ? -1 : tonumber(proto.ports[0])
-        to_port     = proto.protocol == "icmp" ? -1 : tonumber(proto.ports[0])
-        source_cidrs = lookup(rule, "source_cidrs", null)
-        source_role  = lookup(rule, "source_role", null)
-      }
+      for proto in rule.protocols :
+        # ICMP has no port concept — single rule with -1/-1.
+        proto.protocol == "icmp"
+        ? [{
+            key          = "${rule_name}-icmp"
+            target_role  = rule.target_role
+            protocol     = "icmp"
+            from_port    = -1
+            to_port      = -1
+            source_cidrs = lookup(rule, "source_cidrs", null)
+            source_role  = lookup(rule, "source_role", null)
+          }]
+        # Each port/range entry becomes its own SG rule so all ports in the list are applied.
+        : [
+            for port in lookup(proto, "ports", []) : {
+              key          = "${rule_name}-${proto.protocol}-${port}"
+              target_role  = rule.target_role
+              protocol     = proto.protocol
+              from_port    = tonumber(split("-", port)[0])
+              to_port      = length(split("-", port)) > 1 ? tonumber(split("-", port)[1]) : tonumber(split("-", port)[0])
+              source_cidrs = lookup(rule, "source_cidrs", null)
+              source_role  = lookup(rule, "source_role", null)
+            }
+          ]
     ]
   ])
   flat_rules_map = { for r in local.flat_rules : r.key => r }
@@ -46,7 +61,7 @@ resource "aws_security_group" "sg" {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.egress_cidrs
   }
 
   tags = { Name = "${each.key}-sg" }
