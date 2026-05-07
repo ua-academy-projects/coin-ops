@@ -1,0 +1,38 @@
+general:
+  cloud: "gcp"
+  project_id: "devops-intern-penina"
+  gcp_region: "europe-central2"
+  gcp_zone: "europe-central2-a"
+  aws_region: "eu-central-1"
+  disk_size: 10
+  ssh_port: "9922"
+  ops_user: "marta_ops"
+  image:
+    gcp: "ubuntu-os-cloud/ubuntu-2404-lts-amd64"
+    aws: "ami-0084a47cc718c111a"
+
+sizes:
+  small:
+    gcp: "e2-micro"
+    aws: "t3.micro"
+
+vms:
+  jump-host:
+    size: small
+    tags: ["jump-host"]
+    public_ip: true
+
+  internal-vm-1:
+    size: small
+    tags: ["internal"]
+    public_ip: false
+
+  internal-vm-2:
+    size: small
+    tags: ["internal"]
+    public_ip: false
+
+  internal-vm-3:
+    size: small
+    tags: ["internal"]
+    public_ip: false

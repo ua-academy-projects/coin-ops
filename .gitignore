@@ -12,3 +12,7 @@ ui_env/
 
 # Ansible files folder (code is already in service folders)
 ansible/files/
+**/.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
