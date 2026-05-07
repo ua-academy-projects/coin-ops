@@ -15,12 +15,12 @@ terraform {
 provider "google" {
   credentials = file(var.gcp_credentials_file)
   project     = local.general.project_id
-  region      = local.general.gcp_region
-  zone        = local.general.gcp_zone
+  region      = local.general.regions.gcp.region
+  zone = local.general.regions.gcp.zone
 }
 
 provider "aws" {
-  region     = local.general.aws_region
+  region     = local.general.regions.aws.region
   access_key = var.aws_access_key
   secret_key = var.aws_secret_key
 }

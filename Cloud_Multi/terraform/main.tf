@@ -7,7 +7,7 @@ module "gcp_network" {
   source = "./modules/gcp_network"
 
   cloud  = local.general.cloud
-  region = local.general.gcp_region
+  region = local.general.regions.gcp.region
 }
 
 module "gcp_security" {
@@ -24,7 +24,7 @@ module "gcp_vm" {
   cloud          = local.general.cloud
   vms            = local.config.vms
   sizes          = local.config.sizes
-  zone           = local.general.gcp_zone
+  zone = local.general.regions.gcp.zone
   image          = local.general.image.gcp
   default_disk   = local.general.disk_size
   subnetwork     = module.gcp_network.subnet_id
@@ -37,6 +37,7 @@ module "aws_network" {
   source = "./modules/aws_network"
 
   cloud = local.general.cloud
+  zone  = local.general.regions.aws.zone
 }
 
 module "aws_security" {

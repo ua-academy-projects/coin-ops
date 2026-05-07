@@ -15,6 +15,7 @@ resource "aws_subnet" "public" {
 
   vpc_id                  = aws_vpc.main[0].id
   cidr_block              = "10.0.1.0/24"
+  availability_zone       = var.zone
   map_public_ip_on_launch = true
 
   tags = {
@@ -25,8 +26,9 @@ resource "aws_subnet" "public" {
 resource "aws_subnet" "private" {
   count = var.cloud == "aws" ? 1 : 0
 
-  vpc_id     = aws_vpc.main[0].id
-  cidr_block = "10.0.2.0/24"
+  vpc_id            = aws_vpc.main[0].id
+  cidr_block        = "10.0.2.0/24"
+  availability_zone = var.zone
 
   tags = {
     Name = "devops-private-subnet"

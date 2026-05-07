@@ -1,9 +1,13 @@
 general:
-  cloud: "gcp"
+  cloud: "aws"
   project_id: "devops-intern-penina"
-  gcp_region: "europe-central2"
-  gcp_zone: "europe-central2-a"
-  aws_region: "eu-central-1"
+  regions:
+    gcp:
+      region: "europe-central2"
+      zone: "europe-central2-a"
+    aws:
+      region: "eu-central-1"
+      zone: "eu-central-1b"
   disk_size: 10
   ssh_port: "9922"
   ops_user: "marta_ops"
