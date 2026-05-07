@@ -1,35 +1,15 @@
-output "node_ips" {
-  description = "Static IPs assigned via cloud-init"
-  value = {
-    history = "172.31.1.10"
-    proxy   = "172.31.1.11"
-    ui      = "172.31.1.12"
-  }
+output "jump_host_external_ip" {
+  value = local.general.cloud == "gcp" ? module.gcp_vm.jump_host_external_ip : module.aws_vm.jump_host_external_ip
 }
 
-output "ansible_inventory" {
-  description = "Paste this into ansible/inventory after terraform apply"
-  value = <<-INV
-    [history]
-    softserve-node-01 ansible_host=172.31.1.10
-
-    [proxy]
-    softserve-node-02 ansible_host=172.31.1.11
-
-    [ui]
-    softserve-node-03 ansible_host=172.31.1.12
-
-    [all:vars]
-    ansible_user=vagrant
-  INV
+output "jump_host_internal_ip" {
+  value = local.general.cloud == "gcp" ? module.gcp_vm.jump_host_internal_ip : module.aws_vm.jump_host_internal_ip
 }
 
-output "next_steps" {
-  description = "What to do after terraform apply"
-  value = <<-STEPS
-    1. Wait ~2 min for cloud-init to finish on all VMs
-    2. Test SSH: ssh vagrant@172.31.1.10
-    3. Run Ansible: ansible-playbook -i ansible/inventory ansible/provision.yml
-    4. Deploy services: ansible-playbook -i ansible/inventory ansible/deploy.yml
-  STEPS
+output "internal_vm_ips" {
+  value = local.general.cloud == "gcp" ? module.gcp_vm.internal_vm_ips : module.aws_vm.internal_vm_ips
+}
+
+output "ssh_connection" {
+  value = "ssh -p ${local.general.ssh_port} ${local.general.ops_user}@${local.general.cloud == "gcp" ? module.gcp_vm.jump_host_external_ip : module.aws_vm.jump_host_external_ip}"
 }
