@@ -10,9 +10,6 @@
 
 plugin: amazon.aws.aws_ec2
 
-regions:
-  - eu-north-1
-
 filters:
   tag:Project: coin-ops
   instance-state-name: running
@@ -34,7 +31,3 @@ compose:
   # Use default('') so the expression works when public_ip_address is absent (private-only instances).
   ansible_host: "(public_ip_address | default('')) if tags.get('Role') == 'jump-host' else private_ip_address"
   cloud: "'aws'"
-  # Set connection vars at host level (higher precedence than group_vars).
-  # Must match config.json general.username and general.ssh_port.
-  ansible_user: "'coinops'"
-  ansible_port: "53725"

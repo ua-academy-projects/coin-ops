@@ -11,11 +11,6 @@
 plugin: google.cloud.gcp_compute
 auth_kind: serviceaccount
 
-# Project ID is not sensitive — matches TF_VAR_gcp_project_id in config.json.
-# Listed explicitly: some plugin versions don't convert GCP_PROJECT string to list.
-projects:
-  - project-6f41102f-c77c-46a3-aac
-
 hostnames:
   - name
 
@@ -36,7 +31,3 @@ compose:
     if (labels.get('role') == 'jump-host' and networkInterfaces[0].get('accessConfigs', []))
     else networkInterfaces[0].networkIP
   cloud: "'gcp'"
-  # Set connection vars at host level (higher precedence than group_vars).
-  # Must match config.json general.username and general.ssh_port.
-  ansible_user: "'coinops'"
-  ansible_port: "53725"
