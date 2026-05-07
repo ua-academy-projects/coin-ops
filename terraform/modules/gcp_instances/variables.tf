@@ -62,3 +62,9 @@ variable "ssh_port" {
   description = "SSH port configured in sshd_config via user_init_script template. Also used in generated ssh_config."
   default     = 22
 }
+
+variable "project_name" {
+  type        = string
+  description = "Project name to be used in labels/tags for cloud-native Ansible inventory plugins."
+  default     = "coin-ops"
+}

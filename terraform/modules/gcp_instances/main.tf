@@ -73,7 +73,7 @@ resource "google_compute_instance" "vm" {
   # Phase 5: labels for cloud-native Ansible inventory (gcp_compute plugin groups by labels.role).
   labels = {
     role    = each.value.role != "" ? each.value.role : "unset"
-    project = "coin-ops"
+    project = var.project_name
     cloud   = "gcp"
   }
 

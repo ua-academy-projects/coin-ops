@@ -13,8 +13,8 @@ locals {
     subnet           = "internal"
     has_public_ip    = false
     role             = ""
-    ami_filter       = "amzn2-ami-hvm-*-x86_64-gp2"
-    ami_owner        = "amazon"
+    ami_filter       = "debian-12-amd64-20*"
+    ami_owner        = "136693071363"
     can_ip_forward   = false
     startup_script   = ""
     user_init_script = ""
@@ -92,9 +92,12 @@ resource "aws_instance" "vm" {
 
   # Tags for cloud-native Ansible inventory (aws_ec2 plugin groups by tags.Role).
   tags = {
-    Name    = each.key
+    # "aws-" prefix ensures unique cross-cloud hostnames in Ansible inventory.
+    # The aws_ec2 plugin uses tag:Name as hostname — "aws-app-1" won't collide with GCP "app-1".
+    # This is a tag-only change: terraform apply updates tags in-place, no instance recreation.
+    Name    = "aws-${each.key}"
     Role    = each.value.role != "" ? each.value.role : "unset"
-    Project = "coin-ops"
+    Project = var.project_name
     Cloud   = "aws"
   }
 

@@ -1,0 +1,42 @@
+---
+# GCP dynamic inventory — google.cloud.gcp_compute plugin.
+# Credentials: set GCP_PROJECT and GCP_SERVICE_ACCOUNT_FILE in .env.
+#
+# NOTE: hostnames: only accepts predefined values (name, public_ip, private_ip).
+# Jinja2 templates are NOT supported here — "gcp-{{ name }}" is invalid.
+# GCP instance names are resource identifiers and cannot be renamed without
+# recreation, so bare names (app-1, app-2, jump-host) are used.
+# Use --limit gcp or --limit aws to target a specific cloud.
+
+plugin: google.cloud.gcp_compute
+auth_kind: serviceaccount
+
+# Project ID is not sensitive — matches TF_VAR_gcp_project_id in config.json.
+# Listed explicitly: some plugin versions don't convert GCP_PROJECT string to list.
+projects:
+  - project-6f41102f-c77c-46a3-aac
+
+hostnames:
+  - name
+
+keyed_groups:
+  # → role_jump_host, role_app_ui, role_app_backend (hyphens sanitized to underscores)
+  - key: labels.role
+    prefix: role
+    separator: "_"
+  # → group "gcp" (used by ProxyJump intersect logic in group_vars)
+  - key: labels.cloud
+    prefix: ""
+    separator: ""
+
+compose:
+  # Public IP for jump-host/app-1, private IP for app-2
+  ansible_host: >-
+    networkInterfaces[0].accessConfigs[0].natIP
+    if (labels.get('role') == 'jump-host' and networkInterfaces[0].get('accessConfigs', []))
+    else networkInterfaces[0].networkIP
+  cloud: "'gcp'"
+  # Set connection vars at host level (higher precedence than group_vars).
+  # Must match config.json general.username and general.ssh_port.
+  ansible_user: "'coinops'"
+  ansible_port: "53725"

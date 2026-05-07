@@ -1,0 +1,90 @@
+# All variables — safe to commit.
+# Secrets and local paths come from environment variables.
+# Run `source .env` before any ansible-playbook command.
+
+# ── SSH connection variables ─────────────────────────────────────────────────
+# ansible_user and ansible_port are connection variables — read from env vars
+# set in .env (SSH_USER, SSH_PORT). Hardcoded coin-ops defaults as last resort.
+# These MUST resolve before any SSH attempt — do not make them depend on
+# file lookups that may fail silently and fall back to port 22 / system user.
+ansible_user: "{{ lookup('env', 'SSH_USER') | default('coinops', true) }}"
+ansible_port: "{{ lookup('env', 'SSH_PORT') | default(53725, true) | int }}"
+ansible_ssh_private_key_file: "{{ lookup('env', 'SSH_KEY_PATH') if lookup('env', 'SSH_KEY_PATH') else lookup('env', 'HOME') ~ '/.ssh/ssh-key-coin-ops' }}"
+
+# infra_config: full config.json for non-connection variables (image tags, runtime mode, etc.)
+# ANSIBLE_CONFIG env var dirname gives a stable repo root path in both ad-hoc and playbook modes.
+_repo_root: "{{ (lookup('env', 'ANSIBLE_CONFIG') | dirname) if lookup('env', 'ANSIBLE_CONFIG') else (playbook_dir ~ '/..') }}"
+infra_config: "{{ lookup('file', _repo_root ~ '/terraform/config/config.json') | from_json }}"
+
+my_cloud: "{{ cloud | default('gcp') }}"
+# Group names are sanitized by Ansible: hyphens become underscores.
+# role_jump-host (label value) → role_jump_host (Ansible group name)
+my_jump_hosts: "{{ groups['role_jump_host'] | default([]) | intersect(groups[my_cloud] | default([])) }}"
+my_jump_host_name: "{{ my_jump_hosts[0] if my_jump_hosts | length > 0 else '' }}"
+my_jump_host_ip: "{{ hostvars[my_jump_host_name]['ansible_host'] if my_jump_host_name != '' else '' }}"
+
+ansible_ssh_common_args: >-
+  -o StrictHostKeyChecking=no
+  -o UserKnownHostsFile=/dev/null
+  -o IdentitiesOnly=yes
+  {{ '-o ProxyCommand="ssh -W %h:%p -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes -i ' ~ ansible_ssh_private_key_file ~ ' -p ' ~ ansible_port ~ ' ' ~ ansible_user ~ '@' ~ my_jump_host_ip ~ '"' if my_jump_host_ip != '' and 'role_jump_host' not in group_names else '' }}
+
+
+# ── Passwords (loaded from .env) ──────────────────────────────
+rabbitmq_password: "{{ lookup('env', 'RABBITMQ_PASSWORD') | default('coinops_rabbit_secure', true) }}"
+db_password: "{{ lookup('env', 'DB_PASSWORD') | default('coinops_db_secure', true) }}"
+
+# ── Service accounts ──────────────────────────────────────────
+rabbitmq_user: cognitor
+db_name: cognitor
+db_user: cognitor
+runtime_backend: "{{ lookup('env', 'RUNTIME_BACKEND') | default('external', true) }}"
+
+# ── Ports ────────────────────────────────────────────────────
+proxy_port: 8080
+history_port: 8000
+# Private IP of the backend node on the same cloud (used by nginx → proxy_pass).
+# intersect with groups[my_cloud] scopes to current cloud (same pattern as my_jump_hosts).
+_backend_host: "{{ (groups['role_app_backend'] | default([]) | intersect(groups[my_cloud] | default([])) | list | first) | default((groups['role_app_backend'] | list | first) | default('127.0.0.1')) }}"
+postgres_bind_ip: "{{ hostvars[_backend_host]['ansible_host'] if _backend_host != '127.0.0.1' else '127.0.0.1' }}"
+
+# Public entrypoint / TLS
+# Browser-facing domain served by node-03. For local labs, add this to hosts:
+#   172.31.1.12 coinops.test
+app_domain: "{{ lookup('env', 'APP_DOMAIN') | default('coinops.test', true) }}"
+
+# Supported modes:
+#   selfsigned - Ansible creates a local self-signed cert on node-03
+#   provided   - cert/key already exist on node-03 under /etc/cognitor/tls
+#   off        - HTTP only, useful for quick internal debugging
+tls_mode: "{{ lookup('env', 'TLS_MODE') | default('selfsigned', true) }}"
+tls_enabled: "{{ tls_mode != 'off' }}"
+tls_cert_dir: /etc/cognitor/tls
+tls_cert_path: "{{ tls_cert_dir }}/coinops.crt"
+tls_key_path: "{{ tls_cert_dir }}/coinops.key"
+
+# ── Container images ─────────────────────────────────────────
+# GitHub Actions publishes these images to GHCR.
+# Override IMAGE_TAG for immutable deploys, for example:
+#   IMAGE_TAG=<commit-sha> ansible-playbook -i ansible/inventory ansible/deploy.yml
+image_registry: "{{ lookup('env', 'IMAGE_REGISTRY') | default('ghcr.io/ua-academy-projects', true) }}"
+image_registry_host: "{{ image_registry.split('/')[0] }}"
+image_tag: "{{ lookup('env', 'IMAGE_TAG') | default('shabat-latest', true) }}"
+proxy_image: "{{ image_registry }}/coin-ops-proxy:{{ image_tag }}"
+history_api_image: "{{ image_registry }}/coin-ops-history-api:{{ image_tag }}"
+history_consumer_image: "{{ image_registry }}/coin-ops-history-consumer:{{ image_tag }}"
+ui_image: "{{ image_registry }}/coin-ops-ui:{{ image_tag }}"
+postgres_runtime_image: "{{ image_registry }}/coin-ops-postgres-runtime:{{ image_tag }}"
+postgres_image: "{{ postgres_runtime_image if runtime_backend == 'postgres' else 'postgres:16-alpine' }}"
+registry_username: "{{ lookup('env', 'GHCR_USERNAME') | default('', true) }}"
+registry_token: "{{ lookup('env', 'GHCR_TOKEN') | default('', true) }}"
+
+# ── Derived connection strings ────────────────────────────────
+# Use postgres_bind_ip (the node's private IP) for cross-container communication
+# when services are on the same host but in different compose projects.
+rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@{{ postgres_bind_ip }}:5672/"
+database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ postgres_bind_ip }}:5432/{{ db_name }}"
+history_database_url: "postgresql://{{ db_user }}:{{ db_password }}@postgres:5432/{{ db_name }}"
+proxy_database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ postgres_bind_ip }}:5432/{{ db_name }}"
+redis_url: "redis://127.0.0.1:6379/0"
+

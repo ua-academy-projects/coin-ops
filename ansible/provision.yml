@@ -12,9 +12,6 @@
     - name: Check .env vars are exported
       assert:
         that:
-          - lookup('env', 'RABBITMQ_PASSWORD') != ''
-          - lookup('env', 'DB_PASSWORD') != ''
-          - lookup('env', 'SSH_KEY_PATH') != ''
           - lookup('env', 'RUNTIME_BACKEND') in ['', 'external', 'postgres']
         fail_msg: |
           Required environment variables are not set or RUNTIME_BACKEND is invalid.
@@ -30,8 +27,8 @@
     - common
     - docker
 
-- name: Provision history node — Data directories
-  hosts: history
+- name: Provision backend node (app-2) — Data directories
+  hosts: role_app_backend
   become: yes
   tasks:
     - name: Create PostgreSQL data directory
@@ -50,8 +47,8 @@
         group: 999
         mode: '0755'
 
-- name: Provision proxy node — Data directories
-  hosts: proxy
+- name: Provision backend proxy node (app-2) — Data directories
+  hosts: role_app_backend
   become: yes
   tasks:
     - name: Create Redis data directory
@@ -63,7 +60,7 @@
         mode: '0755'
 
 - name: Provision UI node
-  hosts: ui
+  hosts: role_app_ui
   become: yes
   tasks:
     - name: No host-level provisioning required for UI node

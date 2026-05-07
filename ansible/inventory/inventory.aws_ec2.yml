@@ -1,0 +1,40 @@
+---
+# AWS dynamic inventory — amazon.aws.aws_ec2 plugin.
+# Credentials: set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION in .env.
+#
+# NOTE: hostnames: Jinja2 templates (e.g. "aws-{{ ec2_tags.Name }}") are not
+# supported in this version of the plugin — they render literally.
+# Instead, the "aws-" prefix is baked into the Name tag by Terraform:
+#   tags = { Name = "aws-${each.key}" }  ← in modules/aws_instances/main.tf
+# This means tag:Name gives aws-app-1, aws-app-2, aws-jump-host.
+
+plugin: amazon.aws.aws_ec2
+
+regions:
+  - eu-north-1
+
+filters:
+  tag:Project: coin-ops
+  instance-state-name: running
+
+hostnames:
+  - tag:Name
+
+keyed_groups:
+  # → role_jump_host, role_app_ui, role_app_backend (hyphens sanitized to underscores)
+  - key: tags.Role
+    prefix: role
+    separator: "_"
+  # → group "aws" (used by ProxyJump intersect logic in group_vars)
+  - key: "'aws'"
+    prefix: ""
+    separator: ""
+
+compose:
+  # Use default('') so the expression works when public_ip_address is absent (private-only instances).
+  ansible_host: "(public_ip_address | default('')) if tags.get('Role') == 'jump-host' else private_ip_address"
+  cloud: "'aws'"
+  # Set connection vars at host level (higher precedence than group_vars).
+  # Must match config.json general.username and general.ssh_port.
+  ansible_user: "'coinops'"
+  ansible_port: "53725"

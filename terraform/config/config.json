@@ -1,5 +1,8 @@
 {
     "general": {
+        "project_name": "coin-ops",
+        "aws_region": "eu-north-1",
+        "gcp_region": "europe-central2",
         "instance_size": "micro",
         "disk_size": 10,
         "has_public_ip": false,
@@ -18,12 +21,12 @@
         "app-1": {
             "subnet": "external",
             "has_public_ip": true,
-            "role": "app",
+            "role": "app-ui",
             "instance_size": "micro"
         },
         "app-2": {
             "subnet": "internal",
-            "role": "app",
+            "role": "app-backend",
             "instance_size": "small"
         }
     }

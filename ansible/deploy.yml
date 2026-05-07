@@ -12,9 +12,6 @@
     - name: Check .env vars are exported
       assert:
         that:
-          - lookup('env', 'RABBITMQ_PASSWORD') != ''
-          - lookup('env', 'DB_PASSWORD') != ''
-          - lookup('env', 'SSH_KEY_PATH') != ''
           - lookup('env', 'RUNTIME_BACKEND') in ['', 'external', 'postgres']
         fail_msg: |
           Required environment variables are not set or RUNTIME_BACKEND is invalid.
@@ -43,20 +40,20 @@
         msg: "GHCR_USERNAME/GHCR_TOKEN not set; assuming registry images are public."
       when: registry_username | length == 0 or registry_token | length == 0
 
-- name: Deploy History Service (node-01)
-  hosts: history
+- name: Deploy History Service (app-2)
+  hosts: role_app_backend
   become: yes
   roles:
     - history
 
-- name: Deploy Proxy Service (node-02)
-  hosts: proxy
+- name: Deploy Proxy Service (app-2)
+  hosts: role_app_backend
   become: yes
   roles:
     - proxy
 
-- name: Deploy Web UI (node-03)
-  hosts: ui
+- name: Deploy Web UI (app-1)
+  hosts: role_app_ui
   become: yes
   roles:
     - ui

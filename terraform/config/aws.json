@@ -1,6 +1,6 @@
 {
     "zone": "eu-north-1a",
-    "ami_filter": "amzn2-ami-hvm-*-x86_64-gp2",
-    "ami_owner": "amazon",
+    "ami_filter": "debian-12-amd64-*",
+    "ami_owner": "136693071363",
     "ssh_user": "ec2-user"
 }

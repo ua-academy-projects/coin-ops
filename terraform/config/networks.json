@@ -31,30 +31,25 @@
             "source_cidrs": ["10.10.1.0/24"],
             "target_role": "jump-host"
         },
-        "allow-http-https-app": {
+        "allow-http-https-app-ui": {
             "protocols": [{ "protocol": "tcp", "ports": ["80", "443"] }],
             "source_cidrs": ["0.0.0.0/0"],
-            "target_role": "app"
+            "target_role": "app-ui"
         },
-        "allow-app-from-jump": {
+        "allow-app-ui-from-jump": {
+            "protocols": [{ "protocol": "tcp", "ports": ["53725"] }],
+            "source_role": "jump-host",
+            "target_role": "app-ui"
+        },
+        "allow-app-backend-from-jump": {
             "protocols": [{ "protocol": "tcp", "ports": ["53725", "8080", "8000"] }],
             "source_role": "jump-host",
-            "target_role": "app"
+            "target_role": "app-backend"
         },
-        "allow-db-from-jump": {
-            "protocols": [{ "protocol": "tcp", "ports": ["53725", "5432"] }],
-            "source_role": "jump-host",
-            "target_role": "db"
-        },
-        "allow-db-from-app": {
-            "protocols": [{ "protocol": "tcp", "ports": ["5432"] }],
-            "source_role": "app",
-            "target_role": "db"
-        },
-        "allow-history-api-from-app": {
-            "protocols": [{ "protocol": "tcp", "ports": ["8000"] }],
-            "source_role": "app",
-            "target_role": "app"
+        "allow-backend-from-ui": {
+            "protocols": [{ "protocol": "tcp", "ports": ["8000", "8080"] }],
+            "source_role": "app-ui",
+            "target_role": "app-backend"
         }
     }
 }

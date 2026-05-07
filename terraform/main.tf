@@ -60,6 +60,11 @@ locals {
   # Injected into user_init_script template; also used in generated ssh_config.
   username = try(local.general.username, "")
   ssh_port = try(local.general.ssh_port, 22)
+
+  # Project and regions from config.json
+  project_name = try(local.general.project_name, "coin-ops")
+  aws_region   = try(local.general.aws_region, var.aws_region)
+  gcp_region   = try(local.general.gcp_region, var.gcp_region)
 }
 
 # GCP
@@ -68,7 +73,7 @@ module "gcp_network" {
   count    = local.gcp_enabled ? 1 : 0
   source   = "./modules/gcp_network"
   vpc_name = local.vpc_name
-  region   = var.gcp_region
+  region   = local.gcp_region
   subnets  = local.subnets
 }
 
@@ -92,6 +97,7 @@ module "gcp_instances" {
   private_subnet_cidr = local.private_subnet_cidr
   username            = local.username
   ssh_port            = local.ssh_port
+  project_name        = local.project_name
 
   depends_on = [module.gcp_firewall]
 }
@@ -117,7 +123,7 @@ module "aws_network" {
   vpc_name = local.vpc_name
   vpc_cidr = local.vpc_cidr
   subnets  = local.subnets
-  zone     = lookup(local.aws_cfg, "zone", "${var.aws_region}a")
+  zone     = lookup(local.aws_cfg, "zone", "${local.aws_region}a")
 }
 
 module "aws_security_groups" {
@@ -141,6 +147,7 @@ module "aws_instances" {
   private_subnet_cidr = local.private_subnet_cidr
   username            = local.username
   ssh_port            = local.ssh_port
+  project_name        = local.project_name
 }
 
 module "aws_nat_route" {
