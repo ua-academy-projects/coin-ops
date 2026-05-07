@@ -50,3 +50,15 @@ variable "private_subnet_cidr" {
   description = "CIDR of the private subnet (e.g. 10.10.1.0/24). Injected into startup script templates via templatefile()."
   default     = ""
 }
+
+variable "username" {
+  type        = string
+  description = "Custom OS user to create on every VM (e.g. 'coinops'). Injected into user_init_script template."
+  default     = ""
+}
+
+variable "ssh_port" {
+  type        = number
+  description = "SSH port configured in sshd_config via user_init_script template. Also used in generated ssh_config."
+  default     = 22
+}

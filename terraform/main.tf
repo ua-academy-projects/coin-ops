@@ -55,6 +55,11 @@ locals {
   # CIDR of the private subnet — injected into startup script templates.
   # Derived from networks.json; fallback matches the hardcoded default in the script.
   private_subnet_cidr = try(local.subnets["internal"].cidr, "10.10.1.0/24")
+
+  # Custom OS user and SSH port — from config.json → general.
+  # Injected into user_init_script template; also used in generated ssh_config.
+  username = try(local.general.username, "")
+  ssh_port = try(local.general.ssh_port, 22)
 }
 
 # GCP
@@ -85,6 +90,8 @@ module "gcp_instances" {
   subnet_ids          = module.gcp_network[0].subnet_ids
   ssh_public_key      = local.ssh_public_key
   private_subnet_cidr = local.private_subnet_cidr
+  username            = local.username
+  ssh_port            = local.ssh_port
 
   depends_on = [module.gcp_firewall]
 }
@@ -132,6 +139,8 @@ module "aws_instances" {
   sg_ids              = module.aws_security_groups[0].sg_ids
   ssh_public_key      = local.ssh_public_key
   private_subnet_cidr = local.private_subnet_cidr
+  username            = local.username
+  ssh_port            = local.ssh_port
 }
 
 module "aws_nat_route" {
@@ -153,13 +162,15 @@ resource "local_file" "hosts" {
   content = jsonencode(merge(
     local.gcp_enabled ? {
       gcp = {
-        ssh_user  = lookup(local.gcp_cfg, "ssh_user", "debian")
+        ssh_user  = local.username != "" ? local.username : lookup(local.gcp_cfg, "ssh_user", "debian")
+        ssh_port  = local.ssh_port
         instances = try(module.gcp_instances[0].instance_ips, {})
       }
     } : {},
     local.aws_enabled ? {
       aws = {
-        ssh_user  = lookup(local.aws_cfg, "ssh_user", "ec2-user")
+        ssh_user  = local.username != "" ? local.username : lookup(local.aws_cfg, "ssh_user", "ec2-user")
+        ssh_port  = local.ssh_port
         instances = try(module.aws_instances[0].instance_ips, {})
       }
     } : {}
@@ -177,7 +188,8 @@ resource "local_file" "ssh_config" {
       for name, inst in local.gcp_hosts : trimspace(<<-EOT
         Host coinops-gcp-${name}
           HostName ${inst.role == "jump-host" ? try(inst.public_ip, inst.private_ip) : inst.private_ip}
-          User ${lookup(local.gcp_cfg, "ssh_user", "debian")}
+          User ${local.username != "" ? local.username : lookup(local.gcp_cfg, "ssh_user", "debian")}
+          Port ${local.ssh_port}
           ${inst.role != "jump-host" && local.gcp_jump_host_name != "" ? "ProxyJump coinops-gcp-${local.gcp_jump_host_name}" : ""}
           IdentityFile ${pathexpand(replace(var.ssh_public_key_path, ".pub", ""))}
           IdentitiesOnly yes
@@ -190,7 +202,8 @@ resource "local_file" "ssh_config" {
       for name, inst in local.aws_hosts : trimspace(<<-EOT
         Host coinops-aws-${name}
           HostName ${inst.role == "jump-host" ? try(inst.public_ip, inst.private_ip) : inst.private_ip}
-          User ${lookup(local.aws_cfg, "ssh_user", "ec2-user")}
+          User ${local.username != "" ? local.username : lookup(local.aws_cfg, "ssh_user", "ec2-user")}
+          Port ${local.ssh_port}
           ${inst.role != "jump-host" && local.aws_jump_host_name != "" ? "ProxyJump coinops-aws-${local.aws_jump_host_name}" : ""}
           IdentityFile ${pathexpand(replace(var.ssh_public_key_path, ".pub", ""))}
           IdentitiesOnly yes

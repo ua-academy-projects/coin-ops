@@ -8,15 +8,16 @@ locals {
   sizes = length(var.instance_sizes) > 0 ? var.instance_sizes : local.fallback_sizes
 
   fallback = {
-    instance_size  = "micro"
-    os_image       = "debian-cloud/debian-12"
-    disk_size      = 10
-    zone           = "europe-central2-a"
-    subnet         = "internal"
-    has_public_ip  = false
-    role           = ""
-    can_ip_forward = false
-    startup_script = ""
+    instance_size    = "micro"
+    os_image         = "debian-cloud/debian-12"
+    disk_size        = 10
+    zone             = "europe-central2-a"
+    subnet           = "internal"
+    has_public_ip    = false
+    role             = ""
+    can_ip_forward   = false
+    startup_script   = ""
+    user_init_script = ""
   }
 
   fallback_instances = { "default-vm" = {} }
@@ -36,6 +37,23 @@ locals {
   }
 
   ssh_user = lookup(var.cloud_defaults, "ssh_user", "debian")
+
+  # Pre-render startup scripts per instance.
+  # user_init_script (from general) runs on every VM and handles user creation + SSH port.
+  # startup_script (per-instance) contains cloud-specific init (e.g. NAT bootstrap for jump-host).
+  # Both are combined into a single startup-script metadata entry.
+  instance_scripts = {
+    for name, cfg in local.instances : name => join("\n\n", compact([
+      cfg.user_init_script != "" ? templatefile("${path.root}/${cfg.user_init_script}", {
+        username       = var.username
+        ssh_public_key = var.ssh_public_key
+        ssh_port       = var.ssh_port
+      }) : "",
+      cfg.startup_script != "" ? templatefile("${path.root}/${cfg.startup_script}", {
+        private_subnet_cidr = var.private_subnet_cidr
+      }) : "",
+    ]))
+  }
 }
 
 resource "google_compute_instance" "vm" {
@@ -46,11 +64,18 @@ resource "google_compute_instance" "vm" {
   zone           = each.value.zone
   can_ip_forward = each.value.can_ip_forward
 
-  # VMs without a public IP receive the "internal-vm" tag so the NAT route applies to them.
+  # Network tags: role tag for firewall targeting; "internal-vm" for NAT route.
   tags = concat(
     each.value.role != "" ? [each.value.role] : [],
     !each.value.has_public_ip ? ["internal-vm"] : []
   )
+
+  # Phase 5: labels for cloud-native Ansible inventory (gcp_compute plugin groups by labels.role).
+  labels = {
+    role    = each.value.role != "" ? each.value.role : "unset"
+    project = "coin-ops"
+    cloud   = "gcp"
+  }
 
   boot_disk {
     initialize_params {
@@ -78,10 +103,8 @@ resource "google_compute_instance" "vm" {
     var.ssh_public_key != "" ? {
       ssh-keys = "${local.ssh_user}:${var.ssh_public_key}"
     } : {},
-    each.value.startup_script != "" ? {
-      startup-script = templatefile("${path.root}/${each.value.startup_script}", {
-        private_subnet_cidr = var.private_subnet_cidr
-      })
+    local.instance_scripts[each.key] != "" ? {
+      startup-script = local.instance_scripts[each.key]
     } : {}
   )
 }

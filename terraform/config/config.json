@@ -2,7 +2,10 @@
     "general": {
         "instance_size": "micro",
         "disk_size": 10,
-        "has_public_ip": false
+        "has_public_ip": false,
+        "username": "coinops",
+        "user_init_script": "scripts/user-init.sh.tpl",
+        "ssh_port": 53725
     },
     "instances": {
         "jump-host": {

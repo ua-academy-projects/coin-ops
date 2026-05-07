@@ -8,15 +8,16 @@ locals {
   sizes = length(var.instance_sizes) > 0 ? var.instance_sizes : local.fallback_sizes
 
   fallback = {
-    instance_size  = "micro"
-    disk_size      = 10
-    subnet         = "internal"
-    has_public_ip  = false
-    role           = ""
-    ami_filter     = "amzn2-ami-hvm-*-x86_64-gp2"
-    ami_owner      = "amazon"
-    can_ip_forward = false
-    startup_script = ""
+    instance_size    = "micro"
+    disk_size        = 10
+    subnet           = "internal"
+    has_public_ip    = false
+    role             = ""
+    ami_filter       = "amzn2-ami-hvm-*-x86_64-gp2"
+    ami_owner        = "amazon"
+    can_ip_forward   = false
+    startup_script   = ""
+    user_init_script = ""
   }
 
   # If config.json is empty or missing, create a minimal fallback instance.
@@ -38,6 +39,23 @@ locals {
 
   ami_filter = lookup(var.cloud_defaults, "ami_filter", local.fallback.ami_filter)
   ami_owner  = lookup(var.cloud_defaults, "ami_owner", local.fallback.ami_owner)
+
+  # Pre-render startup scripts per instance.
+  # user_init_script (from general) runs on every VM and handles user creation + SSH port.
+  # startup_script (per-instance) contains cloud-specific init (e.g. NAT bootstrap for jump-host).
+  # Both are combined into a single user_data string.
+  instance_scripts = {
+    for name, cfg in local.instances : name => join("\n\n", compact([
+      cfg.user_init_script != "" ? templatefile("${path.root}/${cfg.user_init_script}", {
+        username       = var.username
+        ssh_public_key = var.ssh_public_key
+        ssh_port       = var.ssh_port
+      }) : "",
+      cfg.startup_script != "" ? templatefile("${path.root}/${cfg.startup_script}", {
+        private_subnet_cidr = var.private_subnet_cidr
+      }) : "",
+    ]))
+  }
 }
 
 data "aws_ami" "this" {
@@ -66,15 +84,19 @@ resource "aws_instance" "vm" {
   key_name                    = length(aws_key_pair.deployer) > 0 ? aws_key_pair.deployer[0].key_name : null
   associate_public_ip_address = each.value.has_public_ip
   source_dest_check           = !each.value.can_ip_forward
-  user_data = each.value.startup_script != "" ? templatefile("${path.root}/${each.value.startup_script}", {
-    private_subnet_cidr = var.private_subnet_cidr
-  }) : null
+  user_data                   = local.instance_scripts[each.key] != "" ? local.instance_scripts[each.key] : null
 
   root_block_device {
     volume_size = each.value.disk_size
   }
 
-  tags = { Name = each.key }
+  # Tags for cloud-native Ansible inventory (aws_ec2 plugin groups by tags.Role).
+  tags = {
+    Name    = each.key
+    Role    = each.value.role != "" ? each.value.role : "unset"
+    Project = "coin-ops"
+    Cloud   = "aws"
+  }
 
   lifecycle {
     ignore_changes = [ami]

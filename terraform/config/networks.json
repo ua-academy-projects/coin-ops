@@ -18,7 +18,7 @@
     },
     "firewall_rules": {
         "allow-ssh-jump-host": {
-            "protocols": [{ "protocol": "tcp", "ports": ["22"] }],
+            "protocols": [{ "protocol": "tcp", "ports": ["53725"] }],
             "source_cidrs": ["0.0.0.0/0"],
             "target_role": "jump-host"
         },
@@ -37,12 +37,12 @@
             "target_role": "app"
         },
         "allow-app-from-jump": {
-            "protocols": [{ "protocol": "tcp", "ports": ["22", "8080", "8000"] }],
+            "protocols": [{ "protocol": "tcp", "ports": ["53725", "8080", "8000"] }],
             "source_role": "jump-host",
             "target_role": "app"
         },
         "allow-db-from-jump": {
-            "protocols": [{ "protocol": "tcp", "ports": ["22", "5432"] }],
+            "protocols": [{ "protocol": "tcp", "ports": ["53725", "5432"] }],
             "source_role": "jump-host",
             "target_role": "db"
         },
