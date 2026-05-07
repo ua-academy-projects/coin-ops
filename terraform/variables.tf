@@ -1,6 +1,7 @@
 variable "gcp_credentials_file" {
   type      = string
   sensitive = true
+  default   = ""
 }
 
 variable "aws_access_key" {

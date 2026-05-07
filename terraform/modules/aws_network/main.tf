@@ -66,3 +66,13 @@ resource "aws_route_table_association" "public" {
   subnet_id      = aws_subnet.public[0].id
   route_table_id = aws_route_table.public[0].id
 }
+
+resource "aws_subnet" "private_b" {
+  count             = var.config.general.cloud == "aws" ? 1 : 0
+  vpc_id            = aws_vpc.main[0].id
+  cidr_block        = "10.0.3.0/24"
+  availability_zone = "eu-central-1a"
+  tags = {
+    Name = "devops-private-subnet-b"
+  }
+}

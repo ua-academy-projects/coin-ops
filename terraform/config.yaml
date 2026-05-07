@@ -11,32 +11,31 @@ general:
   disk_size: 10
   ssh_port: "9922"
   ops_user: "marta_ops"
+  db_password: "CHANGE_ME_BEFORE_APPLY"
   image:
     gcp: "ubuntu-os-cloud/ubuntu-2404-lts-amd64"
     aws: "ami-0084a47cc718c111a"
-
 sizes:
   small:
     gcp: "e2-micro"
     aws: "t3.micro"
-
+  medium:
+    gcp: "e2-small"
+    aws: "t3.small"
 vms:
   jump-host:
     size: small
     tags: ["jump-host"]
     public_ip: true
-
-  internal-vm-1:
+  node-01:
     size: small
-    tags: ["internal"]
+    tags: ["internal", "history", "queue"]
     public_ip: false
-
-  internal-vm-2:
+  node-02:
     size: small
-    tags: ["internal"]
+    tags: ["internal", "proxy"]
     public_ip: false
-
-  internal-vm-3:
+  node-03:
     size: small
-    tags: ["internal"]
-    public_ip: false
+    tags: ["internal", "ui", "web"]
+    public_ip: true

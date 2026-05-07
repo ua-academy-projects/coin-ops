@@ -21,3 +21,7 @@ variable "jump_host_sg_id" {
 variable "internal_sg_id" {
   type = string
 }
+
+variable "web_sg_id" {
+  type = string
+}

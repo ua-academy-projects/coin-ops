@@ -4,7 +4,6 @@ terraform {
       source  = "hashicorp/google"
       version = "~> 5.0"
     }
-
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
@@ -13,10 +12,9 @@ terraform {
 }
 
 provider "google" {
-  credentials = file(var.gcp_credentials_file)
-  project     = local.general.project_id
-  region      = local.general.regions.gcp.region
-  zone = local.general.regions.gcp.zone
+  project = local.general.project_id
+  region  = local.general.regions.gcp.region
+  zone    = local.general.regions.gcp.zone
 }
 
 provider "aws" {

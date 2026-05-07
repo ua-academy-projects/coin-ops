@@ -40,4 +40,13 @@ module "aws_vm" {
   private_subnet_id = module.aws_network.private_subnet_id
   jump_host_sg_id   = module.aws_security.jump_host_sg_id
   internal_sg_id    = module.aws_security.internal_sg_id
+  web_sg_id         = module.aws_security.web_sg_id
+}
+
+module "aws_rds" {
+  source              = "./modules/aws_rds"
+  config              = local.config
+  private_subnet_id   = module.aws_network.private_subnet_id
+  private_subnet_b_id = module.aws_network.private_subnet_b_id
+  rds_sg_id           = module.aws_security.rds_sg_id
 }
