@@ -1,13 +1,13 @@
 resource "aws_security_group" "jump_host" {
-  count = var.cloud == "aws" ? 1 : 0
+  count = var.config.general.cloud == "aws" ? 1 : 0
 
   name        = "jump-host-sg"
   description = "Allow SSH from internet on custom port"
   vpc_id      = var.vpc_id
 
   ingress {
-    from_port   = tonumber(var.ssh_port)
-    to_port     = tonumber(var.ssh_port)
+    from_port   = tonumber(var.config.general.ssh_port)
+    to_port     = tonumber(var.config.general.ssh_port)
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -25,15 +25,15 @@ resource "aws_security_group" "jump_host" {
 }
 
 resource "aws_security_group" "internal" {
-  count = var.cloud == "aws" ? 1 : 0
+  count = var.config.general.cloud == "aws" ? 1 : 0
 
   name        = "internal-sg"
   description = "Allow SSH from jump host and internal communication"
   vpc_id      = var.vpc_id
 
   ingress {
-    from_port       = tonumber(var.ssh_port)
-    to_port         = tonumber(var.ssh_port)
+    from_port       = tonumber(var.config.general.ssh_port)
+    to_port         = tonumber(var.config.general.ssh_port)
     protocol        = "tcp"
     security_groups = [aws_security_group.jump_host[0].id]
   }

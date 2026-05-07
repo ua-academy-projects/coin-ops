@@ -1,7 +1,3 @@
-variable "cloud" {
-  type = string
-}
-
-variable "zone" {
-  type = string
+variable "config" {
+  type = any
 }

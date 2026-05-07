@@ -1,5 +1,5 @@
 resource "aws_vpc" "main" {
-  count = var.cloud == "aws" ? 1 : 0
+  count = var.config.general.cloud == "aws" ? 1 : 0
 
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
@@ -11,11 +11,11 @@ resource "aws_vpc" "main" {
 }
 
 resource "aws_subnet" "public" {
-  count = var.cloud == "aws" ? 1 : 0
+  count = var.config.general.cloud == "aws" ? 1 : 0
 
   vpc_id                  = aws_vpc.main[0].id
   cidr_block              = "10.0.1.0/24"
-  availability_zone       = var.zone
+  availability_zone       = var.config.general.regions.aws.zone
   map_public_ip_on_launch = true
 
   tags = {
@@ -24,11 +24,11 @@ resource "aws_subnet" "public" {
 }
 
 resource "aws_subnet" "private" {
-  count = var.cloud == "aws" ? 1 : 0
+  count = var.config.general.cloud == "aws" ? 1 : 0
 
   vpc_id            = aws_vpc.main[0].id
   cidr_block        = "10.0.2.0/24"
-  availability_zone = var.zone
+  availability_zone = var.config.general.regions.aws.zone
 
   tags = {
     Name = "devops-private-subnet"
@@ -36,7 +36,7 @@ resource "aws_subnet" "private" {
 }
 
 resource "aws_internet_gateway" "main" {
-  count = var.cloud == "aws" ? 1 : 0
+  count = var.config.general.cloud == "aws" ? 1 : 0
 
   vpc_id = aws_vpc.main[0].id
 
@@ -46,7 +46,7 @@ resource "aws_internet_gateway" "main" {
 }
 
 resource "aws_route_table" "public" {
-  count = var.cloud == "aws" ? 1 : 0
+  count = var.config.general.cloud == "aws" ? 1 : 0
 
   vpc_id = aws_vpc.main[0].id
 
@@ -61,7 +61,7 @@ resource "aws_route_table" "public" {
 }
 
 resource "aws_route_table_association" "public" {
-  count = var.cloud == "aws" ? 1 : 0
+  count = var.config.general.cloud == "aws" ? 1 : 0
 
   subnet_id      = aws_subnet.public[0].id
   route_table_id = aws_route_table.public[0].id
