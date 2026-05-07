@@ -60,3 +60,14 @@ terraform-guide.pdf
 ansible/group_vars/all/*.backup
 ansible/group_vars/all/secrets.yml
 runtime/__pycache__
+
+# Old penina folders (not used on this branch)
+Cloud_AWS/
+Cloud_GCP/
+history_service/
+ansible/files/
+
+# Terraform local state and secrets
+**/.terraform/
+**/terraform.tfvars
+**/.terraform.lock.hcl

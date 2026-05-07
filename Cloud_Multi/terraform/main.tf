@@ -1,0 +1,43 @@
+locals {
+  config  = yamldecode(file("${path.module}/config.yaml"))
+  general = local.config.general
+}
+
+module "gcp_network" {
+  source = "./modules/gcp_network"
+  config = local.config
+}
+
+module "gcp_security" {
+  source   = "./modules/gcp_security"
+  config   = local.config
+  vpc_name = module.gcp_network.vpc_name
+}
+
+module "gcp_vm" {
+  source         = "./modules/gcp_vm"
+  config         = local.config
+  subnetwork     = module.gcp_network.subnet_id
+  ssh_public_key = file("${pathexpand("~")}/.ssh/id_ed25519.pub")
+}
+
+module "aws_network" {
+  source = "./modules/aws_network"
+  config = local.config
+}
+
+module "aws_security" {
+  source = "./modules/aws_security"
+  config = local.config
+  vpc_id = module.aws_network.vpc_id
+}
+
+module "aws_vm" {
+  source            = "./modules/aws_vm"
+  config            = local.config
+  ssh_public_key    = file("${pathexpand("~")}/.ssh/id_ed25519.pub")
+  public_subnet_id  = module.aws_network.public_subnet_id
+  private_subnet_id = module.aws_network.private_subnet_id
+  jump_host_sg_id   = module.aws_security.jump_host_sg_id
+  internal_sg_id    = module.aws_security.internal_sg_id
+}
