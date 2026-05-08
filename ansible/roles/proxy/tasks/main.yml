@@ -16,6 +16,12 @@
     owner: root
     group: root
     mode: '0750'
+ 
+- name: Allow incoming traffic on Proxy port (UFW)
+  community.general.ufw:
+    rule: allow
+    port: "{{ proxy_port | string }}"
+    proto: tcp
 
 - name: Write proxy environment file
   template:

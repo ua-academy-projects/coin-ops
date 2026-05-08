@@ -31,9 +31,20 @@ ansible_ssh_common_args: >-
   {{ '-o ProxyCommand="ssh -W %h:%p -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes -i ' ~ ansible_ssh_private_key_file ~ ' -p ' ~ ansible_port ~ ' ' ~ ansible_user ~ '@' ~ my_jump_host_ip ~ '"' if my_jump_host_ip != '' and 'role_jump_host' not in group_names else '' }}
 
 
-# ── Passwords (loaded from .env) ──────────────────────────────
-rabbitmq_password: "{{ lookup('env', 'RABBITMQ_PASSWORD') | default('coinops_rabbit_secure', true) }}"
-db_password: "{{ lookup('env', 'DB_PASSWORD') | default('coinops_db_secure', true) }}"
+# ── Secrets (loaded from GCP Secret Manager) ──────────────────
+# Requires `pip install google-auth requests` on the control node.
+_gcp_project: "{{ lookup('env', 'GCP_PROJECT') }}"
+_gcp_sa_file: "{{ lookup('env', 'GCP_SERVICE_ACCOUNT_FILE') }}"
+
+# Do not use errors='ignore' so we can see authentication/missing secret errors directly!
+_db_secrets_raw: "{{ lookup('google.cloud.gcp_secret_manager', key='coinops-db-secrets', project=_gcp_project, auth_kind='serviceaccount', service_account_file=_gcp_sa_file) if my_cloud == 'gcp' else '{}' }}"
+_app_secrets_raw: "{{ lookup('google.cloud.gcp_secret_manager', key='coinops-app-secrets', project=_gcp_project, auth_kind='serviceaccount', service_account_file=_gcp_sa_file) if my_cloud == 'gcp' else '{}' }}"
+
+_db_secrets: "{{ _db_secrets_raw | from_json }}"
+_app_secrets: "{{ _app_secrets_raw | from_json }}"
+
+rabbitmq_password: "{{ _db_secrets.RABBITMQ_PASSWORD | default('coinops_rabbit_secure', true) }}"
+db_password: "{{ _db_secrets.DB_PASSWORD | default('coinops_db_secure', true) }}"
 
 # ── Service accounts ──────────────────────────────────────────
 rabbitmq_user: cognitor
@@ -48,6 +59,7 @@ history_port: 8000
 # intersect with groups[my_cloud] scopes to current cloud (same pattern as my_jump_hosts).
 _backend_host: "{{ (groups['role_app_backend'] | default([]) | intersect(groups[my_cloud] | default([])) | list | first) | default((groups['role_app_backend'] | list | first) | default('127.0.0.1')) }}"
 _backend_ip: "{{ hostvars[_backend_host]['ansible_host'] if _backend_host != '127.0.0.1' else '127.0.0.1' }}"
+backend_ip: "{{ _backend_ip }}"
 
 # Use managed CloudSQL IP if available, otherwise fallback to local backend IP
 _cloudsql_ip: "{{ infra_hosts[my_cloud]['database_ip'] | default('', true) }}"
@@ -85,7 +97,8 @@ ui_image: "{{ image_registry }}/coin-ops-ui:{{ image_tag }}"
 postgres_runtime_image: "{{ image_registry }}/coin-ops-postgres-runtime:{{ image_tag }}"
 postgres_image: "{{ postgres_runtime_image if runtime_backend == 'postgres' else 'postgres:16-alpine' }}"
 registry_username: "{{ lookup('env', 'GHCR_USERNAME') | default('', true) }}"
-registry_token: "{{ lookup('env', 'GHCR_TOKEN') | default('', true) }}"
+registry_token: "{{ _app_secrets.GHCR_TOKEN | default('', true) }}"
+cloudflare_api_token: "{{ _app_secrets.CLOUDFLARE_API_TOKEN | default('', true) }}"
 
 # ── Derived connection strings ────────────────────────────────
 # Use _backend_ip for RabbitMQ as it remains hosted on the backend node.

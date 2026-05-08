@@ -28,7 +28,7 @@
     - docker
 
 - name: Provision backend node (app-2) — Data directories
-  hosts: role_app_backend
+  hosts: "{{ target_backend_group | default('role_app_backend') }}"
   become: yes
   tasks:
     - name: Create PostgreSQL data directory
@@ -48,7 +48,7 @@
         mode: '0755'
 
 - name: Provision backend proxy node (app-2) — Data directories
-  hosts: role_app_backend
+  hosts: "{{ target_backend_group | default('role_app_backend') }}"
   become: yes
   tasks:
     - name: Create Redis data directory
@@ -60,7 +60,7 @@
         mode: '0755'
 
 - name: Provision UI node
-  hosts: role_app_ui
+  hosts: "{{ target_ui_group | default('role_app_ui') }}"
   become: yes
   tasks:
     - name: No host-level provisioning required for UI node

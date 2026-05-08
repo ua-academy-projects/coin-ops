@@ -12,31 +12,23 @@
       - tls_mode in ['selfsigned', 'provided', 'off', 'certbot']
     fail_msg: "TLS_MODE must be one of: selfsigned, provided, off, certbot."
 
-- name: Allow HTTP and HTTPS in UFW
+- name: Remove HTTP (Port 80) from UFW
+  community.general.ufw:
+    rule: allow
+    port: "80"
+    proto: tcp
+    delete: yes
+  failed_when: false
+  notify: Reload UFW
+
+- name: Allow HTTPS in UFW
   community.general.ufw:
     rule: allow
     port: "{{ item }}"
     proto: tcp
   loop:
-    - "80"
     - "443"
   notify: Reload UFW
-
-- name: Install Certbot
-  apt:
-    name: certbot
-    state: present
-    update_cache: yes
-  when: tls_mode == 'certbot'
-
-- name: Create Certbot webroot directory
-  file:
-    path: /var/www/certbot
-    state: directory
-    owner: www-data
-    group: www-data
-    mode: '0755'
-  when: tls_mode == 'certbot'
 
 - name: Check if certificate already exists
   stat:
@@ -44,16 +36,33 @@
   register: cert_file
   when: tls_mode == 'certbot'
 
-- name: Stop existing services on port 80 (to free it for Certbot standalone)
-  shell: |
-    docker stop ui || true
-    fuser -k 80/tcp || true
-  failed_when: false
+- name: Ensure cloudflare.ini is not a directory (Docker workaround)
+  file:
+    path: /etc/cognitor/cloudflare.ini
+    state: absent
+  when: tls_mode == 'certbot' and not cert_file.stat.exists
+  ignore_errors: yes
+
+- name: Write Cloudflare credentials for Certbot
+  copy:
+    content: |
+      dns_cloudflare_api_token = {{ cloudflare_api_token }}
+    dest: /etc/cognitor/cloudflare.ini
+    owner: root
+    group: root
+    mode: '0600'
   when: tls_mode == 'certbot' and not cert_file.stat.exists
 
-- name: Request Let's Encrypt certificate (Initial - Standalone)
+- name: Request Let's Encrypt certificate (Initial - DNS)
   command: >
-    certbot certonly --standalone
+    docker run --rm
+    -v "/etc/letsencrypt:/etc/letsencrypt"
+    -v "/var/lib/letsencrypt:/var/lib/letsencrypt"
+    -v "/etc/cognitor/cloudflare.ini:/cloudflare.ini:ro"
+    certbot/dns-cloudflare certonly
+    --dns-cloudflare
+    --dns-cloudflare-credentials /cloudflare.ini
+    --dns-cloudflare-propagation-seconds 20
     -d {{ app_domain }}
     --email {{ certbot_email }}
     --agree-tos --non-interactive
@@ -65,17 +74,40 @@
     state: directory
     mode: '0755'
 
-- name: Copy Certbot certificates to project directory
+- name: Setup auto-renewal via systemd timer
   copy:
-    src: "/etc/letsencrypt/live/{{ app_domain }}/{{ item.src }}"
-    dest: "{{ item.dest }}"
-    remote_src: yes
-    owner: root
-    group: root
-    mode: '0600'
-  loop:
-    - { src: "fullchain.pem", dest: "{{ tls_cert_path }}" }
-    - { src: "privkey.pem", dest: "{{ tls_key_path }}" }
+    content: |
+      [Unit]
+      Description=Certbot Auto Renewal
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/bin/docker run --rm -v "/etc/letsencrypt:/etc/letsencrypt" -v "/var/lib/letsencrypt:/var/lib/letsencrypt" -v "/etc/cognitor/cloudflare.ini:/cloudflare.ini:ro" certbot/dns-cloudflare renew
+      ExecPost=/usr/bin/docker restart ui
+    dest: /etc/systemd/system/certbot-renewal.service
+  when: tls_mode == 'certbot'
+
+- name: Setup auto-renewal timer
+  copy:
+    content: |
+      [Unit]
+      Description=Timer for Certbot Renewal
+
+      [Timer]
+      OnCalendar=*-*-* 03:00:00
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+    dest: /etc/systemd/system/certbot-renewal.timer
+  when: tls_mode == 'certbot'
+
+- name: Enable auto-renewal timer
+  systemd:
+    name: certbot-renewal.timer
+    enabled: yes
+    state: started
+    daemon_reload: yes
   when: tls_mode == 'certbot'
 
 - name: Install local TLS tooling
@@ -174,11 +206,20 @@
     owner: root
     group: root
     mode: '0644'
+  register: nginx_config
 
 - name: Render compose file
   template:
     src: "{{ playbook_dir }}/../deploy/compose/node-03.compose.yaml"
     dest: /opt/cognitor/ui/compose.yaml
+  register: ui_compose
+
+- name: Restart UI container if config changed
+  command: docker compose -f /opt/cognitor/ui/compose.yaml restart ui
+  args:
+    chdir: /opt/cognitor/ui
+  when: nginx_config.changed or ui_compose.changed
+  failed_when: false
 
 - name: Pull ui container images
   command: docker compose -f /opt/cognitor/ui/compose.yaml pull
@@ -192,7 +233,7 @@
 
 - name: Wait for nginx availability
   uri:
-    url: "{{ 'https://localhost/health' if tls_enabled | bool else 'http://localhost:80/health' }}"
+    url: "https://localhost/health"
     method: GET
     status_code: 200
     validate_certs: no

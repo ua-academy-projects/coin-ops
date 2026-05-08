@@ -69,6 +69,10 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:${SA_EMAIL}" \
     --role="roles/cloudsql.admin"
 
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:${SA_EMAIL}" \
+    --role="roles/secretmanager.admin"
+
 
 # Create GCS Bucket for Terraform remote state
 echo "Creating GCS bucket: $BUCKET_NAME"
@@ -105,14 +109,17 @@ export GCP_REGION=\$TF_VAR_gcp_region
 # ── Ansible: config (absolute path — safe when .env is sourced from anywhere) ──
 export ANSIBLE_CONFIG="${REPO_ROOT}/ansible.cfg"
 
-# ── Ansible: application secrets — FILL IN BEFORE FIRST DEPLOY ───────
-export DB_PASSWORD="CHANGE_ME"
-export RABBITMQ_PASSWORD="CHANGE_ME"
+# ── Secrets — FILL IN BEFORE FIRST DEPLOY ───────
+export TF_VAR_db_password="CHANGE_ME"
+export TF_VAR_rabbitmq_password="CHANGE_ME"
+export TF_VAR_ghcr_token="CHANGE_ME"         # GitHub PAT with read:packages
+export TF_VAR_cloudflare_api_token="CHANGE_ME" # Cloudflare API Token for DNS-01
+
+# ── General config ────────────────────────────
 export RUNTIME_BACKEND="external"
-export APP_DOMAIN="CHANGE_ME"        # public IP of app-1 or real domain
-export TLS_MODE="selfsigned"
-export GHCR_USERNAME="CHANGE_ME"     # GitHub username
-export GHCR_TOKEN="CHANGE_ME"        # GitHub PAT with read:packages
+export APP_DOMAIN="CHANGE_ME"                # public IP of app-1 or real domain
+export TLS_MODE="certbot"                    # changed default to certbot
+export GHCR_USERNAME="CHANGE_ME"             # GitHub username
 EOF
 
 echo "Bootstrap completed successfully."

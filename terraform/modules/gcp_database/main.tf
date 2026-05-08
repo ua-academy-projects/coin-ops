@@ -22,7 +22,7 @@ resource "random_id" "db_name_suffix" {
 resource "google_sql_database_instance" "main" {
   name             = "${var.project_name}-db-${random_id.db_name_suffix.hex}"
   region           = var.region
-  database_version = "POSTGRES_15"
+  database_version = "POSTGRES_16"
   
   depends_on = [google_service_networking_connection.default]
 

@@ -124,6 +124,15 @@ module "gcp_database" {
   db_password  = var.db_password
 }
 
+module "gcp_secrets" {
+  count             = local.gcp_enabled ? 1 : 0
+  source            = "./modules/gcp_secrets"
+  db_password          = var.db_password
+  rabbitmq_password    = var.rabbitmq_password
+  ghcr_token           = var.ghcr_token
+  cloudflare_api_token = var.cloudflare_api_token
+}
+
 # AWS
 
 module "aws_network" {
@@ -230,4 +239,20 @@ resource "local_file" "ssh_config" {
       )
     ] : []
   )))
+}
+
+# Sync SSH config to global ~/.ssh/extra_configs for convenience (WSL/Linux only).
+# This ensures permissions are correct (600) so SSH doesn't complain about world-writable files on /mnt/d.
+resource "null_resource" "sync_ssh_config" {
+  triggers = {
+    config_content = local_file.ssh_config.content
+  }
+
+  provisioner "local-exec" {
+    command = <<EOT
+      mkdir -p ~/.ssh/extra_configs
+      cp ${local_file.ssh_config.filename} ~/.ssh/extra_configs/coin-ops-ssh-config
+      chmod 600 ~/.ssh/extra_configs/coin-ops-ssh-config
+    EOT
+  }
 }

@@ -65,3 +65,17 @@ variable "db_password" {
   sensitive   = true
   default     = ""
 }
+
+variable "rabbitmq_password" {
+  description = "Password for RabbitMQ"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "ghcr_token" {
+  description = "GitHub Container Registry PAT"
+  type        = string
+  sensitive   = true
+  default     = ""
+}

@@ -28,5 +28,5 @@ variable "db_tier" {
 variable "deletion_protection" {
   description = "Whether to prevent Terraform from destroying the database"
   type        = bool
-  default     = false
+  default     = true
 }

@@ -64,6 +64,12 @@
     owner: root
     group: root
     mode: '0750'
+ 
+- name: Allow incoming traffic on History API port (UFW)
+  community.general.ufw:
+    rule: allow
+    port: "{{ history_port | string }}"
+    proto: tcp
 
 - name: Write history environment file
   template:
