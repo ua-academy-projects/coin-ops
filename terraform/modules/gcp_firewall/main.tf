@@ -25,8 +25,10 @@ locals {
 resource "google_compute_firewall" "rule" {
   for_each = local.rules
 
-  name    = each.key
-  network = var.network_id
+  name      = each.key
+  network   = var.network_id
+  priority  = 10
+  direction = "INGRESS"
 
   dynamic "allow" {
     for_each = each.value.protocols
@@ -38,5 +40,5 @@ resource "google_compute_firewall" "rule" {
 
   source_ranges = lookup(each.value, "source_cidrs", null)
   source_tags   = lookup(each.value, "source_role", null) != null ? [each.value.source_role] : null
-  target_tags   = lookup(each.value, "target_role", null) != null ? [each.value.target_role] : null
+  target_tags   = lookup(each.value, "target_tags", null) != null ? each.value.target_tags : (lookup(each.value, "target_role", null) != null ? [each.value.target_role] : null)
 }

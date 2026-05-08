@@ -115,6 +115,15 @@ module "gcp_nat_route" {
   depends_on = [module.gcp_instances]
 }
 
+module "gcp_database" {
+  count        = local.gcp_enabled ? 1 : 0
+  source       = "./modules/gcp_database"
+  project_name = local.project_name
+  region       = local.gcp_region
+  network_id   = module.gcp_network[0].network_id
+  db_password  = var.db_password
+}
+
 # AWS
 
 module "aws_network" {
@@ -194,7 +203,7 @@ resource "local_file" "ssh_config" {
     local.gcp_enabled ? [
       for name, inst in local.gcp_hosts : trimspace(<<-EOT
         Host coinops-gcp-${name}
-          HostName ${inst.role == "jump-host" ? try(inst.public_ip, inst.private_ip) : inst.private_ip}
+          HostName ${inst.role == "jump-host" ? inst.public_ip : inst.private_ip}
           User ${local.username != "" ? local.username : lookup(local.gcp_cfg, "ssh_user", "debian")}
           Port ${local.ssh_port}
           ${inst.role != "jump-host" && local.gcp_jump_host_name != "" ? "ProxyJump coinops-gcp-${local.gcp_jump_host_name}" : ""}
@@ -208,10 +217,10 @@ resource "local_file" "ssh_config" {
     local.aws_enabled ? [
       for name, inst in local.aws_hosts : trimspace(<<-EOT
         Host coinops-aws-${name}
-          HostName ${inst.role == "jump-host" ? try(inst.public_ip, inst.private_ip) : inst.private_ip}
+          HostName ${inst.public_ip != null ? inst.public_ip : inst.private_ip}
           User ${local.username != "" ? local.username : lookup(local.aws_cfg, "ssh_user", "ec2-user")}
           Port ${local.ssh_port}
-          ${inst.role != "jump-host" && local.aws_jump_host_name != "" ? "ProxyJump coinops-aws-${local.aws_jump_host_name}" : ""}
+          ${inst.public_ip == null && local.aws_jump_host_name != "" ? "ProxyJump coinops-aws-${local.aws_jump_host_name}" : ""}
           IdentityFile ${pathexpand(replace(var.ssh_public_key_path, ".pub", ""))}
           IdentitiesOnly yes
           StrictHostKeyChecking no

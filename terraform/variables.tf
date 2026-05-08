@@ -1,7 +1,7 @@
 variable "enabled_clouds" {
   type        = set(string)
   description = "Set of clouds to deploy to. Supported: gcp, aws."
-  default     = ["gcp", "aws"]
+  default     = ["gcp"]
 
   validation {
     condition = alltrue([
@@ -34,8 +34,34 @@ variable "aws_region" {
   default     = "eu-north-1"
 }
 
+variable "cloudflare_api_token" {
+  type        = string
+  description = "Cloudflare API Token with DNS:Edit permissions"
+  sensitive   = true
+  default     = ""
+}
+
+variable "cloudflare_zone_id" {
+  type        = string
+  description = "Cloudflare Zone ID for the domain"
+  default     = ""
+}
+
+variable "app_domain" {
+  type        = string
+  description = "Root domain for the application (e.g. coinops-d.pp.ua)"
+  default     = "coinops.test"
+}
+
 variable "ssh_public_key_path" {
   type        = string
   description = "Path to SSH public key used for all cloud instances (GCP metadata ssh-keys, AWS key pair)."
   default     = "~/.ssh/ssh-key-coin-ops.pub"
+}
+
+variable "db_password" {
+  description = "Password for the CloudSQL database user"
+  type        = string
+  sensitive   = true
+  default     = ""
 }

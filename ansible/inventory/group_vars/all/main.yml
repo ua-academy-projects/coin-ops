@@ -56,9 +56,11 @@ app_domain: "{{ lookup('env', 'APP_DOMAIN') | default('coinops.test', true) }}"
 # Supported modes:
 #   selfsigned - Ansible creates a local self-signed cert on node-03
 #   provided   - cert/key already exist on node-03 under /etc/cognitor/tls
+#   certbot    - Ansible installs certbot and requests a real Let's Encrypt cert
 #   off        - HTTP only, useful for quick internal debugging
 tls_mode: "{{ lookup('env', 'TLS_MODE') | default('selfsigned', true) }}"
 tls_enabled: "{{ tls_mode != 'off' }}"
+certbot_email: "{{ lookup('env', 'CERTBOT_EMAIL') | default('admin@' ~ app_domain, true) }}"
 tls_cert_dir: /etc/cognitor/tls
 tls_cert_path: "{{ tls_cert_dir }}/coinops.crt"
 tls_key_path: "{{ tls_cert_dir }}/coinops.key"

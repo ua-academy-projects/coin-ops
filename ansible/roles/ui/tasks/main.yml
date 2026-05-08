@@ -9,24 +9,74 @@
 - name: Validate TLS mode
   assert:
     that:
-      - tls_mode in ['selfsigned', 'provided', 'off']
-    fail_msg: "TLS_MODE must be one of: selfsigned, provided, off."
+      - tls_mode in ['selfsigned', 'provided', 'off', 'certbot']
+    fail_msg: "TLS_MODE must be one of: selfsigned, provided, off, certbot."
+
+- name: Allow HTTP and HTTPS in UFW
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop:
+    - "80"
+    - "443"
+  notify: Reload UFW
+
+- name: Install Certbot
+  apt:
+    name: certbot
+    state: present
+    update_cache: yes
+  when: tls_mode == 'certbot'
+
+- name: Create Certbot webroot directory
+  file:
+    path: /var/www/certbot
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: '0755'
+  when: tls_mode == 'certbot'
+
+- name: Check if certificate already exists
+  stat:
+    path: "/etc/letsencrypt/live/{{ app_domain }}/fullchain.pem"
+  register: cert_file
+  when: tls_mode == 'certbot'
+
+- name: Stop existing services on port 80 (to free it for Certbot standalone)
+  shell: |
+    docker stop ui || true
+    fuser -k 80/tcp || true
+  failed_when: false
+  when: tls_mode == 'certbot' and not cert_file.stat.exists
+
+- name: Request Let's Encrypt certificate (Initial - Standalone)
+  command: >
+    certbot certonly --standalone
+    -d {{ app_domain }}
+    --email {{ certbot_email }}
+    --agree-tos --non-interactive
+  when: tls_mode == 'certbot' and not cert_file.stat.exists
 
 - name: Create secrets directory
   file:
-    path: /etc/cognitor
-    state: directory
-    owner: root
-    group: root
-    mode: '0750'
-
-- name: Create TLS certificate directory
-  file:
     path: "{{ tls_cert_dir }}"
     state: directory
+    mode: '0755'
+
+- name: Copy Certbot certificates to project directory
+  copy:
+    src: "/etc/letsencrypt/live/{{ app_domain }}/{{ item.src }}"
+    dest: "{{ item.dest }}"
+    remote_src: yes
     owner: root
     group: root
-    mode: '0750'
+    mode: '0600'
+  loop:
+    - { src: "fullchain.pem", dest: "{{ tls_cert_path }}" }
+    - { src: "privkey.pem", dest: "{{ tls_key_path }}" }
+  when: tls_mode == 'certbot'
 
 - name: Install local TLS tooling
   apt:

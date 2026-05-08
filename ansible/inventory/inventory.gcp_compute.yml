@@ -10,7 +10,10 @@
 
 plugin: google.cloud.gcp_compute
 auth_kind: serviceaccount
-
+# Project ID is not sensitive — matches TF_VAR_gcp_project_id in config.json.
+# Listed explicitly because the plugin cannot use Jinja lookups for this key.
+projects:
+  - project-6f41102f-c77c-46a3-aac
 hostnames:
   - name
 

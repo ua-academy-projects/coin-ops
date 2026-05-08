@@ -65,8 +65,10 @@ resource "google_compute_instance" "vm" {
   can_ip_forward = each.value.can_ip_forward
 
   # Network tags: role tag for firewall targeting; "internal-vm" for NAT route.
+  # Also add standard http/https-server tags for UI nodes to satisfy GCP defaults.
   tags = concat(
     each.value.role != "" ? [each.value.role] : [],
+    each.value.role == "app-ui" ? ["http-server", "https-server"] : [],
     !each.value.has_public_ip ? ["internal-vm"] : []
   )
 
