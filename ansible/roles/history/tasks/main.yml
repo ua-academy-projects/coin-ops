@@ -119,17 +119,17 @@
     chdir: /opt/cognitor/history
   changed_when: false
   failed_when: false
+  when: not use_managed_db
 
 - name: Repair PostgreSQL data directory ownership for selected Postgres image
   file:
     path: /var/lib/coin-ops/postgres
     state: directory
-    # Keep the runtime image on Alpine-compatible uid/gid 70 so existing
-    # postgres volumes can be reused during external -> postgres cutover.
     owner: '70'
     group: '70'
     mode: '0700'
     recurse: yes
+  when: not use_managed_db
 
 - name: Pull history container images
   command: docker compose -f /opt/cognitor/history/compose.yaml pull
@@ -139,9 +139,10 @@
 - name: Start history dependencies first
   command: >-
     docker compose -f /opt/cognitor/history/compose.yaml up -d
-    postgres{% if runtime_backend == "external" %} rabbitmq{% endif %}
+    {% if not use_managed_db %}postgres {% endif %}{% if runtime_backend == "external" %}rabbitmq{% endif %}
   args:
     chdir: /opt/cognitor/history
+  when: not use_managed_db or runtime_backend == "external"
 
 - name: Wait for containerized PostgreSQL readiness
   command: "docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres pg_isready -U {{ db_user }} -d {{ db_name }}"
@@ -151,6 +152,7 @@
   delay: 5
   register: postgres_ready
   until: postgres_ready.rc == 0
+  when: not use_managed_db
 
 - name: Check for legacy dump file
   stat:
@@ -164,12 +166,15 @@
   when:
     - legacy_postgres_dump.stat.exists
     - not host_postgres_migration_marker.stat.exists
+    - not use_managed_db
 
 - name: Apply PostgreSQL runtime schema before app startup
   shell: >-
-    docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres
-    psql -v ON_ERROR_STOP=1 -U {{ db_user }} -d {{ db_name }}
-    < /opt/cognitor/history/schema.sql
+    {% if use_managed_db %}
+    docker run --rm -i -e PGPASSWORD="{{ db_password }}" postgres:16-alpine psql -v ON_ERROR_STOP=1 -h {{ postgres_bind_ip }} -U {{ db_user }} -d {{ db_name }} < /opt/cognitor/history/schema.sql
+    {% else %}
+    docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres psql -v ON_ERROR_STOP=1 -U {{ db_user }} -d {{ db_name }} < /opt/cognitor/history/schema.sql
+    {% endif %}
   args:
     chdir: /opt/cognitor/history
   register: schema_result

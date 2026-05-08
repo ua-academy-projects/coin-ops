@@ -178,9 +178,10 @@ resource "local_file" "hosts" {
   content = jsonencode(merge(
     local.gcp_enabled ? {
       gcp = {
-        ssh_user  = local.username != "" ? local.username : lookup(local.gcp_cfg, "ssh_user", "debian")
-        ssh_port  = local.ssh_port
-        instances = try(module.gcp_instances[0].instance_ips, {})
+        ssh_user    = local.username != "" ? local.username : lookup(local.gcp_cfg, "ssh_user", "debian")
+        ssh_port    = local.ssh_port
+        instances   = try(module.gcp_instances[0].instance_ips, {})
+        database_ip = try(module.gcp_database[0].private_ip, "")
       }
     } : {},
     local.aws_enabled ? {

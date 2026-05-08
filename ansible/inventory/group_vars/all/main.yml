@@ -15,6 +15,7 @@ ansible_ssh_private_key_file: "{{ lookup('env', 'SSH_KEY_PATH') if lookup('env',
 # ANSIBLE_CONFIG env var dirname gives a stable repo root path in both ad-hoc and playbook modes.
 _repo_root: "{{ (lookup('env', 'ANSIBLE_CONFIG') | dirname) if lookup('env', 'ANSIBLE_CONFIG') else (playbook_dir ~ '/..') }}"
 infra_config: "{{ lookup('file', _repo_root ~ '/terraform/config/config.json') | from_json }}"
+infra_hosts: "{{ lookup('file', _repo_root ~ '/terraform/config/hosts.json') | from_json | default({}, true) }}"
 
 my_cloud: "{{ cloud | default('gcp') }}"
 # Group names are sanitized by Ansible: hyphens become underscores.
@@ -46,7 +47,12 @@ history_port: 8000
 # Private IP of the backend node on the same cloud (used by nginx → proxy_pass).
 # intersect with groups[my_cloud] scopes to current cloud (same pattern as my_jump_hosts).
 _backend_host: "{{ (groups['role_app_backend'] | default([]) | intersect(groups[my_cloud] | default([])) | list | first) | default((groups['role_app_backend'] | list | first) | default('127.0.0.1')) }}"
-postgres_bind_ip: "{{ hostvars[_backend_host]['ansible_host'] if _backend_host != '127.0.0.1' else '127.0.0.1' }}"
+_backend_ip: "{{ hostvars[_backend_host]['ansible_host'] if _backend_host != '127.0.0.1' else '127.0.0.1' }}"
+
+# Use managed CloudSQL IP if available, otherwise fallback to local backend IP
+_cloudsql_ip: "{{ infra_hosts[my_cloud]['database_ip'] | default('', true) }}"
+postgres_bind_ip: "{{ _cloudsql_ip if _cloudsql_ip != '' else _backend_ip }}"
+use_managed_db: "{{ _cloudsql_ip != '' }}"
 
 # Public entrypoint / TLS
 # Browser-facing domain served by node-03. For local labs, add this to hosts:
@@ -82,11 +88,11 @@ registry_username: "{{ lookup('env', 'GHCR_USERNAME') | default('', true) }}"
 registry_token: "{{ lookup('env', 'GHCR_TOKEN') | default('', true) }}"
 
 # ── Derived connection strings ────────────────────────────────
-# Use postgres_bind_ip (the node's private IP) for cross-container communication
-# when services are on the same host but in different compose projects.
-rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@{{ postgres_bind_ip }}:5672/"
+# Use _backend_ip for RabbitMQ as it remains hosted on the backend node.
+# Use postgres_bind_ip for database connections (points to CloudSQL if managed).
+rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@{{ _backend_ip }}:5672/"
 database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ postgres_bind_ip }}:5432/{{ db_name }}"
-history_database_url: "postgresql://{{ db_user }}:{{ db_password }}@postgres:5432/{{ db_name }}"
+history_database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ postgres_bind_ip }}:5432/{{ db_name }}"
 proxy_database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ postgres_bind_ip }}:5432/{{ db_name }}"
 redis_url: "redis://127.0.0.1:6379/0"
 

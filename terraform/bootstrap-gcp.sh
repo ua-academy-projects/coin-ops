@@ -65,6 +65,11 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:${SA_EMAIL}" \
     --role="roles/compute.securityAdmin"
 
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:${SA_EMAIL}" \
+    --role="roles/cloudsql.admin"
+
+
 # Create GCS Bucket for Terraform remote state
 echo "Creating GCS bucket: $BUCKET_NAME"
 gcloud storage buckets create "gs://$BUCKET_NAME" --location="$REGION"

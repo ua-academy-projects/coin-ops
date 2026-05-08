@@ -50,7 +50,8 @@ resource "google_sql_database" "cognitor" {
 
 # Database User
 resource "google_sql_user" "cognitor_user" {
-  name     = "cognitor"
-  instance = google_sql_database_instance.main.name
-  password = var.db_password
+  name            = "cognitor"
+  instance        = google_sql_database_instance.main.name
+  password        = var.db_password
+  deletion_policy = "ABANDON"
 }

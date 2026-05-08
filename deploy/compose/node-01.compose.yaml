@@ -1,4 +1,5 @@
 services:
+{% if not use_managed_db %}
   postgres:
     image: "{{ postgres_image }}"
     restart: unless-stopped
@@ -21,6 +22,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+{% endif %}
 
 {% if runtime_backend == "external" %}
   rabbitmq:
@@ -44,12 +46,16 @@ services:
     restart: unless-stopped
     env_file:
       - /etc/cognitor/history.env
+{% if not use_managed_db or runtime_backend == "external" %}
     depends_on:
+{% if not use_managed_db %}
       postgres:
         condition: service_healthy
+{% endif %}
 {% if runtime_backend == "external" %}
       rabbitmq:
         condition: service_healthy
+{% endif %}
 {% endif %}
 
   history-api:
@@ -59,6 +65,8 @@ services:
       - "{{ history_port }}:{{ history_port }}"
     env_file:
       - /etc/cognitor/history.env
+{% if not use_managed_db %}
     depends_on:
       postgres:
         condition: service_healthy
+{% endif %}
