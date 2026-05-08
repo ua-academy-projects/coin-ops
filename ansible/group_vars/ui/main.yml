@@ -1,2 +1,2 @@
 ---
-common_allowed_ports: [22, 80, 443]
+common_allowed_ports: [9922, 80, 443]

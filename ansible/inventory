@@ -1,8 +1,14 @@
 [history]
-softserve-node-01 ansible_host=172.31.1.10
+node-01 ansible_host=10.0.2.242
 
 [proxy]
-softserve-node-02 ansible_host=172.31.1.11
+node-02 ansible_host=10.0.2.223
 
 [ui]
-softserve-node-03 ansible_host=172.31.1.12
+node-03 ansible_host=10.0.1.125
+
+[all:vars]
+ansible_user=marta_ops
+ansible_port=9922
+ansible_ssh_private_key_file=~/.ssh/id_ed25519
+ansible_ssh_common_args=-o ProxyJump=marta_ops@3.75.135.177:9922 -o StrictHostKeyChecking=no

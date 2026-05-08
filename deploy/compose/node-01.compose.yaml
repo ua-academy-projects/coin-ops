@@ -1,4 +1,5 @@
 services:
+{% if not use_rds | default(false) %}
   postgres:
     image: "{{ postgres_image }}"
     restart: unless-stopped
@@ -13,7 +14,7 @@ services:
       - cron.database_name={{ db_name }}
 {% endif %}
     ports:
-      - "{{ postgres_bind_ip }}:5432:5432"
+      - "5432:5432"
     volumes:
       - /var/lib/coin-ops/postgres:/var/lib/postgresql/data
     healthcheck:
@@ -21,7 +22,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
+{% endif %}
 {% if runtime_backend == "external" %}
   rabbitmq:
     image: rabbitmq:3-alpine
@@ -38,20 +39,26 @@ services:
       timeout: 5s
       retries: 5
 {% endif %}
-
   history-consumer:
     image: "{{ history_consumer_image }}"
     restart: unless-stopped
     env_file:
       - /etc/cognitor/history.env
+{% if not use_rds | default(false) %}
     depends_on:
       postgres:
         condition: service_healthy
+{% endif %}
 {% if runtime_backend == "external" %}
+{% if not use_rds | default(false) %}
+      rabbitmq:
+        condition: service_healthy
+{% else %}
+    depends_on:
       rabbitmq:
         condition: service_healthy
 {% endif %}
-
+{% endif %}
   history-api:
     image: "{{ history_api_image }}"
     restart: unless-stopped
@@ -59,6 +66,8 @@ services:
       - "{{ history_port }}:{{ history_port }}"
     env_file:
       - /etc/cognitor/history.env
+{% if not use_rds | default(false) %}
     depends_on:
       postgres:
         condition: service_healthy
+{% endif %}
