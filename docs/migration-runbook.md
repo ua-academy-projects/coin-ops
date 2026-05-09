@@ -1,5 +1,8 @@
 # Migration and Demo Runbook
 
+> This document describes the earlier PostgreSQL-runtime migration context.
+> It is not the primary operator runbook for the current cloud-first deployment path; use `runbook.md` for that workflow.
+
 This document provides operational context for the transition to a PostgreSQL-native runtime, deployment guidelines, and emergency fallback procedures.
 
 ## 1. Branch Strategy and Code Consolidation

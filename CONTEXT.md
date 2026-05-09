@@ -180,7 +180,7 @@ Example (conceptual): `general.disk_size = 20` overrides `fallback.disk_size` wh
 
 ### Secrets on VMs
 
-Ansible still writes runtime env files under `/etc/cognitor/*.env` for the containers. The difference is that the values now come from Secret Manager and generated config, not a repo `.env`.
+The current goal is to avoid persisting repo-managed runtime env files on the VMs. Compose templates should prefer direct `environment:` injection from Ansible-rendered values rather than long-lived `/etc/cognitor/*.env` files for application containers.
 
 ---
 

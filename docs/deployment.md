@@ -1,5 +1,8 @@
 # Deployment
 
+> This document describes the older Hyper-V / systemd deployment path and is not the current cloud-first operator workflow.
+> For the current GCP-first Terraform + Ansible process, use `runbook.md`.
+
 ## VM Layout
 
 Three Hyper-V VMs running Ubuntu 24.04 Server (no GUI):

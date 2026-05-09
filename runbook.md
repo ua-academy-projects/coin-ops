@@ -41,6 +41,10 @@ Do not run bootstrap while the active `gcloud` account is the Terraform service 
 
 These files replace the old repo `.env` workflow.
 
+For AWS bootstrap, use the separate generated local shell file:
+
+- `local/generated-aws-env.sh`
+
 ## Very First Start of Infrastructure
 
 ### 1. Review bootstrap defaults

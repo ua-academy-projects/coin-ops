@@ -1,5 +1,8 @@
 # Manual Deployment (without Ansible)
 
+> This is a legacy manual/systemd deployment guide.
+> It does not describe the current Terraform + Ansible + Docker Compose cloud-first workflow.
+
 Everything Ansible does, but typed by hand over SSH. Same end result: three VMs, systemd services, no containers.
 
 ---

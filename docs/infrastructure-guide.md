@@ -1,5 +1,8 @@
 # Infrastructure Guide
 
+> This guide explains the earlier three-VM and systemd-era architecture for educational context.
+> For the current cloud-first topology and operator workflow, cross-check `CONTEXT.md` and `runbook.md`.
+
 An educational walkthrough of how this system is put together and why each piece exists. Written for DevOps interns who have built apps but not yet run a distributed system across multiple machines.
 
 Every decision here has a "why". The "what" is the easy part — you can look it up. The "why" is what separates someone who can copy a tutorial from someone who can debug production at 2am.

@@ -76,27 +76,11 @@
     - cognitor-history-api
   failed_when: false
 
-- name: Create secrets directory
-  file:
-    path: /etc/cognitor
-    state: directory
-    owner: root
-    group: root
-    mode: '0750'
- 
 - name: Allow incoming traffic on History API port (UFW)
   community.general.ufw:
     rule: allow
     port: "{{ history_port | string }}"
     proto: tcp
-
-- name: Write history environment file
-  template:
-    src: history.env.j2
-    dest: /etc/cognitor/history.env
-    owner: root
-    group: root
-    mode: '0640'
 
 - name: Create history deploy directory
   file:

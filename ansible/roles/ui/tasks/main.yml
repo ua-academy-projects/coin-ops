@@ -191,16 +191,6 @@
     fail_msg: "TLS_MODE=provided requires {{ tls_cert_path }} and {{ tls_key_path }} on the UI node."
   when: tls_mode == 'provided'
 
-- name: Write ui runtime environment file
-  copy:
-    content: |
-      PROXY_URL=/api
-      HISTORY_URL=/history-api
-    dest: /etc/cognitor/ui.env
-    owner: root
-    group: root
-    mode: '0640'
-
 - name: Create ui deploy directory
   file:
     path: /opt/cognitor/ui

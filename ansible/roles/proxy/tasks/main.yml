@@ -22,27 +22,11 @@
     - cognitor-proxy
   failed_when: false
 
-- name: Create secrets directory
-  file:
-    path: /etc/cognitor
-    state: directory
-    owner: root
-    group: root
-    mode: '0750'
- 
 - name: Allow incoming traffic on Proxy port (UFW)
   community.general.ufw:
     rule: allow
     port: "{{ proxy_port | string }}"
     proto: tcp
-
-- name: Write proxy environment file
-  template:
-    src: proxy.env.j2
-    dest: /etc/cognitor/proxy.env
-    owner: root
-    group: root
-    mode: '0640'
 
 - name: Create proxy deploy directory
   file:

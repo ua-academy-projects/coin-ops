@@ -88,7 +88,5 @@ postgres_image: "{{ postgres_runtime_image if runtime_backend == 'postgres' else
 registry_username: "{{ lookup('env', 'GHCR_USERNAME') | default(deploy_config.registry_username, true) }}"
 
 rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@{{ backend_ip }}:5672/"
-database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ postgres_bind_ip }}:5432/{{ db_name }}"
 history_database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ postgres_bind_ip }}:5432/{{ db_name }}"
 proxy_database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ postgres_bind_ip }}:5432/{{ db_name }}"
-redis_url: "redis://127.0.0.1:6379/0"

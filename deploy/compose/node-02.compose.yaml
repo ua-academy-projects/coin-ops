@@ -17,8 +17,14 @@ services:
     restart: unless-stopped
     ports:
       - "{{ proxy_port }}:{{ proxy_port }}"
-    env_file:
-      - /etc/cognitor/proxy.env
+    environment:
+      RUNTIME_BACKEND: "{{ runtime_backend }}"
+      DATABASE_URL: "{{ proxy_database_url }}"
+{% if runtime_backend == "external" %}
+      RABBITMQ_URL: "{{ rabbitmq_url }}"
+      REDIS_URL: "redis://redis:6379/0"
+{% endif %}
+      PORT: "{{ proxy_port }}"
 {% if runtime_backend == "external" %}
     depends_on:
       redis:

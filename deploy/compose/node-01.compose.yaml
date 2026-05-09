@@ -3,8 +3,10 @@ services:
   postgres:
     image: "{{ postgres_image }}"
     restart: unless-stopped
-    env_file:
-      - /etc/cognitor/history.env
+    environment:
+      POSTGRES_USER: "{{ db_user }}"
+      POSTGRES_PASSWORD: "{{ db_password }}"
+      POSTGRES_DB: "{{ db_name }}"
 {% if runtime_backend == "postgres" %}
     command:
       - postgres
@@ -28,8 +30,9 @@ services:
   rabbitmq:
     image: rabbitmq:3-alpine
     restart: unless-stopped
-    env_file:
-      - /etc/cognitor/history.env
+    environment:
+      RABBITMQ_DEFAULT_USER: "{{ rabbitmq_user }}"
+      RABBITMQ_DEFAULT_PASS: "{{ rabbitmq_password }}"
     ports:
       - "5672:5672"
     volumes:
@@ -44,8 +47,19 @@ services:
   history-consumer:
     image: "{{ history_consumer_image }}"
     restart: unless-stopped
-    env_file:
-      - /etc/cognitor/history.env
+    environment:
+      RUNTIME_BACKEND: "{{ runtime_backend }}"
+      DATABASE_URL: "{{ history_database_url }}"
+      POSTGRES_USER: "{{ db_user }}"
+      POSTGRES_PASSWORD: "{{ db_password }}"
+      POSTGRES_DB: "{{ db_name }}"
+      RUNTIME_APP_ROLE: "{{ db_user }}"
+{% if runtime_backend == "external" %}
+      RABBITMQ_URL: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@rabbitmq:5672/"
+      RABBITMQ_DEFAULT_USER: "{{ rabbitmq_user }}"
+      RABBITMQ_DEFAULT_PASS: "{{ rabbitmq_password }}"
+{% endif %}
+      PORT: "{{ history_port }}"
 {% if not use_managed_db or runtime_backend == "external" %}
     depends_on:
 {% if not use_managed_db %}
@@ -63,8 +77,19 @@ services:
     restart: unless-stopped
     ports:
       - "{{ history_port }}:{{ history_port }}"
-    env_file:
-      - /etc/cognitor/history.env
+    environment:
+      RUNTIME_BACKEND: "{{ runtime_backend }}"
+      DATABASE_URL: "{{ history_database_url }}"
+      POSTGRES_USER: "{{ db_user }}"
+      POSTGRES_PASSWORD: "{{ db_password }}"
+      POSTGRES_DB: "{{ db_name }}"
+      RUNTIME_APP_ROLE: "{{ db_user }}"
+{% if runtime_backend == "external" %}
+      RABBITMQ_URL: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@rabbitmq:5672/"
+      RABBITMQ_DEFAULT_USER: "{{ rabbitmq_user }}"
+      RABBITMQ_DEFAULT_PASS: "{{ rabbitmq_password }}"
+{% endif %}
+      PORT: "{{ history_port }}"
 {% if not use_managed_db %}
     depends_on:
       postgres:

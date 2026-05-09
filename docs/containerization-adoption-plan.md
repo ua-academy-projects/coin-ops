@@ -1,5 +1,8 @@
 # Containerization Adoption Plan
 
+> This document captures an earlier Hyper-V-oriented containerization adoption phase.
+> For the current cloud-first operator workflow and active roadmap, use `runbook.md`, `CONTEXT.md`, and `NEXT_PHASE_PLAN.md`.
+
 ## Goal
 
 Adopt containerization without discarding the current infrastructure story.

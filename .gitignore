@@ -68,6 +68,7 @@ ansible/group_vars/all/*.backup
 ansible/group_vars/all/secrets.yml
 runtime/__pycache__
 local/generated-env.sh
+local/generated-aws-env.sh
 
 ssh_config
 coin-ops_infra_roadmap_120d8424.plan.md
