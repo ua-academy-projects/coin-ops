@@ -9,8 +9,23 @@
 - name: Validate TLS mode
   assert:
     that:
-      - tls_mode in ['selfsigned', 'provided', 'off', 'certbot']
-    fail_msg: "TLS_MODE must be one of: selfsigned, provided, off, certbot."
+      - tls_mode in ['selfsigned', 'provided', 'certbot']
+    fail_msg: "TLS_MODE must be one of: selfsigned, provided, certbot."
+
+- name: Validate Cloudflare secret availability for Certbot
+  assert:
+    that:
+      - cloudflare_api_token | length > 0
+    fail_msg: "CLOUDFLARE_API_TOKEN must be present in GCP Secret Manager secret coinops-app-secrets when TLS_MODE=certbot."
+  when: tls_mode == 'certbot'
+
+- name: Create shared secrets directory
+  file:
+    path: /etc/cognitor
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
 
 - name: Remove HTTP (Port 80) from UFW
   community.general.ufw:
@@ -83,7 +98,7 @@
       [Service]
       Type=oneshot
       ExecStart=/usr/bin/docker run --rm -v "/etc/letsencrypt:/etc/letsencrypt" -v "/var/lib/letsencrypt:/var/lib/letsencrypt" -v "/etc/cognitor/cloudflare.ini:/cloudflare.ini:ro" certbot/dns-cloudflare renew
-      ExecPost=/usr/bin/docker restart ui
+      ExecPost=/usr/bin/docker compose -f /opt/cognitor/ui/compose.yaml restart ui
     dest: /etc/systemd/system/certbot-renewal.service
   when: tls_mode == 'certbot'
 

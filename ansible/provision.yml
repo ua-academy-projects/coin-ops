@@ -2,23 +2,25 @@
 # provision.yml — install system packages on all VMs.
 # Run once (or re-run: idempotent).
 #
-#   source .env
 #   ansible-playbook -i ansible/inventory ansible/provision.yml
 
-- name: Validate required environment variables
+- name: Validate provisioning contract
   hosts: localhost
   connection: local
+  gather_facts: no
   tasks:
-    - name: Check .env vars are exported
+    - name: Validate configured runtime backend
       assert:
         that:
-          - lookup('env', 'RUNTIME_BACKEND') in ['', 'external', 'postgres']
+          - runtime_backend in ['external', 'postgres']
         fail_msg: |
-          Required environment variables are not set or RUNTIME_BACKEND is invalid.
-          Run:  source .env
-          RUNTIME_BACKEND may be empty and will default to external.
-          Supported explicit runtime backends: external, postgres.
-          Then retry: ansible-playbook -i ansible/inventory ansible/provision.yml
+          runtime_backend must be one of: external, postgres.
+    - name: Validate GCP Secret Manager authentication path
+      assert:
+        that:
+          - gcp_service_account_file | length > 0
+        fail_msg: "Place terraform/sa-key.json in the repo and source local/generated-env.sh before running provision."
+      when: "'gcp' in groups"
 
 - name: Common setup — all nodes
   hosts: all

@@ -1,0 +1,16 @@
+ssh_user: coinops
+ssh_port: 53725
+
+gcp_project: project-6f41102f-c77c-46a3-aac
+
+runtime_backend: external
+app_domain: coinops-d.pp.ua
+tls_mode: certbot
+certbot_email_localpart: admin
+
+image_registry: ghcr.io/ua-academy-projects
+image_tag: shabat-latest
+registry_username: ""
+
+proxy_port: 8080
+history_port: 8000

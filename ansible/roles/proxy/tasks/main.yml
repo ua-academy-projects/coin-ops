@@ -1,4 +1,17 @@
 ---
+- name: Validate proxy database secret availability
+  assert:
+    that:
+      - db_password | length > 0
+    fail_msg: "DB_PASSWORD must be present in GCP Secret Manager secret coinops-db-secrets."
+
+- name: Validate RabbitMQ secret availability
+  assert:
+    that:
+      - rabbitmq_password | length > 0
+    fail_msg: "RABBITMQ_PASSWORD must be present in GCP Secret Manager secret coinops-db-secrets when RUNTIME_BACKEND=external."
+  when: runtime_backend == 'external'
+
 - name: Stop and disable legacy host services
   service:
     name: "{{ item }}"

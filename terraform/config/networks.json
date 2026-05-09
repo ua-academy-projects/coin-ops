@@ -50,15 +50,6 @@
             "protocols": [{ "protocol": "tcp", "ports": ["8000", "8080"] }],
             "source_role": "app-ui",
             "target_role": "app-backend"
-        },
-        "allow-all-internal": {
-            "protocols": [
-                { "protocol": "tcp", "ports": ["1-65535"] },
-                { "protocol": "udp", "ports": ["1-65535"] },
-                { "protocol": "icmp" }
-            ],
-            "source_cidrs": ["10.10.0.0/16"],
-            "target_tags": ["app-ui", "app-backend", "jump-host"]
         }
     }
 }

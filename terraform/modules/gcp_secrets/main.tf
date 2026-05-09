@@ -4,6 +4,10 @@ resource "google_secret_manager_secret" "db_secrets" {
   replication {
     auto {}
   }
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "google_secret_manager_secret_version" "db_secrets_data" {
@@ -20,6 +24,10 @@ resource "google_secret_manager_secret" "app_secrets" {
 
   replication {
     auto {}
+  }
+
+  lifecycle {
+    prevent_destroy = true
   }
 }
 

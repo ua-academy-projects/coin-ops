@@ -1,4 +1,23 @@
 ---
+- name: Validate supported database/runtime combination
+  assert:
+    that:
+      - not (use_managed_db and runtime_backend == 'postgres')
+    fail_msg: "Managed CloudSQL is not supported with RUNTIME_BACKEND=postgres yet. Use RUNTIME_BACKEND=external or disable managed DB."
+
+- name: Validate history database secret availability
+  assert:
+    that:
+      - db_password | length > 0
+    fail_msg: "DB_PASSWORD must be present in GCP Secret Manager secret coinops-db-secrets."
+
+- name: Validate RabbitMQ secret availability
+  assert:
+    that:
+      - rabbitmq_password | length > 0
+    fail_msg: "RABBITMQ_PASSWORD must be present in GCP Secret Manager secret coinops-db-secrets when RUNTIME_BACKEND=external."
+  when: runtime_backend == 'external'
+
 - name: Check for existing containerized PostgreSQL data
   stat:
     path: /var/lib/coin-ops/postgres/PG_VERSION

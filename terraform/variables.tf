@@ -39,6 +39,11 @@ variable "cloudflare_api_token" {
   description = "Cloudflare API Token with DNS:Edit permissions"
   sensitive   = true
   default     = ""
+
+  validation {
+    condition     = !var.seed_secret_manager || trimspace(var.cloudflare_api_token) != ""
+    error_message = "cloudflare_api_token must be set when seed_secret_manager=true."
+  }
 }
 
 variable "cloudflare_zone_id" {
@@ -64,6 +69,11 @@ variable "db_password" {
   type        = string
   sensitive   = true
   default     = ""
+
+  validation {
+    condition     = !var.seed_secret_manager || trimspace(var.db_password) != ""
+    error_message = "db_password must be set when seed_secret_manager=true."
+  }
 }
 
 variable "rabbitmq_password" {
@@ -71,6 +81,11 @@ variable "rabbitmq_password" {
   type        = string
   sensitive   = true
   default     = ""
+
+  validation {
+    condition     = !var.seed_secret_manager || trimspace(var.rabbitmq_password) != ""
+    error_message = "rabbitmq_password must be set when seed_secret_manager=true."
+  }
 }
 
 variable "ghcr_token" {
@@ -78,4 +93,15 @@ variable "ghcr_token" {
   type        = string
   sensitive   = true
   default     = ""
+
+  validation {
+    condition     = !var.seed_secret_manager || trimspace(var.ghcr_token) != ""
+    error_message = "ghcr_token must be set when seed_secret_manager=true."
+  }
+}
+
+variable "seed_secret_manager" {
+  description = "When true, seed/update GCP Secret Manager from local bootstrap secrets input."
+  type        = bool
+  default     = false
 }

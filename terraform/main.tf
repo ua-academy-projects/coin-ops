@@ -24,8 +24,9 @@ locals {
   ssh_public_key = fileexists(pathexpand(var.ssh_public_key_path)) ? file(pathexpand(var.ssh_public_key_path)) : ""
 
   # Enabled clouds ("gcp", "aws")
-  gcp_enabled = contains(var.enabled_clouds, "gcp")
-  aws_enabled = contains(var.enabled_clouds, "aws")
+  gcp_enabled         = contains(var.enabled_clouds, "gcp")
+  aws_enabled         = contains(var.enabled_clouds, "aws")
+  seed_secret_manager = local.gcp_enabled && var.seed_secret_manager
 
   # Derived from resource outputs — used only in ssh_config/hosts.json (apply-time, valid there).
   gcp_hosts = local.gcp_enabled ? try(module.gcp_instances[0].instance_ips, {}) : {}
@@ -65,6 +66,36 @@ locals {
   project_name = try(local.general.project_name, "coin-ops")
   aws_region   = try(local.general.aws_region, var.aws_region)
   gcp_region   = try(local.general.gcp_region, var.gcp_region)
+
+  gcp_db_secrets  = local.gcp_enabled && !local.seed_secret_manager ? try(jsondecode(data.google_secret_manager_secret_version.db_secrets[0].secret_data), {}) : {}
+  gcp_app_secrets = local.gcp_enabled && !local.seed_secret_manager ? try(jsondecode(data.google_secret_manager_secret_version.app_secrets[0].secret_data), {}) : {}
+
+  effective_db_password = local.gcp_enabled ? (
+    local.seed_secret_manager ? var.db_password : try(local.gcp_db_secrets.DB_PASSWORD, "")
+  ) : var.db_password
+  effective_rabbitmq_password = local.gcp_enabled ? (
+    local.seed_secret_manager ? var.rabbitmq_password : try(local.gcp_db_secrets.RABBITMQ_PASSWORD, "")
+  ) : var.rabbitmq_password
+  effective_ghcr_token = local.gcp_enabled ? (
+    local.seed_secret_manager ? var.ghcr_token : try(local.gcp_app_secrets.GHCR_TOKEN, "")
+  ) : var.ghcr_token
+  effective_cloudflare_api_token = local.gcp_enabled ? (
+    local.seed_secret_manager ? var.cloudflare_api_token : try(local.gcp_app_secrets.CLOUDFLARE_API_TOKEN, "")
+  ) : var.cloudflare_api_token
+}
+
+data "google_secret_manager_secret_version" "db_secrets" {
+  count   = local.gcp_enabled && !local.seed_secret_manager ? 1 : 0
+  project = var.gcp_project_id
+  secret  = "coinops-db-secrets"
+  version = "latest"
+}
+
+data "google_secret_manager_secret_version" "app_secrets" {
+  count   = local.gcp_enabled && !local.seed_secret_manager ? 1 : 0
+  project = var.gcp_project_id
+  secret  = "coinops-app-secrets"
+  version = "latest"
 }
 
 # GCP
@@ -121,16 +152,16 @@ module "gcp_database" {
   project_name = local.project_name
   region       = local.gcp_region
   network_id   = module.gcp_network[0].network_id
-  db_password  = var.db_password
+  db_password  = local.effective_db_password
 }
 
 module "gcp_secrets" {
-  count             = local.gcp_enabled ? 1 : 0
-  source            = "./modules/gcp_secrets"
-  db_password          = var.db_password
-  rabbitmq_password    = var.rabbitmq_password
-  ghcr_token           = var.ghcr_token
-  cloudflare_api_token = var.cloudflare_api_token
+  count                = local.gcp_enabled ? 1 : 0
+  source               = "./modules/gcp_secrets"
+  db_password          = local.effective_db_password
+  rabbitmq_password    = local.effective_rabbitmq_password
+  ghcr_token           = local.effective_ghcr_token
+  cloudflare_api_token = local.effective_cloudflare_api_token
 }
 
 # AWS
@@ -179,8 +210,8 @@ module "aws_nat_route" {
 }
 
 # hosts.json
-# Written after every apply. Used by the Ansible dynamic inventory script.
-# Add config/hosts.json to .gitignore — it contains live infrastructure IPs.
+# Written after every apply for operator/debugging use only.
+# Ansible no longer depends on this artifact for runtime host selection.
 
 resource "local_file" "hosts" {
   filename = "${path.module}/config/hosts.json"
@@ -239,6 +270,26 @@ resource "local_file" "ssh_config" {
       )
     ] : []
   )))
+}
+
+resource "local_file" "ansible_runtime" {
+  filename = "${path.module}/config/ansible-runtime.json"
+  content = jsonencode(merge(
+    local.gcp_enabled ? {
+      gcp = {
+        backend_private_ip = try(module.gcp_instances[0].instance_ips["app-2"].private_ip, "")
+        database_ip        = try(module.gcp_database[0].private_ip, "")
+        use_managed_db     = try(module.gcp_database[0].private_ip, "") != ""
+      }
+    } : {},
+    local.aws_enabled ? {
+      aws = {
+        backend_private_ip = try(module.aws_instances[0].instance_ips["app-2"].private_ip, "")
+        database_ip        = ""
+        use_managed_db     = false
+      }
+    } : {}
+  ))
 }
 
 # Sync SSH config to global ~/.ssh/extra_configs for convenience (WSL/Linux only).

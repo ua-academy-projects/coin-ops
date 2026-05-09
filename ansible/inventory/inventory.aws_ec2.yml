@@ -1,6 +1,6 @@
 ---
 # AWS dynamic inventory — amazon.aws.aws_ec2 plugin.
-# Credentials: set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION in .env.
+# Credentials: use the standard AWS SDK credential chain.
 #
 # NOTE: hostnames: Jinja2 templates (e.g. "aws-{{ ec2_tags.Name }}") are not
 # supported in this version of the plugin — they render literally.
@@ -30,6 +30,8 @@ keyed_groups:
     separator: ""
 
 compose:
-  # Use default('') so the expression works when public_ip_address is absent (private-only instances).
-  ansible_host: "(public_ip_address | default('')) if tags.get('Role') == 'jump-host' else private_ip_address"
+  # Public IP only for jump-host. All workload nodes use private IP and are reached via ProxyJump.
+  ansible_host: "(public_ip_address | default('')) if tags.get('Role') == 'jump-host' and (public_ip_address | default('')) != '' else private_ip_address"
+  ansible_user: "'coinops'"
+  ansible_port: "53725"
   cloud: "'aws'"

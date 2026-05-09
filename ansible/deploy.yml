@@ -2,23 +2,25 @@
 # deploy.yml — deploy all services.
 # Safe to re-run on every code push.
 #
-#   source .env
 #   ansible-playbook -i ansible/inventory ansible/deploy.yml
 
-- name: Validate required environment variables
+- name: Validate deployment contract
   hosts: localhost
   connection: local
+  gather_facts: no
   tasks:
-    - name: Check .env vars are exported
+    - name: Validate configured runtime backend
       assert:
         that:
-          - lookup('env', 'RUNTIME_BACKEND') in ['', 'external', 'postgres']
+          - runtime_backend in ['external', 'postgres']
         fail_msg: |
-          Required environment variables are not set or RUNTIME_BACKEND is invalid.
-          Run:  source .env
-          RUNTIME_BACKEND may be empty and will default to external.
-          Supported explicit runtime backends: external, postgres.
-          Then retry: ansible-playbook -i ansible/inventory ansible/deploy.yml
+          runtime_backend must be one of: external, postgres.
+    - name: Validate GCP Secret Manager authentication path
+      assert:
+        that:
+          - gcp_service_account_file | length > 0
+        fail_msg: "Place terraform/sa-key.json in the repo and source local/generated-env.sh before running deploy."
+      when: "'gcp' in groups"
 
 - name: Authenticate Docker registry on target nodes
   hosts: all

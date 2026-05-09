@@ -24,9 +24,3 @@ variable "db_tier" {
   type        = string
   default     = "db-f1-micro"
 }
-
-variable "deletion_protection" {
-  description = "Whether to prevent Terraform from destroying the database"
-  type        = bool
-  default     = true
-}
