@@ -2,7 +2,7 @@
 
 **Purpose:** Ground truth for automated assistants and humans editing this repo. Load this file when working on `terraform/`, `ansible/`, deployments, or cross-service wiring.
 
-**Project:** Polymarket dashboard (live markets, whale leaderboard, BTC/ETH/UAH pricing, historical charts). GCP is primary; AWS is secondary parity. Ansible today targets Hyper-V lab IPs (`172.31.1.x`); cloud migration is planned below.
+**Project:** Polymarket dashboard (live markets, whale leaderboard, BTC/ETH/UAH pricing, historical charts). GCP is primary; AWS is secondary parity. The repository now runs on the cloud-first topology below; Hyper-V-era assumptions should be treated as legacy unless explicitly called out.
 
 ---
 
@@ -16,7 +16,7 @@
 
 ---
 
-## 1. Product and runtime topology (target cloud)
+## 1. Product and runtime topology (current cloud target)
 
 ### Services
 
@@ -29,7 +29,7 @@
 ### Data flow (after cloud layout)
 
 ```
-Browser → nginx on app-1 (80/443)
+Browser → Cloudflare proxy → nginx on app-1 (443)
        → /api/         → Go proxy on app-2 (:8080) → upstream APIs → queue → consumer → PostgreSQL
        → /history-api/ → FastAPI on app-2 (:8000) → PostgreSQL → browser
 ```
@@ -37,9 +37,9 @@ Browser → nginx on app-1 (80/443)
 **Target VM roles:**
 
 - **jump-host** — bastion + NAT only (iptables MASQUERADE); no app workloads.
-- **app-1** — **UI only** (nginx gateway + static SPA). Public IP.
-- **app-2** — **all backends**: proxy, history-api, history-consumer, PostgreSQL, RabbitMQ (when `RUNTIME_BACKEND=external`), Redis. Private subnet; egress via NAT.
-- **db-1** — **remove from `terraform/config/config.json`**; replace later with RDS / CloudSQL (managed DB phase).
+- **app-1** — **UI only** (nginx gateway + static SPA). Public IP, but public HTTP ingress is intentionally closed; Cloudflare proxy fronts HTTPS.
+- **app-2** — **all backends**: proxy, history-api, history-consumer, RabbitMQ (when `RUNTIME_BACKEND=external`), Redis, and local PostgreSQL only when not using a managed DB. Private subnet; egress via NAT.
+- **Managed DB** — Cloud SQL is the current GCP managed-database path. There is no longer a separate `db-1` VM in the intended topology.
 
 Example public IPs existed in workspace snapshots (do not rely on literals in CI): GCP jump-host / app-1 had public addresses; AWS same pattern.
 
@@ -48,9 +48,11 @@ Example public IPs existed in workspace snapshots (do not rely on literals in CI
 - **`external`** — Redis + RabbitMQ as separate containers; classic path.
 - **`postgres`** — queue/session patterns move into PostgreSQL via **pgmq** / extensions; compose uses custom image `deploy/postgres-runtime/Dockerfile` (pg_cron, pgmq). For `external`, Postgres image is typically `postgres:16-alpine`.
 
-### Docker images (GHCR — **private**)
+**Important guard:** `use_managed_db=true` with `RUNTIME_BACKEND=postgres` is intentionally unsupported and should fail early in Ansible.
 
-Deployments expect `docker login` via `GHCR_USERNAME` / `GHCR_TOKEN` (PAT with `read:packages`). Images under `ghcr.io/ua-academy-projects/` with tags like `shabat-latest`.
+### Docker images (GHCR)
+
+Deployments support `docker login` via `GHCR_USERNAME` / `GHCR_TOKEN` (PAT with `read:packages`). Images under `ghcr.io/ua-academy-projects/` with tags like `shabat-latest`. If images are public, registry login is skipped cleanly.
 
 ### API surface (history)
 
@@ -68,6 +70,7 @@ FastAPI exposes at least: `/health`, `/history`, `/history/{slug}`, `/prices/his
 
 - `hashicorp/google` ~> 7.0, `hashicorp/aws` ~> 6.0, `hashicorp/local` ~> 2.0.
 - Remote state (GCS): bucket `internship-state-bucket`, prefix `infra/state` (see `terraform/backend.tf`).
+- `terraform/bootstrap-gcp.sh` is the operator bootstrap entrypoint for the GCP-first workflow.
 
 ### JSON-driven config
 
@@ -81,11 +84,31 @@ Read from `terraform/config/*.json` via `jsondecode(file(...))` in `terraform/ma
 | `gcp.json` / `aws.json` | zone, image/AMI hints, optional `ssh_user` |
 | `hosts.json` | **generated** by `terraform apply` — do not commit |
 | `ssh_config` | **generated** — do not commit |
+| `ansible-runtime.json` | **generated** narrow Terraform→Ansible metadata (managed DB/backend IPs) — do not commit |
+
+### Bootstrap-generated local operator files
+
+The normal workflow does **not** rely on a committed repo `.env`. Instead, bootstrap generates local gitignored operator files:
+
+- `terraform/sa-key.json`
+- `terraform/local.generated.auto.tfvars.json`
+- `terraform/bootstrap.secrets.auto.tfvars`
+- `ansible/vars/local.generated.json`
+- `local/generated-env.sh`
+
+`local/generated-env.sh` is the intended shell entrypoint before normal Terraform or Ansible work.
 
 ### Network model (VPC `10.10.0.0/16`)
 
 - **external** subnet (`10.10.2.0/24`): public-facing; hosts jump-host + app-1.
 - **internal** subnet (`10.10.1.0/24`): private; hosts app-2; default route via **NAT on jump-host** (GCP route + AWS private RT/route to jump ENI + `scripts/jump-host-init.sh`).
+
+### Current public ingress policy
+
+- Public SSH is allowed only to **jump-host** on the custom SSH port.
+- Public HTTPS (`443`) is allowed to **app-1**.
+- Public HTTP (`80`) is intentionally closed at the infrastructure layer.
+- `app-1` reaches `app-2` on `8000` and `8080`.
 
 ### Module map
 
@@ -129,63 +152,35 @@ Example (conceptual): `general.disk_size = 20` overrides `fallback.disk_size` wh
 
 ---
 
-## 5. Safe / intended changes (backlog highlights)
+## 5. Completed Architecture Shifts
 
-### Phase 1 Terraform fixes (still applicable if not merged)
-
-1. **`aws_instances` fallback `disk_size`:** align `local.fallback.disk_size` **10 → 20** so behavior matches `config.json general` when `var.defaults` is omitted in tests-only runs.
-2. **AWS private routing:** Private subnets should associate with a **private route table owned by `aws_network`** before NAT adds `0.0.0.0/0`; avoid two owners fighting `aws_route_table_association`. Desired shape: create empty private RT + associations in `aws_network`, pass `private_route_table_id` into `aws_nat_route`, which only adds the default route via jump ENI.
-
-### Phase 2 — `jump-host-init.sh`
-
-Hardcoded `10.10.1.0/24` in FORWARD rules should become **`${private_subnet_cidr}`** from `networks.json` via `templatefile()` (`.tpl`) and a variable plumbed from root module locals.
-
-### Phases 3–4 — ops hardening
-
-- Custom Linux user (e.g. `coinops`) + SSH key bootstrap (template script).
-- Non-default SSH port only **after** login as the new user is verified; update `networks.json` rules and generated `ssh_config`.
-
-### Phases 5–6 — Ansible inventory
-
-- Add **GCP labels / AWS tags** (`role`, `project`, `cloud`) in Terraform for inventory plugins.
-- Prefer **cloud inventory plugins** (`google.cloud.gcp_compute`, `amazon.aws.aws_ec2`) over “read `hosts.json` script” for true current state. Keep `hosts.json` for SSH config / human workflows, not as the sole inventory source.
-
-### Phases 7+ — Ansible refactor for cloud
-
-- Split static `ansible/inventory` (Hyper-V) into plugin-based inventory per cloud.
-- **Debian vs Ubuntu:** GCP images are Debian; `roles/docker/` today assumes Ubuntu repos — must parameterize (`ansible_distribution | lower`).
-- **New role shape:** `backend` on app-2 combining history + proxy stacks; `ui` on app-1; nginx `proxy_pass` targets **app-2 private IP** for `/api/` and `/history-api/`.
-- Play order: bring **DB + broker** up before API health checks; UI last.
-
-### DNS / TLS (later)
-
-- Domain + Cloudflare NS; Terraform Cloudflare provider for A records to app-1 public IPs.
-- Certbot staging → production; then `TLS_MODE=provided` in Ansible.
-
-### Managed DB (future)
-
-- **Cloud SQL:** private IP / Auth Proxy; no “open internet to Postgres”.
-- **RDS:** private subnet groups, `deletion_protection`, final snapshots.
-- Use **`terraform destroy -target`** lists that preserve DB modules when tearing down compute.
+- **Terraform enhancements:** AWS private routing split, dynamic `jump-host-init.sh`, custom user + SSH workflow, non-default SSH port, VM labels/tags for inventory, generated SSH config, and generated Ansible runtime metadata.
+- **Ansible Dynamic Inventory:** Shifted away from `hosts.json` as inventory truth and now uses `google.cloud.gcp_compute` and `amazon.aws.aws_ec2`. Private hosts are reached through generated SSH config + `ProxyJump`.
+- **Variables contract:** Repo `.env` is no longer the normal operator path. Bootstrap now generates local non-secret config and a generated local env file. Secrets are seeded once and then fetched from GCP Secret Manager during deploy.
+- **Topology:** `app-1` is the UI gateway on public HTTPS; `app-2` runs all backend services on private IPs. Nginx `proxy_pass` targets `app-2` private IP for `/api/` and `/history-api/`.
+- **DNS & TLS:** Terraform manages Cloudflare DNS records, currently intended to be proxied through Cloudflare. Ansible provisions Certbot DNS-challenge TLS on the origin.
+- **Managed DB:** Cloud SQL is integrated via Terraform. Ansible uses generated runtime metadata to decide whether to target managed DB or local Postgres.
+- **Safety:** Secret Manager secret containers and Cloud SQL resources are protected from casual `terraform destroy` by hard Terraform guards.
 
 ---
 
-## 6. Ansible deployment (current vs target)
+## 6. Ansible deployment (current contract)
 
-### Current layout (Hyper-V oriented)
+### Current layout
+- **Inventory:** Dynamic plugins (`inventory.gcp_compute.yml`, `inventory.aws_ec2.yml`).
+- **Variables:** Stable non-secret defaults live in `ansible/vars/deploy-config.yml`, local operator overrides live in `ansible/vars/local.generated.json`, and dynamic connection/runtime values are resolved in `inventory/group_vars/all/main.yml`.
+- **Roles:** `common`, `docker`, `history`, `proxy`, `ui`.
+- **Play order:** Provision common/docker first, then backend services on `app-2`, then UI on `app-1`.
 
-- `ansible/inventory` — static `172.31.1.10/11/12`, user `vagrant`.
-- `ansible/group_vars/all/main.yml` — embeds legacy LAN IPs for `postgres_bind_ip`, RabbitMQ URL, etc.
-- Roles: `common`, `docker`, `history`, `proxy`, `ui`.
-- Compose templates: `deploy/compose/node-01.compose.yaml` (history stack), `node-02` (proxy), `node-03` (ui).
+### Secret and config contract
 
-### Environment contract (`.env` — not committed)
-
-Playbooks assert `RABBITMQ_PASSWORD`, `DB_PASSWORD`, `SSH_KEY_PATH`, and `RUNTIME_BACKEND` in `{ '', external, postgres }`. Common additions: `APP_DOMAIN`, `TLS_MODE`, `IMAGE_TAG`, GHCR credentials, cloud credentials for dynamic inventory.
+- **Secrets:** GCP deployments fetch `DB_PASSWORD`, `RABBITMQ_PASSWORD`, `GHCR_TOKEN`, and `CLOUDFLARE_API_TOKEN` from GCP Secret Manager at deploy time.
+- **Non-secrets:** `app_domain`, `tls_mode`, image defaults, ports, and similar values come from committed defaults plus generated local non-secret config.
+- **Local shell state:** Operators should source `local/generated-env.sh` instead of `source .env`.
 
 ### Secrets on VMs
 
-Ansible drops `/etc/cognitor/*.env`; compose files reference `env_file:` there.
+Ansible still writes runtime env files under `/etc/cognitor/*.env` for the containers. The difference is that the values now come from Secret Manager and generated config, not a repo `.env`.
 
 ---
 
@@ -197,6 +192,8 @@ Ansible drops `/etc/cognitor/*.env`; compose files reference `env_file:` there.
 - **`module.foo[0]`** indexing: guard with `try` or `count`-aware expressions when cloud disabled.
 - **`pathexpand`:** required for `~` in `ssh_public_key_path` on Windows-side workflows.
 - **`local_file` hosts/ssh_config:** overwritten every apply.
+- **Cloudflare provider:** initialized even when DNS records are disabled; provider config uses a placeholder token fallback so init/plan still succeed without live DNS credentials.
+- **Stateful destroy protection:** `prevent_destroy` is hardcoded on important GCP stateful resources; a real full teardown requires a deliberate temporary code edit (see `runbook.md`).
 
 ### AWS
 
@@ -207,11 +204,14 @@ Ansible drops `/etc/cognitor/*.env`; compose files reference `env_file:` there.
 
 - `internal-vm` tag + `can_ip_forward` interact with NAT route targeting.
 - Empty `access_config {}` grants ephemeral public IP; omit block for private NICs.
+- `google.cloud.gcp_compute` inventory works best with `auth_kind: application` plus `GOOGLE_APPLICATION_CREDENTIALS`.
 
 ### Ansible / Compose
 
 - Health task defaults: PostgreSQL readiness loops ~1 minute; failures are often resource/API timing, not app logic.
 - `jump-host-init.sh` uses `iptables -C` before `-A` for idempotency; multi-NIC hops may need future hardening.
+- `inventory/group_vars/all/main.yml` intentionally loads local generated config and generated Terraform runtime metadata; do not revert to using `terraform/config/hosts.json` as inventory truth.
+- `tls_mode=certbot` requires a real public domain and a valid Cloudflare token.
 
 ---
 
@@ -220,34 +220,40 @@ Ansible drops `/etc/cognitor/*.env`; compose files reference `env_file:` there.
 ```
 terraform/config/hosts.json
 terraform/config/ssh_config
+terraform/config/ansible-runtime.json
 terraform/sa-key.json
 terraform/.terraform/
 terraform/*.tfstate*
+terraform/local.generated.auto.tfvars.json
+terraform/bootstrap.secrets.auto.tfvars
+ansible/vars/local.generated.json
+local/generated-env.sh
 .env
 ```
 
 ---
 
-## 9. Workstream checklist (ordered)
+## 9. Current goals and next workstream
 
-Use as a backlog index; execution state may drift — verify in git before claiming “done”.
+The current GCP-first refactor is implemented. The next work should focus on polish and cloud-native maturity, not reintroducing old workflows:
 
-1. Terraform Phase 1: `aws_instances` fallback disk; AWS private RT split / `aws_nat_route` consumes existing RT ID.
-2. Template-driven NAT bootstrap CIDR.
-3. Custom user + SSH workflow.
-4. Non-default SSH port (after verified access).
-5. VM labels/tags for inventory.
-6. Cloud dynamic inventory plugins + credentials wiring.
-7. Ansible topology refactor (app-1 UI, app-2 all backends); Debian Docker role.
-8. `.env` + first cloud `provision.yml` / `deploy.yml`.
-9. DNS (Terraform Cloudflare).
-10. Certbot → `TLS_MODE=provided`.
-11. RDS / CloudSQL + safe destroy-target patterns.
-
-**Blockers:** domain propagation for TLS; managed DB naming retention (~30-day reuse lock on Cloud SQL names after delete).
+1. **Keep the generated bootstrap workflow stable:**
+   - `bootstrap-gcp.sh` + generated local files are now the expected operator path.
+   - Do not reintroduce repo `.env` as the primary workflow.
+2. **Refine inventory/config separation further:**
+   - Keep `group_vars` small and policy-oriented.
+   - Move only truly inventory-native derivation into plugin `compose` or follow-up constructed inventory.
+3. **Improve full-destroy ergonomics:**
+   - The current hard-guard model is safe but manual for complete teardown.
+   - A future improvement could isolate protected resources into separate state or a cleaner dedicated lifecycle.
+4. **Managed services roadmap:**
+   - AWS Secrets Manager parity is still pending.
+   - Managed RabbitMQ/Redis equivalents remain future work.
+5. **Image/provisioning optimization:**
+   - Golden images or Packer remain good future work to shorten provisioning time.
 
 ---
 
 ## 10. Related repo docs
 
-For narrative architecture and ops detail: `README.md`, `docs/architecture.md`, `docs/deployment.md`, `docs/terraform-guide.md`, `terraform/DEPLOY_TODO.md`, `CLAUDE.md`, `AGENTS.md`.
+For narrative architecture and ops detail: `README.md`, `docs/architecture.md`, `docs/deployment.md`, `docs/terraform-guide.md`, `runbook.md`, `CLAUDE.md`, `AGENTS.md`.
