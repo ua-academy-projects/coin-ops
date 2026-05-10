@@ -2,7 +2,7 @@
 
 **Purpose:** Ground truth for automated assistants and humans editing this repo. Load this file when working on `terraform/`, `ansible/`, deployments, or cross-service wiring.
 
-**Project:** Polymarket dashboard (live markets, whale leaderboard, BTC/ETH/UAH pricing, historical charts). GCP is primary; AWS is secondary parity. The repository now runs on the cloud-first topology below; Hyper-V-era assumptions should be treated as legacy unless explicitly called out.
+**Project:** Polymarket dashboard (live markets, whale leaderboard, BTC/ETH/UAH pricing, historical charts). GCP is primary; AWS is secondary parity. The repository now runs on the cloud-first topology below; Hyper-V-era assumptions should be treated as legacy unless explicitly called out. For an explicit support matrix, see [MULTI_CLOUD_SCOPE.md](/D:/Internship/coin-ops-local/coin-ops/MULTI_CLOUD_SCOPE.md).
 
 ---
 
@@ -257,4 +257,4 @@ The current GCP-first refactor is implemented. The next work should focus on pol
 
 ## 10. Related repo docs
 
-For narrative architecture and ops detail: `README.md`, `docs/architecture.md`, `docs/deployment.md`, `docs/terraform-guide.md`, `runbook.md`, `CLAUDE.md`, `AGENTS.md`.
+For narrative architecture and ops detail: `README.md`, `docs/architecture.md`, `docs/deployment.md`, `docs/terraform-guide.md`, `runbook.md`, `MULTI_CLOUD_SCOPE.md`, `CLAUDE.md`, `AGENTS.md`.

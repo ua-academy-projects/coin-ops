@@ -2,6 +2,8 @@
 
 This runbook describes the supported lifecycle for the current GCP-first infrastructure flow.
 
+For exact GCP vs AWS support boundaries, see [MULTI_CLOUD_SCOPE.md](/D:/Internship/coin-ops-local/coin-ops/MULTI_CLOUD_SCOPE.md).
+
 The normal operator model is:
 
 - bootstrap once with `terraform/bootstrap-gcp.sh`
