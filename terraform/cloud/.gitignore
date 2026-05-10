@@ -1,0 +1,12 @@
+# terraform files
+.terraform
+.terraform.lock.hcl
+*.tfstate
+*.tfstate
+*.backup
+
+# secrets
+*.ssh
+
+# agents files
+AGENTS.md

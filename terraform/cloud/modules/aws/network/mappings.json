@@ -1,0 +1,33 @@
+{
+  "subnet_exposure": {
+    "public": {
+      "map_public_ip_on_launch": true
+    },
+    "private": {
+      "map_public_ip_on_launch": false
+    },
+    "internal": {
+      "map_public_ip_on_launch": false
+    },
+    "isolated": {
+      "map_public_ip_on_launch": false
+    },
+    "edge": {
+      "map_public_ip_on_launch": true
+    }
+  },
+  "placement": {
+    "primary": {
+      "subnet_location": "eu-central-1a"
+    },
+    "secondary": {
+      "subnet_location": "eu-central-1b"
+    },
+    "tertiary": {
+      "subnet_location": "eu-central-1c"
+    },
+    "dr": {
+      "subnet_location": "eu-west-1a"
+    }
+  }
+}

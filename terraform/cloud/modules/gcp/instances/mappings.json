@@ -1,0 +1,35 @@
+{
+  "instance_type": {
+    "nano": "e2-micro",
+    "micro": "e2-micro",
+    "small": "e2-small",
+    "medium": "e2-medium",
+    "large": "e2-standard-2",
+    "xlarge": "e2-standard-4",
+    "compute_small": "c3-standard-4",
+    "compute_medium": "c3-standard-8",
+    "memory_small": "n2-highmem-2",
+    "memory_medium": "n2-highmem-4"
+  },
+  "image_family": {
+    "ubuntu_22": "ubuntu-os-cloud/ubuntu-2204-lts",
+    "ubuntu_24": "ubuntu-os-cloud/ubuntu-2404-lts-amd64",
+    "debian_12": "debian-cloud/debian-12",
+    "rocky_9": "rocky-linux-cloud/rocky-linux-9",
+    "cos": "cos-cloud/cos-stable"
+  },
+  "placement": {
+    "primary": {
+      "instance_zone": "europe-west1-b"
+    },
+    "secondary": {
+      "instance_zone": "europe-west4-b"
+    },
+    "tertiary": {
+      "instance_zone": "us-central1-a"
+    },
+    "dr": {
+      "instance_zone": "europe-north1-a"
+    }
+  }
+}

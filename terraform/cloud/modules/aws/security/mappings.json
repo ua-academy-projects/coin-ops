@@ -1,0 +1,12 @@
+{
+  "direction": {
+    "INGRESS": "ingress",
+    "INBOUND": "ingress",
+    "ingress": "ingress",
+    "inbound": "ingress",
+    "EGRESS": "egress",
+    "OUTBOUND": "egress",
+    "egress": "egress",
+    "outbound": "egress"
+  }
+}

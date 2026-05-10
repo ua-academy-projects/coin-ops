@@ -1,0 +1,16 @@
+{
+  "placement": {
+    "primary": {
+      "subnet_location": "europe-west1"
+    },
+    "secondary": {
+      "subnet_location": "europe-west4"
+    },
+    "tertiary": {
+      "subnet_location": "us-central1"
+    },
+    "dr": {
+      "subnet_location": "europe-north1"
+    }
+  }
+}

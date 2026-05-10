@@ -1,0 +1,35 @@
+{
+  "instance_type": {
+    "nano": "t3.nano",
+    "micro": "t3.micro",
+    "small": "t3.small",
+    "medium": "t3.medium",
+    "large": "t3.large",
+    "xlarge": "t3.xlarge",
+    "compute_small": "c7i.large",
+    "compute_medium": "c7i.xlarge",
+    "memory_small": "r7i.large",
+    "memory_medium": "r7i.xlarge"
+  },
+  "image_family": {
+    "ubuntu_22": "ami-0a1234567890abcde",
+    "ubuntu_24": "ami-0123456789abcdef0",
+    "debian_12": "ami-0b1234567890abcde",
+    "rocky_9": "ami-0c1234567890abcde",
+    "al2023": "ami-0d1234567890abcde"
+  },
+  "placement": {
+    "primary": {
+      "instance_zone": "eu-central-1a"
+    },
+    "secondary": {
+      "instance_zone": "eu-central-1b"
+    },
+    "tertiary": {
+      "instance_zone": "eu-central-1c"
+    },
+    "dr": {
+      "instance_zone": "eu-west-1a"
+    }
+  }
+}
