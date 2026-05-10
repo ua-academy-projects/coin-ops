@@ -9,7 +9,7 @@ output "node_ips" {
 
 output "ansible_inventory" {
   description = "Paste this into ansible/inventory after terraform apply"
-  value = <<-INV
+  value       = <<-INV
     [history]
     softserve-node-01 ansible_host=172.31.1.10
 
@@ -26,7 +26,7 @@ output "ansible_inventory" {
 
 output "next_steps" {
   description = "What to do after terraform apply"
-  value = <<-STEPS
+  value       = <<-STEPS
     1. Wait ~2 min for cloud-init to finish on all VMs
     2. Test SSH: ssh vagrant@172.31.1.10
     3. Run Ansible: ansible-playbook -i ansible/inventory ansible/provision.yml

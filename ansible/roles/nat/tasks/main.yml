@@ -1,0 +1,54 @@
+---
+- name: Install NAT packages
+  apt:
+    name:
+      - iptables-persistent
+      - netfilter-persistent
+    state: present
+    update_cache: yes
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: Persist IPv4 forwarding configuration
+  copy:
+    content: |
+      net.ipv4.ip_forward=1
+    dest: /etc/sysctl.d/99-coinops-nat.conf
+    owner: root
+    group: root
+    mode: '0644'
+  register: nat_sysctl_config
+
+- name: Apply IPv4 forwarding configuration
+  command: sysctl -p /etc/sysctl.d/99-coinops-nat.conf
+  when: nat_sysctl_config.changed
+  changed_when: true
+
+- name: Enable IPv4 forwarding immediately
+  command: sysctl -w net.ipv4.ip_forward=1
+  changed_when: false
+
+- name: Allow forwarded traffic in UFW
+  lineinfile:
+    path: /etc/default/ufw
+    regexp: '^DEFAULT_FORWARD_POLICY='
+    line: 'DEFAULT_FORWARD_POLICY="ACCEPT"'
+  notify: Reload UFW
+
+- name: Configure NAT masquerade rules in UFW
+  blockinfile:
+    path: /etc/ufw/before.rules
+    insertbefore: BOF
+    marker: "# {mark} COINOPS NAT"
+    block: |
+      *nat
+      :POSTROUTING ACCEPT [0:0]
+      -A POSTROUTING -s {{ nat_private_cidr }} -o {{ ansible_default_ipv4.interface }} -j MASQUERADE
+      COMMIT
+  notify: Reload UFW
+
+- name: Enable netfilter-persistent service
+  systemd:
+    name: netfilter-persistent
+    enabled: yes
+    state: started

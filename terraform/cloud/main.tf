@@ -7,8 +7,7 @@ module "gcp_network" {
   source = "./modules/gcp/network"
   count  = var.cloud == "gcp" ? 1 : 0
 
-  network   = var.network
-  nat_route = var.nat_route
+  network = var.network
 }
 
 
@@ -27,11 +26,22 @@ module "gcp_instances" {
   count  = var.cloud == "gcp" ? 1 : 0
 
   ssh_user            = "deployer"
-  ssh_public_key_path = "${path.root}/.ssh/id_ed25519.pub"
+  ssh_public_key_path = pathexpand(var.ssh_public_key_path)
   network_name        = module.gcp_network[0].network_name
   subnetworks         = module.gcp_network[0].subnetwork_names
 
   workloads = var.workloads
+}
+
+module "gcp_network_routes" {
+  source = "./modules/gcp/network-routes"
+  count  = var.cloud == "gcp" && var.nat_route != null ? 1 : 0
+
+  network_name      = module.gcp_network[0].network_name
+  route_name        = var.nat_route.name
+  destination_range = var.nat_route.destination_range
+  target_tags       = var.nat_route.target_tags
+  next_hop_instance = module.gcp_instances[0].instance_self_links[var.nat_route.instance_workload]
 }
 
 

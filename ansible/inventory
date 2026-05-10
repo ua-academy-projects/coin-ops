@@ -1,8 +1,14 @@
 [history]
-softserve-node-01 ansible_host=172.31.1.10
+coinops-history ansible_host=10.10.1.3 private_ip=10.10.1.3
 
 [proxy]
-softserve-node-02 ansible_host=172.31.1.11
+coinops-proxy ansible_host=10.10.1.2 private_ip=10.10.1.2
 
 [ui]
-softserve-node-03 ansible_host=172.31.1.12
+coinops-ui ansible_host=10.10.2.4 private_ip=10.10.2.4
+
+[bastion]
+coinops-bastion ansible_host=34.62.67.29 private_ip=10.10.2.3
+
+[nat]
+coinops-nat ansible_host=10.10.2.2 private_ip=10.10.2.2

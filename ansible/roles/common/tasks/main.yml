@@ -22,11 +22,15 @@
   timezone:
     name: UTC
 
+- name: Gather service facts
+  service_facts:
+
 - name: Ensure systemd-timesyncd is running
   systemd:
     name: systemd-timesyncd
     enabled: yes
     state: started
+  when: "'systemd-timesyncd.service' in ansible_facts.services"
 
 - name: Install UFW
   apt:

@@ -12,6 +12,11 @@ variable "cloud" {
   }
 }
 
+variable "ssh_public_key_path" {
+  type    = string
+  default = "~/.ssh/coinops_gcp.pub"
+}
+
 
 # network
 
@@ -38,8 +43,7 @@ variable "nat_route" {
   type = object({
     name              = string
     destination_range = string
-    next_hop_instance = string
-    next_hop_zone     = string
+    instance_workload = string
     target_tags       = list(string)
   })
   default  = null
@@ -51,13 +55,13 @@ variable "nat_route" {
 
 variable "workloads" {
   type = map(object({
-    instance_type = string
-    image_family  = string
-    placement     = string
-    subnet        = string
-    tags          = list(string)
-    disk_size_gb  = number
-    public_ip     = bool
+    instance_type  = string
+    image_family   = string
+    placement      = string
+    subnet         = string
+    tags           = list(string)
+    disk_size_gb   = number
+    public_ip      = bool
     can_ip_forward = bool
   }))
 }

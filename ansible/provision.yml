@@ -69,3 +69,9 @@
     - name: No host-level provisioning required for UI node
       debug:
         msg: "UI node only needs Docker."
+
+- name: Provision NAT node
+  hosts: nat
+  become: yes
+  roles:
+    - nat
