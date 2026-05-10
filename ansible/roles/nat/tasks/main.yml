@@ -28,24 +28,40 @@
   command: sysctl -w net.ipv4.ip_forward=1
   changed_when: false
 
-- name: Allow forwarded traffic in UFW
-  lineinfile:
-    path: /etc/default/ufw
-    regexp: '^DEFAULT_FORWARD_POLICY='
-    line: 'DEFAULT_FORWARD_POLICY="ACCEPT"'
-  notify: Reload UFW
+- name: Ensure NAT masquerade rule exists
+  iptables:
+    table: nat
+    chain: POSTROUTING
+    source: "{{ nat_private_cidr }}"
+    out_interface: "{{ ansible_facts['default_ipv4']['interface'] }}"
+    jump: MASQUERADE
+    comment: CoinOps NAT masquerade
+    state: present
 
-- name: Configure NAT masquerade rules in UFW
-  blockinfile:
-    path: /etc/ufw/before.rules
-    insertbefore: BOF
-    marker: "# {mark} COINOPS NAT"
-    block: |
-      *nat
-      :POSTROUTING ACCEPT [0:0]
-      -A POSTROUTING -s {{ nat_private_cidr }} -o {{ ansible_default_ipv4.interface }} -j MASQUERADE
-      COMMIT
-  notify: Reload UFW
+- name: Allow private subnet traffic to be forwarded out
+  iptables:
+    chain: FORWARD
+    source: "{{ nat_private_cidr }}"
+    out_interface: "{{ ansible_facts['default_ipv4']['interface'] }}"
+    jump: ACCEPT
+    comment: CoinOps NAT forward outbound
+    state: present
+
+- name: Allow established traffic back to the private subnet
+  iptables:
+    chain: FORWARD
+    destination: "{{ nat_private_cidr }}"
+    in_interface: "{{ ansible_facts['default_ipv4']['interface'] }}"
+    ctstate:
+      - ESTABLISHED
+      - RELATED
+    jump: ACCEPT
+    comment: CoinOps NAT forward return
+    state: present
+
+- name: Save iptables rules
+  command: netfilter-persistent save
+  changed_when: true
 
 - name: Enable netfilter-persistent service
   systemd:

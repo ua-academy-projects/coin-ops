@@ -23,8 +23,21 @@
           Supported explicit runtime backends: external, postgres.
           Then retry: ansible-playbook -i ansible/inventory ansible/provision.yml
 
-- name: Common setup — all nodes
-  hosts: all
+- name: Common setup — public nodes
+  hosts: bastion:ui:nat
+  become: yes
+  roles:
+    - common
+    - docker
+
+- name: Provision NAT node
+  hosts: nat
+  become: yes
+  roles:
+    - nat
+
+- name: Common setup — private nodes
+  hosts: history:proxy
   become: yes
   roles:
     - common
@@ -69,9 +82,3 @@
     - name: No host-level provisioning required for UI node
       debug:
         msg: "UI node only needs Docker."
-
-- name: Provision NAT node
-  hosts: nat
-  become: yes
-  roles:
-    - nat
