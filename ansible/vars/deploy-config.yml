@@ -1,6 +1,3 @@
-ssh_user: coinops
-ssh_port: 53725
-
 gcp_project: project-6f41102f-c77c-46a3-aac
 
 runtime_backend: external

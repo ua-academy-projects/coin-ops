@@ -8,6 +8,10 @@ repo_root: >-
     else (playbook_dir | dirname)
   }}
 deploy_defaults: "{{ lookup('file', repo_root ~ '/ansible/vars/deploy-config.yml') | from_yaml }}"
+infra_config_path: "{{ repo_root ~ '/terraform/config/config.json' }}"
+infra_config_text: "{{ lookup('file', infra_config_path) | string }}"
+infra_config: "{{ infra_config_text | from_json }}"
+infra_general: "{{ infra_config.get('general', {}) }}"
 local_generated_config_path: "{{ repo_root ~ '/ansible/vars/local.generated.json' }}"
 local_generated_config_text: "{{ lookup('file', local_generated_config_path, errors='ignore') | default('{}', true) | string }}"
 local_generated_config: >-
@@ -29,7 +33,7 @@ cloud_runtime_metadata: "{{ runtime_metadata.get(my_cloud, {}) }}"
 backend_host: "{{ groups['role_app_backend'][0] if ('role_app_backend' in groups and (groups['role_app_backend'] | length > 0)) else '' }}"
 
 ansible_ssh_private_key_file: "{{ lookup('env', 'SSH_KEY_PATH') | default(lookup('env', 'HOME') ~ '/.ssh/ssh-key-coin-ops', true) }}"
-ansible_user: "{{ deploy_config.ssh_user }}"
+ansible_user: "{{ infra_general.username }}"
 ansible_ssh_common_args: >-
   -o StrictHostKeyChecking=no
   -o UserKnownHostsFile=/dev/null
