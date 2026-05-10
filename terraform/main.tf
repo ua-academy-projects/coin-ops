@@ -75,20 +75,42 @@ locals {
 
   gcp_cfg = merge(
     {
-      zone     = local.gcp_zone
-      os_image = try(local.gcp_images[local.image_profile].os_image, "debian-cloud/debian-12")
-    },
-    try(local.cfg.cloud_defaults.gcp, {})
+      zone = local.gcp_zone
+    }
   )
 
   aws_cfg = merge(
     {
-      zone       = local.aws_zone
-      ami_filter = try(local.aws_images[local.image_profile].ami_filter, "debian-12-amd64-*")
-      ami_owner  = try(local.aws_images[local.image_profile].ami_owner, "136693071363")
-    },
-    try(local.cfg.cloud_defaults.aws, {})
+      zone = local.aws_zone
+    }
   )
+
+  gcp_instances_cfg = {
+    for name, cfg in local.instances : name => merge(
+      cfg,
+      {
+        os_image = (
+          try(local.gcp_images[lookup(cfg, "image_profile", local.image_profile)].os_image, "") != ""
+          ? local.gcp_images[lookup(cfg, "image_profile", local.image_profile)].os_image
+          : (
+              try(local.gcp_images[lookup(cfg, "image_profile", local.image_profile)].image_family, "") != ""
+              ? "projects/${var.gcp_project_id}/global/images/family/${local.gcp_images[lookup(cfg, "image_profile", local.image_profile)].image_family}"
+              : "debian-cloud/debian-12"
+            )
+        )
+      }
+    )
+  }
+
+  aws_instances_cfg = {
+    for name, cfg in local.instances : name => merge(
+      cfg,
+      {
+        ami_filter = try(local.aws_images[lookup(cfg, "image_profile", local.image_profile)].ami_filter, "debian-12-amd64-*")
+        ami_owner  = try(local.aws_images[lookup(cfg, "image_profile", local.image_profile)].ami_owner, "136693071363")
+      }
+    )
+  }
 
   gcp_db_secrets  = local.gcp_enabled && !local.seed_secret_manager ? try(jsondecode(data.google_secret_manager_secret_version.db_secrets[0].secret_data), {}) : {}
   gcp_app_secrets = local.gcp_enabled && !local.seed_secret_manager ? try(jsondecode(data.google_secret_manager_secret_version.app_secrets[0].secret_data), {}) : {}
@@ -141,7 +163,7 @@ module "gcp_firewall" {
 module "gcp_instances" {
   count               = local.gcp_enabled ? 1 : 0
   source              = "./modules/gcp_instances"
-  instances           = local.instances
+  instances           = local.gcp_instances_cfg
   defaults            = local.general
   cloud_defaults      = local.gcp_cfg
   instance_sizes      = local.gcp_instance_sizes
@@ -209,7 +231,7 @@ module "aws_security_groups" {
 module "aws_instances" {
   count               = local.aws_enabled ? 1 : 0
   source              = "./modules/aws_instances"
-  instances           = local.instances
+  instances           = local.aws_instances_cfg
   defaults            = local.general
   cloud_defaults      = local.aws_cfg
   instance_sizes      = local.aws_instance_sizes

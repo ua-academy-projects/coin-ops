@@ -22,8 +22,8 @@ resource "cloudflare_record" "root_a" {
   name    = "@"
   value   = local.target_ui_ip
   type    = "A"
-  proxied         = true
-  ttl             = 1    # Low TTL for fast propagation during development
+  proxied         = false
+  ttl             = 60    # Low TTL for fast propagation during development
   allow_overwrite = true
 }
 
@@ -34,7 +34,7 @@ resource "cloudflare_record" "www_cname" {
   name    = "www"
   value   = var.app_domain
   type    = "CNAME"
-  proxied         = true
-  ttl             = 1
+  proxied         = false
+  ttl             = 60
   allow_overwrite = true
 }

@@ -1,39 +1,98 @@
 ---
-- name: Install dependencies for Docker
-  apt:
-    name:
-      - apt-transport-https
-      - ca-certificates
-      - curl
-      - gnupg
-      - lsb-release
-    state: present
-    update_cache: yes
+- name: Install Docker host prerequisites on non-image-based hosts
+  when: not host_uses_golden_image
+  block:
+    - name: Install dependencies for Docker
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+        state: present
+        update_cache: yes
 
-- name: Add Docker GPG key
-  apt_key:
-    url: "https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg"
-    state: present
+    - name: Ensure Docker keyring directory exists
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
 
-- name: Add Docker APT repository
-  apt_repository:
-    repo: "deb [arch=amd64] https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"
-    state: present
-    update_cache: yes
+    - name: Download Docker GPG key
+      get_url:
+        url: "https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg"
+        dest: /etc/apt/keyrings/docker.asc
+        mode: "0644"
 
-- name: Install Docker and Compose plugin
-  apt:
-    name:
-      - docker-ce
-      - docker-ce-cli
-      - containerd.io
-      - docker-compose-plugin
-      - python3-docker
-    state: present
+    - name: Convert Docker GPG key to keyring format
+      command:
+        argv:
+          - gpg
+          - --dearmor
+          - --yes
+          - --output
+          - /etc/apt/keyrings/docker.gpg
+          - /etc/apt/keyrings/docker.asc
+
+    - name: Remove legacy Docker APT source list entries
+      shell: |
+        set -e
+        shopt -s nullglob
+        for file in /etc/apt/sources.list.d/*.list; do
+          if [ "$(basename "$file")" != "docker.list" ] && grep -q "download.docker.com/linux/{{ ansible_distribution | lower }}" "$file"; then
+            rm -f "$file"
+          fi
+        done
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Add canonical Docker APT repository
+      apt_repository:
+        filename: docker
+        repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"
+        state: present
+        update_cache: yes
+
+    - name: Install Docker and Compose plugin
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose-plugin
+          - python3-docker
+        state: present
 
 - name: Ensure Docker is started and enabled
   systemd:
     name: docker
     state: started
     enabled: yes
+
+- name: Validate baked Docker tooling on golden-image hosts
+  when: host_uses_golden_image
+  block:
+    - name: Verify Docker CLI is available
+      command: docker --version
+      changed_when: false
+
+    - name: Verify Docker Compose plugin is available
+      command:
+        argv:
+          - docker
+          - compose
+          - version
+      changed_when: false
+
+    - name: Refresh service facts after Docker startup
+      service_facts:
+
+    - name: Assert Docker service is available and running
+      assert:
+        that:
+          - "'docker.service' in ansible_facts.services"
+          - ansible_facts.services['docker.service'].state == 'running'
+        fail_msg: "Golden-image app hosts must keep Docker installed and running."
 

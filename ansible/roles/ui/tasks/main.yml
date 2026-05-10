@@ -80,6 +80,7 @@
     --dns-cloudflare-propagation-seconds 20
     -d {{ app_domain }}
     --email {{ certbot_email }}
+    {{ '--test-cert' if certbot_staging else '' }}
     --agree-tos --non-interactive
   when: tls_mode == 'certbot' and not cert_file.stat.exists
 
@@ -97,7 +98,7 @@
 
       [Service]
       Type=oneshot
-      ExecStart=/usr/bin/docker run --rm -v "/etc/letsencrypt:/etc/letsencrypt" -v "/var/lib/letsencrypt:/var/lib/letsencrypt" -v "/etc/cognitor/cloudflare.ini:/cloudflare.ini:ro" certbot/dns-cloudflare renew
+      ExecStart=/usr/bin/docker run --rm -v "/etc/letsencrypt:/etc/letsencrypt" -v "/var/lib/letsencrypt:/var/lib/letsencrypt" -v "/etc/cognitor/cloudflare.ini:/cloudflare.ini:ro" certbot/dns-cloudflare renew {% if certbot_staging %}--test-cert {% endif %}
       ExecPost=/usr/bin/docker compose -f /opt/cognitor/ui/compose.yaml restart ui
     dest: /etc/systemd/system/certbot-renewal.service
   when: tls_mode == 'certbot'

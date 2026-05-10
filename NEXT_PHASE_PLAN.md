@@ -190,7 +190,7 @@ This phase collects the medium-term work that is still pending and should not be
 
 ## Phase E: Image and Provisioning Optimization
 
-This is an optimization phase, not a blocker for the current infrastructure.
+The first slice of this phase is implemented on the GCP path: the repo has Packer templates for an app-host golden image, and `app-1` / `app-2` can use the `coinops-app-host` profile while `jump-host` remains on the base Debian image.
 
 ### Goals
 
@@ -204,11 +204,15 @@ This is an optimization phase, not a blocker for the current infrastructure.
    - Compare Packer with other image-build approaches suitable for GCP and AWS.
    - Focus on preinstalling Docker, common dependencies, user hardening, and baseline OS setup.
    - Prioritize VM roles that actually run containers, since those benefit most from pre-baked Docker and host hardening.
+   - Start with a shared `app-host` image for `app-1` and `app-2` before considering a separate `jump-host` image.
+   - Treat the current GCP app-host rollout as the reference slice before repeating it on AWS.
 
 2. Define the image-versus-Ansible boundary.
    - Decide what belongs in a golden image versus what must remain in Ansible because it changes often.
    - Keep service deployment, runtime env wiring, and compose rendering in the Ansible deploy path.
    - Avoid creating per-VM templates unless the operational benefit clearly exceeds the maintenance cost.
+   - Continue shrinking app-host provisioning only after baked behavior is validated, while keeping `jump-host` on the full path.
+   - Prefer explicit validation of baked host assumptions over silently reinstalling image-provided tooling on app hosts.
 
 3. Measure operator benefit.
    - Quantify whether image-based provisioning meaningfully reduces bootstrap/provision time.

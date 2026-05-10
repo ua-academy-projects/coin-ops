@@ -37,9 +37,6 @@ locals {
     )
   }
 
-  ami_filter = lookup(var.cloud_defaults, "ami_filter", local.fallback.ami_filter)
-  ami_owner  = lookup(var.cloud_defaults, "ami_owner", local.fallback.ami_owner)
-
   # Pre-render startup scripts per instance.
   # user_init_script (from general) runs on every VM and handles user creation + SSH port.
   # startup_script (per-instance) contains cloud-specific init (e.g. NAT bootstrap for jump-host).
@@ -59,12 +56,13 @@ locals {
 }
 
 data "aws_ami" "this" {
+  for_each    = local.instances
   most_recent = true
-  owners      = [local.ami_owner]
+  owners      = [each.value.ami_owner]
 
   filter {
     name   = "name"
-    values = [local.ami_filter]
+    values = [each.value.ami_filter]
   }
 }
 
@@ -77,7 +75,7 @@ resource "aws_key_pair" "deployer" {
 resource "aws_instance" "vm" {
   for_each = local.instances
 
-  ami                         = data.aws_ami.this.id
+  ami                         = data.aws_ami.this[each.key].id
   instance_type               = local.sizes[each.value.instance_size]
   subnet_id                   = var.subnet_ids[each.value.subnet]
   vpc_security_group_ids      = each.value.role != "" ? [var.sg_ids[each.value.role]] : []

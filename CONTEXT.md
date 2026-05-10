@@ -162,6 +162,8 @@ Example (conceptual): `general.disk_size = 20` overrides `fallback.disk_size` wh
 - **DNS & TLS:** Terraform manages Cloudflare DNS records, currently intended to be proxied through Cloudflare. Ansible provisions Certbot DNS-challenge TLS on the origin.
 - **Managed DB:** Cloud SQL is integrated via Terraform. Ansible uses generated runtime metadata to decide whether to target managed DB or local Postgres.
 - **Safety:** Secret Manager secret containers and Cloud SQL resources are protected from casual `terraform destroy` by hard Terraform guards. Intentional full teardown should use `terraform/full-destroy.sh`, which strips protections only in a temporary Terraform copy.
+- **Image-aware provisioning:** `app-1` and `app-2` can use the `coinops-app-host` golden image profile. In that mode, Ansible still provisions runtime-specific pieces but skips most host-preparation work already baked into the image; `jump-host` remains on the full provisioning path.
+- **Golden-image validation contract:** On `coinops-app-host` nodes, Ansible now validates the baked baseline (common CLI tools, UTC timezone, `systemd-timesyncd`, Docker, Compose plugin, and `ufw`) instead of reinstalling that baseline during provision.
 
 ---
 
@@ -251,7 +253,9 @@ The current GCP-first refactor is implemented. The next work should focus on pol
    - AWS Secrets Manager parity is still pending.
    - Managed RabbitMQ/Redis equivalents remain future work.
 5. **Image/provisioning optimization:**
-   - Golden images or Packer remain good future work to shorten provisioning time.
+   - The first slice is now in place: a shared app-host image can be rolled out per instance through `image_profile` overrides.
+   - `jump-host` stays on the base image initially.
+   - Future work should focus on validating and extending the image workflow, not reintroducing duplicated host preparation on app nodes.
 
 ---
 

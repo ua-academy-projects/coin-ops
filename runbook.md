@@ -119,6 +119,13 @@ ansible-playbook -i ansible/inventory ansible/provision.yml
 ansible-playbook -i ansible/inventory ansible/deploy.yml
 ```
 
+Current image-aware behavior:
+
+- `app-1` and `app-2` may use the `coinops-app-host` golden image profile
+- when they do, provisioning skips most of the baked host-preparation work from the `common` and `docker` roles
+- provisioning now validates the baked contract on those hosts instead of reinstalling it silently
+- `jump-host` still runs the full provisioning path
+
 ### 7. Smoke-check the result
 
 ```bash
@@ -132,6 +139,8 @@ Notes:
 - External port `80` is intentionally closed.
 - Cloudflare proxy is the intended public entry point.
 - `TLS_MODE=certbot` requires a real public domain.
+- staging certificates are expected for repeated validation until production issuance is intentionally re-enabled
+- on golden-image app hosts, `ansible/provision.yml` should validate Docker, UTC timezone, `systemd-timesyncd`, `ufw`, and common CLI tools rather than reinstall them
 
 ## Correctly Destroy Infrastructure Without Affecting Important Parts
 

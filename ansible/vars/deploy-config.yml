@@ -4,6 +4,7 @@ runtime_backend: external
 app_domain: coinops-d.pp.ua
 tls_mode: certbot
 certbot_email_localpart: admin
+certbot_staging: true
 
 image_registry: ghcr.io/ua-academy-projects
 image_tag: shabat-latest

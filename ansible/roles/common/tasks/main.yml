@@ -1,37 +1,100 @@
 ---
-- name: Update apt cache
-  apt:
-    update_cache: yes
-    cache_valid_time: 3600
+- name: Normalize Docker APT sources before refreshing apt
+  shell: |
+    set -euo pipefail
+    shopt -s nullglob
 
-- name: Upgrade all packages
-  apt:
-    upgrade: safe
+    canonical_repo="deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"
 
-- name: Install base packages
-  apt:
-    name:
-      - curl
-      - htop
-      - jq
-      - acl
-      - unattended-upgrades
-    state: present
+    if [ -f /etc/apt/sources.list.d/docker.list ]; then
+      if ! grep -Fxq "$canonical_repo" /etc/apt/sources.list.d/docker.list; then
+        rm -f /etc/apt/sources.list.d/docker.list
+      fi
+    fi
 
-- name: Set timezone to UTC
-  timezone:
-    name: UTC
+    for file in /etc/apt/sources.list.d/*.list; do
+      if [ "$(basename "$file")" != "docker.list" ] && grep -q "download.docker.com/linux/{{ ansible_distribution | lower }}" "$file"; then
+        rm -f "$file"
+      fi
+    done
 
-- name: Ensure systemd-timesyncd is running
-  systemd:
-    name: systemd-timesyncd
-    enabled: yes
-    state: started
+    if [ -f /etc/apt/sources.list ]; then
+      sed -i '\|download.docker.com/linux/{{ ansible_distribution | lower }}|d' /etc/apt/sources.list
+    fi
+  args:
+    executable: /bin/bash
+  changed_when: false
 
-- name: Install UFW
-  apt:
-    name: ufw
-    state: present
+- name: Prepare non-image-based hosts
+  when: not host_uses_golden_image
+  block:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Upgrade all packages
+      apt:
+        upgrade: safe
+
+    - name: Install base packages
+      apt:
+        name:
+          - curl
+          - htop
+          - jq
+          - acl
+          - unattended-upgrades
+        state: present
+
+    - name: Set timezone to UTC
+      timezone:
+        name: UTC
+
+    - name: Ensure systemd-timesyncd is running
+      systemd:
+        name: systemd-timesyncd
+        enabled: yes
+        state: started
+
+    - name: Install UFW
+      apt:
+        name: ufw
+        state: present
+
+- name: Validate baked common host tooling on golden-image hosts
+  when: host_uses_golden_image
+  block:
+    - name: Check expected common binaries from the golden image
+      shell: |
+        set -euo pipefail
+        for binary in curl htop jq ufw; do
+          command -v "$binary" >/dev/null
+        done
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Verify host timezone remains UTC
+      command: timedatectl show --property=Timezone --value
+      register: timezone_check
+      changed_when: false
+
+    - name: Assert golden-image timezone contract
+      assert:
+        that:
+          - timezone_check.stdout == 'UTC'
+        fail_msg: "Golden-image app hosts must keep the baked UTC timezone."
+
+    - name: Collect service facts on golden-image hosts
+      service_facts:
+
+    - name: Assert systemd-timesyncd is available and running
+      assert:
+        that:
+          - "'systemd-timesyncd.service' in ansible_facts.services"
+          - ansible_facts.services['systemd-timesyncd.service'].state == 'running'
+        fail_msg: "Golden-image app hosts must keep systemd-timesyncd running."
 
 - name: Set UFW default deny incoming
   community.general.ufw:

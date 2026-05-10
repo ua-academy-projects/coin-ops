@@ -39,10 +39,17 @@
     "gcp": {
       "debian-12": {
         "os_image": "debian-cloud/debian-12"
+      },
+      "coinops-app-host": {
+        "image_family": "coinops-app-host"
       }
     },
     "aws": {
       "debian-12": {
+        "ami_filter": "debian-12-amd64-*",
+        "ami_owner": "136693071363"
+      },
+      "coinops-app-host": {
         "ami_filter": "debian-12-amd64-*",
         "ami_owner": "136693071363"
       }
