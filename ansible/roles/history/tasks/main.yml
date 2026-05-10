@@ -81,6 +81,16 @@
     rule: allow
     port: "{{ history_port | string }}"
     proto: tcp
+  when: not internal_tls_enabled
+
+- name: Remove direct History API UFW allowance when internal TLS is enabled
+  community.general.ufw:
+    rule: allow
+    port: "{{ history_port | string }}"
+    proto: tcp
+    delete: yes
+  failed_when: false
+  when: internal_tls_enabled
 
 - name: Create history deploy directory
   file:

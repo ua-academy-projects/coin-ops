@@ -125,6 +125,7 @@ Current image-aware behavior:
 - when they do, provisioning skips most of the baked host-preparation work from the `common` and `docker` roles
 - provisioning now validates the baked contract on those hosts instead of reinstalling it silently
 - `jump-host` still runs the full provisioning path
+- when `internal_tls_enabled=true`, `app-1` reaches `app-2` through an internal TLS gateway on port `8443` instead of direct plain HTTP to `8000/8080`
 
 ### 7. Smoke-check the result
 

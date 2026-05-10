@@ -90,6 +90,22 @@
     state: directory
     mode: '0755'
 
+- name: Read internal backend CA certificate
+  slurp:
+    src: /etc/cognitor/internal-tls/ca.crt
+  delegate_to: "{{ backend_host }}"
+  register: backend_internal_ca
+  when: internal_tls_enabled
+
+- name: Install trusted internal backend CA certificate
+  copy:
+    content: "{{ backend_internal_ca.content | b64decode }}"
+    dest: "{{ tls_cert_dir }}/internal-ca.crt"
+    owner: root
+    group: root
+    mode: '0644'
+  when: internal_tls_enabled
+
 - name: Setup auto-renewal via systemd timer
   copy:
     content: |

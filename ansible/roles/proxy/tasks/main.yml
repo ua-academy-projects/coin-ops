@@ -27,6 +27,16 @@
     rule: allow
     port: "{{ proxy_port | string }}"
     proto: tcp
+  when: not internal_tls_enabled
+
+- name: Remove direct Proxy UFW allowance when internal TLS is enabled
+  community.general.ufw:
+    rule: allow
+    port: "{{ proxy_port | string }}"
+    proto: tcp
+    delete: yes
+  failed_when: false
+  when: internal_tls_enabled
 
 - name: Create proxy deploy directory
   file:

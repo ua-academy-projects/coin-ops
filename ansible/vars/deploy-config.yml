@@ -12,3 +12,5 @@ registry_username: ""
 
 proxy_port: 8080
 history_port: 8000
+internal_tls_enabled: true
+internal_tls_port: 8443

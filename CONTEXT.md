@@ -164,6 +164,7 @@ Example (conceptual): `general.disk_size = 20` overrides `fallback.disk_size` wh
 - **Safety:** Secret Manager secret containers and Cloud SQL resources are protected from casual `terraform destroy` by hard Terraform guards. Intentional full teardown should use `terraform/full-destroy.sh`, which strips protections only in a temporary Terraform copy.
 - **Image-aware provisioning:** `app-1` and `app-2` can use the `coinops-app-host` golden image profile. In that mode, Ansible still provisions runtime-specific pieces but skips most host-preparation work already baked into the image; `jump-host` remains on the full provisioning path.
 - **Golden-image validation contract:** On `coinops-app-host` nodes, Ansible now validates the baked baseline (common CLI tools, UTC timezone, `systemd-timesyncd`, Docker, Compose plugin, and `ufw`) instead of reinstalling that baseline during provision.
+- **Internal backend TLS:** When `internal_tls_enabled=true`, `app-2` runs an internal TLS gateway on `8443` with a locally generated CA and backend certificate. `app-1` trusts that CA and proxies `/api/` and `/history-api/` to the backend over HTTPS instead of direct HTTP.
 
 ---
 

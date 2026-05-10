@@ -54,6 +54,12 @@
   roles:
     - proxy
 
+- name: Deploy Internal TLS Gateway (app-2)
+  hosts: "{{ target_backend_group | default('role_app_backend') }}"
+  become: yes
+  roles:
+    - backend_tls
+
 - name: Deploy Web UI (app-1)
   hosts: "{{ target_ui_group | default('role_app_ui') }}"
   become: yes

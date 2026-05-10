@@ -72,6 +72,8 @@ certbot_staging: "{{ lookup('env', 'CERTBOT_STAGING') | default(deploy_config.ce
 
 proxy_port: "{{ deploy_config.proxy_port }}"
 history_port: "{{ deploy_config.history_port }}"
+internal_tls_enabled: "{{ lookup('env', 'INTERNAL_TLS_ENABLED') | default(deploy_config.internal_tls_enabled, true) | bool }}"
+internal_tls_port: "{{ deploy_config.internal_tls_port }}"
 backend_ip: "{{ (backend_host | length > 0) | ternary(hostvars[backend_host].ansible_host, '127.0.0.1') }}"
 postgres_bind_ip: "{{ cloud_runtime_metadata.get('database_ip', backend_ip) }}"
 use_managed_db: "{{ cloud_runtime_metadata.get('use_managed_db', false) | bool }}"

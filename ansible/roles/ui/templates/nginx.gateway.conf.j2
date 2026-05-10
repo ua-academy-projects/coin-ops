@@ -31,7 +31,15 @@ server {
     }
 
     location /api/ {
+{% if internal_tls_enabled %}
+        proxy_pass https://{{ backend_ip }}:{{ internal_tls_port }}/api/;
+        proxy_ssl_verify on;
+        proxy_ssl_trusted_certificate /etc/nginx/tls/internal-ca.crt;
+        proxy_ssl_server_name on;
+        proxy_ssl_name backend.internal;
+{% else %}
         proxy_pass http://{{ backend_ip }}:{{ proxy_port }}/;
+{% endif %}
         proxy_http_version 1.1;
         add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate" always;
         add_header Pragma "no-cache" always;
@@ -43,7 +51,15 @@ server {
     }
 
     location /history-api/ {
+{% if internal_tls_enabled %}
+        proxy_pass https://{{ backend_ip }}:{{ internal_tls_port }}/history-api/;
+        proxy_ssl_verify on;
+        proxy_ssl_trusted_certificate /etc/nginx/tls/internal-ca.crt;
+        proxy_ssl_server_name on;
+        proxy_ssl_name backend.internal;
+{% else %}
         proxy_pass http://{{ backend_ip }}:{{ history_port }}/;
+{% endif %}
         proxy_http_version 1.1;
         add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate" always;
         add_header Pragma "no-cache" always;

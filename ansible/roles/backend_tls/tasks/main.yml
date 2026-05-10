@@ -1,0 +1,163 @@
+---
+- name: Install internal TLS gateway prerequisites
+  apt:
+    name: openssl
+    state: present
+    update_cache: yes
+  when: internal_tls_enabled
+
+- name: Allow incoming traffic on internal TLS port (UFW)
+  community.general.ufw:
+    rule: allow
+    port: "{{ internal_tls_port | string }}"
+    proto: tcp
+  when: internal_tls_enabled
+
+- name: Create internal TLS directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /etc/cognitor/internal-tls
+    - /opt/cognitor/backend-gateway
+  when: internal_tls_enabled
+
+- name: Generate internal CA certificate
+  command:
+    cmd: >-
+      openssl req -x509 -nodes -newkey rsa:2048
+      -keyout /etc/cognitor/internal-tls/ca.key
+      -out /etc/cognitor/internal-tls/ca.crt
+      -days 3650
+      -subj /CN=coinops-internal-ca
+    creates: /etc/cognitor/internal-tls/ca.crt
+  when: internal_tls_enabled
+
+- name: Restrict internal CA private key
+  file:
+    path: /etc/cognitor/internal-tls/ca.key
+    owner: root
+    group: root
+    mode: "0600"
+  when: internal_tls_enabled
+
+- name: Generate backend internal TLS private key
+  command:
+    cmd: openssl genrsa -out /etc/cognitor/internal-tls/backend.key 2048
+    creates: /etc/cognitor/internal-tls/backend.key
+  when: internal_tls_enabled
+
+- name: Restrict backend internal TLS private key
+  file:
+    path: /etc/cognitor/internal-tls/backend.key
+    owner: root
+    group: root
+    mode: "0600"
+  when: internal_tls_enabled
+
+- name: Render backend internal TLS certificate request config
+  copy:
+    content: |
+      [req]
+      distinguished_name = req_distinguished_name
+      prompt = no
+      req_extensions = v3_req
+
+      [req_distinguished_name]
+      CN = backend.internal
+
+      [v3_req]
+      subjectAltName = @alt_names
+
+      [alt_names]
+      DNS.1 = backend.internal
+    dest: /etc/cognitor/internal-tls/backend-openssl.cnf
+    owner: root
+    group: root
+    mode: "0644"
+  when: internal_tls_enabled
+
+- name: Generate backend internal TLS certificate signing request
+  command:
+    argv:
+      - openssl
+      - req
+      - -new
+      - -key
+      - /etc/cognitor/internal-tls/backend.key
+      - -out
+      - /etc/cognitor/internal-tls/backend.csr
+      - -config
+      - /etc/cognitor/internal-tls/backend-openssl.cnf
+  args:
+    creates: /etc/cognitor/internal-tls/backend.csr
+  when: internal_tls_enabled
+
+- name: Sign backend internal TLS certificate
+  command:
+    argv:
+      - openssl
+      - x509
+      - -req
+      - -in
+      - /etc/cognitor/internal-tls/backend.csr
+      - -CA
+      - /etc/cognitor/internal-tls/ca.crt
+      - -CAkey
+      - /etc/cognitor/internal-tls/ca.key
+      - -CAcreateserial
+      - -out
+      - /etc/cognitor/internal-tls/backend.crt
+      - -days
+      - "825"
+      - -sha256
+      - -copy_extensions
+      - copy
+  args:
+    creates: /etc/cognitor/internal-tls/backend.crt
+  when: internal_tls_enabled
+
+- name: Render internal backend gateway config
+  template:
+    src: nginx.internal.conf.j2
+    dest: /opt/cognitor/backend-gateway/nginx.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: internal_tls_enabled
+
+- name: Render internal backend gateway compose file
+  template:
+    src: "{{ playbook_dir }}/../deploy/compose/node-02-internal-tls.compose.yaml"
+    dest: /opt/cognitor/backend-gateway/compose.yaml
+    owner: root
+    group: root
+    mode: "0644"
+  when: internal_tls_enabled
+
+- name: Pull internal backend gateway image
+  command: docker compose -f /opt/cognitor/backend-gateway/compose.yaml pull
+  args:
+    chdir: /opt/cognitor/backend-gateway
+  when: internal_tls_enabled
+
+- name: Run internal backend gateway
+  command: docker compose -f /opt/cognitor/backend-gateway/compose.yaml up -d --remove-orphans
+  args:
+    chdir: /opt/cognitor/backend-gateway
+  when: internal_tls_enabled
+
+- name: Wait for internal backend TLS health endpoint
+  uri:
+    url: "https://localhost:{{ internal_tls_port }}/health"
+    method: GET
+    status_code: 200
+    validate_certs: no
+  retries: 12
+  delay: 5
+  register: internal_tls_result
+  until: internal_tls_result.status == 200
+  when: internal_tls_enabled

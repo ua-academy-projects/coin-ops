@@ -42,12 +42,12 @@
             "target_role": "app-ui"
         },
         "allow-app-backend-from-jump": {
-            "protocols": [{ "protocol": "tcp", "ports": ["53725", "8080", "8000"] }],
+            "protocols": [{ "protocol": "tcp", "ports": ["53725", "8443"] }],
             "source_role": "jump-host",
             "target_role": "app-backend"
         },
         "allow-backend-from-ui": {
-            "protocols": [{ "protocol": "tcp", "ports": ["8000", "8080"] }],
+            "protocols": [{ "protocol": "tcp", "ports": ["8443"] }],
             "source_role": "app-ui",
             "target_role": "app-backend"
         }
