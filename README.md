@@ -1,5 +1,8 @@
 # Coin-Ops
 
+> Current infrastructure and operator workflow truth lives in `runbook.md`, `CONTEXT.md`, and `NEXT_PHASE_PLAN.md`.
+> Some sections below describe historical runtime migration work and older integration context rather than the exact current cloud-first deployment state.
+
 Coin-Ops is a distributed Polymarket dashboard deployed across three VMs. The system uses a PostgreSQL-native runtime architecture, consolidating queue and session state management directly into PostgreSQL (live market caches remain in-process). 
 
 The major "Repo Foundation", "PostgreSQL Migration", and "Test Pyramid" phases (April 2026) are successfully completed on `dev`:
@@ -212,7 +215,7 @@ push tag vX.Y.Z
   -> publish immutable release images
 
 Ansible deploy
-  -> renders per-node Compose files and env files
+  -> renders per-node Compose files and runtime config
   -> Docker Compose pulls tagged images
   -> containers start on node-01, node-02, and node-03
 ```

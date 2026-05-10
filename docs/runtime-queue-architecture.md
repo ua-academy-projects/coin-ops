@@ -1,5 +1,8 @@
 # Runtime Queue Architecture (PostgreSQL + pgmq)
 
+> This document captures the PostgreSQL-native runtime design track and related migration work.
+> It is not the primary source of truth for the current cloud-first operator workflow; use `CONTEXT.md` and `runbook.md` for that.
+
 > **Status:** Queue-side PostgreSQL runtime assets are present under `runtime/`, but the default deployed path on `dev` still uses RabbitMQ and Redis.
 > **Scope:** This document describes the PostgreSQL queue path: `pgmq`, retries, dead-letter handling, `LISTEN/NOTIFY`, and advisory-lock-based consumer coordination.
 > **Next step:** proxy wiring, consumer switching, and deployment bootstrap still need to be connected behind the planned `RUNTIME_BACKEND=external|postgres` cutover.

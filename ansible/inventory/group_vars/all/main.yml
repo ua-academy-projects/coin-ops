@@ -9,27 +9,19 @@ repo_root: >-
   }}
 deploy_defaults: "{{ lookup('file', repo_root ~ '/ansible/vars/deploy-config.yml') | from_yaml }}"
 local_generated_config_path: "{{ repo_root ~ '/ansible/vars/local.generated.json' }}"
-local_generated_config_raw: "{{ lookup('file', local_generated_config_path, errors='ignore') | default('{}', true) }}"
+local_generated_config_text: "{{ lookup('file', local_generated_config_path, errors='ignore') | default('{}', true) | string }}"
 local_generated_config: >-
   {{
-    local_generated_config_raw
-    if (local_generated_config_raw is mapping)
-    else (
-      ((local_generated_config_raw | string | trim | length) > 0)
-      | ternary((local_generated_config_raw | from_json), {})
-    )
+    ((local_generated_config_text | trim | length) > 0)
+    | ternary((local_generated_config_text | from_json), {})
   }}
 deploy_config: "{{ deploy_defaults | combine(local_generated_config, recursive=True) }}"
 runtime_metadata_path: "{{ repo_root ~ '/terraform/config/ansible-runtime.json' }}"
-runtime_metadata_raw: "{{ lookup('file', runtime_metadata_path, errors='ignore') | default('{}', true) }}"
+runtime_metadata_text: "{{ lookup('file', runtime_metadata_path, errors='ignore') | default('{}', true) | string }}"
 runtime_metadata: >-
   {{
-    runtime_metadata_raw
-    if (runtime_metadata_raw is mapping)
-    else (
-      ((runtime_metadata_raw | string | trim | length) > 0)
-      | ternary((runtime_metadata_raw | from_json), {})
-    )
+    ((runtime_metadata_text | trim | length) > 0)
+    | ternary((runtime_metadata_text | from_json), {})
   }}
 
 my_cloud: "{{ cloud | default('gcp' if 'gcp' in groups else ('aws' if 'aws' in groups else '')) }}"
@@ -88,5 +80,5 @@ postgres_image: "{{ postgres_runtime_image if runtime_backend == 'postgres' else
 registry_username: "{{ lookup('env', 'GHCR_USERNAME') | default(deploy_config.registry_username, true) }}"
 
 rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@{{ backend_ip }}:5672/"
-history_database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ postgres_bind_ip }}:5432/{{ db_name }}"
-proxy_database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ postgres_bind_ip }}:5432/{{ db_name }}"
+internal_rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@rabbitmq:5672/"
+app_database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ postgres_bind_ip }}:5432/{{ db_name }}"
