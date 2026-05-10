@@ -14,3 +14,7 @@ output "private_ips" {
 output "public_ips" {
   value = var.cloud == "gcp" ? try(module.gcp_instances[0].public_ips, {}) : try(module.aws_instances[0].public_ips, {})
 }
+
+output "ansible_inventory_path" {
+  value = local_file.ansible_inventory.filename
+}
