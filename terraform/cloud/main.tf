@@ -20,6 +20,29 @@ module "gcp_security" {
   rules              = var.security_rules
 }
 
+module "gcp_secrets" {
+  source = "./modules/gcp/secrets"
+  count  = var.cloud == "gcp" ? 1 : 0
+
+  secrets = var.gsm_secrets
+}
+
+module "gcp_service_accounts" {
+  source = "./modules/gcp/service-accounts"
+  count  = var.cloud == "gcp" ? 1 : 0
+
+  service_accounts = var.gcp_service_accounts
+}
+
+module "gcp_secret_access" {
+  source = "./modules/gcp/secret-access"
+  count  = var.cloud == "gcp" ? 1 : 0
+
+  secret_access    = var.gcp_secret_access
+  service_accounts = module.gcp_service_accounts[0].service_accounts
+  secrets          = module.gcp_secrets[0].secret_resource_ids
+}
+
 
 module "gcp_instances" {
   source = "./modules/gcp/instances"
@@ -29,6 +52,7 @@ module "gcp_instances" {
   ssh_public_key_path = pathexpand(var.ssh_public_key_path)
   network_name        = module.gcp_network[0].network_name
   subnetworks         = module.gcp_network[0].subnetwork_names
+  service_accounts    = module.gcp_service_accounts[0].service_accounts
 
   workloads = var.workloads
 }

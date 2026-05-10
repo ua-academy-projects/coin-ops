@@ -1,0 +1,47 @@
+---
+- name: Validate Google project is set for GSM secret fetch
+  assert:
+    that:
+      - google_project | length > 0
+    fail_msg: "GOOGLE_PROJECT must be exported to fetch secrets from Google Secret Manager."
+  when:
+    - required_gsm_secrets | default([]) | length > 0
+
+- name: Request GCP metadata access token
+  uri:
+    url: http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token
+    method: GET
+    headers:
+      Metadata-Flavor: Google
+    return_content: true
+  register: gcp_metadata_token
+  changed_when: false
+  no_log: true
+  when:
+    - required_gsm_secrets | default([]) | length > 0
+
+- name: Read secrets from Google Secret Manager
+  uri:
+    url: "https://secretmanager.googleapis.com/v1/projects/{{ google_project }}/secrets/{{ gsm_secret_ids[item] }}/versions/latest:access"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ gcp_metadata_token.json.access_token }}"
+    return_content: true
+  loop: "{{ required_gsm_secrets | default([]) }}"
+  register: gsm_secret_reads
+  changed_when: false
+  no_log: true
+  when:
+    - required_gsm_secrets | default([]) | length > 0
+
+- name: Store fetched GSM secrets as host facts
+  set_fact:
+    fetched_gsm_secrets: >-
+      {{
+        fetched_gsm_secrets | default({}) |
+        combine({ item.item: (item.json.payload.data | b64decode) })
+      }}
+  loop: "{{ gsm_secret_reads.results | default([]) }}"
+  no_log: true
+  when:
+    - required_gsm_secrets | default([]) | length > 0

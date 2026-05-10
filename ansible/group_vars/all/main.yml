@@ -1,5 +1,5 @@
 # All variables — safe to commit.
-# Secrets and local paths come from environment variables.
+# Local paths come from environment variables.
 # Run `source .env` before any ansible-playbook command.
 
 # ── SSH ───────────────────────────────────────────────────────
@@ -11,9 +11,17 @@ ansible_ssh_common_args: >-
   -o ForwardAgent=yes
   -o ProxyJump={{ ansible_user }}@{{ hostvars['coinops-bastion'].ansible_host }}
 
-# ── Passwords (loaded from .env) ──────────────────────────────
-rabbitmq_password: "{{ lookup('env', 'RABBITMQ_PASSWORD') }}"
-db_password: "{{ lookup('env', 'DB_PASSWORD') }}"
+# ── GCP / Secret Manager ───────────────────────────────────────
+google_project: "{{ lookup('env', 'GOOGLE_PROJECT') | default('', true) }}"
+gsm_secret_ids:
+  ghcr_username: ghcr-username
+  ghcr_token: ghcr-token
+  rabbitmq_password: rabbitmq-password
+  db_password: db-password
+
+# ── Passwords / tokens ─────────────────────────────────────────
+rabbitmq_password: "{{ fetched_gsm_secrets.rabbitmq_password | default(lookup('env', 'RABBITMQ_PASSWORD'), true) }}"
+db_password: "{{ fetched_gsm_secrets.db_password | default(lookup('env', 'DB_PASSWORD'), true) }}"
 
 # ── Service accounts ──────────────────────────────────────────
 rabbitmq_user: cognitor
@@ -59,8 +67,8 @@ history_consumer_image: "{{ image_registry }}/coin-ops-history-consumer:{{ image
 ui_image: "{{ image_registry }}/coin-ops-ui:{{ image_tag }}"
 postgres_runtime_image: "{{ image_registry }}/coin-ops-postgres-runtime:{{ image_tag }}"
 postgres_image: "{{ postgres_runtime_image if runtime_backend == 'postgres' else 'postgres:16-alpine' }}"
-registry_username: "{{ lookup('env', 'GHCR_USERNAME') | default('', true) }}"
-registry_token: "{{ lookup('env', 'GHCR_TOKEN') | default('', true) }}"
+registry_username: "{{ fetched_gsm_secrets.ghcr_username | default(lookup('env', 'GHCR_USERNAME'), true) }}"
+registry_token: "{{ fetched_gsm_secrets.ghcr_token | default(lookup('env', 'GHCR_TOKEN'), true) }}"
 
 # ── Derived connection strings ────────────────────────────────
 # rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@{{ hostvars[groups['history'][0]].ansible_host }}:5672/"

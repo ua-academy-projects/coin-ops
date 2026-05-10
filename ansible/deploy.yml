@@ -12,8 +12,6 @@
     - name: Check .env vars are exported
       assert:
         that:
-          - lookup('env', 'RABBITMQ_PASSWORD') != ''
-          - lookup('env', 'DB_PASSWORD') != ''
           - lookup('env', 'SSH_KEY_PATH') != ''
           - lookup('env', 'RUNTIME_BACKEND') in ['', 'external', 'postgres']
         fail_msg: |
@@ -23,8 +21,14 @@
           Supported explicit runtime backends: external, postgres.
           Then retry: ansible-playbook -i ansible/inventory ansible/deploy.yml
 
+- name: Fetch deploy secrets from Google Secret Manager
+  hosts: history:proxy:ui
+  roles:
+    - role: gsm_secrets
+      when: google_project | length > 0
+
 - name: Authenticate Docker registry on target nodes
-  hosts: all
+  hosts: history:proxy:ui
   become: yes
   tasks:
     - name: Log in to configured container registry
@@ -40,7 +44,7 @@
 
     - name: Explain skipped registry login
       debug:
-        msg: "GHCR_USERNAME/GHCR_TOKEN not set; assuming registry images are public."
+        msg: "GHCR_USERNAME/GHCR_TOKEN not available; assuming registry images are public."
       when: registry_username | length == 0 or registry_token | length == 0
 
 - name: Deploy History Service (node-01)

@@ -55,14 +55,15 @@ variable "nat_route" {
 
 variable "workloads" {
   type = map(object({
-    instance_type  = string
-    image_family   = string
-    placement      = string
-    subnet         = string
-    tags           = list(string)
-    disk_size_gb   = number
-    public_ip      = bool
-    can_ip_forward = bool
+    instance_type   = string
+    image_family    = string
+    placement       = string
+    subnet          = string
+    tags            = list(string)
+    disk_size_gb    = number
+    public_ip       = bool
+    can_ip_forward  = bool
+    service_account = optional(string)
   }))
 }
 
@@ -80,4 +81,30 @@ variable "security_rules" {
     source_workloads = list(string)
     target_workloads = list(string)
   }))
+}
+
+
+# secrets
+
+variable "gsm_secrets" {
+  type = map(object({
+    secret_id = string
+  }))
+  default = {}
+}
+
+variable "gcp_service_accounts" {
+  type = map(object({
+    account_id   = string
+    display_name = string
+  }))
+  default = {}
+}
+
+variable "gcp_secret_access" {
+  type = map(object({
+    service_account = string
+    secrets         = list(string)
+  }))
+  default = {}
 }

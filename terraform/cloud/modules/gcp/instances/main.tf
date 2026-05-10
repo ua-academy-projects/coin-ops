@@ -29,4 +29,13 @@ resource "google_compute_instance" "this" {
     ssh-keys               = "${var.ssh_user}:${trimspace(file(each.value.ssh_public_key_path))}"
     block-project-ssh-keys = "TRUE"
   }
+
+  dynamic "service_account" {
+    for_each = each.value.service_account_email != null ? [1] : []
+
+    content {
+      email  = each.value.service_account_email
+      scopes = ["https://www.googleapis.com/auth/cloud-platform"]
+    }
+  }
 }
