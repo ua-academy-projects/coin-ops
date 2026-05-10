@@ -5,6 +5,7 @@ resource "google_compute_instance" "this" {
   machine_type              = each.value.machine_type
   zone                      = each.value.zone
   tags                      = each.value.tags
+  can_ip_forward            = each.value.can_ip_forward
   allow_stopping_for_update = true
 
   boot_disk {

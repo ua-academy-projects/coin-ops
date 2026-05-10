@@ -17,6 +17,7 @@ locals {
       disk_size_gb        = cfg.disk_size_gb
       ssh_public_key_path = var.ssh_public_key_path
       assign_public_ip    = cfg.public_ip
+      can_ip_forward      = cfg.can_ip_forward
     }
   }
 }

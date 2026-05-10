@@ -7,7 +7,8 @@ module "gcp_network" {
   source = "./modules/gcp/network"
   count  = var.cloud == "gcp" ? 1 : 0
 
-  network = var.network
+  network   = var.network
+  nat_route = var.nat_route
 }
 
 

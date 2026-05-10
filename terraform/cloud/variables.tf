@@ -34,6 +34,18 @@ variable "network" {
   }
 }
 
+variable "nat_route" {
+  type = object({
+    name              = string
+    destination_range = string
+    next_hop_instance = string
+    next_hop_zone     = string
+    target_tags       = list(string)
+  })
+  default  = null
+  nullable = true
+}
+
 
 # instances
 
@@ -46,6 +58,7 @@ variable "workloads" {
     tags          = list(string)
     disk_size_gb  = number
     public_ip     = bool
+    can_ip_forward = bool
   }))
 }
 

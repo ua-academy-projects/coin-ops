@@ -34,5 +34,6 @@ variable "workloads" {
     tags          = list(string)
     disk_size_gb  = number
     public_ip     = bool
+    can_ip_forward = bool
   }))
 }

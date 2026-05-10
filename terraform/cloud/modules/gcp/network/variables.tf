@@ -11,3 +11,15 @@ variable "network" {
     }))
   })
 }
+
+variable "nat_route" {
+  type = object({
+    name              = string
+    destination_range = string
+    next_hop_instance = string
+    next_hop_zone     = string
+    target_tags       = list(string)
+  })
+  default  = null
+  nullable = true
+}
