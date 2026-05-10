@@ -4,14 +4,34 @@
 # Before running this script, ensure your organization's policy allows Service Account key creation.
 # You may need to disable the "iam.disableServiceAccountKeyCreation" policy constraint for your organization.
 
-# Configuration variables - edit before running
-PROJECT_ID="project-6f41102f-c77c-46a3-aac"
+# Configuration sources
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+BOOTSTRAP_DEFAULTS_PATH="${SCRIPT_DIR}/bootstrap.defaults.json"
+MAPPING_PATH="${SCRIPT_DIR}/config/cloud_mappings.json"
+CONFIG_PATH="${SCRIPT_DIR}/config/config.json"
+
+if [ ! -f "${BOOTSTRAP_DEFAULTS_PATH}" ]; then
+  echo "Missing bootstrap defaults file: ${BOOTSTRAP_DEFAULTS_PATH}"
+  exit 1
+fi
+
+if [ ! -f "${MAPPING_PATH}" ]; then
+  echo "Missing cloud mappings file: ${MAPPING_PATH}"
+  exit 1
+fi
+
+if [ ! -f "${CONFIG_PATH}" ]; then
+  echo "Missing Terraform config file: ${CONFIG_PATH}"
+  exit 1
+fi
+
+PROJECT_ID="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["gcp"]["project_id"])' "${BOOTSTRAP_DEFAULTS_PATH}")"
 SA_NAME="terraform-sa"
 BUCKET_NAME="internship-state-bucket"
-REGION="europe-central2"
-
-# Absolute path to THIS repo
-REPO_ROOT="/mnt/d/Internship/coin-ops-local/coin-ops"
+REGION_PROFILE="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["general"]["region_profile"])' "${CONFIG_PATH}")"
+REGION="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["regions"]["gcp"][sys.argv[2]]["region"])' "${MAPPING_PATH}" "${REGION_PROFILE}")"
+GCP_ZONE="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["regions"]["gcp"][sys.argv[2]]["zone"])' "${MAPPING_PATH}" "${REGION_PROFILE}")"
 
 # SA key is stored inside the repo under terraform/ (gitignored)
 SA_KEY_PATH="${REPO_ROOT}/terraform/sa-key.json"
@@ -19,15 +39,16 @@ SSH_PUBLIC_KEY_PATH="${HOME}/.ssh/ssh-key-coin-ops.pub"
 GENERATED_ENV_PATH="${REPO_ROOT}/local/generated-env.sh"
 
 # Non-secret local runtime defaults generated for Terraform/Ansible
-APP_DOMAIN="coinops-d.pp.ua"
-TLS_MODE="certbot"
-RUNTIME_BACKEND="external"
-GHCR_USERNAME="hrenchevskyi-d"
-IMAGE_REGISTRY="ghcr.io/ua-academy-projects"
-IMAGE_TAG="shabat-latest"
+APP_DOMAIN="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["deploy"]["app_domain"])' "${BOOTSTRAP_DEFAULTS_PATH}")"
+TLS_MODE="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["deploy"]["tls_mode"])' "${BOOTSTRAP_DEFAULTS_PATH}")"
+RUNTIME_BACKEND="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["deploy"]["runtime_backend"])' "${BOOTSTRAP_DEFAULTS_PATH}")"
+GHCR_USERNAME="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["deploy"]["ghcr_username"])' "${BOOTSTRAP_DEFAULTS_PATH}")"
+IMAGE_REGISTRY="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["images"]["registry"])' "${BOOTSTRAP_DEFAULTS_PATH}")"
+IMAGE_TAG="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["images"]["tag"])' "${BOOTSTRAP_DEFAULTS_PATH}")"
 CERTBOT_EMAIL_LOCALPART="admin"
-PROXY_PORT=8080
-HISTORY_PORT=8000
+PROXY_PORT="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["ports"]["proxy"])' "${BOOTSTRAP_DEFAULTS_PATH}")"
+HISTORY_PORT="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["ports"]["history"])' "${BOOTSTRAP_DEFAULTS_PATH}")"
+CLOUDFLARE_ZONE_ID="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["cloudflare"]["zone_id"])' "${BOOTSTRAP_DEFAULTS_PATH}")"
 
 BOOTSTRAP_ACCOUNT="${BOOTSTRAP_ACCOUNT:-$(gcloud config get-value account 2>/dev/null)}"
 
@@ -129,7 +150,7 @@ cat > "$LOCAL_TERRAFORM_TFVARS" << EOF
   "gcp_region": "${REGION}",
   "ssh_public_key_path": "${SSH_PUBLIC_KEY_PATH}",
   "app_domain": "${APP_DOMAIN}",
-  "cloudflare_zone_id": "de9eabb2b5b0b9b25b7ee2decc5d161b"
+  "cloudflare_zone_id": "${CLOUDFLARE_ZONE_ID}"
 }
 EOF
 

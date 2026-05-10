@@ -1,9 +1,7 @@
 locals {
   cfg      = try(jsondecode(file("${path.module}/config/config.json")), {})
-  mapping  = try(jsondecode(file("${path.module}/config/mapping.json")), {})
+  mapping  = try(jsondecode(file("${path.module}/config/cloud_mappings.json")), {})
   networks = try(jsondecode(file("${path.module}/config/networks.json")), {})
-  gcp_cfg  = try(jsondecode(file("${path.module}/config/gcp.json")), {})
-  aws_cfg  = try(jsondecode(file("${path.module}/config/aws.json")), {})
 
   instances             = lookup(local.cfg, "instances", {})
   general               = lookup(local.cfg, "general", {})
@@ -18,6 +16,10 @@ locals {
 
   gcp_instance_sizes = try(local.mapping.instance_sizes.gcp, {})
   aws_instance_sizes = try(local.mapping.instance_sizes.aws, {})
+  gcp_regions        = try(local.mapping.regions.gcp, {})
+  aws_regions        = try(local.mapping.regions.aws, {})
+  gcp_images         = try(local.mapping.images.gcp, {})
+  aws_images         = try(local.mapping.images.aws, {})
 
   # Shared SSH key — used for both GCP metadata and AWS key pair.
   # pathexpand() is required so "~/.ssh/..." works on local machines.
@@ -59,13 +61,34 @@ locals {
 
   # Custom OS user and SSH port — from config.json → general.
   # Injected into user_init_script template; also used in generated ssh_config.
-  username = try(local.general.username, "")
+  username = trimspace(try(local.general.username, ""))
   ssh_port = try(local.general.ssh_port, 22)
 
   # Project and regions from config.json
   project_name = try(local.general.project_name, "coin-ops")
-  aws_region   = try(local.general.aws_region, var.aws_region)
-  gcp_region   = try(local.general.gcp_region, var.gcp_region)
+  region_profile = try(local.general.region_profile, "europe-central")
+  image_profile  = try(local.general.image_profile, "debian-12")
+  aws_region     = try(local.aws_regions[local.region_profile].region, try(local.general.aws_region, var.aws_region))
+  gcp_region     = try(local.gcp_regions[local.region_profile].region, try(local.general.gcp_region, var.gcp_region))
+  gcp_zone       = try(local.gcp_regions[local.region_profile].zone, "${local.gcp_region}-a")
+  aws_zone       = try(local.aws_regions[local.region_profile].zone, "${local.aws_region}a")
+
+  gcp_cfg = merge(
+    {
+      zone     = local.gcp_zone
+      os_image = try(local.gcp_images[local.image_profile].os_image, "debian-cloud/debian-12")
+    },
+    try(local.cfg.cloud_defaults.gcp, {})
+  )
+
+  aws_cfg = merge(
+    {
+      zone       = local.aws_zone
+      ami_filter = try(local.aws_images[local.image_profile].ami_filter, "debian-12-amd64-*")
+      ami_owner  = try(local.aws_images[local.image_profile].ami_owner, "136693071363")
+    },
+    try(local.cfg.cloud_defaults.aws, {})
+  )
 
   gcp_db_secrets  = local.gcp_enabled && !local.seed_secret_manager ? try(jsondecode(data.google_secret_manager_secret_version.db_secrets[0].secret_data), {}) : {}
   gcp_app_secrets = local.gcp_enabled && !local.seed_secret_manager ? try(jsondecode(data.google_secret_manager_secret_version.app_secrets[0].secret_data), {}) : {}
@@ -218,7 +241,7 @@ resource "local_file" "hosts" {
   content = jsonencode(merge(
     local.gcp_enabled ? {
       gcp = {
-        ssh_user    = local.username != "" ? local.username : lookup(local.gcp_cfg, "ssh_user", "debian")
+        ssh_user    = local.username
         ssh_port    = local.ssh_port
         instances   = try(module.gcp_instances[0].instance_ips, {})
         database_ip = try(module.gcp_database[0].private_ip, "")
@@ -226,7 +249,7 @@ resource "local_file" "hosts" {
     } : {},
     local.aws_enabled ? {
       aws = {
-        ssh_user  = local.username != "" ? local.username : lookup(local.aws_cfg, "ssh_user", "ec2-user")
+        ssh_user  = local.username
         ssh_port  = local.ssh_port
         instances = try(module.aws_instances[0].instance_ips, {})
       }
@@ -245,7 +268,7 @@ resource "local_file" "ssh_config" {
       for name, inst in local.gcp_hosts : trimspace(<<-EOT
         Host coinops-gcp-${name}
           HostName ${inst.role == "jump-host" ? inst.public_ip : inst.private_ip}
-          User ${local.username != "" ? local.username : lookup(local.gcp_cfg, "ssh_user", "debian")}
+          User ${local.username}
           Port ${local.ssh_port}
           ${inst.role != "jump-host" && local.gcp_jump_host_name != "" ? "ProxyJump coinops-gcp-${local.gcp_jump_host_name}" : ""}
           IdentityFile ${pathexpand(replace(var.ssh_public_key_path, ".pub", ""))}
@@ -259,7 +282,7 @@ resource "local_file" "ssh_config" {
       for name, inst in local.aws_hosts : trimspace(<<-EOT
         Host coinops-aws-${name}
           HostName ${inst.public_ip != null ? inst.public_ip : inst.private_ip}
-          User ${local.username != "" ? local.username : lookup(local.aws_cfg, "ssh_user", "ec2-user")}
+          User ${local.username}
           Port ${local.ssh_port}
           ${inst.public_ip == null && local.aws_jump_host_name != "" ? "ProxyJump coinops-aws-${local.aws_jump_host_name}" : ""}
           IdentityFile ${pathexpand(replace(var.ssh_public_key_path, ".pub", ""))}
@@ -277,14 +300,12 @@ resource "local_file" "ansible_runtime" {
   content = jsonencode(merge(
     local.gcp_enabled ? {
       gcp = {
-        backend_private_ip = try(module.gcp_instances[0].instance_ips["app-2"].private_ip, "")
         database_ip        = try(module.gcp_database[0].private_ip, "")
         use_managed_db     = try(module.gcp_database[0].private_ip, "") != ""
       }
     } : {},
     local.aws_enabled ? {
       aws = {
-        backend_private_ip = try(module.aws_instances[0].instance_ips["app-2"].private_ip, "")
         database_ip        = ""
         use_managed_db     = false
       }

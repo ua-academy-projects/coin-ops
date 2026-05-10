@@ -32,6 +32,5 @@ keyed_groups:
 compose:
   # Public IP only for jump-host. All workload nodes use private IP and are reached via ProxyJump.
   ansible_host: "(public_ip_address | default('')) if tags.get('Role') == 'jump-host' and (public_ip_address | default('')) != '' else private_ip_address"
-  ansible_user: "'coinops'"
   ansible_port: "53725"
   cloud: "'aws'"

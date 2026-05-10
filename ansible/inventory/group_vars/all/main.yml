@@ -26,8 +26,10 @@ runtime_metadata: >-
 
 my_cloud: "{{ cloud | default('gcp' if 'gcp' in groups else ('aws' if 'aws' in groups else '')) }}"
 cloud_runtime_metadata: "{{ runtime_metadata.get(my_cloud, {}) }}"
+backend_host: "{{ groups['role_app_backend'][0] if ('role_app_backend' in groups and (groups['role_app_backend'] | length > 0)) else '' }}"
 
 ansible_ssh_private_key_file: "{{ lookup('env', 'SSH_KEY_PATH') | default(lookup('env', 'HOME') ~ '/.ssh/ssh-key-coin-ops', true) }}"
+ansible_user: "{{ deploy_config.ssh_user }}"
 ansible_ssh_common_args: >-
   -o StrictHostKeyChecking=no
   -o UserKnownHostsFile=/dev/null
@@ -60,7 +62,7 @@ certbot_email: "{{ lookup('env', 'CERTBOT_EMAIL') | default(deploy_config.certbo
 
 proxy_port: "{{ deploy_config.proxy_port }}"
 history_port: "{{ deploy_config.history_port }}"
-backend_ip: "{{ cloud_runtime_metadata.get('backend_private_ip', '127.0.0.1') }}"
+backend_ip: "{{ (backend_host | length > 0) | ternary(hostvars[backend_host].ansible_host, '127.0.0.1') }}"
 postgres_bind_ip: "{{ cloud_runtime_metadata.get('database_ip', backend_ip) }}"
 use_managed_db: "{{ cloud_runtime_metadata.get('use_managed_db', false) | bool }}"
 

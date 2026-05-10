@@ -36,7 +36,7 @@ locals {
     )
   }
 
-  ssh_user = lookup(var.cloud_defaults, "ssh_user", "debian")
+  ssh_user = trimspace(var.username)
 
   # Pre-render startup scripts per instance.
   # user_init_script (from general) runs on every VM and handles user creation + SSH port.

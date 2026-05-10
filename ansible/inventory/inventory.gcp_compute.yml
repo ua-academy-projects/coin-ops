@@ -34,6 +34,5 @@ compose:
     networkInterfaces[0].accessConfigs[0].natIP
     if (labels.get('role') == 'jump-host' and networkInterfaces[0].get('accessConfigs', []))
     else networkInterfaces[0].networkIP
-  ansible_user: "'coinops'"
   ansible_port: "53725"
   cloud: "'gcp'"

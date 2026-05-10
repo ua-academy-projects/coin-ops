@@ -19,7 +19,7 @@ variable "defaults" {
 
 variable "cloud_defaults" {
   type        = any
-  description = "Cloud-specific defaults from gcp.json."
+  description = "Cloud-specific defaults derived from config.json and cloud_mappings.json."
   default     = {}
 }
 
@@ -41,7 +41,7 @@ variable "subnet_ids" {
 
 variable "ssh_public_key" {
   type        = string
-  description = "SSH public key content for GCP instance metadata. Username is derived from cloud_defaults.ssh_user."
+  description = "SSH public key content for GCP instance metadata. Username follows the shared operational user."
   default     = ""
 }
 

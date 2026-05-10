@@ -67,43 +67,45 @@ This is the first active phase because it reduces operational friction in the cu
 
 ## Phase B: Safer Stateful-Resource Lifecycle
 
-This phase addresses the biggest remaining ergonomic gap: safe default protection exists, but complete teardown is still awkward.
+The first version of this phase is implemented: the repo now has a deliberate full-destroy helper that tears down protected resources from an isolated temporary Terraform copy instead of requiring direct module edits. The remaining work in this phase is to validate and harden that operator path.
 
 ### Goals
 
 - preserve the current safety model for DB and secrets
-- remove the need for ad hoc code editing when a full teardown is intentionally required
+- keep the new destroy-helper path dependable and well-bounded
 - make compute-only destroy/recreate the easy default path
 
 ### Work Items
 
-1. Redesign the full-destroy workflow.
-   - Replace the current manual “edit module code to remove protection” flow with a cleaner operator model.
-   - Keep accidental destruction of Secret Manager and managed DB resources difficult by default.
+1. Validate the dedicated full-destroy helper end to end.
+   - Test the temporary-copy approach against the real backend state in a controlled environment.
+   - Confirm it reliably removes the stateful protections only in the ephemeral working copy.
+   - Confirm operator local files and backend configuration are preserved outside the teardown target.
 
-2. Evaluate explicit lifecycle architecture options.
-   - Separate Terraform state for compute versus stateful resources.
-   - Separate root stacks or orchestration layers for stateful modules.
-   - A deliberate documented teardown path built around isolated state boundaries rather than live code edits.
-
-3. Define the supported destroy/recreate workflows.
+2. Define the supported destroy/recreate workflows precisely.
    - Safe compute-only destroy and recreate.
    - Normal day-to-day apply/update flow.
    - Full teardown of everything, including stateful infrastructure, through an intentional process.
 
-4. Update operator documentation once the model is chosen.
-   - Reflect the chosen design in `runbook.md`.
-   - Keep the destroy guidance decision-complete so an operator does not need to infer what is safe.
+3. Harden the long-term lifecycle architecture if needed.
+   - Evaluate whether separate Terraform state for compute versus stateful resources would be cleaner than the helper-based approach.
+   - Evaluate whether separate root stacks or orchestration layers would reduce operational risk further.
+   - Keep these as architecture follow-ups, not prerequisites for using the current helper.
+
+4. Keep operator documentation exact.
+   - Ensure `runbook.md` remains decision-complete for destroy and rebuild operations.
+   - Document known limitations of the helper-based approach so operators do not make hidden assumptions.
 
 ### Success Criteria
 
 - normal destroy/recreate of compute is easy and documented
 - stateful infrastructure remains protected by default
 - full teardown is possible through an intentional operator flow, not ad hoc file edits
+- the destroy-helper workflow is validated and documented well enough for repeated use
 
 ## Phase C: Config and Inventory Architecture Refinement
 
-This phase should refine the current split rather than replace it.
+The first slice of this phase is implemented: backend host discovery now comes from inventory instead of Terraform handoff, cloud-specific sizes/regions/images are consolidated in `terraform/config/cloud_mappings.json`, and committed bootstrap defaults now live in `terraform/bootstrap.defaults.json`. The remaining work in this phase is to simplify and harden that structure further without reopening the migration.
 
 ### Goals
 
@@ -113,9 +115,9 @@ This phase should refine the current split rather than replace it.
 
 ### Work Items
 
-1. Reduce Terraform-to-Ansible coupling where it is not strictly necessary.
-   - Keep `terraform/config/ansible-runtime.json` narrow and intentional.
-   - Revisit whether every current value in the runtime handoff is truly needed or whether some can be derived more cleanly.
+1. Keep Terraform-to-Ansible coupling narrow and intentional.
+   - Preserve `terraform/config/ansible-runtime.json` only for non-VM infrastructure metadata that inventory cannot discover cleanly.
+   - Revisit whether the remaining managed-DB metadata can be represented even more clearly without expanding the handoff again.
 
 2. Keep generated host artifacts as debug/operator outputs only.
    - Preserve `hosts.json` and similar files as convenience artifacts, not runtime sources of truth.
@@ -125,14 +127,15 @@ This phase should refine the current split rather than replace it.
    - Use inventory `compose` or a follow-up constructed source for host-local connection facts and grouping logic when that clearly improves clarity.
    - Do not move deploy-policy logic or secret retrieval into inventory just to reduce file count.
 
-4. Consolidate cloud config structure where it reduces duplication.
-   - Revisit the current split across files like `gcp.json`, `aws.json`, and related provider-specific config inputs.
-   - Evaluate a single dictionary-oriented config shape for cloud-specific images, AMI/image selectors, regions, and similar provider metadata.
+4. Refine the consolidated cloud config structure.
+   - Keep using dictionary-style mappings for cloud-specific images, AMI/image selectors, regions, and similar provider metadata.
+   - Review whether the current logical-region and image-profile model is expressive enough for future cloud additions without becoming too abstract.
    - Keep the result readable; the goal is to reduce drift and duplication, not to hide cloud-specific differences.
 
 5. Reassess bootstrap-default ownership.
-   - Decide whether bootstrap defaults should continue to live directly in `bootstrap-gcp.sh`.
-   - If a template/config file is introduced, keep it small, explicit, and aligned with the generated-local-file model.
+   - Keep `bootstrap.defaults.json` small and operator-oriented rather than letting it become a second full infrastructure config.
+   - Decide carefully which values belong in bootstrap defaults versus `terraform/config/config.json`.
+   - Preserve the generated-local-file model and avoid reintroducing duplicated sources of truth.
 
 6. Keep the architecture constraints explicit.
    - Do not reintroduce heavy dynamic logic into `group_vars`.

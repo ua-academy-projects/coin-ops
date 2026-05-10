@@ -49,15 +49,19 @@ For AWS bootstrap, use the separate generated local shell file:
 
 ### 1. Review bootstrap defaults
 
-Open `terraform/bootstrap-gcp.sh` and adjust the local defaults if needed:
+Open `terraform/bootstrap.defaults.json` and adjust the committed defaults if needed:
 
-- `PROJECT_ID`
-- `REGION`
-- `APP_DOMAIN`
-- `TLS_MODE`
-- `RUNTIME_BACKEND`
-- `GHCR_USERNAME`
-- image defaults
+- `gcp.project_id`
+- `deploy.app_domain`
+- `deploy.tls_mode`
+- `deploy.runtime_backend`
+- `deploy.ghcr_username`
+- image and port defaults
+
+If you need to change the logical deployment region or cloud image profiles, update `terraform/config/config.json` instead:
+
+- `general.region_profile`
+- `general.image_profile`
 
 ### 2. Run bootstrap
 
@@ -203,18 +207,13 @@ cd /mnt/d/Internship/coin-ops-local/coin-ops
 source local/generated-env.sh
 ```
 
-### 2. Temporarily remove the hard protections
+### 2. Run the deliberate full-destroy helper
 
-Terraform does not allow `prevent_destroy` to be toggled by a normal variable. For a deliberate full teardown, temporarily edit these files and remove or comment the `prevent_destroy = true` lifecycle blocks, and set `deletion_protection = false` on the Cloud SQL instance:
-
-- `terraform/modules/gcp_database/main.tf`
-- `terraform/modules/gcp_secrets/main.tf`
-
-### 3. Destroy everything
+This helper creates a temporary Terraform copy, removes the hard destroy protections there, and runs `terraform destroy` against the same backend state. The checked-in Terraform files remain unchanged.
 
 ```bash
 cd terraform
-terraform destroy
+bash full-destroy.sh --yes-really-destroy-stateful
 ```
 
 This allows Terraform to delete:
@@ -224,9 +223,13 @@ This allows Terraform to delete:
 - private service networking created for Cloud SQL
 - compute, network, and local generated Terraform artifacts managed by state
 
-### 4. Restore protections and rebuild after full destroy
+You can pass through normal destroy flags if needed:
 
-After the destroy finishes, restore the protection blocks you removed in the module files before the next normal apply.
+```bash
+bash full-destroy.sh --yes-really-destroy-stateful -auto-approve
+```
+
+### 3. Rebuild after full destroy
 
 After a full destroy, Secret Manager no longer exists. The next start must repeat the initial seeding flow:
 
@@ -273,6 +276,15 @@ That means you are doing a fresh build after full destroy or after deleting secr
 
 ```bash
 terraform apply -var='seed_secret_manager=true'
+```
+
+### `terraform destroy` fails because protected resources cannot be deleted
+
+That is expected for direct destroy operations against the checked-in Terraform configuration. Use the dedicated helper instead:
+
+```bash
+cd /mnt/d/Internship/coin-ops-local/coin-ops/terraform
+bash full-destroy.sh --yes-really-destroy-stateful
 ```
 
 ### Ansible inventory does not show GCP hosts

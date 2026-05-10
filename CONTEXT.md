@@ -80,11 +80,10 @@ Read from `terraform/config/*.json` via `jsondecode(file(...))` in `terraform/ma
 |------|------|
 | `config.json` | `general` defaults + `instances` map (name → subnet, role, sizes, flags) |
 | `networks.json` | `vpc_cidr`, `subnets`, `firewall_rules`, routing metadata |
-| `mapping.json` | logical size labels → GCP/AWS machine types |
-| `gcp.json` / `aws.json` | zone, image/AMI hints, optional `ssh_user` |
+| `cloud_mappings.json` | cloud-specific mapping dictionaries for sizes, logical regions/zones, and image profiles |
 | `hosts.json` | **generated** by `terraform apply` — do not commit |
 | `ssh_config` | **generated** — do not commit |
-| `ansible-runtime.json` | **generated** narrow Terraform→Ansible metadata (managed DB/backend IPs) — do not commit |
+| `ansible-runtime.json` | **generated** narrow Terraform→Ansible metadata for non-VM infrastructure (currently managed DB metadata) — do not commit |
 
 ### Bootstrap-generated local operator files
 
@@ -95,6 +94,8 @@ The normal workflow does **not** rely on a committed repo `.env`. Instead, boots
 - `terraform/bootstrap.secrets.auto.tfvars`
 - `ansible/vars/local.generated.json`
 - `local/generated-env.sh`
+
+Bootstrap defaults now come from committed `terraform/bootstrap.defaults.json` for project/operator settings such as project ID, deploy defaults, image registry/tag, and Cloudflare zone ID. Infrastructure topology choices like `general.region_profile` still live in `terraform/config/config.json`.
 
 `local/generated-env.sh` is the intended shell entrypoint before normal Terraform or Ansible work.
 
@@ -126,7 +127,7 @@ In both `modules/gcp_instances/main.tf` and `modules/aws_instances/main.tf`, eac
 merge(
   local.fallback,       # emergency defaults when upstream config is absent
   var.defaults,         # config.json → general
-  var.cloud_defaults,   # gcp.json or aws.json
+  var.cloud_defaults,   # derived cloud defaults from cloud_mappings.json + config.json
   cfg                     # config.json → instances → <vm_name>
 )
 ```
@@ -142,7 +143,7 @@ Example (conceptual): `general.disk_size = 20` overrides `fallback.disk_size` wh
 | Item | Why |
 |------|-----|
 | **`local.fallback` blocks** in instance modules | Last-resort when variables/JSON are empty; production always overrides via merge. Removing/changing breaks isolated module tests and empty-input behavior. |
-| **`local.fallback_sizes`** in instance modules | Intentional duplicate of `mapping.json` so the module still plans if `var.instance_sizes` is empty; removing yields opaque `Invalid index` errors. |
+| **`local.fallback_sizes`** in instance modules | Intentional duplicate of the cloud size mapping so the module still plans if `var.instance_sizes` is empty; removing yields opaque `Invalid index` errors. |
 | **`jsonencode(jsondecode(...))` guard** for `source_instances` | Workaround for `any`-typed `var.instances` and Terraform type quirks; not a bug. |
 | **`lifecycle { ignore_changes = [ami] }`** on `aws_instance` | Prevents mass replacement on every new Amazon-provided AMI build. |
 | **`block-project-ssh-keys = "true"`** (GCP metadata) | Prevents silent injection of project-wide SSH keys; security posture. |
@@ -160,7 +161,7 @@ Example (conceptual): `general.disk_size = 20` overrides `fallback.disk_size` wh
 - **Topology:** `app-1` is the UI gateway on public HTTPS; `app-2` runs all backend services on private IPs. Nginx `proxy_pass` targets `app-2` private IP for `/api/` and `/history-api/`.
 - **DNS & TLS:** Terraform manages Cloudflare DNS records, currently intended to be proxied through Cloudflare. Ansible provisions Certbot DNS-challenge TLS on the origin.
 - **Managed DB:** Cloud SQL is integrated via Terraform. Ansible uses generated runtime metadata to decide whether to target managed DB or local Postgres.
-- **Safety:** Secret Manager secret containers and Cloud SQL resources are protected from casual `terraform destroy` by hard Terraform guards.
+- **Safety:** Secret Manager secret containers and Cloud SQL resources are protected from casual `terraform destroy` by hard Terraform guards. Intentional full teardown should use `terraform/full-destroy.sh`, which strips protections only in a temporary Terraform copy.
 
 ---
 
@@ -168,7 +169,7 @@ Example (conceptual): `general.disk_size = 20` overrides `fallback.disk_size` wh
 
 ### Current layout
 - **Inventory:** Dynamic plugins (`inventory.gcp_compute.yml`, `inventory.aws_ec2.yml`).
-- **Variables:** Stable non-secret defaults live in `ansible/vars/deploy-config.yml`, local operator overrides live in `ansible/vars/local.generated.json`, and dynamic connection/runtime values are resolved in `inventory/group_vars/all/main.yml`.
+- **Variables:** Stable non-secret defaults live in `ansible/vars/deploy-config.yml`, local operator overrides live in `ansible/vars/local.generated.json`, inventory derives host connectivity, and only narrow non-VM runtime metadata is read from Terraform outputs.
 - **Roles:** `common`, `docker`, `history`, `proxy`, `ui`.
 - **Play order:** Provision common/docker first, then backend services on `app-2`, then UI on `app-1`.
 
@@ -193,12 +194,12 @@ The current goal is to avoid persisting repo-managed runtime env files on the VM
 - **`pathexpand`:** required for `~` in `ssh_public_key_path` on Windows-side workflows.
 - **`local_file` hosts/ssh_config:** overwritten every apply.
 - **Cloudflare provider:** initialized even when DNS records are disabled; provider config uses a placeholder token fallback so init/plan still succeed without live DNS credentials.
-- **Stateful destroy protection:** `prevent_destroy` is hardcoded on important GCP stateful resources; a real full teardown requires a deliberate temporary code edit (see `runbook.md`).
+- **Stateful destroy protection:** `prevent_destroy` is hardcoded on important GCP stateful resources; intentional full teardown should use `terraform/full-destroy.sh` rather than direct `terraform destroy`.
 
 ### AWS
 
 - One subnet ↔ one route table association; NAT refactors must not double-associate.
-- AL2 AMI filters in `aws.json` are legacy; migrating AMI without `ignore_changes` can recreate instances.
+- AWS AMI selection still depends on the Debian image mapping and `ignore_changes = [ami]`; changing image selection carelessly can recreate instances.
 
 ### GCP
 

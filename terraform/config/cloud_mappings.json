@@ -1,0 +1,51 @@
+{
+  "instance_sizes": {
+    "gcp": {
+      "micro": "e2-micro",
+      "small": "e2-small",
+      "medium": "e2-standard-2",
+      "large": "e2-standard-4"
+    },
+    "aws": {
+      "micro": "t3.micro",
+      "small": "t3.small",
+      "medium": "m7i-flex.large",
+      "large": "c7i-flex.large"
+    }
+  },
+  "regions": {
+    "gcp": {
+      "europe-central": {
+        "region": "europe-central2",
+        "zone": "europe-central2-a"
+      },
+      "europe-west": {
+        "region": "europe-west3",
+        "zone": "europe-west3-a"
+      }
+    },
+    "aws": {
+      "europe-central": {
+        "region": "eu-central-1",
+        "zone": "eu-central-1a"
+      },
+      "europe-west": {
+        "region": "eu-west-1",
+        "zone": "eu-west-1a"
+      }
+    }
+  },
+  "images": {
+    "gcp": {
+      "debian-12": {
+        "os_image": "debian-cloud/debian-12"
+      }
+    },
+    "aws": {
+      "debian-12": {
+        "ami_filter": "debian-12-amd64-*",
+        "ami_owner": "136693071363"
+      }
+    }
+  }
+}

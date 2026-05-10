@@ -19,7 +19,7 @@ variable "defaults" {
 
 variable "cloud_defaults" {
   type        = any
-  description = "Cloud-specific defaults from aws.json."
+  description = "Cloud-specific defaults derived from config.json and cloud_mappings.json."
   default     = {}
 }
 

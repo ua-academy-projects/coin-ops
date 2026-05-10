@@ -1,8 +1,8 @@
 {
     "general": {
         "project_name": "coin-ops",
-        "aws_region": "eu-north-1",
-        "gcp_region": "europe-central2",
+        "region_profile": "europe-central",
+        "image_profile": "debian-12",
         "instance_size": "micro",
         "disk_size": 10,
         "has_public_ip": false,
