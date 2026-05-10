@@ -9,8 +9,8 @@
 - name: Validate TLS mode
   assert:
     that:
-      - tls_mode in ['selfsigned', 'provided', 'off']
-    fail_msg: "TLS_MODE must be one of: selfsigned, provided, off."
+      - tls_mode in ['selfsigned', 'provided', 'letsencrypt', 'off']
+    fail_msg: "TLS_MODE must be one of: selfsigned, provided, letsencrypt, off."
 
 - name: Create secrets directory
   file:
@@ -28,12 +28,29 @@
     group: root
     mode: '0750'
 
+- name: Create Let's Encrypt webroot directory
+  file:
+    path: "{{ tls_acme_webroot }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when: tls_mode == 'letsencrypt'
+
 - name: Install local TLS tooling
   apt:
     name: openssl
     state: present
     update_cache: yes
   when: tls_mode == 'selfsigned'
+
+- name: Install Let's Encrypt tooling
+  apt:
+    name:
+      - certbot
+    state: present
+    update_cache: yes
+  when: tls_mode == 'letsencrypt'
 
 - name: Inspect existing self-signed certificate SAN
   command: "openssl x509 -in {{ tls_cert_path }} -noout -ext subjectAltName"
@@ -94,6 +111,17 @@
     fail_msg: "TLS_MODE=provided requires {{ tls_cert_path }} and {{ tls_key_path }} on the UI node."
   when: tls_mode == 'provided'
 
+- name: Validate Let's Encrypt email
+  assert:
+    that:
+      - tls_letsencrypt_email | length > 0
+    fail_msg: "TLS_MODE=letsencrypt requires LETSENCRYPT_EMAIL to be exported."
+  when: tls_mode == 'letsencrypt'
+
+- name: Decide initial nginx TLS state
+  set_fact:
+    ui_tls_enabled: "{{ tls_mode in ['selfsigned', 'provided'] }}"
+
 - name: Write ui runtime environment file
   copy:
     content: |
@@ -142,7 +170,7 @@
 
 - name: Wait for nginx availability
   uri:
-    url: "{{ 'https://localhost/health' if tls_enabled | bool else 'http://localhost:80/health' }}"
+    url: "{{ 'https://localhost/health' if ui_tls_enabled | bool else 'http://localhost:80/health' }}"
     method: GET
     status_code: 200
     validate_certs: no
@@ -150,6 +178,83 @@
   delay: 5
   register: result
   until: result.status == 200
+
+- name: Check existing Let's Encrypt certificate
+  stat:
+    path: "/etc/letsencrypt/live/{{ app_domain }}/fullchain.pem"
+  register: letsencrypt_live_cert
+  when: tls_mode == 'letsencrypt'
+
+- name: Request Let's Encrypt certificate
+  command:
+    cmd: >-
+      certbot certonly --webroot
+      -w {{ tls_acme_webroot }}
+      -d {{ app_domain }}
+      --email {{ tls_letsencrypt_email }}
+      --agree-tos
+      --non-interactive
+  when:
+    - tls_mode == 'letsencrypt'
+    - not letsencrypt_live_cert.stat.exists
+
+- name: Renew Let's Encrypt certificate if needed
+  command:
+    cmd: certbot renew --webroot -w {{ tls_acme_webroot }} --non-interactive
+  changed_when: false
+  when: tls_mode == 'letsencrypt'
+
+- name: Copy active Let's Encrypt certificate
+  copy:
+    src: "/etc/letsencrypt/live/{{ app_domain }}/fullchain.pem"
+    dest: "{{ tls_cert_path }}"
+    owner: root
+    group: root
+    mode: '0644'
+    remote_src: true
+  when: tls_mode == 'letsencrypt'
+
+- name: Copy active Let's Encrypt private key
+  copy:
+    src: "/etc/letsencrypt/live/{{ app_domain }}/privkey.pem"
+    dest: "{{ tls_key_path }}"
+    owner: root
+    group: root
+    mode: '0600'
+    remote_src: true
+  when: tls_mode == 'letsencrypt'
+
+- name: Enable TLS in nginx after Let's Encrypt certificate install
+  set_fact:
+    ui_tls_enabled: true
+  when: tls_mode == 'letsencrypt'
+
+- name: Render nginx gateway config with Let's Encrypt TLS
+  template:
+    src: nginx.gateway.conf.j2
+    dest: /opt/cognitor/ui/nginx.conf
+    owner: root
+    group: root
+    mode: '0644'
+  when: tls_mode == 'letsencrypt'
+
+- name: Restart Docker Compose after Let's Encrypt certificate install
+  command: docker compose -f /opt/cognitor/ui/compose.yaml up -d --force-recreate --remove-orphans
+  args:
+    chdir: /opt/cognitor/ui
+  when: tls_mode == 'letsencrypt'
+
+- name: Wait for nginx TLS availability
+  uri:
+    url: https://localhost/health
+    method: GET
+    status_code: 200
+    validate_certs: no
+  retries: 12
+  delay: 5
+  register: tls_result
+  until: tls_result.status == 200
+  when: tls_mode == 'letsencrypt'
 
 - name: Remove dangling Docker images
   command: docker image prune -f

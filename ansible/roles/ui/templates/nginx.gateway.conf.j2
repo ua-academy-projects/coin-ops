@@ -1,7 +1,11 @@
-{% if tls_enabled | bool %}
+{% if ui_tls_enabled | bool %}
 server {
     listen 80;
     server_name {{ app_domain }};
+
+    location /.well-known/acme-challenge/ {
+        root {{ tls_acme_webroot }};
+    }
 
     location = /health {
         access_log off;
@@ -34,6 +38,12 @@ server {
 {% endif %}
     root /usr/share/nginx/html;
     index index.html;
+
+{% if tls_mode == 'letsencrypt' %}
+    location /.well-known/acme-challenge/ {
+        root {{ tls_acme_webroot }};
+    }
+{% endif %}
 
     location = /health {
         access_log off;
