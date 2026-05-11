@@ -82,6 +82,10 @@
     --email {{ certbot_email }}
     {{ '--test-cert' if certbot_staging else '' }}
     --agree-tos --non-interactive
+  register: certbot_initial_request
+  retries: 3
+  delay: 20
+  until: certbot_initial_request.rc == 0
   when: tls_mode == 'certbot' and not cert_file.stat.exists
 
 - name: Create secrets directory

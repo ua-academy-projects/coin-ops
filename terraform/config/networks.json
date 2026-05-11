@@ -6,7 +6,7 @@
             "destination_cidr": "0.0.0.0/0",
             "priority": 800,
             "target_tags": ["internal-vm"],
-            "name": "coin-ops-private-default-via-jump"
+            "name": "coin-ops-private-default-via-nat"
         }
     },
     "security": {
@@ -22,14 +22,19 @@
             "source_cidrs": ["0.0.0.0/0"],
             "target_role": "jump-host"
         },
-        "allow-nat-from-internal-to-jump": {
+        "allow-nat-from-internal-to-nat": {
             "protocols": [
                 { "protocol": "tcp", "ports": ["1-65535"] },
                 { "protocol": "udp", "ports": ["1-65535"] },
                 { "protocol": "icmp" }
             ],
             "source_cidrs": ["10.10.1.0/24"],
-            "target_role": "jump-host"
+            "target_role": "nat"
+        },
+        "allow-nat-admin-from-jump": {
+            "protocols": [{ "protocol": "tcp", "ports": ["53725"] }],
+            "source_role": "jump-host",
+            "target_role": "nat"
         },
         "allow-http-https-app-ui": {
             "protocols": [{ "protocol": "tcp", "ports": ["443"] }],

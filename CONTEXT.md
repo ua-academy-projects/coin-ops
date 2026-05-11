@@ -1,4 +1,4 @@
-# CONTEXT.md — AI / maintainer context for **coin-ops**
+# CONTEXT.md - AI / maintainer context for **coin-ops**
 
 **Purpose:** Ground truth for automated assistants and humans editing this repo. Load this file when working on `terraform/`, `ansible/`, deployments, or cross-service wiring.
 
@@ -23,20 +23,21 @@
 | Path | Stack | Responsibility |
 |------|--------|----------------|
 | `proxy/` | Go | Fetches external APIs (Polymarket Gamma/Data, CoinGecko, NBU); caches (Redis TTLs vary); publishes to broker; Redis session optional (503 if down) |
-| `history/` | Python | `consumer.py` → DB; `main.py` → FastAPI (port 8000) |
+| `history/` | Python | `consumer.py` -> DB; `main.py` -> FastAPI (port 8000) |
 | `ui-react/` | React + Vite | SPA with Recharts/Tailwind; prod build baked into nginx image |
 
 ### Data flow (after cloud layout)
 
-```
-Browser → Cloudflare proxy → nginx on app-1 (443)
-       → /api/         → Go proxy on app-2 (:8080) → upstream APIs → queue → consumer → PostgreSQL
-       → /history-api/ → FastAPI on app-2 (:8000) → PostgreSQL → browser
+```text
+Browser -> Cloudflare proxy -> nginx on app-1 (443)
+       -> /api/         -> internal TLS gateway on app-2 (8443) -> Go proxy on app-2 (:8080) -> upstream APIs -> queue -> consumer -> PostgreSQL
+       -> /history-api/ -> internal TLS gateway on app-2 (8443) -> FastAPI on app-2 (:8000) -> PostgreSQL -> browser
 ```
 
 **Target VM roles:**
 
-- **jump-host** — bastion + NAT only (iptables MASQUERADE); no app workloads.
+- **jump-host** — bastion only; public SSH ingress for operators.
+- **nat-1** — dedicated NAT / egress router for private-subnet workloads; no application workloads.
 - **app-1** — **UI only** (nginx gateway + static SPA). Public IP, but public HTTP ingress is intentionally closed; Cloudflare proxy fronts HTTPS.
 - **app-2** — **all backends**: proxy, history-api, history-consumer, RabbitMQ (when `RUNTIME_BACKEND=external`), Redis, and local PostgreSQL only when not using a managed DB. Private subnet; egress via NAT.
 - **Managed DB** — Cloud SQL is the current GCP managed-database path. There is no longer a separate `db-1` VM in the intended topology.
@@ -78,12 +79,12 @@ Read from `terraform/config/*.json` via `jsondecode(file(...))` in `terraform/ma
 
 | File | Role |
 |------|------|
-| `config.json` | `general` defaults + `instances` map (name → subnet, role, sizes, flags) |
+| `config.json` | `general` defaults + `instances` map (name -> subnet, role, sizes, flags) |
 | `networks.json` | `vpc_cidr`, `subnets`, `firewall_rules`, routing metadata |
 | `cloud_mappings.json` | cloud-specific mapping dictionaries for sizes, logical regions/zones, and image profiles |
 | `hosts.json` | **generated** by `terraform apply` — do not commit |
 | `ssh_config` | **generated** — do not commit |
-| `ansible-runtime.json` | **generated** narrow Terraform→Ansible metadata for non-VM infrastructure (currently managed DB metadata) — do not commit |
+| `ansible-runtime.json` | **generated** narrow Terraform->Ansible metadata for non-VM infrastructure (currently managed DB metadata) — do not commit |
 
 ### Bootstrap-generated local operator files
 
@@ -101,15 +102,15 @@ Bootstrap defaults now come from committed `terraform/bootstrap.defaults.json` f
 
 ### Network model (VPC `10.10.0.0/16`)
 
-- **external** subnet (`10.10.2.0/24`): public-facing; hosts jump-host + app-1.
-- **internal** subnet (`10.10.1.0/24`): private; hosts app-2; default route via **NAT on jump-host** (GCP route + AWS private RT/route to jump ENI + `scripts/jump-host-init.sh`).
+- **external** subnet (`10.10.2.0/24`): public-facing; hosts jump-host, nat-1, and app-1.
+- **internal** subnet (`10.10.1.0/24`): private; hosts app-2; default route via **nat-1** (GCP route + AWS private RT/route to the NAT ENI + `scripts/nat-init.sh`).
 
 ### Current public ingress policy
 
 - Public SSH is allowed only to **jump-host** on the custom SSH port.
 - Public HTTPS (`443`) is allowed to **app-1**.
 - Public HTTP (`80`) is intentionally closed at the infrastructure layer.
-- `app-1` reaches `app-2` on `8000` and `8080`.
+- `app-1` reaches `app-2` on `8443` over internal TLS.
 
 ### Module map
 
@@ -126,15 +127,15 @@ In both `modules/gcp_instances/main.tf` and `modules/aws_instances/main.tf`, eac
 ```text
 merge(
   local.fallback,       # emergency defaults when upstream config is absent
-  var.defaults,         # config.json → general
+  var.defaults,         # config.json -> general
   var.cloud_defaults,   # derived cloud defaults from cloud_mappings.json + config.json
-  cfg                     # config.json → instances → <vm_name>
+  cfg                   # config.json -> instances -> <vm_name>
 )
 ```
 
 Example (conceptual): `general.disk_size = 20` overrides `fallback.disk_size` when defaults are passed; per-instance keys override cloud defaults.
 
-**This merge is foundational.** Do not “simplify” by flattening layers without explicit maintainer approval.
+**This merge is foundational.** Do not "simplify" by flattening layers without explicit maintainer approval.
 
 ---
 
@@ -147,7 +148,7 @@ Example (conceptual): `general.disk_size = 20` overrides `fallback.disk_size` wh
 | **`jsonencode(jsondecode(...))` guard** for `source_instances` | Workaround for `any`-typed `var.instances` and Terraform type quirks; not a bug. |
 | **`lifecycle { ignore_changes = [ami] }`** on `aws_instance` | Prevents mass replacement on every new Amazon-provided AMI build. |
 | **`block-project-ssh-keys = "true"`** (GCP metadata) | Prevents silent injection of project-wide SSH keys; security posture. |
-| **`source_dest_check = !can_ip_forward`** on AWS | Required for NAT/jump traffic; disabling `source_dest_check` for forwarders is mandatory for NAT-instance pattern. |
+| **`source_dest_check = !can_ip_forward`** on AWS | Required for forwarders; disabling `source_dest_check` for NAT instances is mandatory for the current design. |
 | **Jinja placeholders** in `deploy/compose/*.compose.yaml` | Must be rendered by Ansible `template:`; never `docker compose` these files raw. |
 | **`ON CONFLICT DO NOTHING`** in consumer inserts | Replay-safe ingestion. |
 
@@ -155,10 +156,10 @@ Example (conceptual): `general.disk_size = 20` overrides `fallback.disk_size` wh
 
 ## 5. Completed Architecture Shifts
 
-- **Terraform enhancements:** AWS private routing split, dynamic `jump-host-init.sh`, custom user + SSH workflow, non-default SSH port, VM labels/tags for inventory, generated SSH config, and generated Ansible runtime metadata.
+- **Terraform enhancements:** AWS private routing split, dedicated NAT instance pattern, custom user + SSH workflow, non-default SSH port, VM labels/tags for inventory, generated SSH config, and generated Ansible runtime metadata.
 - **Ansible Dynamic Inventory:** Shifted away from `hosts.json` as inventory truth and now uses `google.cloud.gcp_compute` and `amazon.aws.aws_ec2`. Private hosts are reached through generated SSH config + `ProxyJump`.
 - **Variables contract:** Repo `.env` is no longer the normal operator path. Bootstrap now generates local non-secret config and a generated local env file. Secrets are seeded once and then fetched from GCP Secret Manager during deploy.
-- **Topology:** `app-1` is the UI gateway on public HTTPS; `app-2` runs all backend services on private IPs. Nginx `proxy_pass` targets `app-2` private IP for `/api/` and `/history-api/`.
+- **Topology:** `app-1` is the UI gateway on public HTTPS; `app-2` runs all backend services on private IPs. Nginx `proxy_pass` targets app-2 over internal TLS.
 - **DNS & TLS:** Terraform manages Cloudflare DNS records, currently intended to be proxied through Cloudflare. Ansible provisions Certbot DNS-challenge TLS on the origin.
 - **Managed DB:** Cloud SQL is integrated via Terraform. Ansible uses generated runtime metadata to decide whether to target managed DB or local Postgres.
 - **Safety:** Secret Manager secret containers and Cloud SQL resources are protected from casual `terraform destroy` by hard Terraform guards. Intentional full teardown should use `terraform/full-destroy.sh`, which strips protections only in a temporary Terraform copy.
@@ -171,10 +172,11 @@ Example (conceptual): `general.disk_size = 20` overrides `fallback.disk_size` wh
 ## 6. Ansible deployment (current contract)
 
 ### Current layout
+
 - **Inventory:** Dynamic plugins (`inventory.gcp_compute.yml`, `inventory.aws_ec2.yml`).
 - **Variables:** Stable non-secret defaults live in `ansible/vars/deploy-config.yml`, local operator overrides live in `ansible/vars/local.generated.json`, inventory derives host connectivity, and only narrow non-VM runtime metadata is read from Terraform outputs.
-- **Roles:** `common`, `docker`, `history`, `proxy`, `ui`.
-- **Play order:** Provision common/docker first, then backend services on `app-2`, then UI on `app-1`.
+- **Roles:** `common`, `docker`, `history`, `proxy`, `backend_tls`, `ui`.
+- **Play order:** Provision common/docker first, then backend services on `app-2`, then the internal TLS gateway on `app-2`, then UI on `app-1`.
 
 ### Secret and config contract
 
@@ -192,7 +194,7 @@ The current goal is to avoid persisting repo-managed runtime env files on the VM
 
 ### Terraform
 
-- **`try(jsondecode(file(...)), {})`:** missing file becomes `{}` — mis-paths may silently “succeed” with fallbacks.
+- **`try(jsondecode(file(...)), {})`:** missing file becomes `{}` — mis-paths may silently "succeed" with fallbacks.
 - **`module.foo[0]`** indexing: guard with `try` or `count`-aware expressions when cloud disabled.
 - **`pathexpand`:** required for `~` in `ssh_public_key_path` on Windows-side workflows.
 - **`local_file` hosts/ssh_config:** overwritten every apply.
@@ -201,7 +203,7 @@ The current goal is to avoid persisting repo-managed runtime env files on the VM
 
 ### AWS
 
-- One subnet ↔ one route table association; NAT refactors must not double-associate.
+- One subnet -> one route table association; NAT refactors must not double-associate.
 - AWS AMI selection still depends on the Debian image mapping and `ignore_changes = [ami]`; changing image selection carelessly can recreate instances.
 
 ### GCP
@@ -213,7 +215,7 @@ The current goal is to avoid persisting repo-managed runtime env files on the VM
 ### Ansible / Compose
 
 - Health task defaults: PostgreSQL readiness loops ~1 minute; failures are often resource/API timing, not app logic.
-- `jump-host-init.sh` uses `iptables -C` before `-A` for idempotency; multi-NIC hops may need future hardening.
+- `nat-init.sh` uses `iptables -C` before `-A` for idempotency; multi-NIC hops may need future hardening.
 - `inventory/group_vars/all/main.yml` intentionally loads local generated config and generated Terraform runtime metadata; do not revert to using `terraform/config/hosts.json` as inventory truth.
 - `tls_mode=certbot` requires a real public domain and a valid Cloudflare token.
 
@@ -221,7 +223,7 @@ The current goal is to avoid persisting repo-managed runtime env files on the VM
 
 ## 8. Never commit (examples)
 
-```
+```text
 terraform/config/hosts.json
 terraform/config/ssh_config
 terraform/config/ansible-runtime.json

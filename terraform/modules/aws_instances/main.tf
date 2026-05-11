@@ -39,7 +39,7 @@ locals {
 
   # Pre-render startup scripts per instance.
   # user_init_script (from general) runs on every VM and handles user creation + SSH port.
-  # startup_script (per-instance) contains cloud-specific init (e.g. NAT bootstrap for jump-host).
+  # startup_script (per-instance) contains cloud-specific init (e.g. NAT bootstrap for nat-1).
   # Both are combined into a single user_data string.
   instance_scripts = {
     for name, cfg in local.instances : name => join("\n\n", compact([

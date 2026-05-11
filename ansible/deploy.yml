@@ -22,8 +22,8 @@
         fail_msg: "Place terraform/sa-key.json in the repo and source local/generated-env.sh before running deploy."
       when: "'gcp' in groups"
 
-- name: Authenticate Docker registry on target nodes
-  hosts: all
+- name: Authenticate Docker registry on workload nodes
+  hosts: role_app_ui:role_app_backend
   become: yes
   tasks:
     - name: Log in to configured container registry

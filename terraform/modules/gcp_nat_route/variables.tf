@@ -1,7 +1,7 @@
 variable "name" {
   type        = string
   description = "Route name."
-  default     = "private-default-via-jump"
+  default     = "private-default-via-nat"
 }
 
 variable "network_id" {

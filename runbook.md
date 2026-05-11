@@ -11,6 +11,13 @@ The normal operator model is:
 - seed Secret Manager only when needed
 - keep the built-in stateful-resource protections in place for normal work
 
+Current host-role split:
+
+- `jump-host` is bastion-only
+- `nat-1` is the dedicated NAT / egress VM for the private subnet
+- `app-1` is the public UI node
+- `app-2` is the private backend node
+
 ## Prerequisites
 
 - Run from WSL/Linux.

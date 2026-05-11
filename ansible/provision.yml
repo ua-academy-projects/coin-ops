@@ -1,5 +1,5 @@
 ---
-# provision.yml — install system packages on all VMs.
+# provision.yml - install and validate host prerequisites.
 # Run once (or re-run: idempotent).
 #
 #   ansible-playbook -i ansible/inventory ansible/provision.yml
@@ -22,14 +22,23 @@
         fail_msg: "Place terraform/sa-key.json in the repo and source local/generated-env.sh before running provision."
       when: "'gcp' in groups"
 
-- name: Common setup — all nodes
+- name: Common setup - all nodes
   hosts: all
   become: yes
+  serial: 1
   roles:
     - common
+  post_tasks:
+    - name: Flush handlers after host-level firewall changes
+      meta: flush_handlers
+
+- name: Docker runtime setup - workload nodes only
+  hosts: role_app_ui:role_app_backend
+  become: yes
+  roles:
     - docker
 
-- name: Provision backend node (app-2) — Data directories
+- name: Provision backend node (app-2) - data directories
   hosts: "{{ target_backend_group | default('role_app_backend') }}"
   become: yes
   tasks:
@@ -39,7 +48,7 @@
         state: directory
         owner: 70
         group: 70
-        mode: '0700'
+        mode: "0700"
 
     - name: Create RabbitMQ data directory
       file:
@@ -47,9 +56,9 @@
         state: directory
         owner: 999
         group: 999
-        mode: '0755'
+        mode: "0755"
 
-- name: Provision backend proxy node (app-2) — Data directories
+- name: Provision backend proxy node (app-2) - data directories
   hosts: "{{ target_backend_group | default('role_app_backend') }}"
   become: yes
   tasks:
@@ -59,7 +68,7 @@
         state: directory
         owner: 999
         group: 999
-        mode: '0755'
+        mode: "0755"
 
 - name: Provision UI node
   hosts: "{{ target_ui_group | default('role_app_ui') }}"

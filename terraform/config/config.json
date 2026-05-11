@@ -14,9 +14,14 @@
         "jump-host": {
             "subnet": "external",
             "has_public_ip": true,
-            "role": "jump-host",
+            "role": "jump-host"
+        },
+        "nat-1": {
+            "subnet": "external",
+            "has_public_ip": true,
+            "role": "nat",
             "can_ip_forward": true,
-            "startup_script": "scripts/jump-host-init.sh.tpl"
+            "startup_script": "scripts/nat-init.sh.tpl"
         },
         "app-1": {
             "subnet": "external",

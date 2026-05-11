@@ -40,17 +40,27 @@ locals {
     for name, cfg in local.instances : name
     if lookup(cfg, "role", "") == "jump-host" && lookup(cfg, "has_public_ip", false)
   ][0], "") : ""
+  gcp_nat_host_name = local.gcp_enabled ? try([
+    for name, cfg in local.instances : name
+    if lookup(cfg, "role", "") == "nat"
+  ][0], "") : ""
   aws_jump_host_name = local.aws_enabled ? try([
     for name, cfg in local.instances : name
     if lookup(cfg, "role", "") == "jump-host" && lookup(cfg, "has_public_ip", false)
+  ][0], "") : ""
+  aws_nat_host_name = local.aws_enabled ? try([
+    for name, cfg in local.instances : name
+    if lookup(cfg, "role", "") == "nat"
   ][0], "") : ""
 
   # Guards: NAT route modules are only created when a jump-host is present in config.
   gcp_has_jump_host = local.gcp_jump_host_name != ""
   aws_has_jump_host = local.aws_jump_host_name != ""
+  gcp_has_nat_host  = local.gcp_nat_host_name != ""
+  aws_has_nat_host  = local.aws_nat_host_name != ""
 
   # NAT route params with fallback values so apply succeeds even without networks.json.
-  nat_route_name       = try(local.private_default_route.name, "private-default-via-jump")
+  nat_route_name       = try(local.private_default_route.name, "private-default-via-nat")
   nat_destination_cidr = try(local.private_default_route.destination_cidr, "0.0.0.0/0")
   nat_priority         = try(local.private_default_route.priority, 800)
   nat_target_tags      = try(local.private_default_route.target_tags, ["internal-vm"])
@@ -179,14 +189,14 @@ module "gcp_instances" {
 }
 
 module "gcp_nat_route" {
-  count            = local.gcp_enabled && local.gcp_has_jump_host ? 1 : 0
+  count            = local.gcp_enabled && local.gcp_has_nat_host ? 1 : 0
   source           = "./modules/gcp_nat_route"
   name             = local.nat_route_name
   network_id       = module.gcp_network[0].network_id
   destination_cidr = local.nat_destination_cidr
   priority         = local.nat_priority
   target_tags      = local.nat_target_tags
-  next_hop_ip      = module.gcp_instances[0].instance_ips[local.gcp_jump_host_name].private_ip
+  next_hop_ip      = module.gcp_instances[0].instance_ips[local.gcp_nat_host_name].private_ip
 
   depends_on = [module.gcp_instances]
 }
@@ -245,10 +255,10 @@ module "aws_instances" {
 }
 
 module "aws_nat_route" {
-  count                    = local.aws_enabled && local.aws_has_jump_host ? 1 : 0
+  count                    = local.aws_enabled && local.aws_has_nat_host ? 1 : 0
   source                   = "./modules/aws_nat_route"
   private_route_table_id   = module.aws_network[0].private_route_table_id
-  nat_network_interface_id = module.aws_instances[0].instance_primary_network_interface_ids[local.aws_jump_host_name]
+  nat_network_interface_id = module.aws_instances[0].instance_primary_network_interface_ids[local.aws_nat_host_name]
   destination_cidr         = local.nat_destination_cidr
 
   depends_on = [module.aws_instances]
@@ -303,10 +313,10 @@ resource "local_file" "ssh_config" {
     local.aws_enabled ? [
       for name, inst in local.aws_hosts : trimspace(<<-EOT
         Host coinops-aws-${name}
-          HostName ${inst.public_ip != null ? inst.public_ip : inst.private_ip}
+          HostName ${inst.role == "jump-host" ? inst.public_ip : inst.private_ip}
           User ${local.username}
           Port ${local.ssh_port}
-          ${inst.public_ip == null && local.aws_jump_host_name != "" ? "ProxyJump coinops-aws-${local.aws_jump_host_name}" : ""}
+          ${inst.role != "jump-host" && local.aws_jump_host_name != "" ? "ProxyJump coinops-aws-${local.aws_jump_host_name}" : ""}
           IdentityFile ${pathexpand(replace(var.ssh_public_key_path, ".pub", ""))}
           IdentitiesOnly yes
           StrictHostKeyChecking no
