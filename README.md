@@ -60,6 +60,73 @@ node-02
 | node-02 | `172.31.1.11` | Go proxy, Redis |
 | node-03 | `172.31.1.12` | nginx gateway, React SPA |
 
+## Cloud-Native Architecture (`dev-Shabat-cloud` path)
+
+The `dev-Shabat-cloud` branch keeps the browser contract the same, but moves infrastructure and runtime dependencies to cloud-native services. Terraform creates the cloud resources from `terraform/multicloud-vm-yaml-lab/config/lab.yaml`, and Ansible deploys the app containers onto private app VMs.
+
+```text
+Browser
+  |
+  v
+Cloudflare DNS
+  |
+  v
+HTTPS 443 cloud load balancer
+  |   AWS: Application Load Balancer + ACM certificate
+  |   GCP: HTTPS Load Balancer + Google-managed certificate
+  |
+  v
+private app VM group
+  app-1 / app-2
+  ui container (nginx + React SPA)
+  proxy container :8080
+  history-api container :8000
+  |
+  +-- /api -----------> Go proxy
+  |                       - fetches Polymarket markets
+  |                       - fetches whale leaderboard/positions
+  |                       - fetches BTC/ETH and USD/UAH
+  |                       - publishes events to managed queue
+  |                       - stores UI session JSON in managed Valkey
+  |
+  +-- /history-api ---> FastAPI history API
+                          - reads managed PostgreSQL history tables
+
+managed database
+  AWS: RDS PostgreSQL
+  GCP: Cloud SQL PostgreSQL
+
+managed queue
+  AWS: SQS + DLQ
+  GCP: Pub/Sub + DLQ topic/subscription
+
+managed session/cache
+  AWS: ElastiCache for Valkey
+  GCP: Memorystore for Valkey
+
+bastion VM
+  - public SSH/admin entrypoint only
+  - app VMs and managed services stay private
+
+secret manager
+  AWS: Secrets Manager
+  GCP: Secret Manager
+  - stores DB password / GHCR token references used by Ansible deploy
+```
+
+| Layer | AWS implementation | GCP implementation |
+| --- | --- | --- |
+| Network | VPC, public/private subnets, IGW, NAT Gateway | VPC, subnets, Cloud Router, Cloud NAT |
+| Public entry | ALB on 80/443 | Global HTTPS Load Balancer |
+| TLS | ACM DNS-validated certificate | Google-managed certificate |
+| DNS | Cloudflare CNAME to ALB | Cloudflare A record to global LB IP |
+| App runtime | EC2 app VMs in private subnets | Compute Engine app VMs in private subnet |
+| Admin access | Bastion EC2 VM | Bastion Compute Engine VM |
+| Database | RDS PostgreSQL, private-only | Cloud SQL PostgreSQL, private-only |
+| Queue | SQS + DLQ | Pub/Sub + DLQ topic/subscription |
+| Sessions/cache | ElastiCache Valkey | Memorystore Valkey |
+| Secrets | AWS Secrets Manager | GCP Secret Manager |
+
 ## Current Data Flow
 
 | Path | Flow | Purpose |
