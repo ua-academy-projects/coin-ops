@@ -1,89 +1,95 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides quick repository guidance for coding agents working in this repo.
 
-## Architecture
+## Current Architecture
 
-Three services across three Hyper-V VMs on an internal switch (172.31.0.0/20):
+The current supported path is the cloud-first GCP workflow described in [runbook.md](/D:/Internship/coin-ops-local/coin-ops/runbook.md) and [CONTEXT.md](/D:/Internship/coin-ops-local/coin-ops/CONTEXT.md).
 
-| VM | IP | Service |
-|----|-----|---------|
-| node-01 | 172.31.1.10 | History consumer + FastAPI + PostgreSQL + RabbitMQ |
-| node-02 | 172.31.1.11 | Go proxy + Redis |
-| node-03 | 172.31.1.12 | React SPA + nginx |
+Current runtime topology:
 
-**Data flow:** Browser → nginx (node-03:80) → Go proxy (node-02:8080) → Polymarket/CoinGecko/NBU APIs → publishes to RabbitMQ → Python consumer (node-01) inserts into PostgreSQL → History API (node-01:8000) serves historical data back to browser.
+- `jump-host` — bastion only
+- `nat-1` — dedicated NAT / egress VM for the private subnet
+- `app-1` — public UI node with nginx gateway
+- `app-2` — private backend node (proxy, history API, consumer, Redis/RabbitMQ when needed)
 
-**Proxy** (`proxy/main.go`) — stateless Go service. Fetches 20 live Polymarket markets, whale leaderboard, and BTC/ETH/UAH prices. Caches whales (5 min) and prices (60s). Publishes market and price events to RabbitMQ. Stores session state in Redis (non-critical; 503 if Redis unavailable).
+Traffic shape:
 
-**History** (`history/`) — two Python processes sharing the same codebase:
-- `consumer.py` — pika RabbitMQ consumer, routes by `type` field: market events → `market_snapshots`, price events → `price_snapshots`. Idempotent writes via `ON CONFLICT DO NOTHING`.
-- `main.py` — FastAPI server on port 8000 with endpoints: `/history`, `/history/{slug}`, `/prices/history/{coin}`, `/health`.
+- browser -> Cloudflare -> `app-1` over HTTPS
+- `app-1` -> `app-2` over internal TLS on `8443`
+- `app-2` reaches the internet through `nat-1`
 
-**UI** (`ui-react/`) — React + Vite + Recharts SPA. Service URLs come from Vite env vars (`VITE_PROXY_URL`, `VITE_HISTORY_URL`) written by Ansible at build time.
+## Operator Workflow
 
-## Commands
+Do **not** assume repo `.env` is the normal workflow.
 
-### Proxy (Go)
-```bash
-cd proxy
-make build    # cross-compile → proxy-linux (GOOS=linux GOARCH=amd64)
-make run      # local run
-make tidy     # go mod tidy
-go test ./... # fast unit tests (no Docker/Redis/RabbitMQ/PostgreSQL required)
-```
-
-### UI (React)
-```bash
-cd ui-react
-npm run dev      # dev server on :3000
-npm run build    # production build → dist/
-npm run lint     # tsc --noEmit
-```
-
-### History (Python)
-No local runner — deploy via Ansible or run manually: `python3 main.py` / `python3 consumer.py`.
-
-## Deployment
-
-**Prerequisites:** `source .env` before any Ansible or Terraform command.
+Normal operator flow:
 
 ```bash
-# First-time VM provisioning
-terraform -chdir=terraform apply
+cd /mnt/d/Internship/coin-ops-local/coin-ops
+source local/generated-env.sh
 
-# OS setup (Go, Python, PostgreSQL, RabbitMQ, UFW)
+cd terraform
+terraform plan
+terraform apply
+
+cd ..
 ansible-playbook -i ansible/inventory ansible/provision.yml
-
-# Deploy / update all services
 ansible-playbook -i ansible/inventory ansible/deploy.yml
-
-# Redeploy a single service
-ansible-playbook -i ansible/inventory ansible/deploy.yml --limit softserve-node-02,localhost
-# Note: always include 'localhost' when limiting — the React build runs on localhost
 ```
 
-Ansible builds the React app on `localhost`, syncs `dist/` to node-03, builds the Go binary on node-02, and deploys Python to node-01. Service configs land in `/etc/cognitor/` on each VM; systemd units are managed by Ansible.
+Bootstrap is handled by:
 
-## Infrastructure Details
+```bash
+cd terraform
+bash bootstrap-gcp.sh
+```
 
-- **Terraform** uses WinRM to talk to the Windows Hyper-V host. Provider: `taliesins/hyperv`.
-- **Secrets** flow: `.env` → Ansible group_vars (`lookup('env', ...)`) → written to `/etc/cognitor/*.env` on VMs at deploy time. Never hardcoded.
-- **WSL chmod** on `/mnt/f/` requires `/etc/wsl.conf` with `[automount] options = "metadata"`, otherwise chmod is a no-op and SSH rejects the key.
-- **After terraform destroy+apply:** re-run `New-NetIPAddress` + `New-NetNat` in PowerShell Admin (switch loses host IP), and `ssh-keygen -R 172.31.1.{10,11,12}` (host keys change).
-- Base VHDX must be pre-resized to ≥20 GB with `Resize-VHD` in PowerShell Admin before `terraform apply`. Cloud-init `growpart` expands the partition automatically on first boot.
-- Hyper-V Gen 2 Secure Boot requires `MicrosoftUEFICertificateAuthority` template (not the default `MicrosoftWindows`).
+Generated local files are gitignored and replace the older repo `.env` flow.
 
-## Database Schema
+## Secrets
 
-Tables in PostgreSQL on node-01 (`history/schema.sql`):
-- `market_snapshots` — one row per market per `/current` call; UNIQUE(slug, fetched_at)
-- `price_snapshots` — BTC/ETH/USD_UAH prices; UNIQUE(coin, fetched_at)
-- `whales`, `whale_positions` — leaderboard + open positions
+- Runtime secrets come from GCP Secret Manager during Ansible deploy.
+- Do not hardcode credentials.
+- Do not reintroduce `/etc/cognitor/*.env` as the primary application secret delivery path for current containerized services.
 
-## Known Provider Quirks (taliesins/hyperv Terraform provider)
+## Infrastructure Notes
 
-- `enable_secure_boot` expects `"On"`/`"Off"` strings, not booleans.
-- MAC address: must set both `static_mac_address` AND `dynamic_mac_address = false`.
-- Memory: use either `dynamic_memory = true` OR `static_memory = true`, never both.
-- Stop VMs before `terraform apply` when changing hardware (DVD drive resource pool lock).
+- Terraform uses JSON-driven config in `terraform/config/`.
+- Inventory truth is dynamic Ansible inventory, not `terraform/config/hosts.json`.
+- SSH to private hosts goes through generated SSH config plus `ProxyJump` via `jump-host`.
+- Stateful GCP resources are protected from casual destroy; intentional full teardown uses `terraform/full-destroy.sh`.
+
+## Deployment Notes
+
+- `app-1` and `app-2` may use the `coinops-app-host` golden image profile.
+- Provisioning is image-aware and skips baked host-preparation work on golden-image app nodes.
+- Internal backend TLS is enabled with `internal_tls_enabled=true`.
+- Certbot renewal is timer-driven; use staging while repeatedly validating issuance behavior.
+
+## Local Development
+
+Local Compose convenience targets remain available from the repo root:
+
+```bash
+make local-up
+make local-down
+make local-logs
+make local-ps
+```
+
+Service-specific commands:
+
+```bash
+cd ui-react && npm run dev
+cd proxy && make run
+cd history && python main.py
+```
+
+## Source of Truth
+
+When this file conflicts with more detailed docs, prefer:
+
+1. `runbook.md`
+2. `CONTEXT.md`
+3. `AGENTS.md`

@@ -251,7 +251,7 @@ For local lab HTTPS, keep `APP_DOMAIN=coinops.test`, `TLS_MODE=selfsigned`, and 
 
 ## Secrets and Runtime Configuration
 
-Secrets are not baked into images. Ansible writes root-owned env files on the VMs under `/etc/cognitor/`, and Docker Compose injects those values at container startup with `env_file`.
+Secrets are not baked into images. The current cloud-first path retrieves runtime secrets through Ansible from Secret Manager and renders them directly into the active container configuration. The normal operator workflow no longer depends on a repo `.env` file.
 
 Current runtime env highlights:
 
@@ -266,11 +266,10 @@ Legacy mode env variables (if `RUNTIME_BACKEND=external`):
 
 ## Deployment Commands
 
-Prepare environment variables first:
+Prepare the generated local environment first:
 
 ```bash
-cp .env.example .env
-source .env
+source local/generated-env.sh
 ```
 
 For the local root `docker compose` flow, use a plain Compose `.env` file and the root `Makefile` convenience targets:
@@ -297,6 +296,7 @@ ansible-galaxy collection install -r ansible/requirements.yml
 Provision infrastructure:
 
 ```bash
+terraform -chdir=terraform plan
 terraform -chdir=terraform apply
 ```
 
