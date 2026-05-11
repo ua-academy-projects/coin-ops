@@ -17,6 +17,7 @@
       - acl
       - systemd-timesyncd
       - unattended-upgrades
+      - postgresql-client
     state: present
 
 - name: Set timezone to UTC

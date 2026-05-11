@@ -132,13 +132,14 @@ type PriceEvent struct {
 // ---- Server ----
 
 type Server struct {
-	ch      *amqp.Channel
-	chMu    sync.Mutex
-	rdb     *redis.Client
-	db      stateDB
-	backend string
-	state   StateStore
-	cache   struct {
+	ch        *amqp.Channel
+	chMu      sync.Mutex
+	rdb       *redis.Client
+	db        stateDB
+	publisher EventPublisher
+	backend   string
+	state     StateStore
+	cache     struct {
 		sync.RWMutex
 		markets []MarketSnapshot
 		whales  []Whale
@@ -181,17 +182,7 @@ func (s *Server) publishPriceEvent(coin string, priceUsd, change24h float64, fet
 		return err
 	}
 
-	if s.backend == "postgres" {
-		return s.pgEnqueue(body)
-	}
-
-	s.chMu.Lock()
-	defer s.chMu.Unlock()
-	return s.ch.Publish("", queueName, false, false, amqp.Publishing{
-		DeliveryMode: amqp.Persistent,
-		ContentType:  "application/json",
-		Body:         body,
-	})
+	return s.publishEvent(body)
 }
 
 func (s *Server) publish(snap MarketSnapshot) error {
@@ -200,17 +191,7 @@ func (s *Server) publish(snap MarketSnapshot) error {
 		return err
 	}
 
-	if s.backend == "postgres" {
-		return s.pgEnqueue(body)
-	}
-
-	s.chMu.Lock()
-	defer s.chMu.Unlock()
-	return s.ch.Publish("", queueName, false, false, amqp.Publishing{
-		DeliveryMode: amqp.Persistent,
-		ContentType:  "application/json",
-		Body:         body,
-	})
+	return s.publishEvent(body)
 }
 
 // ---- Helpers ----
@@ -677,25 +658,68 @@ func main() {
 		}
 		defer pool.Close()
 		srv.db = pool
+		srv.publisher = &postgresEventPublisher{db: pool}
 		srv.state = &postgresStateStore{db: pool}
 		log.Println("Connected to PostgreSQL (postgres mode)")
 
-	default: // "external" — current RabbitMQ + Redis behavior
+	case "cloud_native":
+		if dbURL == "" {
+			log.Fatal("DATABASE_URL is required when RUNTIME_BACKEND=cloud_native")
+		}
+		pool, err := pgxpool.New(context.Background(), dbURL)
+		if err != nil {
+			log.Fatalf("connect managed postgres: %v", err)
+		}
+		defer pool.Close()
+		publisher, err := newCloudNativeEventPublisher(context.Background())
+		if err != nil {
+			log.Fatalf("configure cloud-native queue publisher: %v", err)
+		}
+		defer publisher.Close()
+		srv.db = pool
+		srv.publisher = publisher
+
+		sessionBackend := os.Getenv("SESSION_BACKEND")
+		if sessionBackend == "" {
+			sessionBackend = "managed_valkey"
+		}
+		switch sessionBackend {
+		case "managed_valkey", "valkey", "redis":
+			redisURL := os.Getenv("REDIS_URL")
+			if redisURL == "" {
+				log.Fatal("REDIS_URL is required when RUNTIME_BACKEND=cloud_native and SESSION_BACKEND=managed_valkey")
+			}
+			redisOpts, err := redis.ParseURL(redisURL)
+			if err != nil {
+				log.Fatalf("parse managed valkey url: %v", err)
+			}
+			srv.rdb = redis.NewClient(redisOpts)
+			srv.state = &redisStateStore{c: srv.rdb}
+			pingCtx, pingCancel := context.WithTimeout(context.Background(), 3*time.Second)
+			if pingErr := srv.rdb.Ping(pingCtx).Err(); pingErr != nil {
+				log.Printf("Warning: managed Valkey not reachable: %v; /state will return 503", pingErr)
+			} else {
+				log.Println("Connected to managed Valkey")
+			}
+			pingCancel()
+		case "postgres":
+			srv.state = &postgresStateStore{db: pool}
+		default:
+			log.Fatalf("unsupported SESSION_BACKEND %q for cloud_native", sessionBackend)
+		}
+		log.Println("Connected to managed PostgreSQL and cloud-native queue")
+
+	case "external":
 		rabbitURL := os.Getenv("RABBITMQ_URL")
 		if rabbitURL == "" {
 			rabbitURL = "amqp://guest:guest@localhost:5672/"
 		}
-		conn := connectRabbitMQ(rabbitURL)
-		defer conn.Close()
-		ch, err := conn.Channel()
+		publisher, err := newRabbitMQEventPublisher(rabbitURL, queueName)
 		if err != nil {
-			log.Fatalf("open channel: %v", err)
+			log.Fatalf("configure rabbitmq publisher: %v", err)
 		}
-		defer ch.Close()
-		if _, err := ch.QueueDeclare(queueName, true, false, false, false, nil); err != nil {
-			log.Fatalf("declare queue: %v", err)
-		}
-		srv.ch = ch
+		defer publisher.Close()
+		srv.publisher = publisher
 
 		redisURL := os.Getenv("REDIS_URL")
 		if redisURL == "" {
@@ -714,6 +738,9 @@ func main() {
 			log.Println("Connected to Redis")
 		}
 		pingCancel()
+
+	default:
+		log.Fatalf("unsupported RUNTIME_BACKEND %q", backend)
 	}
 	// Populate market cache immediately, then refresh independently of UI requests.
 	go func() {

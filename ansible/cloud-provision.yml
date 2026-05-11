@@ -6,9 +6,8 @@
     - name: Check .env vars are exported
       assert:
         that:
-          - lookup('env', 'DB_PASSWORD') != ''
           - lookup('env', 'SSH_KEY_PATH') != ''
-          - lookup('env', 'RUNTIME_BACKEND') in ['', 'external', 'postgres']
+          - lookup('env', 'RUNTIME_BACKEND') in ['', 'external', 'postgres', 'cloud_native']
         fail_msg: |
           Required environment variables are not set or RUNTIME_BACKEND is invalid.
           Run: source .env
@@ -24,26 +23,28 @@
   hosts: db
   become: yes
   tasks:
-    - name: Create PostgreSQL data directory
-      file:
-        path: /var/lib/coin-ops/postgres
-        state: directory
-        owner: 70
-        group: 70
-        mode: '0700'
+    - block:
+          - name: Create PostgreSQL data directory
+            file:
+              path: /var/lib/coin-ops/postgres
+              state: directory
+              owner: 70
+              group: 70
+              mode: '0700'
 
-    - name: Create RabbitMQ data directory
-      file:
-        path: /var/lib/coin-ops/rabbitmq
-        state: directory
-        owner: 999
-        group: 999
-        mode: '0755'
+          - name: Create RabbitMQ data directory
+            file:
+              path: /var/lib/coin-ops/rabbitmq
+              state: directory
+              owner: 999
+              group: 999
+              mode: '0755'
 
-    - name: Create Redis data directory
-      file:
-        path: /var/lib/coin-ops/redis
-        state: directory
-        owner: 999
-        group: 999
-        mode: '0755'
+          - name: Create Redis data directory
+            file:
+              path: /var/lib/coin-ops/redis
+              state: directory
+              owner: 999
+              group: 999
+              mode: '0755'
+      when: runtime_backend | default(lookup('env', 'RUNTIME_BACKEND') | default('external', true), true) != "cloud_native"

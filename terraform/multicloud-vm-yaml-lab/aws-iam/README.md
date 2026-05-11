@@ -1,31 +1,25 @@
-# AWS IAM For Multicloud VM YAML Lab
+# AWS IAM Bootstrap For Multicloud Lab
 
-This policy is intentionally narrower than `AdministratorAccess`.
-
-It allows:
-
-- Terraform state access only under `s3://coinops-leev1tan-terraform-state-001/aws/multicloud-vm-yaml-lab/`
-- S3 lock-file access for `use_lockfile = true`
-- EC2/VPC operations needed by this lab in `eu-central-1`
-
-It does not store access keys. Store keys in the AWS CLI profile:
+Run this once with an admin-capable AWS profile. Normal Terraform runs should use the restricted `coinops-lab` profile afterward.
 
 ```bash
-aws configure --profile coinops-lab
-aws sts get-caller-identity --profile coinops-lab
+cd terraform/multicloud-vm-yaml-lab
+IAM_USER="terraform-coinops-lab" ADMIN_PROFILE="admin" ./aws-iam/bootstrap.sh
 ```
 
-To create and attach the policy, run with an admin-capable profile:
+The legacy command still works and delegates to the bootstrap script:
 
 ```bash
-cd ~/projects/softserv-internship/terraform/multicloud-vm-yaml-lab
-IAM_USER="your-terraform-user" ADMIN_PROFILE="admin" ./aws-iam/create-and-attach-policy.sh
+IAM_USER="terraform-coinops-lab" ADMIN_PROFILE="admin" ./aws-iam/create-and-attach-policy.sh
 ```
 
-Then use the restricted profile for Terraform:
+The bootstrap creates:
 
-```bash
-export AWS_PROFILE=coinops-lab
-terraform init -backend-config=backend.aws.hcl -reconfigure
-terraform plan
-```
+- AWS service-linked roles for Elastic Load Balancing, ElastiCache, and RDS.
+- `coinops-lab-app-runtime-role`.
+- `coinops-lab-app-runtime-profile`.
+- several small customer-managed policies attached to `terraform-coinops-lab`.
+
+The normal Terraform IAM user gets scoped permissions for EC2/VPC, ALB/ACM, Secrets Manager, future RDS/SQS/ElastiCache resources, Terraform state, and `iam:PassRole` only for the app runtime role.
+
+It does **not** require `AdministratorAccess` for normal `terraform plan/apply`.

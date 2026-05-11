@@ -1,64 +1,161 @@
 locals {
-  config       = var.config
-  name_prefix  = local.config.name_prefix
-  network_key  = local.config.defaults.network
-  network_raw  = local.config.networks[local.network_key]
-  gcp_location = local.config.catalog.locations[local.config.location].gcp
+  stack          = var.stack
+  domain_enabled = try(local.stack.domain.enabled, false)
+  app_url        = local.domain_enabled ? "https://${local.stack.domain.name}" : "http://${module.certificate_dns.ip_address}"
+  app_domain     = local.domain_enabled ? local.stack.domain.name : module.certificate_dns.ip_address
 
-  network = {
-    name        = local.network_raw.name
-    subnet_name = local.network_raw.subnet_name
-    cidr        = try(local.network_raw.gcp_subnet_cidr, local.network_raw.cidr)
-  }
+  bastion_target_tags = local.stack.instances[local.stack.bastion_name].tags
+  app_target_tags     = distinct(flatten([for name in local.stack.app_names : local.stack.instances[name].tags]))
+  db_target_tags      = local.stack.instances[local.stack.db_name].tags
+  cloud_native        = try(local.stack.runtime.mode, "external") == "cloud_native"
+  compute_instances   = local.cloud_native ? { for name, instance in local.stack.instances : name => instance if name != local.stack.db_name } : local.stack.instances
+  runtime_base = merge(local.stack.runtime, {
+    gcp_project_id = local.stack.gcp.project_id
+  })
+}
 
-  instances = {
-    for name, vm in local.config.instances : name => {
-      private_ip   = vm.private_ip
-      public_ip    = local.config.roles[vm.role].public_ip
-      tags         = local.config.roles[vm.role].tags
-      machine_type = local.config.catalog.sizes[lookup(vm, "size", local.config.defaults.size)].gcp
-      image        = local.config.catalog.images[lookup(vm, "image", local.config.defaults.image)].gcp
-      disk_size_gb = lookup(vm, "disk_size_gb", local.config.defaults.disk_size_gb)
-    }
-  }
+module "secrets" {
+  source = "../shared/gcp-secrets"
 
-  bastion_name = local.config.app.nodes.bastion
-  private_tags = distinct(flatten([
-    for name, vm in local.instances : vm.tags if name != local.bastion_name
-  ]))
+  name_prefix = local.stack.name_prefix
+  secrets     = local.stack.secrets
+}
+resource "google_service_account" "app" {
+  count = local.cloud_native ? 1 : 0
+
+  account_id   = "${replace(local.stack.name_prefix, "-", "")}-app"
+  display_name = "${local.stack.name_prefix} app runtime"
+}
+
+module "queue" {
+  count  = local.cloud_native ? 1 : 0
+  source = "./modules/queue"
+
+  name_prefix               = local.stack.name_prefix
+  runtime                   = local.stack.runtime
+  project_id                = local.stack.gcp.project_id
+  app_service_account_email = google_service_account.app[0].email
+}
+
+module "database" {
+  count  = local.cloud_native ? 1 : 0
+  source = "./modules/database"
+
+  name_prefix       = local.stack.name_prefix
+  runtime           = local.stack.runtime
+  project_id        = local.stack.gcp.project_id
+  region            = local.stack.gcp.region
+  network_self_link = module.network.network_self_link
+  db_password       = var.db_password
+}
+
+module "cache" {
+  count  = local.cloud_native ? 1 : 0
+  source = "./modules/cache"
+
+  name_prefix               = local.stack.name_prefix
+  runtime                   = local.stack.runtime
+  project_id                = local.stack.gcp.project_id
+  region                    = local.stack.gcp.region
+  network_self_link         = module.network.network_self_link
+  private_subnet_self_links = module.network.private_subnet_self_links
 }
 
 module "network" {
-  source = "../network"
+  source = "./modules/network"
 
-  region  = local.gcp_location.region
-  network = local.network
+  name_prefix = local.stack.name_prefix
+  network     = local.stack.network
+  region      = local.stack.gcp.region
 }
 
-module "vms" {
-  source = "../gcp-vms"
+module "security" {
+  source = "./modules/security"
 
-  zone       = local.gcp_location.zone
-  network    = module.network.network_self_link
-  subnetwork = module.network.subnetwork_self_link
-
-  defaults = {
-    machine_type        = local.config.catalog.sizes[local.config.defaults.size].gcp
-    image               = local.config.catalog.images[local.config.defaults.image].gcp
-    disk_size_gb        = local.config.defaults.disk_size_gb
-    ssh_user            = local.config.ssh.user
-    ssh_public_key_path = local.config.ssh.public_key_path
-  }
-  instances = local.instances
+  name_prefix             = local.stack.name_prefix
+  network_self_link       = module.network.network_self_link
+  firewall                = local.stack.firewall
+  app_port                = local.stack.app.port
+  bastion_target_tags     = local.bastion_target_tags
+  app_target_tags         = local.app_target_tags
+  db_target_tags          = local.db_target_tags
+  allow_icmp_from_bastion = local.stack.firewall.allow_icmp_from_bastion
 }
 
-module "firewall" {
-  source = "../firewall"
+module "compute" {
+  source = "./modules/compute"
 
-  name_prefix             = local.name_prefix
-  network                 = module.network.network_self_link
-  ssh_source_ranges       = local.config.firewall.ssh_source_ranges
-  bastion_target_tags     = local.config.roles.bastion.tags
-  private_target_tags     = local.private_tags
-  allow_icmp_from_bastion = local.config.firewall.allow_icmp_from_bastion
+  instances                 = local.compute_instances
+  ssh                       = local.stack.ssh
+  ssh_public_key            = local.stack.ssh_public_key
+  zones                     = local.stack.gcp.zones
+  app_names                 = local.stack.app_names
+  db_name                   = local.stack.db_name
+  bastion_name              = local.stack.bastion_name
+  network_self_link         = module.network.network_self_link
+  public_subnet_self_links  = module.network.public_subnet_self_links
+  private_subnet_self_links = module.network.private_subnet_self_links
+  app_service_account_email = local.cloud_native ? google_service_account.app[0].email : null
+}
+
+module "certificate_dns" {
+  source = "./modules/certificate-dns"
+
+  name_prefix = local.stack.name_prefix
+  domain      = local.stack.domain
+}
+
+module "load_balancer" {
+  source = "./modules/load-balancer"
+
+  name_prefix           = local.stack.name_prefix
+  app_instances         = module.compute.app_instances
+  app_port              = local.stack.app.port
+  health_path           = local.stack.app.health_path
+  domain_enabled        = local.domain_enabled
+  ip_address            = module.certificate_dns.ip_address
+  certificate_self_link = module.certificate_dns.certificate_self_link
+}
+
+module "access_outputs" {
+  source = "../shared/access-outputs"
+
+  cloud       = "gcp"
+  name_prefix = local.stack.name_prefix
+  ssh         = local.stack.ssh
+  instances   = module.compute.instances
+  runtime = local.cloud_native ? merge(local.runtime_base, {
+    database = merge(local.stack.runtime.database, module.database[0].database)
+    queue    = merge(local.stack.runtime.queue, module.queue[0].queue)
+    cache    = merge(local.stack.runtime.cache, module.cache[0].cache)
+    }) : merge(local.runtime_base, {
+    database = merge(local.stack.runtime.database, {
+      managed = false
+      host    = module.compute.instances[local.stack.db_name].private_ip
+      port    = 5432
+      name    = local.stack.runtime.database.name
+      user    = local.stack.runtime.database.user
+    })
+    queue = merge(local.stack.runtime.queue, {
+      backend      = local.stack.runtime.mode == "postgres" ? "postgres" : "rabbitmq"
+      url          = ""
+      topic        = ""
+      subscription = ""
+    })
+    cache = merge(local.stack.runtime.cache, {
+      managed   = false
+      backend   = "redis"
+      host      = module.compute.instances[local.stack.db_name].private_ip
+      port      = 6379
+      redis_url = "redis://${module.compute.instances[local.stack.db_name].private_ip}:6379/0"
+    })
+  })
+  bastion_name     = local.stack.bastion_name
+  app_names        = local.stack.app_names
+  db_name          = local.stack.db_name
+  app_url          = local.app_url
+  app_domain       = local.app_domain
+  known_hosts_file = "~/.ssh/known_hosts_gcp_lab"
+  secret_refs      = module.secrets.refs
+  load_balancer    = module.load_balancer.load_balancer
 }

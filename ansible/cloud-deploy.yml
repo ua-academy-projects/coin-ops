@@ -6,13 +6,120 @@
     - name: Check .env vars are exported
       assert:
         that:
-          - lookup('env', 'DB_PASSWORD') != ''
           - lookup('env', 'SSH_KEY_PATH') != ''
-          - lookup('env', 'RUNTIME_BACKEND') in ['', 'external', 'postgres']
+          - lookup('env', 'RUNTIME_BACKEND') in ['', 'external', 'postgres', 'cloud_native']
         fail_msg: |
           Required environment variables are not set or RUNTIME_BACKEND is invalid.
           Run: source .env
 
+
+- name: Resolve runtime secrets from cloud secret manager
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    target_cloud_hosts: "{{ groups['cloud'] | default([]) }}"
+    first_cloud_host: "{{ target_cloud_hosts[0] | default('localhost') }}"
+    selected_cloud: "{{ hostvars[first_cloud_host].coinops_cloud_provider | default(lookup('env', 'CLOUD') | default('aws', true), true) }}"
+    cloud_region: "{{ hostvars[first_cloud_host].coinops_aws_region | default(hostvars[first_cloud_host].coinops_cloud_region | default(lookup('env', 'AWS_REGION') | default('', true), true), true) }}"
+    cloud_profile: "{{ hostvars[first_cloud_host].coinops_cloud_profile | default(lookup('env', 'AWS_PROFILE') | default('', true), true) }}"
+    gcp_project_id: "{{ hostvars[first_cloud_host].coinops_gcp_project_id | default(lookup('env', 'GCP_PROJECT_ID') | default('', true), true) }}"
+    runtime_backend_from_inventory: "{{ (hostvars[first_cloud_host].coinops_runtime_backend | default('external', true)) | replace('-', '_') }}"
+    db_password_secret_ref: "{{ hostvars[first_cloud_host].coinops_db_password_secret_ref | default('', true) }}"
+    rabbitmq_password_secret_ref: "{{ hostvars[first_cloud_host].coinops_rabbitmq_password_secret_ref | default('', true) }}"
+    ghcr_token_secret_ref: "{{ hostvars[first_cloud_host].coinops_ghcr_token_secret_ref | default('', true) }}"
+  tasks:
+    - name: Fetch DB password from AWS Secrets Manager
+      command:
+        argv: [aws, secretsmanager, get-secret-value, --secret-id, "{{ db_password_secret_ref }}", --query, SecretString, --output, text, --region, "{{ cloud_region }}", --profile, "{{ cloud_profile }}"]
+      register: aws_db_password
+      changed_when: false
+      no_log: true
+      when:
+        - selected_cloud == 'aws'
+        - db_password_secret_ref | length > 0
+
+    - name: Fetch RabbitMQ password from AWS Secrets Manager
+      command:
+        argv: [aws, secretsmanager, get-secret-value, --secret-id, "{{ rabbitmq_password_secret_ref }}", --query, SecretString, --output, text, --region, "{{ cloud_region }}", --profile, "{{ cloud_profile }}"]
+      register: aws_rabbitmq_password
+      changed_when: false
+      no_log: true
+      when:
+        - selected_cloud == 'gcp'
+        - rabbitmq_password_secret_ref | length > 0
+        - runtime_backend_from_inventory != 'cloud_native'
+
+    - name: Fetch GHCR token from AWS Secrets Manager
+      command:
+        argv: [aws, secretsmanager, get-secret-value, --secret-id, "{{ ghcr_token_secret_ref }}", --query, SecretString, --output, text, --region, "{{ cloud_region }}", --profile, "{{ cloud_profile }}"]
+      register: aws_ghcr_token
+      changed_when: false
+      failed_when: false
+      no_log: true
+      when:
+        - selected_cloud == 'aws'
+        - ghcr_token_secret_ref | length > 0
+
+    - name: Fetch DB password from GCP Secret Manager
+      command:
+        argv: [gcloud, secrets, versions, access, latest, --secret, "{{ db_password_secret_ref }}", --project, "{{ gcp_project_id }}"]
+      register: gcp_db_password
+      changed_when: false
+      no_log: true
+      when:
+        - selected_cloud == 'gcp'
+        - db_password_secret_ref | length > 0
+
+    - name: Fetch RabbitMQ password from GCP Secret Manager
+      command:
+        argv: [gcloud, secrets, versions, access, latest, --secret, "{{ rabbitmq_password_secret_ref }}", --project, "{{ gcp_project_id }}"]
+      register: gcp_rabbitmq_password
+      changed_when: false
+      no_log: true
+      when:
+        - selected_cloud == 'gcp'
+        - rabbitmq_password_secret_ref | length > 0
+        - runtime_backend_from_inventory != 'cloud_native'
+
+
+    - name: Fetch GHCR token from GCP Secret Manager
+      command:
+        argv: [gcloud, secrets, versions, access, latest, --secret, "{{ ghcr_token_secret_ref }}", --project, "{{ gcp_project_id }}"]
+      register: gcp_ghcr_token
+      changed_when: false
+      failed_when: false
+      no_log: true
+      when:
+        - selected_cloud == 'gcp'
+        - ghcr_token_secret_ref | length > 0
+
+    - name: Resolve secret values
+      set_fact:
+        resolved_db_password: "{{ aws_db_password.stdout if (aws_db_password is defined and aws_db_password.stdout is defined) else (gcp_db_password.stdout if (gcp_db_password is defined and gcp_db_password.stdout is defined) else lookup('env', 'DB_PASSWORD')) }}"
+        resolved_rabbitmq_password: "{{ aws_rabbitmq_password.stdout if (aws_rabbitmq_password is defined and aws_rabbitmq_password.stdout is defined) else (gcp_rabbitmq_password.stdout if (gcp_rabbitmq_password is defined and gcp_rabbitmq_password.stdout is defined) else lookup('env', 'RABBITMQ_PASSWORD')) }}"
+        resolved_ghcr_token: "{{ aws_ghcr_token.stdout if (aws_ghcr_token is defined and aws_ghcr_token.stdout is defined and aws_ghcr_token.rc == 0) else (gcp_ghcr_token.stdout if (gcp_ghcr_token is defined and gcp_ghcr_token.stdout is defined and gcp_ghcr_token.rc == 0) else lookup('env', 'GHCR_TOKEN')) }}"
+      no_log: true
+
+    - name: Validate required resolved secrets
+      assert:
+        that:
+          - resolved_db_password | length > 0
+          - resolved_rabbitmq_password | length > 0 or runtime_backend_from_inventory == 'cloud_native'
+        fail_msg: |
+          Required secrets were not found in cloud secret manager.
+          Run from terraform/multicloud-vm-yaml-lab:
+            ./scripts/lab.sh secrets push
+      no_log: true
+
+    - name: Publish resolved secrets to cloud hosts
+      add_host:
+        name: "{{ item }}"
+        coinops_db_password: "{{ resolved_db_password }}"
+        coinops_rabbitmq_password: "{{ resolved_rabbitmq_password }}"
+        coinops_ghcr_token: "{{ resolved_ghcr_token }}"
+      loop: "{{ target_cloud_hosts }}"
+      no_log: true
 - name: Authenticate Docker registry on cloud nodes
   hosts: cloud
   become: yes
@@ -32,62 +139,200 @@
   hosts: db
   become: yes
   tasks:
-    - name: Create config directory
-      file:
-        path: /etc/cognitor
-        state: directory
-        owner: root
-        group: root
-        mode: '0750'
+    - block:
+          - name: Create config directory
+            file:
+              path: /etc/cognitor
+              state: directory
+              owner: root
+              group: root
+              mode: '0750'
 
-    - name: Create deploy directory
-      file:
-        path: /opt/cognitor/cloud-db
-        state: directory
-        owner: root
-        group: root
-        mode: '0755'
+          - name: Create deploy directory
+            file:
+              path: /opt/cognitor/cloud-db
+              state: directory
+              owner: root
+              group: root
+              mode: '0755'
 
-    - name: Write DB/runtime environment file
-      template:
-        src: cloud-db.env.j2
-        dest: /etc/cognitor/cloud-db.env
-        owner: root
-        group: root
-        mode: '0640'
+          - name: Write DB/runtime environment file
+            template:
+              src: cloud-db.env.j2
+              dest: /etc/cognitor/cloud-db.env
+              owner: root
+              group: root
+              mode: '0640'
 
-    - name: Render DB/runtime compose file
-      template:
-        src: cloud-db.compose.yaml.j2
-        dest: /opt/cognitor/cloud-db/compose.yaml
-        owner: root
-        group: root
-        mode: '0644'
+          - name: Render DB/runtime compose file
+            template:
+              src: cloud-db.compose.yaml.j2
+              dest: /opt/cognitor/cloud-db/compose.yaml
+              owner: root
+              group: root
+              mode: '0644'
 
-    - name: Validate DB/runtime compose config
-      command: docker compose -f /opt/cognitor/cloud-db/compose.yaml config -q
-      args:
-        chdir: /opt/cognitor/cloud-db
-      changed_when: false
+          - name: Validate DB/runtime compose config
+            command: docker compose -f /opt/cognitor/cloud-db/compose.yaml config -q
+            args:
+              chdir: /opt/cognitor/cloud-db
+            changed_when: false
 
-    - name: Pull DB/runtime images
-      command: docker compose -f /opt/cognitor/cloud-db/compose.yaml pull
-      args:
-        chdir: /opt/cognitor/cloud-db
+          - name: Pull DB/runtime images
+            command: docker compose -f /opt/cognitor/cloud-db/compose.yaml pull
+            args:
+              chdir: /opt/cognitor/cloud-db
 
-    - name: Run DB/runtime compose
-      command: docker compose -f /opt/cognitor/cloud-db/compose.yaml up -d --remove-orphans
-      args:
-        chdir: /opt/cognitor/cloud-db
+          - name: Run DB/runtime compose
+            command: docker compose -f /opt/cognitor/cloud-db/compose.yaml up -d --remove-orphans
+            args:
+              chdir: /opt/cognitor/cloud-db
 
-    - name: Wait for PostgreSQL readiness
-      command: docker compose -f /opt/cognitor/cloud-db/compose.yaml exec -T postgres pg_isready -U {{ db_user }} -d {{ db_name }}
-      args:
-        chdir: /opt/cognitor/cloud-db
-      retries: 12
-      delay: 5
-      register: postgres_ready
-      until: postgres_ready.rc == 0
+          - name: Wait for PostgreSQL readiness
+            command: docker compose -f /opt/cognitor/cloud-db/compose.yaml exec -T postgres pg_isready -U {{ db_user }} -d {{ db_name }}
+            args:
+              chdir: /opt/cognitor/cloud-db
+            retries: 12
+            delay: 5
+            register: postgres_ready
+            until: postgres_ready.rc == 0
+
+          - name: Copy history schema
+            copy:
+              src: ../history/schema.sql
+              dest: /opt/cognitor/cloud-db/schema.sql
+              owner: root
+              group: root
+              mode: '0644'
+
+          - name: Copy runtime SQL schema files
+            copy:
+              src: ../runtime/
+              dest: /opt/cognitor/cloud-db/runtime/
+              owner: root
+              group: root
+              mode: '0644'
+            when: runtime_backend == "postgres"
+
+          - name: Apply history tables schema
+            shell: >-
+              docker compose -f /opt/cognitor/cloud-db/compose.yaml exec -T postgres
+              psql -v ON_ERROR_STOP=1 -U {{ db_user }} -d {{ db_name }}
+              < /opt/cognitor/cloud-db/schema.sql
+            args:
+              chdir: /opt/cognitor/cloud-db
+            changed_when: false
+
+          - name: Persist runtime application role before wrapper bootstrap
+            command: >-
+              docker compose -f /opt/cognitor/cloud-db/compose.yaml exec -T postgres
+              psql -v ON_ERROR_STOP=1 -U {{ db_user }} -d {{ db_name }}
+              -c "ALTER DATABASE {{ db_name }} SET runtime.app_role = '{{ db_user }}';"
+            args:
+              chdir: /opt/cognitor/cloud-db
+            changed_when: false
+            when: runtime_backend == "postgres"
+
+          - name: Apply runtime queue and session schema
+            shell: |
+              (
+                printf "%s\n" "SET runtime.app_role = '{{ db_user }}';"
+                cat \
+                  /opt/cognitor/cloud-db/runtime/01_schema.sql \
+                  /opt/cognitor/cloud-db/runtime/02_wrappers.sql \
+                  /opt/cognitor/cloud-db/runtime/03_notify.sql \
+                  /opt/cognitor/cloud-db/runtime/04_advisory.sql \
+                  /opt/cognitor/cloud-db/runtime/05_dlq.sql \
+                  /opt/cognitor/cloud-db/runtime/06_cache_schema.sql \
+                  /opt/cognitor/cloud-db/runtime/07_cache_wrappers.sql \
+                  /opt/cognitor/cloud-db/runtime/08_cron.sql
+              ) | docker compose -f /opt/cognitor/cloud-db/compose.yaml exec -T postgres psql -v ON_ERROR_STOP=1 -U {{ db_user }} -d {{ db_name }}
+            args:
+              chdir: /opt/cognitor/cloud-db
+            changed_when: false
+            when: runtime_backend == "postgres"
+
+          - name: Verify PostgreSQL runtime extensions are installed
+            command: >-
+              docker compose -f /opt/cognitor/cloud-db/compose.yaml exec -T postgres
+              psql -v ON_ERROR_STOP=1 -At -U {{ db_user }} -d {{ db_name }}
+              -c "SELECT string_agg(extname, ',' ORDER BY extname) FROM pg_extension WHERE extname IN ('pg_cron', 'pgmq');"
+            args:
+              chdir: /opt/cognitor/cloud-db
+            register: runtime_extension_check
+            changed_when: false
+            failed_when: runtime_extension_check.stdout | trim != "pg_cron,pgmq"
+            when: runtime_backend == "postgres"
+
+          - name: Verify PostgreSQL runtime cron jobs are registered
+            command: >-
+              docker compose -f /opt/cognitor/cloud-db/compose.yaml exec -T postgres
+              psql -v ON_ERROR_STOP=1 -At -U {{ db_user }} -d {{ db_name }}
+              -c "SELECT count(*) FROM cron.job WHERE jobname IN ('runtime-cache-reap', 'runtime-session-reap', 'runtime-dlq-reap') AND active;"
+            args:
+              chdir: /opt/cognitor/cloud-db
+            register: runtime_cron_check
+            changed_when: false
+            failed_when: runtime_cron_check.stdout | trim | int != 3
+            when: runtime_backend == "postgres"
+
+      when: runtime_backend | default(lookup('env', 'RUNTIME_BACKEND') | default('external', true), true) != "cloud_native"
+- name: Bootstrap managed cloud-native database
+  hosts: app
+  become: yes
+  tasks:
+    - block:
+        - name: Create managed DB bootstrap directory
+          file:
+            path: /opt/cognitor/managed-db
+            state: directory
+            owner: root
+            group: root
+            mode: '0755'
+
+        - name: Copy history schema for managed DB
+          copy:
+            src: ../history/schema.sql
+            dest: /opt/cognitor/managed-db/history-schema.sql
+            owner: root
+            group: root
+            mode: '0644'
+
+        - name: Copy cloud-native session schema
+          copy:
+            src: files/cloud-native-session-schema.sql
+            dest: /opt/cognitor/managed-db/session-schema.sql
+            owner: root
+            group: root
+            mode: '0644'
+          when: session_backend == "postgres"
+
+        - name: Apply history schema to managed DB
+          command: >-
+            psql -v ON_ERROR_STOP=1
+            -h {{ cloud_db_host }}
+            -p {{ db_port }}
+            -U {{ db_user }}
+            -d {{ db_name }}
+            -f /opt/cognitor/managed-db/history-schema.sql
+          environment:
+            PGPASSWORD: "{{ db_password }}"
+          changed_when: false
+
+        - name: Apply cloud-native session schema to managed DB
+          command: >-
+            psql -v ON_ERROR_STOP=1
+            -h {{ cloud_db_host }}
+            -p {{ db_port }}
+            -U {{ db_user }}
+            -d {{ db_name }}
+            -f /opt/cognitor/managed-db/session-schema.sql
+          environment:
+            PGPASSWORD: "{{ db_password }}"
+          changed_when: false
+          when: session_backend == "postgres"
+      run_once: true
+      when: runtime_backend == "cloud_native"
 
 - name: Deploy app nodes behind load balancer
   hosts: app

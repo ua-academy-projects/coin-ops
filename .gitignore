@@ -1,6 +1,6 @@
 DASHBOARD_PROJECT.md
 
-# Environment file — passwords and local paths, never commit
+# Environment file вЂ” passwords and local paths, never commit
 .env
 
 # Worktrees created by agent runs
@@ -8,7 +8,7 @@ DASHBOARD_PROJECT.md
 .worktrees/
 .codex-*
 
-# Superpowers generated plans/specs — internal tooling, not for the repo
+# Superpowers generated plans/specs вЂ” internal tooling, not for the repo
 docs/superpowers/
 
 # Compiled binary
@@ -47,7 +47,7 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Personal notes — not for the repo
+# Personal notes вЂ” not for the repo
 docs/interview-notes.md
 interview-notes.md
 0804meet.txt
@@ -79,3 +79,4 @@ terraform/**/*key*.json
 ansible/inventory.cloud
 !terraform/multicloud-vm-yaml-lab/scripts/
 !terraform/multicloud-vm-yaml-lab/scripts/*.sh
+*Zone.Identifier

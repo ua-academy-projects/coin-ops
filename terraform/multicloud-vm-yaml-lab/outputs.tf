@@ -19,5 +19,26 @@ output "ansible_inventory" {
 }
 
 output "load_balancer" {
-  value = local.is_aws ? module.aws[0].load_balancer : null
+  value = local.is_aws ? module.aws[0].load_balancer : module.gcp[0].load_balancer
+}
+
+
+output "runtime" {
+  value = local.is_aws ? module.aws[0].runtime : module.gcp[0].runtime
+}
+
+output "secret_refs" {
+  value = local.is_aws ? module.aws[0].secret_refs : module.gcp[0].secret_refs
+}
+
+output "db_password_secret_ref" {
+  value = try((local.is_aws ? module.aws[0].secret_refs : module.gcp[0].secret_refs).db_password, null)
+}
+
+output "rabbitmq_password_secret_ref" {
+  value = try((local.is_aws ? module.aws[0].secret_refs : module.gcp[0].secret_refs).rabbitmq_password, null)
+}
+
+output "ghcr_token_secret_ref" {
+  value = try((local.is_aws ? module.aws[0].secret_refs : module.gcp[0].secret_refs).ghcr_token, null)
 }

@@ -8,6 +8,8 @@ services:
     command:
       - postgres
       - -c
+      - listen_addresses=*
+      - -c
       - shared_preload_libraries=pg_cron
       - -c
       - cron.database_name={{ db_name }}

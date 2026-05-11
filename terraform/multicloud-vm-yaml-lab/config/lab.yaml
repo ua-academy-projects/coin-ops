@@ -13,7 +13,17 @@ clouds:
     project_id: coinops-student-leev1tan-001
   aws:
     profile: coinops-lab
+    terraform_iam_user: terraform-coinops-lab
+    app_instance_profile_name: coinops-lab-app-runtime-profile
 
+
+secrets:
+  prefix: coinops-lab
+  items:
+    db_password: db-password
+    rabbitmq_password: rabbitmq-password
+    ghcr_token: ghcr-token
+    cloudflare_token: cloudflare-token
 # Replace these before the HTTPS/DNS apply.
 domain:
   enabled: true
@@ -47,6 +57,34 @@ defaults:
   disk_size_gb: 10
   network: lab
 
+runtime:
+  mode: cloud-native
+  database:
+    mode: managed_postgres
+    engine: postgres
+    version: "16"
+    name: cognitor
+    user: cognitor
+    size: small
+    storage_gb: 20
+    publicly_accessible: false
+  queue:
+    mode: managed
+    name: market-events
+    dead_letter: true
+    visibility_timeout_seconds: 30
+    max_receive_count: 3
+  sessions:
+    backend: managed_valkey
+    ttl_hours: 24
+  cache:
+    mode: managed_valkey
+    engine: valkey
+    size: micro
+    port: 6379
+    auth: false
+    transit_encryption: false
+
 roles:
   bastion:
     public_ip: true
@@ -74,6 +112,9 @@ catalog:
       gcp:
         region: europe-central2
         zone: europe-central2-a
+        zones:
+          - europe-central2-a
+          - europe-central2-b
       aws:
         region: eu-central-1
         availability_zones:
@@ -86,6 +127,24 @@ catalog:
     small:
       gcp: e2-small
       aws: t3.small
+  database_sizes:
+    micro:
+      gcp: db-f1-micro
+      aws: db.t4g.micro
+    small:
+      gcp: db-g1-small
+      aws: db.t4g.micro
+  cache_sizes:
+    micro:
+      aws:
+        node_type: cache.t4g.micro
+        engine_version: "7.2"
+        replicas: 0
+      gcp:
+        node_type: SHARED_CORE_NANO
+        engine_version: VALKEY_8_0
+        shard_count: 1
+        replica_count: 0
   images:
     ubuntu_2204:
       gcp: ubuntu-os-cloud/ubuntu-2204-lts

@@ -10,7 +10,80 @@ read_cloud() {
   awk -F: '/^cloud:[[:space:]]*/ { gsub(/[[:space:]]/, "", $2); print $2; exit }' "$ROOT_DIR/config/lab.yaml"
 }
 
+read_runtime_mode() {
+  awk '
+    /^runtime:[[:space:]]*$/ { in_runtime=1; next }
+    in_runtime && /^[^[:space:]]/ { in_runtime=0 }
+    in_runtime && /^[[:space:]]+mode:[[:space:]]*/ { sub(/^[[:space:]]+mode:[[:space:]]*/, ""); gsub(/[[:space:]]/, ""); print; exit }
+  ' "$ROOT_DIR/config/lab.yaml"
+}
+
+normalize_runtime_mode() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr '-' '_'
+}
+
+expand_home_path() {
+  path="$1"
+  if [ "$path" = "~" ]; then
+    printf '%s' "$HOME"
+  elif [ "${path:0:2}" = "~/" ]; then
+    printf '%s/%s' "$HOME" "${path:2}"
+  else
+    printf '%s' "$path"
+  fi
+}
+
+refresh_lab_known_hosts() {
+  known_hosts_file="$(awk '/^[[:space:]]*UserKnownHostsFile[[:space:]]+/ { print $2; exit }' "$SSH_CONFIG_OUT")"
+  [ -n "$known_hosts_file" ] || return 0
+  known_hosts_file="$(expand_home_path "$known_hosts_file")"
+  mkdir -p "$(dirname "$known_hosts_file")"
+  touch "$known_hosts_file"
+
+  tmp_hosts="$(mktemp)"
+  {
+    awk '/^[[:space:]]*Host[[:space:]]+/ && $2 != "*" { print $2 }' "$SSH_CONFIG_OUT"
+    awk '/^[[:space:]]*HostName[[:space:]]+/ { print $2 }' "$SSH_CONFIG_OUT"
+    awk '
+      /(^|[[:space:]])ansible_host=/ {
+        for (i = 1; i <= NF; i++) {
+          if ($i ~ /^ansible_host=/) {
+            sub(/^ansible_host=/, "", $i)
+            print $i
+          }
+        }
+      }
+    ' "$ANSIBLE_INVENTORY_OUT"
+  } | sort -u > "$tmp_hosts"
+
+  while IFS= read -r host; do
+    [ -n "$host" ] || continue
+    ssh-keygen -f "$known_hosts_file" -R "$host" >/dev/null 2>&1 || true
+    ssh-keygen -f "$known_hosts_file" -R "[$host]:22" >/dev/null 2>&1 || true
+  done < "$tmp_hosts"
+  rm -f "$tmp_hosts"
+
+  echo "Refreshed lab known_hosts entries: $known_hosts_file"
+}
+
+ensure_inventory_known_hosts() {
+  known_hosts_file="$(awk '/^[[:space:]]*UserKnownHostsFile[[:space:]]+/ { print $2; exit }' "$SSH_CONFIG_OUT")"
+  [ -n "$known_hosts_file" ] || return 0
+
+  tmp_inventory="$(mktemp)"
+  awk -v known_hosts_file="$known_hosts_file" '
+    /^coinops_ssh_common_args=/ && $0 !~ /UserKnownHostsFile=/ {
+      sub(/StrictHostKeyChecking=accept-new/, "UserKnownHostsFile=" known_hosts_file " -o StrictHostKeyChecking=accept-new")
+    }
+    { print }
+  ' "$ANSIBLE_INVENTORY_OUT" > "$tmp_inventory"
+  cat "$tmp_inventory" > "$ANSIBLE_INVENTORY_OUT"
+  rm -f "$tmp_inventory"
+}
+
 CLOUD="${CLOUD:-$(read_cloud)}"
+RUNTIME_MODE="${RUNTIME_MODE:-$(read_runtime_mode)}"
+RUNTIME_MODE="$(normalize_runtime_mode "${RUNTIME_MODE:-external}")"
 SSH_CONFIG_OUT="${SSH_CONFIG_OUT:-$HOME/.ssh/${CLOUD}-multicloud-lab.generated}"
 ANSIBLE_INVENTORY_OUT="${ANSIBLE_INVENTORY_OUT:-$ANSIBLE_DIR/inventory.cloud}"
 SSH_INCLUDE="Include $SSH_CONFIG_OUT"
@@ -21,12 +94,8 @@ mkdir -p "$(dirname "$SSH_CONFIG_OUT")" "$ANSIBLE_DIR" "$HOME/.ssh"
 touch "$HOME/.ssh/config"
 terraform output -raw ssh_config > "$SSH_CONFIG_OUT"
 terraform output -raw ansible_inventory > "$ANSIBLE_INVENTORY_OUT"
-
-BASTION_ALIAS="$(awk '$0 == "[bastion]" { getline; split($1, host, " "); print host[1]; exit }' "$ANSIBLE_INVENTORY_OUT")"
-if [ -n "$BASTION_ALIAS" ]; then
-  sed -i "s/ansible_ssh_common_args=/coinops_ssh_common_args=/g" "$ANSIBLE_INVENTORY_OUT"
-  sed -i -E "s/ProxyJump=[^ '\"]+/ProxyJump=${BASTION_ALIAS}/g" "$ANSIBLE_INVENTORY_OUT"
-fi
+refresh_lab_known_hosts
+ensure_inventory_known_hosts
 
 tmp_config="$(mktemp)"
 {
@@ -43,9 +112,7 @@ echo "App URL: $(terraform output -raw app_url)"
 
 if [ "$RUN_ANSIBLE" = "true" ]; then
   : "${SSH_KEY_PATH:?Set SSH_KEY_PATH before RUN_ANSIBLE=true}"
-  : "${DB_PASSWORD:?Set DB_PASSWORD before RUN_ANSIBLE=true}"
-  : "${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD before RUN_ANSIBLE=true}"
-  export RUNTIME_BACKEND="${RUNTIME_BACKEND:-external}"
+  export RUNTIME_BACKEND="$RUNTIME_MODE"
   cd "$REPO_ROOT"
   ansible-playbook -i "$ANSIBLE_INVENTORY_OUT" ansible/cloud-provision.yml
   ansible-playbook -i "$ANSIBLE_INVENTORY_OUT" ansible/cloud-deploy.yml
@@ -53,9 +120,8 @@ else
   echo "To deploy app after apply:"
   echo "  cd $REPO_ROOT"
   echo "  export SSH_KEY_PATH=~/.ssh/coinops_gcp_jump"
-  echo "  export DB_PASSWORD='...'"
-  echo "  export RABBITMQ_PASSWORD='...'"
-  echo "  export RUNTIME_BACKEND=external"
+  echo "  # secret values are fetched from cloud secret manager"
+  echo "  # runtime comes from terraform/multicloud-vm-yaml-lab/config/lab.yaml"
   echo "  ansible-playbook -i $ANSIBLE_INVENTORY_OUT ansible/cloud-provision.yml"
   echo "  ansible-playbook -i $ANSIBLE_INVENTORY_OUT ansible/cloud-deploy.yml"
   echo "Or run: RUN_ANSIBLE=true ./scripts/post-apply.sh"

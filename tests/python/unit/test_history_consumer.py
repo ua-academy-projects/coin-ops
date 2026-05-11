@@ -175,3 +175,77 @@ def test_execute_with_reconnect_swaps_in_new_connection(history_consumer_module,
     ]
     assert second_conn.commit_calls == 1
     assert db_ref["conn"] is second_conn
+
+
+
+def test_process_cloud_message_body_delegates_to_existing_payload_processor(history_consumer_module, monkeypatch):
+    processed = []
+    monkeypatch.setattr(
+        history_consumer_module,
+        "process_event_payload",
+        lambda db_ref, data: processed.append((db_ref, data)),
+    )
+    db_ref = {"conn": ConnectionSpy()}
+
+    history_consumer_module.process_cloud_message_body(db_ref, b'{"type":"price","coin":"bitcoin"}')
+
+    assert processed == [(db_ref, {"type": "price", "coin": "bitcoin"})]
+
+
+def test_pubsub_callback_acks_on_success(history_consumer_module, monkeypatch):
+    monkeypatch.setattr(history_consumer_module, "process_cloud_message_body", lambda db_ref, body: None)
+
+    class Message:
+        data = b'{"type":"price"}'
+        message_id = "m-1"
+        acked = False
+        nacked = False
+
+        def ack(self):
+            self.acked = True
+
+        def nack(self):
+            self.nacked = True
+
+    message = Message()
+    callback = history_consumer_module.make_pubsub_callback({"conn": ConnectionSpy()})
+
+    callback(message)
+
+    assert message.acked is True
+    assert message.nacked is False
+
+
+def test_pubsub_callback_nacks_on_failure(history_consumer_module, monkeypatch):
+    def fail(*args, **kwargs):
+        raise RuntimeError("bad payload")
+
+    monkeypatch.setattr(history_consumer_module, "process_cloud_message_body", fail)
+
+    class Message:
+        data = b'{bad-json'
+        nacked = False
+        acked = False
+
+        def ack(self):
+            self.acked = True
+
+        def nack(self):
+            self.nacked = True
+
+    message = Message()
+    conn = ConnectionSpy()
+    callback = history_consumer_module.make_pubsub_callback({"conn": conn})
+
+    callback(message)
+
+    assert message.acked is False
+    assert message.nacked is True
+    assert conn.rollback_calls == 1
+
+
+def test_build_pubsub_subscription_path_accepts_full_path(history_consumer_module):
+    assert (
+        history_consumer_module.build_pubsub_subscription_path(None, "", "projects/p/subscriptions/s")
+        == "projects/p/subscriptions/s"
+    )

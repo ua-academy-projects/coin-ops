@@ -7,20 +7,31 @@ ansible_user: "{{ coinops_ansible_user | default('vagrant', true) }}"
 ansible_ssh_private_key_file: "{{ (coinops_ssh_private_key_file | default(lookup('env', 'SSH_KEY_PATH'), true)) | expanduser }}"
 ansible_ssh_common_args: "{{ coinops_ssh_common_args | default('-o StrictHostKeyChecking=no', true) }}"
 
-# Passwords
-rabbitmq_password: "{{ lookup('env', 'RABBITMQ_PASSWORD') }}"
-db_password: "{{ lookup('env', 'DB_PASSWORD') }}"
+# Passwords are resolved by cloud-deploy.yml from cloud secret manager.
+# Env fallback is kept only for old local/non-cloud runs.
+rabbitmq_password: "{{ coinops_rabbitmq_password | default(lookup('env', 'RABBITMQ_PASSWORD'), true) }}"
+db_password: "{{ coinops_db_password | default(lookup('env', 'DB_PASSWORD'), true) }}"
 
 # Service accounts
 rabbitmq_user: cognitor
-db_name: cognitor
-db_user: cognitor
-runtime_backend: "{{ lookup('env', 'RUNTIME_BACKEND') | default('external', true) }}"
+db_name: "{{ coinops_db_name | default('cognitor', true) }}"
+db_user: "{{ coinops_db_user | default('cognitor', true) }}"
+db_port: "{{ coinops_db_port | default(5432, true) }}"
+runtime_backend: "{{ coinops_runtime_backend | default(lookup('env', 'RUNTIME_BACKEND') | default('external', true), true) }}"
 
 # Ports
 proxy_port: 8080
 history_port: 8000
-cloud_db_host: "{{ coinops_db_host | default((hostvars[groups['db'][0]].ansible_host if 'db' in groups else hostvars[groups['history'][0]].ansible_host), true) }}"
+cloud_db_host: >-
+  {{
+    coinops_db_host
+    if (coinops_db_host is defined and (coinops_db_host | string | length > 0))
+    else (
+      hostvars[groups['db'][0]].ansible_host
+      if ('db' in groups and (groups['db'] | length > 0))
+      else hostvars[groups['history'][0]].ansible_host
+    )
+  }}
 postgres_bind_ip: "{{ cloud_db_host }}"
 
 # Public entrypoint / TLS
@@ -43,12 +54,27 @@ ui_image: "{{ image_registry }}/coin-ops-ui:{{ image_tag }}"
 postgres_runtime_image: "{{ image_registry }}/coin-ops-postgres-runtime:{{ image_tag }}"
 postgres_image: "{{ postgres_runtime_image if runtime_backend == 'postgres' else 'postgres:16-alpine' }}"
 registry_username: "{{ lookup('env', 'GHCR_USERNAME') | default('', true) }}"
-registry_token: "{{ lookup('env', 'GHCR_TOKEN') | default('', true) }}"
+registry_token: "{{ coinops_ghcr_token | default(lookup('env', 'GHCR_TOKEN') | default('', true), true) }}"
 
 # Derived connection strings
 rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@{{ cloud_db_host }}:5672/"
 database_url: "postgresql://{{ db_user }}:{{ db_password }}@localhost:5432/{{ db_name }}"
 history_database_url: "postgresql://{{ db_user }}:{{ db_password }}@postgres:5432/{{ db_name }}"
-proxy_database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ cloud_db_host }}:5432/{{ db_name }}"
-redis_url: "redis://{{ cloud_db_host }}:6379/0"
+proxy_database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ cloud_db_host }}:{{ db_port }}/{{ db_name }}"
+container_redis_url: "redis://{{ cloud_db_host }}:6379/0"
 
+
+# Cloud-native runtime
+queue_backend: "{{ coinops_queue_backend | default(lookup('env', 'QUEUE_BACKEND') | default('', true), true) }}"
+queue_name: "{{ coinops_queue_name | default('market-events', true) }}"
+sqs_queue_url: "{{ coinops_queue_url | default(lookup('env', 'SQS_QUEUE_URL') | default('', true), true) }}"
+aws_region: "{{ coinops_aws_region | default(lookup('env', 'AWS_REGION') | default('', true), true) }}"
+gcp_project_id: "{{ coinops_gcp_project_id | default(lookup('env', 'GCP_PROJECT_ID') | default('', true), true) }}"
+pubsub_topic_id: "{{ coinops_pubsub_topic | default(lookup('env', 'PUBSUB_TOPIC_ID') | default('', true), true) }}"
+pubsub_subscription_id: "{{ coinops_pubsub_subscription | default(lookup('env', 'PUBSUB_SUBSCRIPTION_ID') | default('', true), true) }}"
+session_backend: "{{ coinops_session_backend | default('managed_valkey' if runtime_backend == 'cloud_native' else '', true) }}"
+cache_backend: "{{ coinops_cache_backend | default('valkey' if runtime_backend == 'cloud_native' else 'redis', true) }}"
+cache_host: "{{ coinops_cache_host | default('', true) }}"
+cache_port: "{{ coinops_cache_port | default(6379, true) }}"
+managed_redis_url: "redis://{{ cache_host }}:{{ cache_port }}/0"
+redis_url: "{{ coinops_redis_url | default((managed_redis_url if (runtime_backend == 'cloud_native' and (cache_host | length > 0)) else container_redis_url), true) }}"

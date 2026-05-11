@@ -31,6 +31,12 @@ POSTGRES_VISIBILITY_TIMEOUT = int(os.environ.get("POSTGRES_VISIBILITY_TIMEOUT", 
 
 POSTGRES_MAX_RETRIES = int(os.environ.get("POSTGRES_MAX_RETRIES", "3"))
 
+QUEUE_BACKEND = (os.environ.get("QUEUE_BACKEND") or "").strip()
+SQS_QUEUE_URL = os.environ.get("SQS_QUEUE_URL", "")
+AWS_REGION = os.environ.get("AWS_REGION", "")
+GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID") or os.environ.get("GOOGLE_CLOUD_PROJECT", "")
+PUBSUB_SUBSCRIPTION_ID = os.environ.get("PUBSUB_SUBSCRIPTION_ID", "")
+
 INSERT_SQL = """
     INSERT INTO market_snapshots
         (question, slug, yes_price, no_price, volume_24h, category, end_date, fetched_at)
@@ -265,9 +271,125 @@ def run_postgres_worker(db_ref: dict) -> None:
             time.sleep(5)
 
 
+def process_cloud_message_body(db_ref: dict, body: bytes | str) -> None:
+    if isinstance(body, bytes):
+        body = body.decode("utf-8")
+    data = json.loads(body)
+    process_event_payload(db_ref, data)
+
+
+def run_sqs_worker(db_ref: dict) -> None:
+    if not SQS_QUEUE_URL:
+        raise ValueError("SQS_QUEUE_URL is required when QUEUE_BACKEND=sqs")
+    import boto3
+
+    kwargs = {"region_name": AWS_REGION} if AWS_REGION else {}
+    client = boto3.client("sqs", **kwargs)
+    log.info("Consuming from SQS queue %s", SQS_QUEUE_URL)
+
+    while True:
+        try:
+            response = client.receive_message(
+                QueueUrl=SQS_QUEUE_URL,
+                MaxNumberOfMessages=1,
+                WaitTimeSeconds=20,
+                VisibilityTimeout=POSTGRES_VISIBILITY_TIMEOUT,
+                MessageAttributeNames=["All"],
+            )
+            for message in response.get("Messages", []):
+                receipt_handle = message["ReceiptHandle"]
+                try:
+                    process_cloud_message_body(db_ref, message.get("Body", ""))
+                    client.delete_message(QueueUrl=SQS_QUEUE_URL, ReceiptHandle=receipt_handle)
+                    log.info("Processed and deleted SQS message %s", message.get("MessageId"))
+                except (psycopg2.OperationalError, psycopg2.InterfaceError):
+                    raise
+                except Exception as exc:
+                    try:
+                        db_ref["conn"].rollback()
+                    except Exception:
+                        pass
+                    log.error("Failed SQS message %s; leaving for retry/DLQ: %s", message.get("MessageId"), exc)
+        except (psycopg2.OperationalError, psycopg2.InterfaceError) as exc:
+            log.error("SQS worker database error: %s - reconnecting", exc)
+            time.sleep(5)
+            db_ref["conn"] = reconnect_postgres(db_ref.get("conn"))
+        except Exception as exc:
+            log.error("SQS worker loop error: %s - retrying in 5s", exc)
+            time.sleep(5)
+
+
+def build_pubsub_subscription_path(subscriber, project_id: str, subscription_id: str) -> str:
+    if subscription_id.startswith("projects/"):
+        return subscription_id
+    if not project_id:
+        raise ValueError("GCP_PROJECT_ID or GOOGLE_CLOUD_PROJECT is required when QUEUE_BACKEND=pubsub")
+    if not subscription_id:
+        raise ValueError("PUBSUB_SUBSCRIPTION_ID is required when QUEUE_BACKEND=pubsub")
+    return subscriber.subscription_path(project_id, subscription_id)
+
+
+def make_pubsub_callback(db_ref: dict):
+    def callback(message):
+        try:
+            process_cloud_message_body(db_ref, message.data)
+            message.ack()
+            log.info("Processed and acked Pub/Sub message %s", getattr(message, "message_id", ""))
+        except (psycopg2.OperationalError, psycopg2.InterfaceError):
+            message.nack()
+            raise
+        except Exception as exc:
+            try:
+                db_ref["conn"].rollback()
+            except Exception:
+                pass
+            log.error("Failed Pub/Sub message; nacking for retry/DLQ: %s", exc)
+            message.nack()
+
+    return callback
+
+
+def run_pubsub_worker(db_ref: dict) -> None:
+    from google.cloud import pubsub_v1
+
+    subscriber = pubsub_v1.SubscriberClient()
+    subscription_path = build_pubsub_subscription_path(subscriber, GCP_PROJECT_ID, PUBSUB_SUBSCRIPTION_ID)
+    log.info("Consuming from Pub/Sub subscription %s", subscription_path)
+
+    while True:
+        future = subscriber.subscribe(subscription_path, callback=make_pubsub_callback(db_ref))
+        try:
+            future.result()
+        except (psycopg2.OperationalError, psycopg2.InterfaceError) as exc:
+            future.cancel()
+            log.error("Pub/Sub worker database error: %s - reconnecting", exc)
+            time.sleep(5)
+            db_ref["conn"] = reconnect_postgres(db_ref.get("conn"))
+        except Exception as exc:
+            future.cancel()
+            log.error("Pub/Sub worker loop error: %s - retrying in 5s", exc)
+            time.sleep(5)
+
+
+def run_cloud_native_worker(db_ref: dict) -> None:
+    backend = QUEUE_BACKEND
+    if backend == "":
+        if SQS_QUEUE_URL:
+            backend = "sqs"
+        elif PUBSUB_SUBSCRIPTION_ID:
+            backend = "pubsub"
+
+    if backend == "sqs":
+        run_sqs_worker(db_ref)
+    elif backend == "pubsub":
+        run_pubsub_worker(db_ref)
+    else:
+        raise ValueError(f"Unsupported or missing QUEUE_BACKEND for cloud_native runtime: {backend!r}")
+
+
 
 def main() -> None:
-    if RUNTIME_BACKEND not in ("external", "postgres"):
+    if RUNTIME_BACKEND not in ("external", "postgres", "cloud_native"):
         raise ValueError(f"Unsupported RUNTIME_BACKEND parameter: {RUNTIME_BACKEND!r}")
 
     db = connect_postgres()
@@ -278,6 +400,8 @@ def main() -> None:
         run_rabbitmq_worker(db_ref)
     elif RUNTIME_BACKEND == "postgres":
         run_postgres_worker(db_ref)
+    elif RUNTIME_BACKEND == "cloud_native":
+        run_cloud_native_worker(db_ref)
 
 
 
