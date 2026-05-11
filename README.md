@@ -127,6 +127,53 @@ flowchart TD
 | Queue | SQS + DLQ | Pub/Sub + DLQ topic/subscription |
 | Sessions/cache | ElastiCache Valkey | Memorystore Valkey |
 | Secrets | AWS Secrets Manager | GCP Secret Manager |
+
+## Cloud-Native Data Flow (`dev-Shabat-cloud` path)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Browser
+    participant CF as Cloudflare DNS
+    participant LB as HTTPS Load Balancer
+    participant UI as UI container on app VM
+    participant Proxy as Go proxy on app VM
+    participant HistoryAPI as History API on app VM
+    participant Queue as Managed queue<br/>SQS or Pub/Sub
+    participant Consumer as History consumer container
+    participant DB as Managed PostgreSQL<br/>RDS or Cloud SQL
+    participant Cache as Managed Valkey<br/>ElastiCache or Memorystore
+    participant Secrets as Cloud Secret Manager
+    participant Ansible as Ansible deploy
+
+    Ansible->>Secrets: fetch DB password and GHCR token by secret ref
+    Ansible->>UI: render env files and start containers
+    Ansible->>Proxy: render env files and start containers
+    Ansible->>HistoryAPI: render env files and start containers
+    Ansible->>Consumer: render env files and start container
+
+    User->>CF: open https://coinops.pp.ua
+    CF-->>User: resolve load balancer address
+    User->>LB: HTTPS request
+    LB->>UI: serve React app over HTTP 80
+    UI-->>User: static UI assets
+
+    User->>LB: GET /api/*
+    LB->>Proxy: route API request
+    Proxy->>Cache: read/write UI session state
+    Proxy->>Queue: publish market/price event
+    Proxy-->>User: live market response
+
+    Queue->>Consumer: deliver event
+    Consumer->>DB: insert market_snapshots / price_snapshots
+    Consumer-->>Queue: ack/delete message on success
+
+    User->>LB: GET /history-api/*
+    LB->>HistoryAPI: route history request
+    HistoryAPI->>DB: read time-series history
+    HistoryAPI-->>User: chart/history JSON
+```
+
 ## Current Data Flow
 
 | Path | Flow | Purpose |
