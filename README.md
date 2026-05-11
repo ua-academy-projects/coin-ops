@@ -64,54 +64,55 @@ node-02
 
 The `dev-Shabat-cloud` branch keeps the browser contract the same, but moves infrastructure and runtime dependencies to cloud-native services. Terraform creates the cloud resources from `terraform/multicloud-vm-yaml-lab/config/lab.yaml`, and Ansible deploys the app containers onto private app VMs.
 
-```text
-Browser
-  |
-  v
-Cloudflare DNS
-  |
-  v
-HTTPS 443 cloud load balancer
-  |   AWS: Application Load Balancer + ACM certificate
-  |   GCP: HTTPS Load Balancer + Google-managed certificate
-  |
-  v
-private app VM group
-  app-1 / app-2
-  ui container (nginx + React SPA)
-  proxy container :8080
-  history-api container :8000
-  |
-  +-- /api -----------> Go proxy
-  |                       - fetches Polymarket markets
-  |                       - fetches whale leaderboard/positions
-  |                       - fetches BTC/ETH and USD/UAH
-  |                       - publishes events to managed queue
-  |                       - stores UI session JSON in managed Valkey
-  |
-  +-- /history-api ---> FastAPI history API
-                          - reads managed PostgreSQL history tables
+```mermaid
+flowchart TD
+    browser["Browser"] --> cf["Cloudflare DNS"]
+    cf --> lb["HTTPS 443 cloud load balancer"]
 
-managed database
-  AWS: RDS PostgreSQL
-  GCP: Cloud SQL PostgreSQL
+    lb --> app1["Private app VM: app-1\nui nginx + React\nGo proxy :8080\nhistory-api :8000"]
+    lb --> app2["Private app VM: app-2\nui nginx + React\nGo proxy :8080\nhistory-api :8000"]
 
-managed queue
-  AWS: SQS + DLQ
-  GCP: Pub/Sub + DLQ topic/subscription
+    admin["Operator SSH"] --> bastion["Bastion VM\nSSH/admin only"]
+    bastion -. "ProxyJump" .-> app1
+    bastion -. "ProxyJump" .-> app2
 
-managed session/cache
-  AWS: ElastiCache for Valkey
-  GCP: Memorystore for Valkey
+    app1 --> db["Managed PostgreSQL\nAWS RDS / GCP Cloud SQL"]
+    app2 --> db
 
-bastion VM
-  - public SSH/admin entrypoint only
-  - app VMs and managed services stay private
+    app1 --> queue["Managed queue\nAWS SQS + DLQ\nGCP Pub/Sub + DLQ"]
+    app2 --> queue
 
-secret manager
-  AWS: Secrets Manager
-  GCP: Secret Manager
-  - stores DB password / GHCR token references used by Ansible deploy
+    app1 --> cache["Managed Valkey sessions\nAWS ElastiCache\nGCP Memorystore"]
+    app2 --> cache
+
+    ansible["Ansible deploy"] --> secrets["Cloud secret manager\nAWS Secrets Manager\nGCP Secret Manager"]
+    secrets --> ansible
+    ansible --> app1
+    ansible --> app2
+
+    tf["Terraform root\nconfig/lab.yaml"] --> network["VPC / subnets / NAT / firewall"]
+    tf --> lb
+    tf --> bastion
+    tf --> app1
+    tf --> app2
+    tf --> db
+    tf --> queue
+    tf --> cache
+    tf --> secrets
+
+    subgraph AWS["AWS mapping"]
+      aws_lb["ALB + ACM"]
+      aws_db["RDS PostgreSQL"]
+      aws_queue["SQS"]
+      aws_cache["ElastiCache Valkey"]
+    end
+
+    subgraph GCP["GCP mapping"]
+      gcp_lb["HTTPS Load Balancer + managed cert"]
+      gcp_db["Cloud SQL PostgreSQL"]
+      gcp_queue["Pub/Sub"]
+      gcp_cache["Memorystore Valkey"]
+    end
 ```
 
 | Layer | AWS implementation | GCP implementation |
@@ -126,7 +127,6 @@ secret manager
 | Queue | SQS + DLQ | Pub/Sub + DLQ topic/subscription |
 | Sessions/cache | ElastiCache Valkey | Memorystore Valkey |
 | Secrets | AWS Secrets Manager | GCP Secret Manager |
-
 ## Current Data Flow
 
 | Path | Flow | Purpose |
