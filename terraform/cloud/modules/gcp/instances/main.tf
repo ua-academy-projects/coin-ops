@@ -1,3 +1,10 @@
+resource "google_service_account" "this" {
+  for_each = var.service_accounts
+
+  account_id   = each.value.name
+  display_name = each.value.display_name
+}
+
 resource "google_compute_instance" "this" {
   for_each = local.instances
 

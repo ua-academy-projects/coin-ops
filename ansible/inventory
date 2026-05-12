@@ -8,7 +8,7 @@ coinops-proxy ansible_host=10.10.1.2 private_ip=10.10.1.2
 coinops-ui ansible_host=10.10.2.4 private_ip=10.10.2.4
 
 [bastion]
-coinops-bastion ansible_host=34.62.67.29 private_ip=10.10.2.3
+coinops-bastion ansible_host=146.148.13.94 private_ip=10.10.2.3
 
 [nat]
 coinops-nat ansible_host=10.10.2.2 private_ip=10.10.2.2

@@ -18,3 +18,23 @@ output "public_ips" {
 output "ansible_inventory_path" {
   value = local_file.ansible_inventory.filename
 }
+
+output "cloud_sql_instance_name" {
+  value = var.cloud == "gcp" ? try(module.gcp_sql[0].instance_name, null) : null
+}
+
+output "cloud_sql_private_ip" {
+  value = var.cloud == "gcp" ? try(module.gcp_sql[0].private_ip, null) : null
+}
+
+output "cloud_sql_connection_name" {
+  value = var.cloud == "gcp" ? try(module.gcp_sql[0].connection_name, null) : null
+}
+
+output "cloud_sql_database_name" {
+  value = var.cloud == "gcp" ? try(module.gcp_sql[0].database_name, null) : null
+}
+
+output "cloud_sql_database_user" {
+  value = var.cloud == "gcp" ? try(module.gcp_sql[0].database_user, null) : null
+}

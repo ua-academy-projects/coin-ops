@@ -93,18 +93,72 @@ variable "gsm_secrets" {
   default = {}
 }
 
-variable "gcp_service_accounts" {
+variable "service_accounts" {
   type = map(object({
-    account_id   = string
+    name         = string
     display_name = string
   }))
   default = {}
 }
 
-variable "gcp_secret_access" {
+variable "secret_access" {
   type = map(object({
     service_account = string
     secrets         = list(string)
   }))
   default = {}
+}
+
+variable "sql" {
+  type = object({
+    placement = string
+    instance = object({
+      name                = string
+      edition             = string
+      database_version    = string
+      instance_type       = string
+      availability_type   = string
+      disk_type           = string
+      disk_size           = number
+      disk_autoresize     = bool
+      deletion_protection = bool
+      backup_enabled      = bool
+      pitr_enabled        = bool
+      private_range_name  = string
+      private_range_cidr  = number
+    })
+    database = object({
+      name = string
+    })
+    user = object({
+      name = string
+    })
+  })
+  default  = null
+  nullable = true
+
+  validation {
+    condition     = var.sql == null || contains(["enterprise", "enterprise_plus"], var.sql.instance.edition)
+    error_message = "sql.instance.edition must be one of: enterprise, enterprise_plus."
+  }
+
+  validation {
+    condition     = var.sql == null || contains(["postgres_16"], var.sql.instance.database_version)
+    error_message = "sql.instance.database_version must be one of: postgres_16."
+  }
+
+  validation {
+    condition     = var.sql == null || contains(["economical"], var.sql.instance.instance_type)
+    error_message = "sql.instance.instance_type must be one of: economical."
+  }
+
+  validation {
+    condition     = var.sql == null || contains(["single_zone", "regional"], var.sql.instance.availability_type)
+    error_message = "sql.instance.availability_type must be one of: single_zone, regional."
+  }
+
+  validation {
+    condition     = var.sql == null || contains(["hdd", "ssd"], var.sql.instance.disk_type)
+    error_message = "sql.instance.disk_type must be one of: hdd, ssd."
+  }
 }

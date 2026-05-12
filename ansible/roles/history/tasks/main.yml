@@ -86,6 +86,12 @@
     path: /opt/cognitor/history/history
     state: absent
 
+- name: Install PostgreSQL client for Cloud SQL bootstrap
+  package:
+    name: postgresql-client
+    state: present
+  when: cloud_sql_enabled
+
 - name: Copy PostgreSQL runtime schema
   copy:
     src: "{{ playbook_dir }}/../history/schema.sql"
@@ -119,6 +125,7 @@
     chdir: /opt/cognitor/history
   changed_when: false
   failed_when: false
+  when: not cloud_sql_enabled
 
 - name: Repair PostgreSQL data directory ownership for selected Postgres image
   file:
@@ -130,6 +137,7 @@
     group: '70'
     mode: '0700'
     recurse: yes
+  when: not cloud_sql_enabled
 
 - name: Pull history container images
   command: docker compose -f /opt/cognitor/history/compose.yaml pull
@@ -142,6 +150,16 @@
     postgres{% if runtime_backend == "external" %} rabbitmq{% endif %}
   args:
     chdir: /opt/cognitor/history
+  when: not cloud_sql_enabled
+
+- name: Start Cloud SQL history dependencies first
+  command: >-
+    docker compose -f /opt/cognitor/history/compose.yaml up -d rabbitmq
+  args:
+    chdir: /opt/cognitor/history
+  when:
+    - cloud_sql_enabled
+    - runtime_backend == "external"
 
 - name: Wait for containerized PostgreSQL readiness
   command: "docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres pg_isready -U {{ db_user }} -d {{ db_name }}"
@@ -151,6 +169,15 @@
   delay: 5
   register: postgres_ready
   until: postgres_ready.rc == 0
+  when: not cloud_sql_enabled
+
+- name: Wait for Cloud SQL PostgreSQL readiness
+  command: "pg_isready -h {{ cloud_sql_private_ip }} -p 5432 -U {{ db_user }} -d {{ db_name }}"
+  retries: 12
+  delay: 5
+  register: cloud_sql_ready
+  until: cloud_sql_ready.rc == 0
+  when: cloud_sql_enabled
 
 - name: Check for legacy dump file
   stat:
@@ -164,6 +191,19 @@
   when:
     - legacy_postgres_dump.stat.exists
     - not host_postgres_migration_marker.stat.exists
+    - not cloud_sql_enabled
+
+- name: Restore legacy PostgreSQL dump into Cloud SQL
+  shell: "psql -h {{ cloud_sql_private_ip }} -U {{ db_user }} -d {{ db_name }} < /var/backups/coin-ops/pre-container-postgres.sql"
+  environment:
+    PGPASSWORD: "{{ db_password }}"
+  no_log: true
+  args:
+    chdir: /opt/cognitor/history
+  when:
+    - legacy_postgres_dump.stat.exists
+    - not host_postgres_migration_marker.stat.exists
+    - cloud_sql_enabled
 
 - name: Apply PostgreSQL runtime schema before app startup
   shell: >-
@@ -174,6 +214,20 @@
     chdir: /opt/cognitor/history
   register: schema_result
   changed_when: false
+  when: not cloud_sql_enabled
+
+- name: Apply PostgreSQL runtime schema to Cloud SQL before app startup
+  shell: >-
+    psql -v ON_ERROR_STOP=1 -h {{ cloud_sql_private_ip }} -U {{ db_user }} -d {{ db_name }}
+    < /opt/cognitor/history/schema.sql
+  environment:
+    PGPASSWORD: "{{ db_password }}"
+  no_log: true
+  args:
+    chdir: /opt/cognitor/history
+  register: cloud_sql_schema_result
+  changed_when: false
+  when: cloud_sql_enabled
 
 - name: Persist runtime application role before wrapper bootstrap
   command: >-
@@ -184,7 +238,22 @@
     chdir: /opt/cognitor/history
   register: runtime_app_role_result
   changed_when: false
-  when: runtime_backend == "postgres"
+  when:
+    - runtime_backend == "postgres"
+    - not cloud_sql_enabled
+
+- name: Persist runtime application role in Cloud SQL before wrapper bootstrap
+  command: >-
+    psql -v ON_ERROR_STOP=1 -h {{ cloud_sql_private_ip }} -U {{ db_user }} -d {{ db_name }}
+    -c "ALTER DATABASE {{ db_name }} SET runtime.app_role = '{{ db_user }}';"
+  environment:
+    PGPASSWORD: "{{ db_password }}"
+  no_log: true
+  register: cloud_sql_runtime_app_role_result
+  changed_when: false
+  when:
+    - runtime_backend == "postgres"
+    - cloud_sql_enabled
 
 - name: Apply runtime queue and session schema
   shell: |
@@ -204,7 +273,32 @@
     chdir: /opt/cognitor/history
   register: runtime_schema_result
   changed_when: false
-  when: runtime_backend == "postgres"
+  when:
+    - runtime_backend == "postgres"
+    - not cloud_sql_enabled
+
+- name: Apply runtime queue and session schema to Cloud SQL
+  shell: |
+    (
+      printf "%s\n" "SET runtime.app_role = '{{ db_user }}';"
+      cat \
+        /opt/cognitor/history/runtime/01_schema.sql \
+        /opt/cognitor/history/runtime/02_wrappers.sql \
+        /opt/cognitor/history/runtime/03_notify.sql \
+        /opt/cognitor/history/runtime/04_advisory.sql \
+        /opt/cognitor/history/runtime/05_dlq.sql \
+        /opt/cognitor/history/runtime/06_cache_schema.sql \
+        /opt/cognitor/history/runtime/07_cache_wrappers.sql \
+        /opt/cognitor/history/runtime/08_cron.sql
+    ) | PGPASSWORD="{{ db_password }}" psql -v ON_ERROR_STOP=1 -h {{ cloud_sql_private_ip }} -U {{ db_user }} -d {{ db_name }}
+  args:
+    chdir: /opt/cognitor/history
+  register: cloud_sql_runtime_schema_result
+  changed_when: false
+  no_log: true
+  when:
+    - runtime_backend == "postgres"
+    - cloud_sql_enabled
 
 - name: Verify PostgreSQL runtime extensions are installed
   command: >-
@@ -216,7 +310,23 @@
   register: runtime_extension_check
   changed_when: false
   failed_when: runtime_extension_check.stdout | trim != "pg_cron,pgmq"
-  when: runtime_backend == "postgres"
+  when:
+    - runtime_backend == "postgres"
+    - not cloud_sql_enabled
+
+- name: Verify Cloud SQL runtime extensions are installed
+  command: >-
+    psql -v ON_ERROR_STOP=1 -At -h {{ cloud_sql_private_ip }} -U {{ db_user }} -d {{ db_name }}
+    -c "SELECT string_agg(extname, ',' ORDER BY extname) FROM pg_extension WHERE extname IN ('pg_cron', 'pgmq');"
+  environment:
+    PGPASSWORD: "{{ db_password }}"
+  no_log: true
+  register: cloud_sql_runtime_extension_check
+  changed_when: false
+  failed_when: cloud_sql_runtime_extension_check.stdout | trim != "pg_cron,pgmq"
+  when:
+    - runtime_backend == "postgres"
+    - cloud_sql_enabled
 
 - name: Verify PostgreSQL runtime cron jobs are registered
   command: >-
@@ -228,7 +338,23 @@
   register: runtime_cron_check
   changed_when: false
   failed_when: runtime_cron_check.stdout | trim | int != 3
-  when: runtime_backend == "postgres"
+  when:
+    - runtime_backend == "postgres"
+    - not cloud_sql_enabled
+
+- name: Verify Cloud SQL runtime cron jobs are registered
+  command: >-
+    psql -v ON_ERROR_STOP=1 -At -h {{ cloud_sql_private_ip }} -U {{ db_user }} -d {{ db_name }}
+    -c "SELECT count(*) FROM cron.job WHERE jobname IN ('runtime-cache-reap', 'runtime-session-reap', 'runtime-dlq-reap') AND active;"
+  environment:
+    PGPASSWORD: "{{ db_password }}"
+  no_log: true
+  register: cloud_sql_runtime_cron_check
+  changed_when: false
+  failed_when: cloud_sql_runtime_cron_check.stdout | trim | int != 3
+  when:
+    - runtime_backend == "postgres"
+    - cloud_sql_enabled
 
 - name: Mark legacy PostgreSQL migration complete
   file:

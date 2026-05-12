@@ -24,7 +24,8 @@ variable "subnetworks" {
 
 variable "service_accounts" {
   type = map(object({
-    email = string
+    name         = string
+    display_name = string
   }))
 }
 

@@ -8,6 +8,12 @@ module "gcp_network" {
   count  = var.cloud == "gcp" ? 1 : 0
 
   network = var.network
+  nat_route = var.cloud == "gcp" && var.nat_route != null ? {
+    name              = var.nat_route.name
+    destination_range = var.nat_route.destination_range
+    target_tags       = var.nat_route.target_tags
+    next_hop_instance = module.gcp_instances[0].instance_self_links[var.nat_route.instance_workload]
+  } : null
 }
 
 
@@ -24,23 +30,9 @@ module "gcp_secrets" {
   source = "./modules/gcp/secrets"
   count  = var.cloud == "gcp" ? 1 : 0
 
-  secrets = var.gsm_secrets
-}
-
-module "gcp_service_accounts" {
-  source = "./modules/gcp/service-accounts"
-  count  = var.cloud == "gcp" ? 1 : 0
-
-  service_accounts = var.gcp_service_accounts
-}
-
-module "gcp_secret_access" {
-  source = "./modules/gcp/secret-access"
-  count  = var.cloud == "gcp" ? 1 : 0
-
-  secret_access    = var.gcp_secret_access
-  service_accounts = module.gcp_service_accounts[0].service_accounts
-  secrets          = module.gcp_secrets[0].secret_resource_ids
+  secrets          = var.gsm_secrets
+  secret_access    = var.secret_access
+  service_accounts = module.gcp_instances[0].service_accounts
 }
 
 
@@ -52,20 +44,22 @@ module "gcp_instances" {
   ssh_public_key_path = pathexpand(var.ssh_public_key_path)
   network_name        = module.gcp_network[0].network_name
   subnetworks         = module.gcp_network[0].subnetwork_names
-  service_accounts    = module.gcp_service_accounts[0].service_accounts
+  service_accounts    = var.service_accounts
 
   workloads = var.workloads
 }
 
-module "gcp_network_routes" {
-  source = "./modules/gcp/network-routes"
-  count  = var.cloud == "gcp" && var.nat_route != null ? 1 : 0
+module "gcp_sql" {
+  source = "./modules/gcp/sql"
+  count  = var.cloud == "gcp" && var.sql != null ? 1 : 0
 
-  network_name      = module.gcp_network[0].network_name
-  route_name        = var.nat_route.name
-  destination_range = var.nat_route.destination_range
-  target_tags       = var.nat_route.target_tags
-  next_hop_instance = module.gcp_instances[0].instance_self_links[var.nat_route.instance_workload]
+  placement             = var.sql.placement
+  network_name          = module.gcp_network[0].network_name
+  db_password_secret_id = var.gsm_secrets["db_password"].secret_id
+
+  instance = var.sql.instance
+  database = var.sql.database
+  user     = var.sql.user
 }
 
 
