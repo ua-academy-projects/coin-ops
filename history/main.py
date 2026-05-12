@@ -13,6 +13,8 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
+# POSTGRES ->
+# reads DATABASE_URL
 DATABASE_URL = os.environ["DATABASE_URL"]
 
 app = FastAPI(title="Coin-Ops History API", version="1.0.0")

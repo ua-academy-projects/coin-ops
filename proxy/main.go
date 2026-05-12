@@ -656,6 +656,8 @@ func main() {
 	if backend == "" {
 		backend = "external"
 	}
+// POSTGRES ->
+// reads DATABASE_URL
 	dbURL := os.Getenv("DATABASE_URL")
 	log.Printf("Runtime backend: %s", backend)
 

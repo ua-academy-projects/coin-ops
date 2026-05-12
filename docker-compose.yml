@@ -1,3 +1,5 @@
+# POSTGRES ->
+# Defines the local postgres container
 services:
   postgres:
     image: postgres:16-alpine
@@ -43,6 +45,8 @@ services:
       context: ./history
       dockerfile: Dockerfile.api
     environment:
+# POSTGRES ->
+# gives history-api DATABASE_URL
       DATABASE_URL: postgresql://cognitor:changeme@postgres:5432/cognitor
       PORT: "8000"
       RUNTIME_BACKEND: ${RUNTIME_BACKEND:-external}
@@ -57,6 +61,8 @@ services:
       context: ./history
       dockerfile: Dockerfile.consumer
     environment:
+# POSTGRES ->
+# gives history-consumer DATABASE_URL
       DATABASE_URL: postgresql://cognitor:changeme@postgres:5432/cognitor
       RABBITMQ_URL: amqp://cognitor:changeme@rabbitmq:5672/
       RUNTIME_BACKEND: ${RUNTIME_BACKEND:-external}
@@ -73,6 +79,8 @@ services:
       RABBITMQ_URL: amqp://cognitor:changeme@rabbitmq:5672/
       REDIS_URL: redis://redis:6379/0
       PORT: "8080"
+# POSTGRES ->
+# gives proxy DATABASE_URL
       DATABASE_URL: ${DATABASE_URL:-postgresql://cognitor:changeme@postgres:5432/cognitor}
       RUNTIME_BACKEND: ${RUNTIME_BACKEND:-external}
     ports:

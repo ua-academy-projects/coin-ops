@@ -73,6 +73,8 @@ registry_token: "{{ fetched_gsm_secrets.ghcr_token | default(lookup('env', 'GHCR
 # ── Derived connection strings ────────────────────────────────
 # rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@{{ hostvars[groups['history'][0]].ansible_host }}:5672/"
 rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@{{ hostvars[groups['history'][0]].private_ip }}:5672/"
+# POSTGRES ->
+# defines DATABASE_URL
 database_url: "postgresql://{{ db_user }}:{{ db_password }}@localhost:5432/{{ db_name }}"
 history_database_url: "postgresql://{{ db_user }}:{{ db_password }}@postgres:5432/{{ db_name }}"
 proxy_database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ hostvars[groups['history'][0]].private_ip }}:5432/{{ db_name }}"

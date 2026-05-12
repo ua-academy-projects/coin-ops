@@ -21,6 +21,8 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 RABBITMQ_URL = os.environ.get("RABBITMQ_URL", "")
+# POSTGRES ->
+# reads DATABASE_URL
 DATABASE_URL = os.environ["DATABASE_URL"]
 QUEUE_NAME = "market_events"
 DEAD_QUEUE_NAME = "market_events_dead_letter"
