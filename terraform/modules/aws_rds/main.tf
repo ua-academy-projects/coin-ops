@@ -4,7 +4,8 @@ resource "aws_db_subnet_group" "main" {
 
   subnet_ids = [
     var.private_subnet_id,
-    var.private_subnet_b_id
+    var.private_subnet_b_id,
+    "subnet-01886c757ce10dbd8"
   ]
 
   tags = {

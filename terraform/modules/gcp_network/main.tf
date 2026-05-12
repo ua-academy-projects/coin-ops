@@ -10,6 +10,8 @@ resource "google_compute_subnetwork" "subnet" {
 
   name          = "devops-subnet"
   ip_cidr_range = "10.0.1.0/24"
-  region        = var.config.general.regions.gcp.region
-  network       = google_compute_network.vpc[0].id
+
+  region = var.config.locations[var.config.general.location].gcp.region
+
+  network = google_compute_network.vpc[0].id
 }

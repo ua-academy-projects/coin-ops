@@ -1,5 +1,6 @@
 resource "aws_key_pair" "main" {
-  count      = var.config.general.cloud == "aws" ? 1 : 0
+  count = var.config.general.cloud == "aws" ? 1 : 0
+
   key_name   = "marta-ops-key"
   public_key = var.ssh_public_key
 }
@@ -7,9 +8,11 @@ resource "aws_key_pair" "main" {
 resource "aws_instance" "vm" {
   for_each = var.config.general.cloud == "aws" ? var.config.vms : {}
 
-  ami                         = var.config.general.image.aws
-  instance_type               = var.config.sizes[each.value.size].aws
-  subnet_id                   = each.value.public_ip ? var.public_subnet_id : var.private_subnet_id
+  ami           = var.config.images.ubuntu_2404.aws
+  instance_type = var.config.sizes[each.value.size].aws
+
+  subnet_id = each.value.public_ip ? var.public_subnet_id : var.private_subnet_id
+
   associate_public_ip_address = each.value.public_ip
 
   vpc_security_group_ids = concat(

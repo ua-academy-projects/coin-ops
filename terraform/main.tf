@@ -1,6 +1,17 @@
 locals {
-  config  = yamldecode(file("${path.module}/config.yaml"))
-  general = local.config.general
+  raw_config = yamldecode(file("${path.module}/config.yaml"))
+
+  config = merge(local.raw_config, {
+    general = merge(local.raw_config.general, {
+      db_password = var.db_password
+    })
+  })
+
+  general  = local.config.general
+  cloud    = local.general.cloud
+  location = local.general.location
+
+  active_location = local.config.locations[local.location][local.cloud]
 }
 
 module "gcp_network" {
@@ -43,10 +54,26 @@ module "aws_vm" {
   web_sg_id         = module.aws_security.web_sg_id
 }
 
+module "aws_lb" {
+  source = "./modules/aws_lb"
+
+  config = local.config
+
+  vpc_id             = module.aws_network.vpc_id
+  public_subnet_id   = module.aws_network.public_subnet_id
+  public_subnet_b_id = module.aws_network.public_subnet_b_id
+
+  ui_instance_id = module.aws_vm.ui_instance_id
+}
+
 module "aws_rds" {
   source              = "./modules/aws_rds"
   config              = local.config
   private_subnet_id   = module.aws_network.private_subnet_id
   private_subnet_b_id = module.aws_network.private_subnet_b_id
   rds_sg_id           = module.aws_security.rds_sg_id
+}
+
+output "alb_dns_name" {
+  value = module.aws_lb.alb_dns_name
 }

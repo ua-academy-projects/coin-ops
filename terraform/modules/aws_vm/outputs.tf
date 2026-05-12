@@ -12,3 +12,7 @@ output "internal_vm_ips" {
     if name != "jump-host"
   }
 }
+
+output "ui_instance_id" {
+  value = try(aws_instance.vm["node-03"].id, null)
+}

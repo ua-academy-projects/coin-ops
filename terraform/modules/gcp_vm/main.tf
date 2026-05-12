@@ -3,12 +3,12 @@ resource "google_compute_instance" "vm" {
 
   name         = each.key
   machine_type = var.config.sizes[each.value.size].gcp
-  zone         = var.config.general.regions.gcp.zone
+  zone         = var.config.locations[var.config.general.location].gcp.zones[each.value.zone]
   tags         = each.value.tags
 
   boot_disk {
     initialize_params {
-      image = var.config.general.image.gcp
+      image = var.config.images.ubuntu_2404.gcp
       size  = try(each.value.disk_size, var.config.general.disk_size)
     }
   }

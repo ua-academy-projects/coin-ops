@@ -13,3 +13,7 @@ output "private_subnet_id" {
 output "private_subnet_b_id" {
   value = try(aws_subnet.private_b[0].id, null)
 }
+
+output "public_subnet_b_id" {
+  value = try(aws_subnet.public_b[0].id, null)
+}
