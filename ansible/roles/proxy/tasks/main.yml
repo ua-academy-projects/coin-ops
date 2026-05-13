@@ -9,21 +9,10 @@
     - cognitor-proxy
   failed_when: false
 
-- name: Create secrets directory
+- name: Remove legacy proxy environment file
   file:
-    path: /etc/cognitor
-    state: directory
-    owner: root
-    group: root
-    mode: '0750'
-
-- name: Write proxy environment file
-  template:
-    src: proxy.env.j2
-    dest: /etc/cognitor/proxy.env
-    owner: root
-    group: root
-    mode: '0640'
+    path: /etc/cognitor/proxy.env
+    state: absent
 
 - name: Create proxy deploy directory
   file:
@@ -42,22 +31,31 @@
   template:
     src: "{{ playbook_dir }}/../deploy/compose/node-02.compose.yaml"
     dest: /opt/cognitor/proxy/compose.yaml
+    owner: root
+    group: root
+    mode: '0644'
 
 - name: Validate proxy compose configuration
   command: docker compose -f /opt/cognitor/proxy/compose.yaml config -q
   args:
     chdir: /opt/cognitor/proxy
+  environment: "{{ proxy_compose_environment }}"
   changed_when: false
+  no_log: true
 
 - name: Pull proxy container images
   command: docker compose -f /opt/cognitor/proxy/compose.yaml pull
   args:
     chdir: /opt/cognitor/proxy
+  environment: "{{ proxy_compose_environment }}"
+  no_log: true
 
 - name: Run Docker Compose
-  command: docker compose -f /opt/cognitor/proxy/compose.yaml up -d --remove-orphans
+  command: docker compose -f /opt/cognitor/proxy/compose.yaml up -d --force-recreate --remove-orphans
   args:
     chdir: /opt/cognitor/proxy
+  environment: "{{ proxy_compose_environment }}"
+  no_log: true
 
 - name: Wait for proxy health endpoint
   uri:

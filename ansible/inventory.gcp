@@ -1,11 +1,11 @@
 [history]
-vm-1 ansible_host=10.0.0.5 ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyJump=terraform@34.134.179.161:47832'
+vm-1 ansible_host=10.0.0.5 ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyCommand="ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=yes -i ~/.ssh/gcp_jump -p 47832 -W %h:%p terraform@34.134.179.161"'
 
 [proxy]
-vm-2 ansible_host=10.0.0.2 ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyJump=terraform@34.134.179.161:47832'
+vm-2 ansible_host=10.0.0.2 ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyCommand="ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=yes -i ~/.ssh/gcp_jump -p 47832 -W %h:%p terraform@34.134.179.161"'
 
 [ui]
-vm-3 ansible_host=10.0.0.4 ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyJump=terraform@34.134.179.161:47832'
+vm-3 ansible_host=10.0.0.4 ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyCommand="ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=yes -i ~/.ssh/gcp_jump -p 47832 -W %h:%p terraform@34.134.179.161"'
 
 [all:vars]
 ansible_user=terraform

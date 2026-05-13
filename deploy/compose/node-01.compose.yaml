@@ -1,16 +1,20 @@
 services:
+{% if database_backend == "local" %}
   postgres:
     image: "{{ postgres_image }}"
     restart: unless-stopped
-    env_file:
-      - /etc/cognitor/history.env
+    environment:
+      POSTGRES_USER: "${DB_USER:?}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD:?}"
+      POSTGRES_DB: "${DB_NAME:?}"
+      RUNTIME_APP_ROLE: "${DB_USER:?}"
 {% if runtime_backend == "postgres" %}
     command:
       - postgres
       - -c
       - shared_preload_libraries=pg_cron
       - -c
-      - cron.database_name={{ db_name }}
+      - cron.database_name=${DB_NAME:?}
 {% endif %}
     ports:
       - "{{ postgres_bind_ip }}:5432:5432"
@@ -21,13 +25,15 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+{% endif %}
 
 {% if runtime_backend == "external" %}
   rabbitmq:
     image: rabbitmq:3-alpine
     restart: unless-stopped
-    env_file:
-      - /etc/cognitor/history.env
+    environment:
+      RABBITMQ_DEFAULT_USER: "${RABBITMQ_USER:?}"
+      RABBITMQ_DEFAULT_PASS: "${RABBITMQ_PASSWORD:?}"
     ports:
       - "5672:5672"
     volumes:
@@ -42,11 +48,18 @@ services:
   history-consumer:
     image: "{{ history_consumer_image }}"
     restart: unless-stopped
-    env_file:
-      - /etc/cognitor/history.env
+    environment:
+      RUNTIME_BACKEND: "{{ runtime_backend }}"
+      DATABASE_URL: "${HISTORY_DATABASE_URL:?}"
+{% if runtime_backend == "external" %}
+      RABBITMQ_URL: "${RABBITMQ_URL:?}"
+{% endif %}
+      PORT: "{{ history_port }}"
     depends_on:
+{% if database_backend == "local" %}
       postgres:
         condition: service_healthy
+{% endif %}
 {% if runtime_backend == "external" %}
       rabbitmq:
         condition: service_healthy
@@ -57,8 +70,19 @@ services:
     restart: unless-stopped
     ports:
       - "{{ history_port }}:{{ history_port }}"
-    env_file:
-      - /etc/cognitor/history.env
+    environment:
+      RUNTIME_BACKEND: "{{ runtime_backend }}"
+      DATABASE_URL: "${HISTORY_DATABASE_URL:?}"
+{% if runtime_backend == "external" %}
+      RABBITMQ_URL: "${RABBITMQ_URL:?}"
+{% endif %}
+      PORT: "{{ history_port }}"
     depends_on:
+{% if database_backend == "local" %}
       postgres:
         condition: service_healthy
+{% endif %}
+{% if runtime_backend == "external" %}
+      rabbitmq:
+        condition: service_healthy
+{% endif %}

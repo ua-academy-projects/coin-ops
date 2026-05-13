@@ -182,19 +182,19 @@ For local lab HTTPS, keep `APP_DOMAIN=coinops.test`, `TLS_MODE=selfsigned`, and 
 
 ## Secrets and Runtime Configuration
 
-Secrets are not baked into images. Ansible writes root-owned env files on the VMs under `/etc/cognitor/`, and Docker Compose injects those values at container startup with `env_file`.
+Secrets are not baked into images. In the GCP deployment, Terraform creates GCP
+Secret Manager secret containers and Ansible reads grouped secret values from
+Secret Manager at deploy time. Secrets are passed to Docker Compose through the
+Ansible process environment and are not written to `/etc/cognitor/*.env` files.
 
 Current runtime env highlights:
 
-- proxy: `RABBITMQ_URL`, `REDIS_URL`, `PORT`
-- history: `DATABASE_URL`, `RABBITMQ_URL`, `POSTGRES_*`, `PORT`
+- proxy: `DATABASE_URL`, `RABBITMQ_URL`, `REDIS_URL`, `PORT`
+- history: `DATABASE_URL`, `RABBITMQ_URL`, `PORT`
 - ui: `PROXY_URL=/api`, `HISTORY_URL=/history-api`
 
-Pending full PostgreSQL runtime mode still adds:
-
-- `RUNTIME_BACKEND=external|postgres`
-- proxy `DATABASE_URL`
-- runtime schema/bootstrap in deployment before app containers start
+The GCP runtime uses Cloud SQL PostgreSQL over private IP. RabbitMQ and Redis
+remain containerized on the private application VMs.
 
 ## Deployment Commands
 
@@ -245,11 +245,10 @@ ansible-playbook -i ansible/inventory ansible/deploy.yml
 ```
 
 GCP deployment uses the shared GCP infrastructure project and a dedicated
-inventory:
+inventory. Secrets are loaded from GCP Secret Manager, so no `.env` file is
+required:
 
 ```bash
-cp .env.gcp.example .env
-source .env
 ansible-playbook -i ansible/inventory.gcp ansible/provision.yml
 ansible-playbook -i ansible/inventory.gcp ansible/deploy.yml
 ```

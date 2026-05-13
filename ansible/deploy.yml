@@ -2,46 +2,123 @@
 # deploy.yml — deploy all services.
 # Safe to re-run on every code push.
 #
-#   source .env
 #   ansible-playbook -i ansible/inventory ansible/deploy.yml
 
-- name: Validate required environment variables
+- name: Load deployment secrets from GCP Secret Manager
   hosts: localhost
   connection: local
+  gather_facts: no
+  vars:
+    gcp_project_id: project-8888321c-54a9-4dac-86d
+    db_secret_name: coinops-db-secrets
+    service_secret_name: coinops-service-secrets
+    cloud_sql_instance_name: coinops-postgres-learning
   tasks:
-    - name: Check .env vars are exported
+    - name: Read grouped database secrets
+      command: >-
+        gcloud secrets versions access latest
+        --project {{ gcp_project_id }}
+        --secret {{ db_secret_name }}
+      register: db_secret_raw
+      changed_when: false
+      no_log: true
+
+    - name: Read grouped service secrets
+      command: >-
+        gcloud secrets versions access latest
+        --project {{ gcp_project_id }}
+        --secret {{ service_secret_name }}
+      register: service_secret_raw
+      changed_when: false
+      no_log: true
+
+    - name: Read Cloud SQL instance metadata
+      command: >-
+        gcloud sql instances describe {{ cloud_sql_instance_name }}
+        --project {{ gcp_project_id }}
+        --format=json
+      register: cloud_sql_instance_raw
+      changed_when: false
+
+    - name: Store secrets and Cloud SQL private IP in memory
+      set_fact:
+        coinops_db_secrets: "{{ db_secret_raw.stdout | from_json }}"
+        coinops_service_secrets: "{{ service_secret_raw.stdout | from_json }}"
+        cloud_sql_private_ip: >-
+          {{
+            (
+              (cloud_sql_instance_raw.stdout | from_json).ipAddresses
+              | selectattr('type', 'equalto', 'PRIVATE')
+              | map(attribute='ipAddress')
+              | list
+            )[0]
+          }}
+      no_log: true
+
+    - name: Validate loaded secret groups
       assert:
         that:
-          - lookup('env', 'RABBITMQ_PASSWORD') != ''
-          - lookup('env', 'DB_PASSWORD') != ''
-          - lookup('env', 'SSH_KEY_PATH') != ''
-          - lookup('env', 'RUNTIME_BACKEND') in ['', 'external', 'postgres']
+          - coinops_db_secrets.db_user is defined
+          - coinops_db_secrets.db_password is defined
+          - coinops_db_secrets.db_name is defined
+          - coinops_service_secrets.rabbitmq_user is defined
+          - coinops_service_secrets.rabbitmq_password is defined
+          - coinops_service_secrets.ghcr_username is defined
+          - coinops_service_secrets.ghcr_token is defined
+          - cloud_sql_private_ip | length > 0
         fail_msg: |
-          Required environment variables are not set or RUNTIME_BACKEND is invalid.
-          Run:  source .env
-          RUNTIME_BACKEND may be empty and will default to external.
-          Supported explicit runtime backends: external, postgres.
-          Then retry: ansible-playbook -i ansible/inventory ansible/deploy.yml
+          Required GCP Secret Manager values are missing.
+          Expected JSON keys:
+          DB secret: db_user, db_password, db_name.
+          Service secret: rabbitmq_user, rabbitmq_password, ghcr_username, ghcr_token.
+      no_log: true
+
+    - name: Check existing Cloud SQL users
+      command: >-
+        gcloud sql users list
+        --project {{ gcp_project_id }}
+        --instance {{ cloud_sql_instance_name }}
+        --format=value(name)
+      register: cloud_sql_users
+      changed_when: false
+
+    - name: Create Cloud SQL application user when missing
+      command: >-
+        gcloud sql users create {{ coinops_db_secrets.db_user }}
+        --project {{ gcp_project_id }}
+        --instance {{ cloud_sql_instance_name }}
+        --password={{ coinops_db_secrets.db_password }}
+      when: coinops_db_secrets.db_user not in cloud_sql_users.stdout_lines
+      no_log: true
+
+    - name: Rotate Cloud SQL application user password to Secret Manager value
+      command: >-
+        gcloud sql users set-password {{ coinops_db_secrets.db_user }}
+        --project {{ gcp_project_id }}
+        --instance {{ cloud_sql_instance_name }}
+        --password={{ coinops_db_secrets.db_password }}
+      no_log: true
 
 - name: Authenticate Docker registry on target nodes
   hosts: all
   become: yes
   tasks:
+    - name: Create in-memory Docker auth config directory
+      file:
+        path: "{{ docker_auth_config_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
     - name: Log in to configured container registry
       community.docker.docker_login:
         registry_url: "{{ image_registry_host }}"
         username: "{{ registry_username }}"
         password: "{{ registry_token }}"
         reauthorize: true
+        config_path: "{{ docker_auth_config_dir }}/config.json"
       no_log: true
-      when:
-        - registry_username | length > 0
-        - registry_token | length > 0
-
-    - name: Explain skipped registry login
-      debug:
-        msg: "GHCR_USERNAME/GHCR_TOKEN not set; assuming registry images are public."
-      when: registry_username | length == 0 or registry_token | length == 0
 
 - name: Deploy History Service (node-01)
   hosts: history
@@ -60,3 +137,12 @@
   become: yes
   roles:
     - ui
+
+- name: Remove temporary Docker registry auth from target nodes
+  hosts: all
+  become: yes
+  tasks:
+    - name: Remove in-memory Docker auth config directory
+      file:
+        path: "{{ docker_auth_config_dir }}"
+        state: absent

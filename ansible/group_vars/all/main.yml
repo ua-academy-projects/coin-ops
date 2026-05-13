@@ -1,39 +1,41 @@
-# All variables — safe to commit.
-# Secrets and local paths come from environment variables.
-# Run `source .env` before any ansible-playbook command.
+# All variables here are safe to commit. Secrets are loaded from GCP Secret
+# Manager by ansible/deploy.yml and are kept in Ansible memory only.
 
 # ── SSH ───────────────────────────────────────────────────────
 # GCP VM user created by Terraform metadata SSH keys.
-ansible_user: "{{ lookup('env', 'ANSIBLE_USER') | default('terraform', true) }}"
+ansible_user: terraform
 ansible_ssh_private_key_file: "{{ lookup('env', 'SSH_KEY_PATH') | default('~/.ssh/gcp_jump', true) | expanduser }}"
+ansible_python_interpreter: /usr/bin/python3.11
 
-
-
-# ── Passwords (loaded from .env) ──────────────────────────────
-rabbitmq_password: "{{ lookup('env', 'RABBITMQ_PASSWORD') }}"
-db_password: "{{ lookup('env', 'DB_PASSWORD') }}"
+# ── GCP Secret Manager ────────────────────────────────────────
+gcp_project_id: project-8888321c-54a9-4dac-86d
+db_secret_name: coinops-db-secrets
+service_secret_name: coinops-service-secrets
+cloud_sql_instance_name: coinops-postgres-learning
 
 # ── Service accounts ──────────────────────────────────────────
-rabbitmq_user: cognitor
-db_name: cognitor
-db_user: cognitor
-runtime_backend: "{{ lookup('env', 'RUNTIME_BACKEND') | default('external', true) }}"
+db_name: "{{ hostvars['localhost'].coinops_db_secrets.db_name | default('cognitor') }}"
+db_user: "{{ hostvars['localhost'].coinops_db_secrets.db_user | default('cognitor') }}"
+db_password: "{{ hostvars['localhost'].coinops_db_secrets.db_password | default('') }}"
+rabbitmq_user: "{{ hostvars['localhost'].coinops_service_secrets.rabbitmq_user | default('cognitor') }}"
+rabbitmq_password: "{{ hostvars['localhost'].coinops_service_secrets.rabbitmq_password | default('') }}"
+runtime_backend: external
+database_backend: cloudsql
 
 # ── Ports ────────────────────────────────────────────────────
 proxy_port: 8080
 history_port: 8000
 postgres_bind_ip: "{{ hostvars[groups['history'][0]].ansible_host }}"
+cloud_sql_private_ip: "{{ hostvars['localhost'].cloud_sql_private_ip | default('') }}"
 
 # Public entrypoint / TLS
-# Browser-facing domain served by node-03. For local labs, add this to hosts:
-#   172.31.1.12 coinops.test
-app_domain: "{{ lookup('env', 'APP_DOMAIN') | default('coinops.test', true) }}"
+app_domain: coinops-kazachuk.pp.ua
 
 # Supported modes:
 #   selfsigned - Ansible creates a local self-signed cert on node-03
 #   provided   - cert/key already exist on node-03 under /etc/cognitor/tls
 #   off        - HTTP only, useful for quick internal debugging
-tls_mode: "{{ lookup('env', 'TLS_MODE') | default('selfsigned', true) }}"
+tls_mode: "off"
 tls_enabled: "{{ tls_mode != 'off' }}"
 tls_cert_dir: /etc/cognitor/tls
 tls_cert_path: "{{ tls_cert_dir }}/coinops.crt"
@@ -45,20 +47,40 @@ tls_key_path: "{{ tls_cert_dir }}/coinops.key"
 #   IMAGE_TAG=<commit-sha> ansible-playbook -i ansible/inventory ansible/deploy.yml
 image_registry: "{{ lookup('env', 'IMAGE_REGISTRY') | default('ghcr.io/ua-academy-projects', true) }}"
 image_registry_host: "{{ image_registry.split('/')[0] }}"
-image_tag: "{{ lookup('env', 'IMAGE_TAG') | default('dev-latest', true) }}"
+image_tag: dev-latest
 proxy_image: "{{ image_registry }}/coin-ops-proxy:{{ image_tag }}"
 history_api_image: "{{ image_registry }}/coin-ops-history-api:{{ image_tag }}"
 history_consumer_image: "{{ image_registry }}/coin-ops-history-consumer:{{ image_tag }}"
 ui_image: "{{ image_registry }}/coin-ops-ui:{{ image_tag }}"
 postgres_runtime_image: "{{ image_registry }}/coin-ops-postgres-runtime:{{ image_tag }}"
 postgres_image: "{{ postgres_runtime_image if runtime_backend == 'postgres' else 'postgres:16-alpine' }}"
-registry_username: "{{ lookup('env', 'GHCR_USERNAME') | default('', true) }}"
-registry_token: "{{ lookup('env', 'GHCR_TOKEN') | default('', true) }}"
+registry_username: "{{ hostvars['localhost'].coinops_service_secrets.ghcr_username | default('') }}"
+registry_token: "{{ hostvars['localhost'].coinops_service_secrets.ghcr_token | default('') }}"
 
 # ── Derived connection strings ────────────────────────────────
 rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@{{ hostvars[groups['history'][0]].ansible_host }}:5672/"
 database_url: "postgresql://{{ db_user }}:{{ db_password }}@localhost:5432/{{ db_name }}"
-history_database_url: "postgresql://{{ db_user }}:{{ db_password }}@postgres:5432/{{ db_name }}"
-proxy_database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ postgres_bind_ip }}:5432/{{ db_name }}"
+history_database_url: "{{ 'postgresql://' ~ db_user ~ ':' ~ db_password ~ '@' ~ cloud_sql_private_ip ~ ':5432/' ~ db_name if database_backend == 'cloudsql' else 'postgresql://' ~ db_user ~ ':' ~ db_password ~ '@postgres:5432/' ~ db_name }}"
+proxy_database_url: "{{ 'postgresql://' ~ db_user ~ ':' ~ db_password ~ '@' ~ cloud_sql_private_ip ~ ':5432/' ~ db_name if database_backend == 'cloudsql' else 'postgresql://' ~ db_user ~ ':' ~ db_password ~ '@' ~ postgres_bind_ip ~ ':5432/' ~ db_name }}"
 redis_url: "redis://127.0.0.1:6379/0"
 
+docker_auth_config_dir: /run/coinops-docker-auth
+
+history_compose_environment:
+  DOCKER_CONFIG: "{{ docker_auth_config_dir }}"
+  DB_NAME: "{{ db_name }}"
+  DB_USER: "{{ db_user }}"
+  DB_PASSWORD: "{{ db_password }}"
+  DB_HOST: "{{ cloud_sql_private_ip if database_backend == 'cloudsql' else 'postgres' }}"
+  HISTORY_DATABASE_URL: "{{ history_database_url }}"
+  RABBITMQ_USER: "{{ rabbitmq_user }}"
+  RABBITMQ_PASSWORD: "{{ rabbitmq_password }}"
+  RABBITMQ_URL: "{{ 'amqp://' ~ rabbitmq_user ~ ':' ~ rabbitmq_password ~ '@rabbitmq:5672/' }}"
+
+proxy_compose_environment:
+  DOCKER_CONFIG: "{{ docker_auth_config_dir }}"
+  PROXY_DATABASE_URL: "{{ proxy_database_url }}"
+  RABBITMQ_URL: "{{ rabbitmq_url }}"
+
+ui_compose_environment:
+  DOCKER_CONFIG: "{{ docker_auth_config_dir }}"

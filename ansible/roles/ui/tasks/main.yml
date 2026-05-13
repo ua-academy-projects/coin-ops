@@ -12,14 +12,6 @@
       - tls_mode in ['selfsigned', 'provided', 'off']
     fail_msg: "TLS_MODE must be one of: selfsigned, provided, off."
 
-- name: Create secrets directory
-  file:
-    path: /etc/cognitor
-    state: directory
-    owner: root
-    group: root
-    mode: '0750'
-
 - name: Create TLS certificate directory
   file:
     path: "{{ tls_cert_dir }}"
@@ -94,15 +86,10 @@
     fail_msg: "TLS_MODE=provided requires {{ tls_cert_path }} and {{ tls_key_path }} on the UI node."
   when: tls_mode == 'provided'
 
-- name: Write ui runtime environment file
-  copy:
-    content: |
-      PROXY_URL=/api
-      HISTORY_URL=/history-api
-    dest: /etc/cognitor/ui.env
-    owner: root
-    group: root
-    mode: '0640'
+- name: Remove legacy UI environment file
+  file:
+    path: /etc/cognitor/ui.env
+    state: absent
 
 - name: Create ui deploy directory
   file:
@@ -134,11 +121,13 @@
   command: docker compose -f /opt/cognitor/ui/compose.yaml pull
   args:
     chdir: /opt/cognitor/ui
+  environment: "{{ ui_compose_environment }}"
 
 - name: Run Docker Compose
-  command: docker compose -f /opt/cognitor/ui/compose.yaml up -d --remove-orphans
+  command: docker compose -f /opt/cognitor/ui/compose.yaml up -d --force-recreate --remove-orphans
   args:
     chdir: /opt/cognitor/ui
+  environment: "{{ ui_compose_environment }}"
 
 - name: Wait for nginx availability
   uri:

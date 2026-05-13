@@ -2,26 +2,7 @@
 # provision.yml — install system packages on all VMs.
 # Run once (or re-run: idempotent).
 #
-#   source .env
 #   ansible-playbook -i ansible/inventory ansible/provision.yml
-
-- name: Validate required environment variables
-  hosts: localhost
-  connection: local
-  tasks:
-    - name: Check .env vars are exported
-      assert:
-        that:
-          - lookup('env', 'RABBITMQ_PASSWORD') != ''
-          - lookup('env', 'DB_PASSWORD') != ''
-          - lookup('env', 'SSH_KEY_PATH') != ''
-          - lookup('env', 'RUNTIME_BACKEND') in ['', 'external', 'postgres']
-        fail_msg: |
-          Required environment variables are not set or RUNTIME_BACKEND is invalid.
-          Run:  source .env
-          RUNTIME_BACKEND may be empty and will default to external.
-          Supported explicit runtime backends: external, postgres.
-          Then retry: ansible-playbook -i ansible/inventory ansible/provision.yml
 
 - name: Common setup — all nodes
   hosts: all
@@ -41,6 +22,7 @@
         owner: 70
         group: 70
         mode: '0700'
+      when: database_backend == 'local'
 
     - name: Create RabbitMQ data directory
       file:
