@@ -251,6 +251,10 @@
   command: docker compose -f /opt/cognitor/ui/compose.yaml pull
   args:
     chdir: /opt/cognitor/ui
+  register: ui_pull_result
+  retries: 3
+  delay: 15
+  until: ui_pull_result.rc == 0
 
 - name: Run Docker Compose
   command: docker compose -f /opt/cognitor/ui/compose.yaml up -d --remove-orphans

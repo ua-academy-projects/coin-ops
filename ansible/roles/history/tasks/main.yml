@@ -154,6 +154,10 @@
   command: docker compose -f /opt/cognitor/history/compose.yaml pull
   args:
     chdir: /opt/cognitor/history
+  register: history_pull_result
+  retries: 3
+  delay: 15
+  until: history_pull_result.rc == 0
 
 - name: Start history dependencies first
   command: >-

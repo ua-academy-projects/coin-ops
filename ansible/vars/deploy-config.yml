@@ -4,7 +4,7 @@ runtime_backend: external
 app_domain: coinops-d.pp.ua
 tls_mode: certbot
 certbot_email_localpart: admin
-certbot_staging: true
+certbot_staging: false
 
 image_registry: ghcr.io/ua-academy-projects
 image_tag: shabat-latest
@@ -14,3 +14,10 @@ proxy_port: 8080
 history_port: 8000
 internal_tls_enabled: true
 internal_tls_port: 8443
+
+provisioning_wait_for_connection_timeout: 600
+provisioning_wait_for_connection_delay: 5
+provisioning_wait_for_connection_sleep: 5
+provisioning_wait_for_cloud_init: true
+provisioning_apt_lock_timeout: 900
+provisioning_upgrade_packages: false

@@ -142,6 +142,10 @@
   command: docker compose -f /opt/cognitor/backend-gateway/compose.yaml pull
   args:
     chdir: /opt/cognitor/backend-gateway
+  register: backend_tls_pull_result
+  retries: 3
+  delay: 15
+  until: backend_tls_pull_result.rc == 0
   when: internal_tls_enabled
 
 - name: Run internal backend gateway

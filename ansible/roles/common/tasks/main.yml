@@ -25,17 +25,55 @@
     executable: /bin/bash
   changed_when: false
 
+- name: Check whether ufw is installed
+  stat:
+    path: /usr/sbin/ufw
+  register: ufw_binary
+
 - name: Prepare non-image-based hosts
   when: not host_uses_golden_image
   block:
+    - name: Check whether cloud-init is installed
+      stat:
+        path: /usr/bin/cloud-init
+      register: cloud_init_binary
+
+    - name: Wait for cloud-init to finish first boot work
+      command: cloud-init status --wait
+      when:
+        - provisioning_wait_for_cloud_init | default(true) | bool
+        - cloud_init_binary.stat.exists
+      changed_when: false
+
+    - name: Wait for apt and dpkg background jobs to finish
+      shell: |
+        set -euo pipefail
+        timeout_seconds={{ provisioning_apt_lock_timeout | default(900) | int }}
+        elapsed=0
+
+        while ps -eo comm= | grep -Eq '^(apt|apt-get|dpkg|unattended-upgrade)$'; do
+          if [ "$elapsed" -ge "$timeout_seconds" ]; then
+            echo "Timed out waiting for apt/dpkg background jobs to finish" >&2
+            exit 1
+          fi
+          sleep 5
+          elapsed=$((elapsed + 5))
+        done
+      args:
+        executable: /bin/bash
+      changed_when: false
+
     - name: Update apt cache
       apt:
         update_cache: yes
         cache_valid_time: 3600
+        lock_timeout: "{{ provisioning_apt_lock_timeout | default(900) }}"
 
     - name: Upgrade all packages
       apt:
         upgrade: safe
+        lock_timeout: "{{ provisioning_apt_lock_timeout | default(900) }}"
+      when: provisioning_upgrade_packages | default(false) | bool
 
     - name: Install base packages
       apt:
@@ -46,6 +84,7 @@
           - acl
           - unattended-upgrades
         state: present
+        lock_timeout: "{{ provisioning_apt_lock_timeout | default(900) }}"
 
     - name: Set timezone to UTC
       timezone:
@@ -61,6 +100,15 @@
       apt:
         name: ufw
         state: present
+        lock_timeout: "{{ provisioning_apt_lock_timeout | default(900) }}"
+      when: "'role_nat' not in group_names"
+
+- name: Disable UFW on nat hosts to avoid interfering with forwarded traffic
+  community.general.ufw:
+    state: disabled
+  when:
+    - "'role_nat' in group_names"
+    - ufw_binary.stat.exists
 
 - name: Validate baked common host tooling on golden-image hosts
   when: host_uses_golden_image
@@ -101,12 +149,14 @@
     direction: incoming
     policy: deny
   notify: Reload UFW
+  when: "'role_nat' not in group_names"
 
 - name: Set UFW default allow outgoing
   community.general.ufw:
     direction: outgoing
     policy: allow
   notify: Reload UFW
+  when: "'role_nat' not in group_names"
 
 - name: Allow configured ports through UFW
   community.general.ufw:
@@ -115,7 +165,9 @@
     proto: tcp
   loop: "{{ common_allowed_ports }}"
   notify: Reload UFW
+  when: "'role_nat' not in group_names"
 
 - name: Enable UFW
   community.general.ufw:
     state: enabled
+  when: "'role_nat' not in group_names"

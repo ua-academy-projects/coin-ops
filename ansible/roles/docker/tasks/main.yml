@@ -12,6 +12,7 @@
           - lsb-release
         state: present
         update_cache: yes
+        lock_timeout: "{{ provisioning_apt_lock_timeout | default(900) }}"
 
     - name: Ensure Docker keyring directory exists
       file:
@@ -64,6 +65,7 @@
           - docker-compose-plugin
           - python3-docker
         state: present
+        lock_timeout: "{{ provisioning_apt_lock_timeout | default(900) }}"
 
 - name: Ensure Docker is started and enabled
   systemd:

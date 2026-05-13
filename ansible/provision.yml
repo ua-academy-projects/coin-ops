@@ -25,7 +25,18 @@
 - name: Common setup - all nodes
   hosts: all
   become: yes
+  gather_facts: no
   serial: 1
+  pre_tasks:
+    - name: Wait for SSH to become stable after instance boot
+      wait_for_connection:
+        timeout: "{{ provisioning_wait_for_connection_timeout | default(600) }}"
+        connect_timeout: 10
+        sleep: "{{ provisioning_wait_for_connection_sleep | default(5) }}"
+        delay: "{{ provisioning_wait_for_connection_delay | default(5) }}"
+
+    - name: Gather facts after SSH stabilizes
+      setup:
   roles:
     - common
   post_tasks:
@@ -35,12 +46,14 @@
 - name: Docker runtime setup - workload nodes only
   hosts: role_app_ui:role_app_backend
   become: yes
+  gather_facts: no
   roles:
     - docker
 
 - name: Provision backend node (app-2) - data directories
   hosts: "{{ target_backend_group | default('role_app_backend') }}"
   become: yes
+  gather_facts: no
   tasks:
     - name: Create PostgreSQL data directory
       file:
@@ -61,6 +74,7 @@
 - name: Provision backend proxy node (app-2) - data directories
   hosts: "{{ target_backend_group | default('role_app_backend') }}"
   become: yes
+  gather_facts: no
   tasks:
     - name: Create Redis data directory
       file:
@@ -73,6 +87,7 @@
 - name: Provision UI node
   hosts: "{{ target_ui_group | default('role_app_ui') }}"
   become: yes
+  gather_facts: no
   tasks:
     - name: No host-level provisioning required for UI node
       debug:

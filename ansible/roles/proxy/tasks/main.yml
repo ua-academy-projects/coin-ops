@@ -66,6 +66,10 @@
   command: docker compose -f /opt/cognitor/proxy/compose.yaml pull
   args:
     chdir: /opt/cognitor/proxy
+  register: proxy_pull_result
+  retries: 3
+  delay: 15
+  until: proxy_pull_result.rc == 0
 
 - name: Run Docker Compose
   command: docker compose -f /opt/cognitor/proxy/compose.yaml up -d --remove-orphans
