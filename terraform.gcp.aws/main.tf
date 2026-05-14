@@ -1,6 +1,17 @@
 terraform {
   required_version = ">= 1.5.0"
 
+  backend "s3" {
+    bucket         = "coinops-terraform-state"
+    key            = "coin-ops/terraform.gcp.aws/terraform.tfstate"
+    region         = "eu-central-1"
+    dynamodb_table = "coinops-terraform-locks"
+    encrypt        = true
+  }
+
+
+
+
   required_providers {
     cloudflare = {
       source  = "cloudflare/cloudflare"
