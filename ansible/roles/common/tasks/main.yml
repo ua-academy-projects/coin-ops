@@ -1,0 +1,93 @@
+---
+- name: Prefer AWS regional Ubuntu mirror
+  replace:
+    path: /etc/apt/sources.list
+    regexp: 'http://(archive|security)\.ubuntu\.com/ubuntu/?'
+    replace: 'http://eu-central-1.ec2.archive.ubuntu.com/ubuntu/'
+  failed_when: false
+
+- name: Prefer AWS regional Ubuntu mirror in deb822 sources
+  replace:
+    path: /etc/apt/sources.list.d/ubuntu.sources
+    regexp: 'http://(archive|security)\.ubuntu\.com/ubuntu/?'
+    replace: 'http://eu-central-1.ec2.archive.ubuntu.com/ubuntu/'
+  failed_when: false
+
+- name: Configure apt network retries and IPv4 preference
+  copy:
+    content: |
+      Acquire::Retries "3";
+      Acquire::http::Timeout "20";
+      Acquire::https::Timeout "20";
+      Acquire::ForceIPv4 "true";
+    dest: /etc/apt/apt.conf.d/99coinops-network
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Upgrade all packages
+  apt:
+    upgrade: safe
+
+- name: Install base packages
+  apt:
+    name:
+      - curl
+      - htop
+      - jq
+      - acl
+      - unattended-upgrades
+    state: present
+
+- name: Create disk-backed Ansible remote temp directory
+  file:
+    path: /var/tmp/ansible
+    state: directory
+    owner: root
+    group: root
+    mode: '1777'
+
+- name: Set timezone to UTC
+  timezone:
+    name: UTC
+
+- name: Ensure systemd-timesyncd is running
+  systemd:
+    name: systemd-timesyncd
+    enabled: yes
+    state: started
+  failed_when: false
+
+- name: Install UFW
+  apt:
+    name: ufw
+    state: present
+
+- name: Set UFW default deny incoming
+  community.general.ufw:
+    direction: incoming
+    policy: deny
+  notify: Reload UFW
+
+- name: Set UFW default allow outgoing
+  community.general.ufw:
+    direction: outgoing
+    policy: allow
+  notify: Reload UFW
+
+- name: Allow configured ports through UFW
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop: "{{ common_allowed_ports }}"
+  notify: Reload UFW
+
+- name: Enable UFW
+  community.general.ufw:
+    state: enabled

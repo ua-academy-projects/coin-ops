@@ -1,0 +1,46 @@
+---
+- name: Create local image staging directory
+  file:
+    path: /opt/cognitor/images
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Select local image archives for this host
+  set_fact:
+    local_image_archives: >-
+      {{
+        []
+        + (['postgres-runtime.tar'] if 'db' in group_names and runtime_backend == 'postgres' else [])
+        + (['history-api.tar', 'history-consumer.tar'] if 'history' in group_names else [])
+        + (['proxy.tar'] if 'proxy' in group_names else [])
+        + (['ui.tar'] if 'ui' in group_names else [])
+      }}
+
+- name: Remove previously staged Docker image archives
+  file:
+    path: "/opt/cognitor/images/{{ item }}"
+    state: absent
+  loop: "{{ local_image_archives }}"
+
+- name: Copy local Docker image archives
+  copy:
+    src: "{{ local_image_artifact_dir }}/{{ item }}"
+    dest: "/opt/cognitor/images/{{ item }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop: "{{ local_image_archives }}"
+
+- name: Load local Docker images
+  command: "docker load -i /opt/cognitor/images/{{ item }}"
+  loop: "{{ local_image_archives }}"
+  register: docker_load_result
+  changed_when: "'Loaded image:' in docker_load_result.stdout or 'Loaded image ID:' in docker_load_result.stdout"
+
+- name: Remove staged Docker image archives after load
+  file:
+    path: "/opt/cognitor/images/{{ item }}"
+    state: absent
+  loop: "{{ local_image_archives }}"

@@ -1,4 +1,67 @@
+
+DASHBOARD_PROJECT.md
+
+# Environment file — passwords and local paths, never commit
+.env
+
+# Worktrees created by agent runs
+.claude/worktrees/
+.worktrees/
+.codex-*
+
+# Superpowers generated plans/specs — internal tooling, not for the repo
+docs/superpowers/
+
+# Compiled binary
+proxy/proxy
+
+# Local/scratch analysis and helper artifacts excluded from dev
+tournament/
+.artifacts/
+
+# Terraform
 .terraform
 .terraform.lock.hcl
 terraform.tfstate
 terraform.tfstate.backup
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/terraform.tfstate.*.backup
+terraform/terraform.tfvars
+terraform/keys/
+
+# React build output
+ui-react/dist/
+ui-react/node_modules/
+ui-react/.env
+
+# Source zip
+coin-ops-intelligence.zip
+
+# Patch files
+*.patch
+
+# Local TLS certificates/keys generated for mkcert demos
+*.pem
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Personal notes — not for the repo
+docs/interview-notes.md
+interview-notes.md
+0804meet.txt
+1004meet.txt
+container-sizes-report.txt
+
+# Local docs and infrastructure artifacts
+hyper-v/
+terraform-guide.pdf
+ansible/group_vars/all/*.backup
+ansible/group_vars/all/secrets.yml
+ansible/inventory.generated
+runtime/__pycache__

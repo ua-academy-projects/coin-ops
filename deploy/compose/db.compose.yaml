@@ -1,0 +1,25 @@
+services:
+  postgres:
+    image: "{{ postgres_image }}"
+    restart: unless-stopped
+    env_file:
+      - /etc/cognitor/db.env
+    command:
+      - postgres
+      - -c
+      - listen_addresses=*
+{% if runtime_backend == "postgres" %}
+      - -c
+      - shared_preload_libraries=pg_cron
+      - -c
+      - cron.database_name={{ db_name }}
+{% endif %}
+    ports:
+      - "{{ postgres_bind_ip }}:5432:5432"
+    volumes:
+      - /var/lib/coin-ops/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5

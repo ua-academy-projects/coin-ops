@@ -1,0 +1,88 @@
+# All variables — safe to commit.
+# Secrets and local paths come from environment variables.
+# Run `source .env` before any ansible-playbook command.
+
+# ── SSH ───────────────────────────────────────────────────────
+ansible_user: "{{ lookup('env', 'ANSIBLE_USER') | default('vagrant', true) }}"
+ansible_ssh_common_args: "{{ lookup('env', 'ANSIBLE_SSH_COMMON_ARGS') | default('-o StrictHostKeyChecking=no', true) }}"
+ansible_ssh_private_key_file: "{{ lookup('env', 'SSH_KEY_PATH') | expanduser }}"
+# Use disk-backed temp storage on remote hosts. Some cloud images mount /tmp as
+# small tmpfs, which breaks large image archive uploads during deploy.
+ansible_remote_tmp: /var/tmp/ansible
+
+# ── Passwords (loaded from .env) ──────────────────────────────
+rabbitmq_password: "{{ lookup('env', 'RABBITMQ_PASSWORD') }}"
+db_password: "{{ lookup('env', 'DB_PASSWORD') }}"
+
+# ── Service accounts ──────────────────────────────────────────
+rabbitmq_user: cognitor
+db_name: cognitor
+db_user: cognitor
+runtime_backend: "{{ lookup('env', 'RUNTIME_BACKEND') | default('external', true) }}"
+external_db_host: "{{ lookup('env', 'EXTERNAL_DB_HOST') | default('', true) }}"
+using_external_db: "{{ external_db_host | length > 0 }}"
+external_db_sslmode: "{{ 'sslmode=require' if using_external_db else '' }}"
+
+# ── Ports ────────────────────────────────────────────────────
+proxy_port: 8080
+history_port: 8000
+db_separate_vm: "{{ groups.get('db', []) | length > 0 }}"
+db_separate: "{{ using_external_db or db_separate_vm | bool }}"
+using_local_db: "{{ (not using_external_db) and (not db_separate_vm | bool) }}"
+db_host_group: "{{ 'db' if db_separate_vm | bool else 'history' }}"
+db_host_ip: "{{ external_db_host if using_external_db else hostvars[groups[db_host_group][0]].ansible_host }}"
+postgres_bind_ip: "{{ db_host_ip }}"
+
+# Host firewall ports. AWS Security Groups should still be the primary network
+# boundary; UFW mirrors the ports each VM role actually serves.
+common_allowed_ports: >-
+  {{
+    [22]
+    + ([5432] if ('db' in group_names or (using_local_db and 'history' in group_names)) else [])
+    + ([5672] if (runtime_backend == 'external' and 'history' in group_names) else [])
+    + ([history_port] if 'history' in group_names else [])
+    + ([proxy_port] if 'proxy' in group_names else [])
+    + ([80, 443] if 'ui' in group_names else [])
+  }}
+
+# Public entrypoint / TLS
+# Browser-facing domain served by node-03. For local labs, add this to hosts:
+#   172.31.1.12 coinops.test
+app_domain: "{{ lookup('env', 'APP_DOMAIN') | default('coinops.test', true) }}"
+
+# Supported modes:
+#   selfsigned - Ansible creates a local self-signed cert on node-03
+#   provided   - cert/key already exist on node-03 under /etc/cognitor/tls
+#   off        - HTTP only, useful for quick internal debugging
+tls_mode: "{{ lookup('env', 'TLS_MODE') | default('selfsigned', true) }}"
+tls_enabled: "{{ tls_mode != 'off' }}"
+tls_cert_dir: /etc/cognitor/tls
+tls_cert_path: "{{ tls_cert_dir }}/coinops.crt"
+tls_key_path: "{{ tls_cert_dir }}/coinops.key"
+
+# ── Container images ─────────────────────────────────────────
+# GitHub Actions publishes these images to GHCR.
+# Override IMAGE_TAG for immutable deploys, for example:
+#   IMAGE_TAG=<commit-sha> ansible-playbook -i ansible/inventory.generated ansible/deploy.yml
+image_registry: "{{ lookup('env', 'IMAGE_REGISTRY') | default('ghcr.io/ua-academy-projects', true) }}"
+image_registry_host: "{{ image_registry.split('/')[0] }}"
+image_tag: "{{ lookup('env', 'IMAGE_TAG') | default('shabat-latest', true) }}"
+image_source: "{{ lookup('env', 'IMAGE_SOURCE') | default('registry', true) }}"
+local_image_tag: "{{ lookup('env', 'LOCAL_IMAGE_TAG') | default('local', true) }}"
+local_image_artifact_dir: "{{ lookup('env', 'LOCAL_IMAGE_ARTIFACT_DIR') | default(playbook_dir ~ '/../.artifacts/images', true) }}"
+proxy_image: "{{ 'coin-ops-proxy:' ~ local_image_tag if image_source == 'local' else image_registry ~ '/coin-ops-proxy:' ~ image_tag }}"
+history_api_image: "{{ 'coin-ops-history-api:' ~ local_image_tag if image_source == 'local' else image_registry ~ '/coin-ops-history-api:' ~ image_tag }}"
+history_consumer_image: "{{ 'coin-ops-history-consumer:' ~ local_image_tag if image_source == 'local' else image_registry ~ '/coin-ops-history-consumer:' ~ image_tag }}"
+ui_image: "{{ 'coin-ops-ui:' ~ local_image_tag if image_source == 'local' else image_registry ~ '/coin-ops-ui:' ~ image_tag }}"
+postgres_runtime_image: "{{ 'coin-ops-postgres-runtime:' ~ local_image_tag if image_source == 'local' else image_registry ~ '/coin-ops-postgres-runtime:' ~ image_tag }}"
+postgres_image: "{{ postgres_runtime_image if runtime_backend == 'postgres' else 'postgres:16-alpine' }}"
+registry_username: "{{ lookup('env', 'GHCR_USERNAME') | default('', true) }}"
+registry_token: "{{ lookup('env', 'GHCR_TOKEN') | default('', true) }}"
+
+# ── Derived connection strings ────────────────────────────────
+rabbitmq_host_ip: "{{ hostvars[groups['history'][0]].ansible_host }}"
+rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@{{ rabbitmq_host_ip }}:5672/"
+database_url: "postgresql://{{ db_user }}:{{ db_password }}@localhost:5432/{{ db_name }}"
+history_database_url: "{{ ('postgresql://' ~ db_user ~ ':' ~ db_password ~ '@' ~ db_host_ip ~ ':5432/' ~ db_name ~ ('?' ~ external_db_sslmode if using_external_db else '')) if db_separate | bool else 'postgresql://' ~ db_user ~ ':' ~ db_password ~ '@postgres:5432/' ~ db_name }}"
+proxy_database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ postgres_bind_ip }}:5432/{{ db_name }}{{ '?' ~ external_db_sslmode if using_external_db else '' }}"
+redis_url: "redis://127.0.0.1:6379/0"

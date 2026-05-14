@@ -1,0 +1,86 @@
+project:
+  gcp:
+    id: brave-framework-494704-e6
+    region: europe-central2
+    zone: europe-central2-a
+  aws:
+    region: eu-central-1
+    zones:
+      - eu-central-1a
+      - eu-central-1b
+
+ssh:
+  user: valentyn
+  public_key_path: ~/.ssh/id_rsa.pub
+  allowed_source_cidr: 176.119.114.72/32
+
+network:
+  name: coinops-vpc
+  subnet_name: coinops-subnet
+  cidr: 10.10.0.0/24
+
+  aws_subnets:
+    public-a:
+      cidr: 10.10.0.0/28
+      az: eu-central-1a
+      public: true
+
+    public-b:
+      cidr: 10.10.0.16/28
+      az: eu-central-1b
+      public: true
+
+    private-a:
+      cidr: 10.10.0.32/28
+      az: eu-central-1a
+      public: false
+
+    private-b:
+      cidr: 10.10.0.48/28
+      az: eu-central-1b
+      public: false
+
+load_balancer:
+  port: 80
+  target_tag: web
+
+vms:
+  bastion:
+    role: bastion
+    machine_type:
+      gcp: e2-micro
+      aws: t3.micro
+    image:
+      gcp: debian-cloud/debian-12
+      aws: ami-051eaec1417c5d4ae
+    ip: 10.10.0.10
+    tags:
+      - bastion
+    external_ip: true
+  app:
+    role: private
+    machine_type:
+      gcp: e2-micro
+      aws: t3.micro
+    image:
+      gcp: debian-cloud/debian-12
+      aws: ami-051eaec1417c5d4ae
+    ip: 10.10.0.38
+    tags:
+      - private-vm
+      - app
+    external_ip: false
+
+  web:
+    role: private
+    machine_type:
+      gcp: e2-micro
+      aws: t3.micro
+    image:
+      gcp: debian-cloud/debian-12
+      aws: ami-051eaec1417c5d4ae
+    ip: 10.10.0.39
+    tags:
+      - private-vm
+      - web
+    external_ip: false

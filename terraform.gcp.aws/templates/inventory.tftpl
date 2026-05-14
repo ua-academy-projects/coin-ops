@@ -1,0 +1,24 @@
+# Generated from ${root_module_path} Terraform outputs.
+# ${cloud} private nodes are reached through the bastion host.
+
+%{ if inventory_groups.db != null ~}
+[db]
+coinops-db ansible_host=${inventory_groups.db} ansible_user=${inventory_ssh_user} ansible_ssh_common_args='${ssh_common_args}'
+
+%{ endif ~}
+%{ if inventory_groups.history != null ~}
+[history]
+coinops-app ansible_host=${inventory_groups.history} ansible_user=${inventory_ssh_user} ansible_ssh_common_args='${ssh_common_args}'
+
+[proxy]
+coinops-app ansible_host=${inventory_groups.proxy} ansible_user=${inventory_ssh_user} ansible_ssh_common_args='${ssh_common_args}'
+
+%{ endif ~}
+%{ if inventory_groups.ui != null ~}
+[ui]
+coinops-web ansible_host=${inventory_groups.ui} ansible_user=${inventory_ssh_user} ansible_ssh_common_args='${ssh_common_args}'
+
+%{ endif ~}
+[all:vars]
+ansible_user=${inventory_ssh_user}
+ansible_ssh_common_args='${ssh_common_args}'

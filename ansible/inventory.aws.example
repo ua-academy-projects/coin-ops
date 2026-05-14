@@ -1,0 +1,11 @@
+[db]
+coinops-db ansible_host=10.10.0.21
+
+[history]
+coinops-history ansible_host=10.10.0.20
+
+[proxy]
+coinops-proxy ansible_host=10.10.0.22
+
+[ui]
+coinops-ui ansible_host=10.10.0.23

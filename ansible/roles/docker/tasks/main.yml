@@ -1,0 +1,81 @@
+---
+- name: Select Docker package source
+  set_fact:
+    use_distribution_docker: "{{ ansible_distribution == 'Ubuntu' and ansible_distribution_version is version('26.04', '>=') }}"
+    docker_repo_distribution: "{{ 'ubuntu' if ansible_distribution == 'Ubuntu' else 'debian' }}"
+
+- name: Install dependencies for Docker
+  apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+    state: present
+    update_cache: yes
+    lock_timeout: 120
+
+- name: Create APT keyrings directory
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when: not use_distribution_docker | bool
+
+- name: Install Docker GPG key
+  shell: >-
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg |
+    gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  args:
+    creates: /etc/apt/keyrings/docker.gpg
+  when: not use_distribution_docker | bool
+
+- name: Set Docker GPG key permissions
+  file:
+    path: /etc/apt/keyrings/docker.gpg
+    owner: root
+    group: root
+    mode: '0644'
+  when: not use_distribution_docker | bool
+
+- name: Add Docker APT repository
+  apt_repository:
+    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/{{ docker_repo_distribution }} {{ ansible_distribution_release }} stable"
+    state: present
+    update_cache: yes
+  register: docker_repo_result
+  failed_when: false
+  when: not use_distribution_docker | bool
+
+- name: Install Docker and Compose plugin from Docker repository
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+      - python3-docker
+    state: present
+    update_cache: yes
+    lock_timeout: 120
+  when: not use_distribution_docker | bool
+
+- name: Install Docker and Compose plugin from Ubuntu repository
+  apt:
+    name:
+      - docker.io
+      - docker-compose-v2
+      - python3-docker
+    state: present
+    update_cache: yes
+    lock_timeout: 120
+  when: use_distribution_docker | bool
+
+- name: Ensure Docker is started and enabled
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
