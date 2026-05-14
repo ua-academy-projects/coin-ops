@@ -22,7 +22,7 @@ The recommended entrypoint is:
 
 `deploy.sh` performs the full deployment pipeline:
 
-1. loads `.env`
+1. loads deployment secrets from AWS Secrets Manager
 2. resolves the target cloud
 3. runs `terraform init`
 4. runs `terraform apply`
@@ -34,14 +34,16 @@ The recommended entrypoint is:
 
 - Python 3 and Ansible installed locally
 - Terraform installed locally
-- SSH key configured in `.env`
-- `.env` created and loaded from `.env.example`
+- AWS CLI configured locally
+- `jq` installed locally
+- SSH private key available on the local machine
 
 Initial setup:
 
 ```bash
-cp .env.example .env
-source .env
+export SSH_KEY_PATH=/home/valentyn/.ssh/coinops
+export AWS_SECRETS_ID=coinops/app
+export AWS_REGION=eu-central-1
 ansible-galaxy collection install -r ansible/requirements.yml
 ```
 
@@ -49,7 +51,7 @@ ansible-galaxy collection install -r ansible/requirements.yml
 
 Cloud selection is controlled by Terraform variable `cloud` in:
 
-[terraform.gcp.aws/variables.tf](/home/valentyn/codex/coin-ops/terraform.gcp.aws/variables.tf)
+[terraform.gcp.aws/variables.tf](/home/valentyn/Devops/git.repo/coin-ops/coin-ops/terraform.gcp.aws/variables.tf)
 
 You can also override it at runtime:
 

@@ -198,13 +198,6 @@ Pending full PostgreSQL runtime mode still adds:
 
 ## Deployment Commands
 
-Prepare environment variables first:
-
-```bash
-cp .env.example .env
-source .env
-```
-
 For the local root `docker compose` flow, use a plain Compose `.env` file and the root `Makefile` convenience targets:
 
 ```bash
@@ -239,11 +232,20 @@ Recommended entrypoint:
 
 `deploy.sh` does the following:
 
+- loads deployment secrets from AWS Secrets Manager
 - runs `terraform init`
 - applies infrastructure for the selected cloud
 - generates `ansible/inventory.generated`
 - runs `ansible/provision.yml`
 - runs `ansible/deploy.yml`
+
+Before running it, export the local machine context that cannot live in Secrets Manager:
+
+```bash
+export SSH_KEY_PATH=/home/valentyn/.ssh/coinops
+export AWS_SECRETS_ID=coinops/app
+export AWS_REGION=eu-central-1
+```
 
 ### Select the cloud
 

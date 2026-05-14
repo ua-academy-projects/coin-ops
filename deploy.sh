@@ -7,18 +7,72 @@ INVENTORY_PATH="${ROOT_DIR}/ansible/inventory.generated"
 PROVISION_PLAYBOOK="${ROOT_DIR}/ansible/provision.yml"
 DEPLOY_PLAYBOOK="${ROOT_DIR}/ansible/deploy.yml"
 CLOUD_PROVIDER="${CLOUD_PROVIDER:-}"
-
-if [[ ! -f "${ROOT_DIR}/.env" ]]; then
-  echo "Missing .env in ${ROOT_DIR}" >&2
-  exit 1
-fi
-
-set -a
-. "${ROOT_DIR}/.env"
-set +a
+AWS_SECRETS_ID="${AWS_SECRETS_ID:-coinops/app}"
+AWS_SECRETS_REGION="${AWS_SECRETS_REGION:-${AWS_REGION:-eu-central-1}}"
 
 export ANSIBLE_LOCAL_TEMP="${ANSIBLE_LOCAL_TEMP:-/tmp/ansible-local}"
 export ANSIBLE_REMOTE_TEMP="${ANSIBLE_REMOTE_TEMP:-/tmp/ansible-remote}"
+
+require_command() {
+  local cmd="$1"
+  if ! command -v "${cmd}" >/dev/null 2>&1; then
+    echo "Missing required command: ${cmd}" >&2
+    exit 1
+  fi
+}
+
+load_aws_secrets() {
+  local secret_json
+
+  require_command aws
+  require_command jq
+
+  secret_json="$(
+    aws secretsmanager get-secret-value \
+      --secret-id "${AWS_SECRETS_ID}" \
+      --region "${AWS_SECRETS_REGION}" \
+      --query SecretString \
+      --output text
+  )"
+
+  if [[ -z "${secret_json}" || "${secret_json}" == "None" ]]; then
+    echo "AWS Secrets Manager returned an empty secret for ${AWS_SECRETS_ID}" >&2
+    exit 1
+  fi
+
+  export DB_PASSWORD="${DB_PASSWORD:-$(jq -r '.DB_PASSWORD // empty' <<<"${secret_json}")}"
+  export RABBITMQ_PASSWORD="${RABBITMQ_PASSWORD:-$(jq -r '.RABBITMQ_PASSWORD // empty' <<<"${secret_json}")}"
+  export GHCR_USERNAME="${GHCR_USERNAME:-$(jq -r '.GHCR_USERNAME // empty' <<<"${secret_json}")}"
+  export GHCR_TOKEN="${GHCR_TOKEN:-$(jq -r '.GHCR_TOKEN // empty' <<<"${secret_json}")}"
+  export APP_DOMAIN="${APP_DOMAIN:-$(jq -r '.APP_DOMAIN // empty' <<<"${secret_json}")}"
+  export TLS_MODE="${TLS_MODE:-$(jq -r '.TLS_MODE // empty' <<<"${secret_json}")}"
+  export EXTERNAL_DB_HOST="${EXTERNAL_DB_HOST:-$(jq -r '.EXTERNAL_DB_HOST // empty' <<<"${secret_json}")}"
+  export RUNTIME_BACKEND="${RUNTIME_BACKEND:-$(jq -r '.RUNTIME_BACKEND // empty' <<<"${secret_json}")}"
+  export IMAGE_REGISTRY="${IMAGE_REGISTRY:-$(jq -r '.IMAGE_REGISTRY // empty' <<<"${secret_json}")}"
+  export IMAGE_TAG="${IMAGE_TAG:-$(jq -r '.IMAGE_TAG // empty' <<<"${secret_json}")}"
+  export IMAGE_SOURCE="${IMAGE_SOURCE:-$(jq -r '.IMAGE_SOURCE // empty' <<<"${secret_json}")}"
+  export LOCAL_IMAGE_TAG="${LOCAL_IMAGE_TAG:-$(jq -r '.LOCAL_IMAGE_TAG // empty' <<<"${secret_json}")}"
+  export LOCAL_IMAGE_ARTIFACT_DIR="${LOCAL_IMAGE_ARTIFACT_DIR:-$(jq -r '.LOCAL_IMAGE_ARTIFACT_DIR // empty' <<<"${secret_json}")}"
+  export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN:-$(jq -r '.CLOUDFLARE_API_TOKEN // empty' <<<"${secret_json}")}"
+  export TF_VAR_cloudflare_zone_name="${TF_VAR_cloudflare_zone_name:-$(jq -r '.TF_VAR_cloudflare_zone_name // empty' <<<"${secret_json}")}"
+  export TF_VAR_cloudflare_account_id="${TF_VAR_cloudflare_account_id:-$(jq -r '.TF_VAR_cloudflare_account_id // empty' <<<"${secret_json}")}"
+  export TF_VAR_cloudflare_record_name="${TF_VAR_cloudflare_record_name:-$(jq -r '.TF_VAR_cloudflare_record_name // empty' <<<"${secret_json}")}"
+  export TF_VAR_cloudflare_proxied="${TF_VAR_cloudflare_proxied:-$(jq -r '.TF_VAR_cloudflare_proxied // empty' <<<"${secret_json}")}"
+}
+
+validate_local_context() {
+  if [[ -z "${SSH_KEY_PATH:-}" ]]; then
+    echo "SSH_KEY_PATH is required. Export it in the shell before running deploy.sh" >&2
+    exit 1
+  fi
+
+  if [[ ! -f "${SSH_KEY_PATH}.pub" ]]; then
+    echo "Missing public key: ${SSH_KEY_PATH}.pub" >&2
+    exit 1
+  fi
+
+  export TF_VAR_ssh_public_key="${TF_VAR_ssh_public_key:-$(cat "${SSH_KEY_PATH}.pub")}"
+}
 
 resolve_cloud_provider() {
   if [[ -n "${CLOUD_PROVIDER}" ]]; then
@@ -44,6 +98,8 @@ resolve_cloud_provider() {
 }
 
 prepare_cloud_env() {
+  load_aws_secrets
+  validate_local_context
   resolve_cloud_provider
 
   case "${CLOUD_PROVIDER}" in
