@@ -1,0 +1,14 @@
+{
+    "dns": {
+        "primary_cloud": "gcp",
+        "cloud_subdomains": {
+            "gcp": "gcp",
+            "aws": "aws"
+        },
+        "cloudflare": {
+            "zone_id": "de9eabb2b5b0b9b25b7ee2decc5d161b",
+            "proxied": false,
+            "ttl": 60
+        }
+    }
+}

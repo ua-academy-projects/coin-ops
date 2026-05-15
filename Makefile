@@ -81,6 +81,8 @@ tf-destroy-compute:
 	$(ENV_PREFIX) cd "$(TF_DIR)" && terraform destroy \
 		-target=module.gcp_nat_route \
 		-target=module.gcp_instances \
+		-target=module.aws_instances \
+		-target=module.aws_nat_route \
 		-target=local_file.hosts \
 		-target=local_file.ssh_config \
 		-target=local_file.ansible_runtime \

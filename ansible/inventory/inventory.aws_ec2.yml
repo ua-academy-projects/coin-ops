@@ -5,7 +5,7 @@
 # NOTE: hostnames: Jinja2 templates (e.g. "aws-{{ ec2_tags.Name }}") are not
 # supported in this version of the plugin — they render literally.
 # Instead, the "aws-" prefix is baked into the Name tag by Terraform:
-#   tags = { Name = "aws-${each.key}" }  ← in modules/aws_instances/main.tf
+#   tags = { Name = "aws-${each.key}" }  ← in modules/cloud/aws/instances/main.tf
 # This means tag:Name gives aws-app-1, aws-app-2, aws-jump-host.
 
 plugin: amazon.aws.aws_ec2

@@ -1,0 +1,6 @@
+terraform {
+  backend "gcs" {
+    bucket = "__GCP_STATE_BUCKET__"
+    prefix = "__GCP_STATE_PREFIX__"
+  }
+}

@@ -1,0 +1,38 @@
+{
+    "clouds": {
+        "control_plane": "gcp",
+        "enabled": ["gcp", "aws"],
+        "default_instance_clouds": ["gcp", "aws"],
+        "secret_backend": "gcp",
+        "providers": {
+            "gcp": {
+                "account": {
+                    "project_id": "project-6f41102f-c77c-46a3-aac"
+                },
+                "terraform_identity": {
+                    "kind": "service_account",
+                    "name": "terraform-sa"
+                }
+            },
+            "aws": {
+                "account": {
+                    "account_id": ""
+                },
+                "terraform_identity": {
+                    "kind": "iam_user",
+                    "name": "bootstrap-terraform-user"
+                }
+            }
+        },
+        "backends": {
+            "gcp": {
+                "bucket": "internship-state-bucket",
+                "prefix": "infra/state"
+            },
+            "aws": {
+                "bucket_prefix": "coinops-terraform-state",
+                "key": "infra/state/terraform.tfstate"
+            }
+        }
+    }
+}

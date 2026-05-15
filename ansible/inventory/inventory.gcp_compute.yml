@@ -11,7 +11,7 @@
 plugin: google.cloud.gcp_compute
 auth_kind: application
 
-# Project ID is not sensitive — matches TF_VAR_gcp_project_id in config.json.
+# Project ID is not sensitive — canonical value lives in terraform/config/clouds.json.
 # Listed explicitly because the plugin cannot use Jinja lookups for this key.
 projects:
   - project-6f41102f-c77c-46a3-aac

@@ -1,7 +1,7 @@
-# Runtime layer — operator runbook
+# Runtime Layer Operator Runbook
 
-> Design rationale: see [ADR 0001](adr/0001-postgres-runtime.md). This
-> document is the operator-facing view; the ADR is the decision record.
+This document keeps only the operator-facing runtime steps that are still useful
+for the current PostgreSQL runtime path.
 
 ## Postgres image requirements
 
@@ -11,7 +11,7 @@ The runtime layer depends on two extensions:
 - `pgmq` — queue primitives used by the sibling branch.
 
 Neither ships in the stock `postgres:16-alpine` image referenced by
-`deploy/compose/node-01.compose.yaml` today, so a custom image is
+`deploy/compose/backend-history.compose.yaml` today, so a custom image is
 required. Per ADR §9.1, the chosen base is
 an Ubuntu PostgreSQL 16 runtime with `pg_cron` installed from Ubuntu's
 package repositories and the `pgmq` extension files copied from Tembo's

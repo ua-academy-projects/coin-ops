@@ -41,8 +41,8 @@ import sys
 terraform_dir = pathlib.Path(sys.argv[1])
 
 files = [
-    terraform_dir / "modules" / "gcp_database" / "main.tf",
-    terraform_dir / "modules" / "gcp_secrets" / "main.tf",
+    terraform_dir / "modules" / "cloud" / "gcp" / "database" / "main.tf",
+    terraform_dir / "modules" / "cloud" / "gcp" / "secrets" / "main.tf",
 ]
 
 lifecycle_pattern = re.compile(
@@ -53,7 +53,7 @@ lifecycle_pattern = re.compile(
 for path in files:
     content = path.read_text(encoding="utf-8")
     content = lifecycle_pattern.sub("\n", content)
-    if path.name == "main.tf" and "gcp_database" in str(path.parent):
+    if path.name == "main.tf" and path.parent.name == "database":
         content = content.replace("deletion_protection = true", "deletion_protection = false")
     path.write_text(content, encoding="utf-8")
 PY

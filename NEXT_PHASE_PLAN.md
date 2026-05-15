@@ -105,7 +105,7 @@ The first version of this phase is implemented: the repo now has a deliberate fu
 
 ## Phase C: Config and Inventory Architecture Refinement
 
-The first slice of this phase is implemented: backend host discovery now comes from inventory instead of Terraform handoff, cloud-specific sizes/regions/images are consolidated in `terraform/config/cloud_mappings.json`, and committed bootstrap defaults now live in `terraform/bootstrap.defaults.json`. The remaining work in this phase is to simplify and harden that structure further without reopening the migration.
+The first slice of this phase is implemented: backend host discovery now comes from inventory instead of Terraform handoff, cloud-specific sizes/regions/images are consolidated in `terraform/config/cloud_mappings.json`, and committed bootstrap/deploy/DNS defaults now live in split SSOT JSON files under `terraform/config/`. The remaining work in this phase is to simplify and harden that structure further without reopening the migration.
 
 ### Goals
 
@@ -133,8 +133,8 @@ The first slice of this phase is implemented: backend host discovery now comes f
    - Keep the result readable; the goal is to reduce drift and duplication, not to hide cloud-specific differences.
 
 5. Reassess bootstrap-default ownership.
-   - Keep `bootstrap.defaults.json` small and operator-oriented rather than letting it become a second full infrastructure config.
-   - Decide carefully which values belong in bootstrap defaults versus `terraform/config/config.json`.
+   - Keep bootstrap-local generated files small and operator-oriented rather than letting them become a second full infrastructure config.
+   - Decide carefully which values belong in generated local artifacts versus the committed split JSON files under `terraform/config/`.
    - Preserve the generated-local-file model and avoid reintroducing duplicated sources of truth.
 
 6. Keep the architecture constraints explicit.

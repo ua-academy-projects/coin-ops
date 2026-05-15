@@ -1,133 +1,28 @@
 # Coin-Ops
 
-> Current infrastructure and operator workflow truth lives in `runbook.md`, `CONTEXT.md`, and `NEXT_PHASE_PLAN.md`.
-> Some sections below describe historical runtime migration work and older integration context rather than the exact current cloud-first deployment state.
+Coin-Ops is a distributed Polymarket dashboard. The current infrastructure path is cloud-first: Terraform creates cloud networking and VMs, Ansible provisions/deploys Docker Compose service stacks, and runtime secrets come from cloud secret storage rather than a repo `.env`.
 
-Coin-Ops is a distributed Polymarket dashboard deployed across three VMs. The system uses a PostgreSQL-native runtime architecture, consolidating queue and session state management directly into PostgreSQL (live market caches remain in-process). 
-
-The major "Repo Foundation", "PostgreSQL Migration", and "Test Pyramid" phases (April 2026) are successfully completed on `dev`:
-
-- **Infrastructure:** CI/CD gating, SemVer releases, and local Compose workflows (`make verify`) are fully operational.
-- **Runtime Backend:** Proxy and Consumer services have fully cut over to `RUNTIME_BACKEND=postgres`, consolidating queue and session state natively in PostgreSQL.
-- **Validation:** A comprehensive Test Pyramid is in place, covering unit tests (Go, Python, React), integration tests (PostgreSQL-backed), and end-to-end smoke suites (#44, #46, #47, #49, #50), all wired into CI (#52).
-
-**Current Focus & Next Steps:**
-
-- **Legacy Cleanup:** Physically removing RabbitMQ and Redis completely from infrastructure provisioning (#12, PR #48).
-- **Frontend Porting:** Porting the React frontend to the PostgreSQL-runtime architecture and integrating cross-branch improvements (#14).
-- **Documentation:** Finalizing the migration and demo runbook (#13, PR #51).
-
-**[Read the Documentation](docs/)** | **[How to Contribute](CONTRIBUTING.md)**
+Current infrastructure and operator workflow truth lives in [runbook.md](runbook.md), [CONTEXT.md](CONTEXT.md), [NEXT_PHASE_PLAN.md](NEXT_PHASE_PLAN.md), and [MULTI_CLOUD_SCOPE.md](MULTI_CLOUD_SCOPE.md).
 
 ## Status Snapshot
 
 | Topic | Current repo state on `dev` | Next planned step |
 | --- | --- | --- |
-| Runtime backend | Default deployed path is `postgres`: queue and session state consolidated in PostgreSQL | Monitor and optimize PostgreSQL runtime load |
-| Runtime queue assets | Proxy and consumer use `pgmq` queue SQL, DLQ, and `LISTEN/NOTIFY` via `runtime/` schema | Remove remaining legacy dead code if any |
+| Runtime backend | `postgres` is the PostgreSQL-native path; `external` remains an explicit fallback mode | Monitor and optimize PostgreSQL runtime load |
+| Runtime queue assets | Proxy and consumer use `pgmq` queue SQL, DLQ, and `LISTEN/NOTIFY` via `runtime/` schema | Keep deploy wiring aligned with runtime mode |
 | Frontend contract | same-origin `/api` and `/history-api` | keep the same HTTP contract |
-| Deployment shape | Docker Compose on three VMs via Ansible | keep the three-VM story |
+| Deployment shape | Docker Compose on role-based VMs via Ansible | keep role naming and cloud placement explicit |
 | Image publishing | `Shabat` -> `shabat-latest`, `dev` -> `dev-latest`, tags -> `vX.Y.Z` | use moving branch tags for integration/demo deploys and tags for pinned releases |
 | Validation | PR checks run on pull requests into `dev` | extend the test pyramid beyond the current baseline over time |
 
-## Architecture
+## Deployment Topology
 
-```mermaid
-flowchart TD
-    %% Стилі
-    classDef deprecated fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#b71c1c
-    classDef neutral fill:#f3f4f6,stroke:#9ca3af,stroke-width:2px
-    classDef pg_cache fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#e65100
-    classDef pg_queue fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1
-    classDef pg_db fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#1b5e20
+> **Note:** The runtime mode is now PostgreSQL-native (`RUNTIME_BACKEND=postgres`). The fallback RabbitMQ/Redis mode (`RUNTIME_BACKEND=external`) is retained for controlled rollback only.
 
-    subgraph Shabat ["Стан: Shabat (Як було)"]
-        direction TB
-        Browser1(Browser)
-
-        subgraph Node03_1 ["Node-03"]
-            UI1["React UI Gateway"]:::neutral
-        end
-
-        subgraph Node02_1 ["Node-02"]
-            Proxy1["Go Proxy"]:::neutral
-            Redis[("Redis Cache")]:::deprecated
-        end
-
-        subgraph Node01_1 ["Node-01"]
-            HistoryAPI1["Python History API"]:::neutral
-            RabbitMQ[["RabbitMQ Queue"]]:::deprecated
-            Consumer1["pika Consumer"]:::deprecated
-            PGDB1[("PostgreSQL Database")]:::pg_db
-        end
-
-        Browser1 -->|HTTP| UI1
-        UI1 -->|/api| Proxy1
-        UI1 -->|/history-api| HistoryAPI1
-        
-        Proxy1 -->|Read / Write State| Redis
-        Proxy1 -->|Publish Event| RabbitMQ
-        
-        RabbitMQ -->|Consume| Consumer1
-        Consumer1 -->|Write Data| PGDB1
-        
-        HistoryAPI1 -->|Read Data| PGDB1
-    end
-
-    subgraph Dev ["Стан: dev (Як стало)"]
-        direction TB
-        Browser2(Browser)
-
-        subgraph Node03_2 ["Node-03"]
-            UI2["React UI Gateway"]:::neutral
-        end
-
-
-        subgraph Node02_2 ["Node-02"]
-            Proxy2["Go Proxy"]:::neutral
-        end
-
-        subgraph Node01_2 ["Node-01"]
-            HistoryAPI2["Python History API"]:::neutral
-            Consumer2["consumer.py (postgres)"]:::neutral
-            
-            subgraph PostgreSQL ["PostgreSQL Container"]
-                direction TB
-                PGCache[("PSQL: Session<br/>Схема 'runtime.session'")]:::pg_cache
-                PGQueue[("PSQL: Queue<br/>Extension 'pgmq'")]:::pg_queue
-                PGDB2[("PSQL: Database<br/>History Tables")]:::pg_db
-            end
-        end
-
-        subgraph CICD ["CI/CD Automation"]
-            GHA["GitHub Actions:<br/>- PR Checks<br/>- Docker Builds<br/>- SemVer Releases"]:::active
-        end
-
-        Browser2 -->|HTTP| UI2
-        UI2 -->|/api| Proxy2
-        UI2 -->|/history-api| HistoryAPI2
-        
-        Proxy2 -->|Read / Write State| PGCache
-        Proxy2 -->|"enqueue_event()"| PGQueue
-        
-        PGQueue -->|LISTEN / NOTIFY| Consumer2
-        Consumer2 -->|"claim_events()"| PGQueue
-        Consumer2 -->|Write Snapshots| PGDB2
-        
-        HistoryAPI2 -->|Read Data| PGDB2
-    end
-```
-
-> **Note:** The runtime mode is now PostgreSQL-native (`RUNTIME_BACKEND=postgres`). The legacy mode using RabbitMQ and Redis (`RUNTIME_BACKEND=external`) is kept as a fallback.
-> -> See `docs/migration-runbook.md` for migration steps and rollback procedures.
-> -> See `docs/adr/0001-postgres-runtime.md` for design decisions.
-
-| VM | IP | Runtime services |
-| --- | --- | --- |
-| node-01 | `172.31.1.10` | PostgreSQL, history consumer, history API |
-| node-02 | `172.31.1.11` | Go proxy |
-| node-03 | `172.31.1.12` | nginx gateway, React SPA |
-
+| Role | Runtime services |
+| --- | --- |
+| `app-1` | nginx gateway, React SPA |
+| `app-2` | PostgreSQL, history consumer, history API, Go proxy |
 
 ## Current Data Flow
 
@@ -138,7 +33,7 @@ flowchart TD
 | History path | Browser -> `/history-api` -> FastAPI -> PostgreSQL -> Browser | chart time series |
 | Session path | Browser -> `/api/state` -> PostgreSQL (UNLOGGED) | short-lived UI state |
 
-The browser does not call `172.31.1.10:8000` or `172.31.1.11:8080` directly. Node-03 keeps the frontend same-origin by reverse-proxying `/api` and `/history-api`.
+The browser does not call backend private IPs directly. The `app-1` gateway keeps the frontend same-origin by reverse-proxying `/api` and `/history-api` to the backend role.
 
 ## Roadmap Status
 
@@ -149,14 +44,14 @@ The browser does not call `172.31.1.10:8000` or `172.31.1.11:8080` directly. Nod
 - GHCR publishing for `dev-latest` exists in `.github/workflows/docker-images.yml`
 - PostgreSQL queue-side runtime SQL and `runtime_consumer.py` exist under `runtime/`
 
-### Completed migrations
+### Current runtime wiring
 
 - added `RUNTIME_BACKEND=external|postgres` wiring to proxy and consumer startup paths
 - switched proxy event publishing from RabbitMQ to `runtime.enqueue_event(...)`
 - added PostgreSQL worker routing inside `history/consumer.py` via `RUNTIME_BACKEND`
 - wired runtime schema/bootstrap into Ansible and Compose
 - moved Redis-backed session state into PostgreSQL runtime primitives (live caches remain in-process)
-- deprecated RabbitMQ and Redis as primary dependencies
+- keeps RabbitMQ and Redis available only when `RUNTIME_BACKEND=external` is selected
 
 ## Tech Stack
 
@@ -177,13 +72,13 @@ The browser does not call `172.31.1.10:8000` or `172.31.1.11:8080` directly. Nod
 ```text
 .
 |-- ansible/          # provisioning and deployment automation
-|-- deploy/compose/   # per-node Docker Compose stacks
-|-- docs/             # architecture, deployment, and runbook notes
+|-- deploy/compose/   # role/service Docker Compose templates
+|-- docs/             # current operator notes
 |-- history/          # FastAPI history API, consumer (pika fallback), schema
 |-- proxy/            # Go live-data proxy
 |-- runtime/          # PostgreSQL runtime queue SQL and pgmq-backed consumer assets
 |-- terraform/        # VM and network provisioning
-|-- ui/               # legacy static UI
+|-- ui/               # older static UI
 `-- ui-react/         # main React/Vite frontend
 ```
 
@@ -215,9 +110,9 @@ push tag vX.Y.Z
   -> publish immutable release images
 
 Ansible deploy
-  -> renders per-node Compose files and runtime config
+  -> renders role/service Compose files and runtime config
   -> Docker Compose pulls tagged images
-  -> containers start on node-01, node-02, and node-03
+  -> containers start on app-1 and app-2
 ```
 
 ## Branches and Release Tags
@@ -235,18 +130,18 @@ Release tags are automated from Conventional Commit style squash merge titles on
 
 ## Public Gateway and TLS
 
-Node-03 is the browser-facing gateway. It serves the React UI and reverse-proxies the backend paths:
+`app-1` is the browser-facing gateway. It serves the React UI and reverse-proxies the backend paths:
 
 ```text
 https://coinops.test/              -> React UI
-https://coinops.test/api/*         -> node-02 proxy
-https://coinops.test/history-api/* -> node-01 history API
+https://coinops.test/api/*         -> app-2 proxy
+https://coinops.test/history-api/* -> app-2 history API
 ```
 
 For local lab HTTPS, keep `APP_DOMAIN=coinops.test`, `TLS_MODE=selfsigned`, and add this hosts entry on the machine running the browser:
 
 ```text
-172.31.1.12 coinops.test
+<app-1-public-ip> coinops.test
 ```
 
 ## Secrets and Runtime Configuration
@@ -269,7 +164,7 @@ Legacy mode env variables (if `RUNTIME_BACKEND=external`):
 Prepare the generated local environment first:
 
 ```bash
-source local/generated-env.sh
+source local/generated-gcp-env.sh
 ```
 
 For the local root `docker compose` flow, use a plain Compose `.env` file and the root `Makefile` convenience targets:
@@ -423,5 +318,7 @@ These are public unauthenticated APIs, so live behavior depends on upstream avai
 
 ## More Detail
 
-- [docs/architecture.md](docs/architecture.md) explains the system architecture and service responsibilities.
-- [docs/runtime-queue-architecture.md](docs/runtime-queue-architecture.md) focuses on the queue-side PostgreSQL runtime design and its current status on `dev`.
+- [runbook.md](runbook.md) is the current infrastructure operator workflow.
+- [MULTI_CLOUD_SCOPE.md](MULTI_CLOUD_SCOPE.md) defines the current GCP/AWS support boundary.
+- [docs/runtime.md](docs/runtime.md) covers PostgreSQL runtime operator steps.
+- [docs/release-automation.md](docs/release-automation.md) covers SemVer release automation.

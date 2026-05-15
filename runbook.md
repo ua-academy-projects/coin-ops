@@ -1,13 +1,14 @@
 # Infrastructure Runbook
 
-This runbook describes the supported lifecycle for the current GCP-first infrastructure flow.
+This runbook describes the supported lifecycle for the current multi-cloud-ready infrastructure flow.
 
 For exact GCP vs AWS support boundaries, see [MULTI_CLOUD_SCOPE.md](/D:/Internship/coin-ops-local/coin-ops/MULTI_CLOUD_SCOPE.md).
 
 The normal operator model is:
 
-- bootstrap once with `terraform/bootstrap-gcp.sh`
-- source `local/generated-env.sh`
+- choose the control-plane cloud in `terraform/config/clouds.json`
+- bootstrap once with the matching script, for example `terraform/bootstrap-gcp.sh`
+- source the matching generated env, for example `local/generated-gcp-env.sh`
 - seed Secret Manager only when needed
 - keep the built-in stateful-resource protections in place for normal work
 
@@ -21,7 +22,7 @@ Current host-role split:
 ## Prerequisites
 
 - Run from WSL/Linux.
-- Install Terraform, Ansible, `gcloud`, and Docker-compatible SSH tooling.
+- Install Terraform, Ansible, `jq`, Docker-compatible SSH tooling, and the CLI for the chosen control-plane cloud (`gcloud` or `aws` today).
 - Install Ansible collections:
 
 ```bash
@@ -29,7 +30,7 @@ cd /mnt/d/Internship/coin-ops-local/coin-ops
 ansible-galaxy collection install -r ansible/requirements.yml
 ```
 
-- Authenticate `gcloud` with a human/operator account before bootstrap:
+- Authenticate the selected cloud CLI with a human/operator account before bootstrap. For the default GCP path:
 
 ```bash
 gcloud auth login
@@ -40,37 +41,32 @@ Do not run bootstrap while the active `gcloud` account is the Terraform service 
 
 ## Generated Local Files
 
-`terraform/bootstrap-gcp.sh` generates these local gitignored files:
+Bootstrap scripts generate local gitignored files:
 
+- `terraform/backend.active.tf`
 - `terraform/sa-key.json`
 - `terraform/local.generated.auto.tfvars.json`
 - `terraform/bootstrap.secrets.auto.tfvars`
 - `ansible/vars/local.generated.json`
-- `local/generated-env.sh`
+- `local/generated-gcp-env.sh` or `local/generated-aws-env.sh`
 
 These files replace the old repo `.env` workflow.
 
-For AWS bootstrap, use the separate generated local shell file:
+`backend.active.tf` is intentionally generated rather than committed because Terraform backend blocks cannot read JSON locals directly.
 
-- `local/generated-aws-env.sh`
+Generated env files contain only local credentials and operator paths. Committed non-secret deploy settings such as domain, TLS mode, ports, and image tags stay in the split JSON files under `terraform/config/`.
 
 ## Very First Start of Infrastructure
 
-### 1. Review bootstrap defaults
+### 1. Review SSOT config
 
-Open `terraform/bootstrap.defaults.json` and adjust the committed defaults if needed:
+Review the split SSOT files under `terraform/config/` and adjust the committed non-secret defaults if needed:
 
-- `gcp.project_id`
-- `deploy.app_domain`
-- `deploy.tls_mode`
-- `deploy.runtime_backend`
-- `deploy.ghcr_username`
-- image and port defaults
-
-If you need to change the logical deployment region or cloud image profiles, update `terraform/config/config.json` instead:
-
-- `general.region_profile`
-- `general.image_profile`
+- `clouds.json`: `clouds.control_plane`, `clouds.enabled`, `clouds.default_instance_clouds`, `clouds.providers`, and `clouds.backends`
+- `general.json`: project/user/SSH/region/image defaults
+- `deploy.json`: domain, TLS/certbot policy, runtime backend, image defaults, ports, and Ansible provisioning defaults
+- `dns.json`: `dns.primary_cloud`, aliases, and Cloudflare defaults
+- `instances.json`: VM topology and per-VM cloud overrides
 
 ### 2. Run bootstrap
 
@@ -78,6 +74,16 @@ If you need to change the logical deployment region or cloud image profiles, upd
 cd /mnt/d/Internship/coin-ops-local/coin-ops/terraform
 bash bootstrap-gcp.sh
 ```
+
+For AWS as the selected control-plane, run:
+
+```bash
+cd /mnt/d/Internship/coin-ops-local/coin-ops/terraform
+bash bootstrap-aws.sh
+```
+
+AWS bootstrap creates an S3 state bucket and uses Terraform's native S3 lockfile
+support in the generated backend artifact.
 
 ### 3. Fill the bootstrap secrets file
 
@@ -92,14 +98,14 @@ Edit `terraform/bootstrap.secrets.auto.tfvars` and replace the placeholder value
 
 ```bash
 cd /mnt/d/Internship/coin-ops-local/coin-ops
-source local/generated-env.sh
+source local/generated-gcp-env.sh
 ```
 
 Optional: add this to `~/.bashrc` so new shells load it automatically:
 
 ```bash
-if [ -f /mnt/d/Internship/coin-ops-local/coin-ops/local/generated-env.sh ]; then
-  source /mnt/d/Internship/coin-ops-local/coin-ops/local/generated-env.sh
+if [ -f /mnt/d/Internship/coin-ops-local/coin-ops/local/generated-gcp-env.sh ]; then
+  source /mnt/d/Internship/coin-ops-local/coin-ops/local/generated-gcp-env.sh
 fi
 ```
 
@@ -115,6 +121,7 @@ This first apply:
 
 - creates or updates GCP Secret Manager secrets
 - creates the infrastructure
+- uses the explicit backend from `terraform/backend.active.tf`
 - generates `terraform/config/ssh_config`
 - generates `terraform/config/ansible-runtime.json`
 
@@ -138,6 +145,7 @@ Current image-aware behavior:
 
 ```bash
 ansible-inventory -i ansible/inventory --graph
+APP_DOMAIN="$(jq -r '.deploy.app_domain' terraform/config/deploy.json)"
 curl -I https://"$APP_DOMAIN"
 curl https://"$APP_DOMAIN"/health
 ```
@@ -146,9 +154,77 @@ Notes:
 
 - External port `80` is intentionally closed.
 - Cloudflare proxy is the intended public entry point.
+- `dns.primary_cloud` owns `APP_DOMAIN`; other simultaneous cloud deployments use aliases such as `gcp.$APP_DOMAIN` and `aws.$APP_DOMAIN`.
 - `TLS_MODE=certbot` requires a real public domain.
-- staging certificates are expected for repeated validation until production issuance is intentionally re-enabled
+- `deploy.certbot.staging` in `terraform/config/deploy.json` controls whether certbot requests staging certificates by default.
+- set `deploy.certbot.staging=true` for repeated validation; keep it `false` only when production certificate issuance is intentional
 - on golden-image app hosts, `ansible/provision.yml` should validate Docker, UTC timezone, `systemd-timesyncd`, `ufw`, and common CLI tools rather than reinstall them
+
+## Validation Path For Infrastructure Refactors
+
+Run these before applying refactored infrastructure changes to a real project:
+
+```bash
+cd /mnt/d/Internship/coin-ops-local/coin-ops
+git diff --check
+```
+
+Validate Terraform structure without touching the remote backend:
+
+```bash
+cd terraform
+terraform fmt -check -recursive
+terraform init -backend=false
+terraform validate
+```
+
+Validate the active backend artifact after bootstrap:
+
+```bash
+# default supported path
+bash bootstrap-gcp.sh
+grep -n 'backend "gcs"' backend.active.tf
+
+# AWS control-plane rehearsal in a disposable AWS account/profile
+bash bootstrap-aws.sh
+grep -n 'backend "s3"' backend.active.tf
+grep -n 'use_lockfile = true' backend.active.tf
+```
+
+Validate planning scenarios by changing only split JSON files under `terraform/config/`:
+
+- `clouds.enabled = ["gcp"]`
+- `clouds.enabled = ["aws"]`
+- `clouds.enabled = ["gcp", "aws"]`
+- `instances.<name>.clouds` set for one mixed-placement VM
+- `dns.primary_cloud` switched between available clouds
+
+For each scenario:
+
+```bash
+terraform plan -out=tfplan
+terraform show -no-color tfplan > tfplan.txt
+```
+
+Check that:
+
+- only the selected cloud modules receive VMs
+- root/`www` DNS records point to `dns.primary_cloud`
+- secondary clouds expose `gcp.<app_domain>` / `aws.<app_domain>` aliases when DNS is enabled
+- `public_endpoints` contains usable endpoints when DNS is disabled or Cloudflare credentials are absent
+
+Validate Ansible after Terraform has produced inventory artifacts:
+
+```bash
+cd ..
+ansible-inventory -i ansible/inventory --graph
+ansible-playbook -i ansible/inventory ansible/provision.yml --syntax-check
+ansible-playbook -i ansible/inventory ansible/deploy.yml --syntax-check
+```
+
+The inventory graph should contain cloud groups and role groups such as
+`gcp`, `aws`, `role_app_ui`, `role_app_backend`, `role_jump_host`, and
+`role_nat`.
 
 ## Correctly Destroy Infrastructure Without Affecting Important Parts
 
@@ -161,7 +237,7 @@ To remove only compute and compute-adjacent runtime artifacts, use targeted dest
 
 ```bash
 cd /mnt/d/Internship/coin-ops-local/coin-ops
-source local/generated-env.sh
+source local/generated-gcp-env.sh
 cd terraform
 terraform destroy \
   -target=module.gcp_nat_route \
@@ -195,7 +271,7 @@ Use this when compute was destroyed but stateful infrastructure was intentionall
 
 ```bash
 cd /mnt/d/Internship/coin-ops-local/coin-ops
-source local/generated-env.sh
+source local/generated-gcp-env.sh
 ```
 
 ### 2. Recreate infrastructure
@@ -223,7 +299,7 @@ Use this only when you intentionally want to remove everything, including statef
 
 ```bash
 cd /mnt/d/Internship/coin-ops-local/coin-ops
-source local/generated-env.sh
+source local/generated-gcp-env.sh
 ```
 
 ### 2. Run the deliberate full-destroy helper
@@ -311,7 +387,7 @@ bash full-destroy.sh --yes-really-destroy-stateful
 Make sure you have sourced:
 
 ```bash
-source local/generated-env.sh
+source local/generated-gcp-env.sh
 ```
 
 and confirm:

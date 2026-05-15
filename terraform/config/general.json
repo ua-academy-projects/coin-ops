@@ -1,0 +1,13 @@
+{
+    "general": {
+        "project_name": "coin-ops",
+        "region_profile": "europe-central",
+        "image_profile": "debian-12",
+        "instance_size": "micro",
+        "disk_size": 10,
+        "has_public_ip": false,
+        "username": "coinops",
+        "user_init_script": "scripts/user-init.sh.tpl",
+        "ssh_port": 53725
+    }
+}

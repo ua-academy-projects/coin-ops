@@ -2,7 +2,7 @@
 
 **Purpose:** Ground truth for automated assistants and humans editing this repo. Load this file when working on `terraform/`, `ansible/`, deployments, or cross-service wiring.
 
-**Project:** Polymarket dashboard (live markets, whale leaderboard, BTC/ETH/UAH pricing, historical charts). GCP is primary; AWS is secondary parity. The repository now runs on the cloud-first topology below; Hyper-V-era assumptions should be treated as legacy unless explicitly called out. For an explicit support matrix, see [MULTI_CLOUD_SCOPE.md](/D:/Internship/coin-ops-local/coin-ops/MULTI_CLOUD_SCOPE.md).
+**Project:** Polymarket dashboard (live markets, whale leaderboard, BTC/ETH/UAH pricing, historical charts). GCP is primary; AWS is secondary parity. The repository now runs on the cloud-first topology below; pre-cloud local-VM assumptions are unsupported unless explicitly called out. For an explicit support matrix, see [MULTI_CLOUD_SCOPE.md](/D:/Internship/coin-ops-local/coin-ops/MULTI_CLOUD_SCOPE.md).
 
 ---
 
@@ -70,7 +70,8 @@ FastAPI exposes at least: `/health`, `/history`, `/history/{slug}`, `/prices/his
 ### Providers and state
 
 - `hashicorp/google` ~> 7.0, `hashicorp/aws` ~> 6.0, `hashicorp/local` ~> 2.0.
-- Remote state (GCS): bucket `internship-state-bucket`, prefix `infra/state` (see `terraform/backend.tf`).
+- Remote state backend is selected by bootstrap into gitignored `terraform/backend.active.tf`.
+- GCP remains the default control plane today, but each supported cloud bootstrap prepares its own state storage.
 - `terraform/bootstrap-gcp.sh` is the operator bootstrap entrypoint for the GCP-first workflow.
 
 ### JSON-driven config
@@ -79,7 +80,11 @@ Read from `terraform/config/*.json` via `jsondecode(file(...))` in `terraform/ma
 
 | File | Role |
 |------|------|
-| `config.json` | `general` defaults + `instances` map (name -> subnet, role, sizes, flags) |
+| `clouds.json` | control-plane cloud, enabled clouds, normalized cloud provider/account/terraform identity contract, and backend storage config |
+| `general.json` | project/user/SSH/region/image defaults |
+| `deploy.json` | domain, TLS/certbot, runtime backend, image defaults, ports, and Ansible provisioning defaults |
+| `dns.json` | primary DNS cloud, cloud aliases, and Cloudflare defaults |
+| `instances.json` | VM topology and per-instance overrides |
 | `networks.json` | `vpc_cidr`, `subnets`, `firewall_rules`, routing metadata |
 | `cloud_mappings.json` | cloud-specific mapping dictionaries for sizes, logical regions/zones, and image profiles |
 | `hosts.json` | **generated** by `terraform apply` — do not commit |
@@ -91,14 +96,15 @@ Read from `terraform/config/*.json` via `jsondecode(file(...))` in `terraform/ma
 The normal workflow does **not** rely on a committed repo `.env`. Instead, bootstrap generates local gitignored operator files:
 
 - `terraform/sa-key.json`
+- `terraform/backend.active.tf`
 - `terraform/local.generated.auto.tfvars.json`
 - `terraform/bootstrap.secrets.auto.tfvars`
 - `ansible/vars/local.generated.json`
-- `local/generated-env.sh`
+- `local/generated-gcp-env.sh` / `local/generated-aws-env.sh`
 
-Bootstrap defaults now come from committed `terraform/bootstrap.defaults.json` for project/operator settings such as project ID, deploy defaults, image registry/tag, and Cloudflare zone ID. Infrastructure topology choices like `general.region_profile` still live in `terraform/config/config.json`.
+Committed non-secret bootstrap, deploy, DNS, cloud, and topology defaults now live in split JSON files under `terraform/config/`.
 
-`local/generated-env.sh` is the intended shell entrypoint before normal Terraform or Ansible work.
+`local/generated-gcp-env.sh` is the default shell entrypoint before normal Terraform or Ansible work; AWS bootstrap writes `local/generated-aws-env.sh`.
 
 ### Network model (VPC `10.10.0.0/16`)
 
@@ -116,20 +122,20 @@ Bootstrap defaults now come from committed `terraform/bootstrap.defaults.json` f
 
 - GCP: `gcp_network`, `gcp_firewall`, `gcp_instances`, `gcp_nat_route`.
 - AWS: `aws_network`, `aws_security_groups`, `aws_instances`, `aws_nat_route`.
-- Roots wire modules with `count = local.<cloud>_enabled ? 1 : 0`; `var.enabled_clouds` controls which stacks apply.
+- Roots wire modules with `count = local.<cloud>_enabled ? 1 : 0`; `terraform/config/clouds.json` and `terraform/config/instances.json` control enabled clouds and per-instance cloud placement.
 
 ---
 
 ## 3. Critical pattern: instance config merge
 
-In both `modules/gcp_instances/main.tf` and `modules/aws_instances/main.tf`, each VM config is merged in **fixed order** (later wins):
+In both cloud instance modules (`modules/cloud/gcp/instances` and `modules/cloud/aws/instances`), each VM config is merged in **fixed order** (later wins):
 
 ```text
 merge(
   local.fallback,       # emergency defaults when upstream config is absent
-  var.defaults,         # config.json -> general
-  var.cloud_defaults,   # derived cloud defaults from cloud_mappings.json + config.json
-  cfg                   # config.json -> instances -> <vm_name>
+  var.defaults,         # general.json -> general
+  var.cloud_defaults,   # derived cloud defaults from cloud_mappings.json + split config
+  cfg                   # instances.json -> instances -> <vm_name>
 )
 ```
 
@@ -182,7 +188,7 @@ Example (conceptual): `general.disk_size = 20` overrides `fallback.disk_size` wh
 
 - **Secrets:** GCP deployments fetch `DB_PASSWORD`, `RABBITMQ_PASSWORD`, `GHCR_TOKEN`, and `CLOUDFLARE_API_TOKEN` from GCP Secret Manager at deploy time.
 - **Non-secrets:** `app_domain`, `tls_mode`, image defaults, ports, and similar values come from committed defaults plus generated local non-secret config.
-- **Local shell state:** Operators should source `local/generated-env.sh` instead of `source .env`.
+- **Local shell state:** Operators should source `local/generated-gcp-env.sh` or `local/generated-aws-env.sh` instead of `source .env`.
 
 ### Secrets on VMs
 
@@ -233,7 +239,8 @@ terraform/*.tfstate*
 terraform/local.generated.auto.tfvars.json
 terraform/bootstrap.secrets.auto.tfvars
 ansible/vars/local.generated.json
-local/generated-env.sh
+local/generated-gcp-env.sh
+local/generated-aws-env.sh
 .env
 ```
 
@@ -264,4 +271,4 @@ The current GCP-first refactor is implemented. The next work should focus on pol
 
 ## 10. Related repo docs
 
-For narrative architecture and ops detail: `README.md`, `docs/architecture.md`, `docs/deployment.md`, `docs/terraform-guide.md`, `runbook.md`, `MULTI_CLOUD_SCOPE.md`, `CLAUDE.md`, `AGENTS.md`.
+For current architecture and ops detail: `README.md`, `runbook.md`, `MULTI_CLOUD_SCOPE.md`, `docs/runtime.md`, `docs/release-automation.md`, `docs/smoke-suite.md`, `CLAUDE.md`, `AGENTS.md`.

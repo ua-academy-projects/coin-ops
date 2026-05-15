@@ -6,12 +6,14 @@ It is a scope document, not a runbook. For operator steps, use [runbook.md](/D:/
 
 ## Current Position
 
-The repo supports a **GCP-first production-like path** and a **partial AWS parity path**.
+The repo supports a **GCP-first production-like path** and a **partial AWS parity path**. The file layout and bootstrap contract are now prepared for a future Azure path, but Azure resources are intentionally out of scope for the current implementation.
 
 That means:
 
 - GCP is the primary supported cloud for the full bootstrap, secret-management, managed-database, TLS, and deploy workflow.
 - AWS support currently covers compute/network provisioning patterns, dynamic inventory, bastion/NAT access, and the same logical topology model.
+- Every supported cloud bootstrap should prepare its own Terraform state storage and native lock-safe backend configuration so that the control-plane cloud can be changed intentionally later.
+- Future Azure support must include Azure Storage for state, Azure RBAC/IAM bootstrap, Key Vault, dynamic inventory, VM/network modules, and managed PostgreSQL parity before it is documented as supported.
 - "Multi-cloud" does not currently mean identical features, identical destroy flows, or identical secret/managed-service integrations across both providers.
 
 ## Support Matrix
@@ -101,4 +103,3 @@ Phase D can be considered complete only when:
 Until then, the honest repo statement is:
 
 > `coin-ops` supports a full GCP-first infrastructure path and a partial AWS parity path.
-

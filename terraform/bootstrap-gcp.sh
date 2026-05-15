@@ -7,48 +7,61 @@
 # Configuration sources
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-BOOTSTRAP_DEFAULTS_PATH="${SCRIPT_DIR}/bootstrap.defaults.json"
 MAPPING_PATH="${SCRIPT_DIR}/config/cloud_mappings.json"
-CONFIG_PATH="${SCRIPT_DIR}/config/config.json"
-
-if [ ! -f "${BOOTSTRAP_DEFAULTS_PATH}" ]; then
-  echo "Missing bootstrap defaults file: ${BOOTSTRAP_DEFAULTS_PATH}"
-  exit 1
-fi
+CONFIG_DIR="${SCRIPT_DIR}/config"
+BACKEND_TEMPLATE_PATH="${SCRIPT_DIR}/backends/backend.gcp.tf.tmpl"
+BACKEND_ACTIVE_PATH="${SCRIPT_DIR}/backend.active.tf"
+CONFIG_FILES=(clouds.json general.json deploy.json dns.json instances.json)
 
 if [ ! -f "${MAPPING_PATH}" ]; then
   echo "Missing cloud mappings file: ${MAPPING_PATH}"
   exit 1
 fi
 
-if [ ! -f "${CONFIG_PATH}" ]; then
-  echo "Missing Terraform config file: ${CONFIG_PATH}"
+for config_file in "${CONFIG_FILES[@]}"; do
+  if [ ! -f "${CONFIG_DIR}/${config_file}" ]; then
+    echo "Missing Terraform config file: ${CONFIG_DIR}/${config_file}"
+    exit 1
+  fi
+done
+
+if [ ! -f "${BACKEND_TEMPLATE_PATH}" ]; then
+  echo "Missing backend template file: ${BACKEND_TEMPLATE_PATH}"
   exit 1
 fi
 
-PROJECT_ID="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["gcp"]["project_id"])' "${BOOTSTRAP_DEFAULTS_PATH}")"
-SA_NAME="terraform-sa"
-BUCKET_NAME="internship-state-bucket"
-REGION_PROFILE="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["general"]["region_profile"])' "${CONFIG_PATH}")"
+read_config() {
+  python3 - "$CONFIG_DIR" "$1" <<'PY'
+import json
+import pathlib
+import sys
+
+config_dir = pathlib.Path(sys.argv[1])
+expression = sys.argv[2]
+data = {}
+for name in ("clouds.json", "general.json", "deploy.json", "dns.json", "instances.json"):
+    with (config_dir / name).open(encoding="utf-8") as handle:
+        data.update(json.load(handle))
+
+value = eval(expression, {"__builtins__": {}}, {"data": data})
+if isinstance(value, bool):
+    print(str(value).lower())
+else:
+    print(value)
+PY
+}
+
+PROJECT_ID="$(read_config 'data["clouds"]["providers"]["gcp"]["account"]["project_id"]')"
+SA_NAME="$(read_config 'data["clouds"]["providers"]["gcp"]["terraform_identity"]["name"]')"
+BUCKET_NAME="$(read_config 'data["clouds"]["backends"]["gcp"]["bucket"]')"
+STATE_PREFIX="$(read_config 'data["clouds"]["backends"]["gcp"].get("prefix", "infra/state")')"
+REGION_PROFILE="$(read_config 'data["general"]["region_profile"]')"
 REGION="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["regions"]["gcp"][sys.argv[2]]["region"])' "${MAPPING_PATH}" "${REGION_PROFILE}")"
-GCP_ZONE="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["regions"]["gcp"][sys.argv[2]]["zone"])' "${MAPPING_PATH}" "${REGION_PROFILE}")"
 
 # SA key is stored inside the repo under terraform/ (gitignored)
 SA_KEY_PATH="${REPO_ROOT}/terraform/sa-key.json"
 SSH_PUBLIC_KEY_PATH="${HOME}/.ssh/ssh-key-coin-ops.pub"
-GENERATED_ENV_PATH="${REPO_ROOT}/local/generated-env.sh"
-
-# Non-secret local runtime defaults generated for Terraform/Ansible
-APP_DOMAIN="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["deploy"]["app_domain"])' "${BOOTSTRAP_DEFAULTS_PATH}")"
-TLS_MODE="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["deploy"]["tls_mode"])' "${BOOTSTRAP_DEFAULTS_PATH}")"
-RUNTIME_BACKEND="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["deploy"]["runtime_backend"])' "${BOOTSTRAP_DEFAULTS_PATH}")"
-GHCR_USERNAME="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["deploy"]["ghcr_username"])' "${BOOTSTRAP_DEFAULTS_PATH}")"
-IMAGE_REGISTRY="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["images"]["registry"])' "${BOOTSTRAP_DEFAULTS_PATH}")"
-IMAGE_TAG="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["images"]["tag"])' "${BOOTSTRAP_DEFAULTS_PATH}")"
-CERTBOT_EMAIL_LOCALPART="admin"
-PROXY_PORT="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["ports"]["proxy"])' "${BOOTSTRAP_DEFAULTS_PATH}")"
-HISTORY_PORT="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["ports"]["history"])' "${BOOTSTRAP_DEFAULTS_PATH}")"
-CLOUDFLARE_ZONE_ID="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["cloudflare"]["zone_id"])' "${BOOTSTRAP_DEFAULTS_PATH}")"
+GENERATED_ENV_PATH="${REPO_ROOT}/local/generated-gcp-env.sh"
 
 BOOTSTRAP_ACCOUNT="${BOOTSTRAP_ACCOUNT:-$(gcloud config get-value account 2>/dev/null)}"
 
@@ -77,12 +90,15 @@ echo "Enabling required APIs..."
 gcloud services enable iamcredentials.googleapis.com --account="$BOOTSTRAP_ACCOUNT" > /dev/null
 gcloud services enable iam.googleapis.com --account="$BOOTSTRAP_ACCOUNT" > /dev/null
 gcloud services enable compute.googleapis.com --account="$BOOTSTRAP_ACCOUNT" > /dev/null
+gcloud services enable servicenetworking.googleapis.com --account="$BOOTSTRAP_ACCOUNT" > /dev/null
 
 # Create Service Account
-echo "Creating Service Account: $SA_NAME"
-gcloud iam service-accounts create "$SA_NAME" \
-    --account="$BOOTSTRAP_ACCOUNT" \
-    --display-name="Terraform Service Account"
+echo "Ensuring Service Account exists: $SA_NAME"
+if ! gcloud iam service-accounts describe "${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com" --account="$BOOTSTRAP_ACCOUNT" > /dev/null 2>&1; then
+  gcloud iam service-accounts create "$SA_NAME" \
+      --account="$BOOTSTRAP_ACCOUNT" \
+      --display-name="Terraform Service Account"
+fi
 
 SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 
@@ -128,12 +144,26 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --role="roles/secretmanager.admin"
 
 # Create GCS Bucket for Terraform remote state
-echo "Creating GCS bucket: $BUCKET_NAME"
-gcloud storage buckets create "gs://$BUCKET_NAME" --location="$REGION" --account="$BOOTSTRAP_ACCOUNT"
+echo "Ensuring GCS state bucket exists: $BUCKET_NAME"
+if ! gcloud storage buckets describe "gs://$BUCKET_NAME" --account="$BOOTSTRAP_ACCOUNT" > /dev/null 2>&1; then
+  gcloud storage buckets create "gs://$BUCKET_NAME" --location="$REGION" --account="$BOOTSTRAP_ACCOUNT"
+fi
 
 # Enable object versioning for state protection
 echo "Enabling bucket versioning..."
 gcloud storage buckets update "gs://$BUCKET_NAME" --versioning --account="$BOOTSTRAP_ACCOUNT"
+
+echo "Writing active Terraform backend at ${BACKEND_ACTIVE_PATH}..."
+python3 - <<'PY' "${BACKEND_TEMPLATE_PATH}" "${BACKEND_ACTIVE_PATH}" "${BUCKET_NAME}" "${STATE_PREFIX}"
+import pathlib
+import sys
+
+template_path, output_path, bucket, prefix = sys.argv[1:5]
+content = pathlib.Path(template_path).read_text(encoding="utf-8")
+content = content.replace("__GCP_STATE_BUCKET__", bucket)
+content = content.replace("__GCP_STATE_PREFIX__", prefix)
+pathlib.Path(output_path).write_text(content, encoding="utf-8")
+PY
 
 # Generate Service Account key into terraform/
 echo "Generating JSON key at ${SA_KEY_PATH}..."
@@ -141,35 +171,20 @@ gcloud iam service-accounts keys create "$SA_KEY_PATH" \
     --account="$BOOTSTRAP_ACCOUNT" \
     --iam-account="$SA_EMAIL"
 
-# Create a gitignored local non-secret config for Terraform.
+# Create a gitignored local Terraform config for machine-local paths.
 LOCAL_TERRAFORM_TFVARS="${REPO_ROOT}/terraform/local.generated.auto.tfvars.json"
 echo "Writing local Terraform config at ${LOCAL_TERRAFORM_TFVARS}..."
 cat > "$LOCAL_TERRAFORM_TFVARS" << EOF
 {
-  "gcp_project_id": "${PROJECT_ID}",
-  "gcp_region": "${REGION}",
-  "ssh_public_key_path": "${SSH_PUBLIC_KEY_PATH}",
-  "app_domain": "${APP_DOMAIN}",
-  "cloudflare_zone_id": "${CLOUDFLARE_ZONE_ID}"
+  "ssh_public_key_path": "${SSH_PUBLIC_KEY_PATH}"
 }
 EOF
 
-# Create a gitignored local non-secret config for Ansible derived from the same bootstrap source.
+# Create a gitignored optional Ansible override file. Committed JSON remains the SSOT.
 LOCAL_ANSIBLE_CONFIG="${REPO_ROOT}/ansible/vars/local.generated.json"
 echo "Writing local Ansible config at ${LOCAL_ANSIBLE_CONFIG}..."
 cat > "$LOCAL_ANSIBLE_CONFIG" << EOF
-{
-  "gcp_project": "${PROJECT_ID}",
-  "runtime_backend": "${RUNTIME_BACKEND}",
-  "app_domain": "${APP_DOMAIN}",
-  "tls_mode": "${TLS_MODE}",
-  "certbot_email_localpart": "${CERTBOT_EMAIL_LOCALPART}",
-  "image_registry": "${IMAGE_REGISTRY}",
-  "image_tag": "${IMAGE_TAG}",
-  "registry_username": "${GHCR_USERNAME}",
-  "proxy_port": ${PROXY_PORT},
-  "history_port": ${HISTORY_PORT}
-}
+{}
 EOF
 
 mkdir -p "${REPO_ROOT}/local"
@@ -183,11 +198,6 @@ export GOOGLE_PROJECT="${PROJECT_ID}"
 export GCP_PROJECT="${PROJECT_ID}"
 export CLOUDSDK_CORE_PROJECT="${PROJECT_ID}"
 export SSH_KEY_PATH="\${HOME}/.ssh/ssh-key-coin-ops"
-export GHCR_USERNAME="${GHCR_USERNAME}"
-export APP_DOMAIN="${APP_DOMAIN}"
-export TLS_MODE="${TLS_MODE}"
-export CERTBOT_EMAIL="${CERTBOT_EMAIL_LOCALPART}@${APP_DOMAIN}"
-export RUNTIME_BACKEND="${RUNTIME_BACKEND}"
 EOF
 chmod 600 "$GENERATED_ENV_PATH"
 
@@ -207,6 +217,6 @@ echo "Bootstrap completed successfully."
 echo "Next steps:"
 echo "  1. Review terraform/local.generated.auto.tfvars.json and ansible/vars/local.generated.json"
 echo "  2. Edit terraform/bootstrap.secrets.auto.tfvars and replace placeholder secret values"
-echo "  3. Source local/generated-env.sh or add it to your ~/.bashrc"
+echo "  3. Source local/generated-gcp-env.sh or add it to your ~/.bashrc"
 echo "  4. Seed Secret Manager and infra: cd ${REPO_ROOT}/terraform && terraform init && terraform apply -var='seed_secret_manager=true'"
 echo "  5. Normal terraform/ansible runs can reuse the generated local env + local config files"

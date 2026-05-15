@@ -131,7 +131,7 @@
 
 - name: Render internal backend gateway compose file
   template:
-    src: "{{ playbook_dir }}/../deploy/compose/node-02-internal-tls.compose.yaml"
+    src: "{{ playbook_dir }}/../deploy/compose/backend-tls.compose.yaml"
     dest: /opt/cognitor/backend-gateway/compose.yaml
     owner: root
     group: root

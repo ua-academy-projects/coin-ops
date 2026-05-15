@@ -1,0 +1,4 @@
+---
+common_allowed_ports:
+  - "{{ infra_general.get('ssh_port', 53725) }}"
+  - "{{ infra_ports.get('https', 443) }}"

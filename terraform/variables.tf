@@ -1,36 +1,18 @@
-variable "enabled_clouds" {
-  type        = set(string)
-  description = "Set of clouds to deploy to. Supported: gcp, aws."
-  default     = ["gcp"]
-
-  validation {
-    condition = alltrue([
-      for cloud in var.enabled_clouds : contains(["gcp", "aws"], cloud)
-    ])
-    error_message = "Supported clouds: \"gcp\", \"aws\"."
-  }
-
-  validation {
-    condition     = length(var.enabled_clouds) > 0
-    error_message = "At least one cloud must be enabled."
-  }
-}
-
 variable "gcp_project_id" {
   type        = string
-  description = "GCP project ID (required when deploying to GCP)"
+  description = "Fallback GCP project ID. The canonical value lives in terraform/config/clouds.json."
   default     = ""
 }
 
 variable "gcp_region" {
   type        = string
-  description = "GCP region for resources"
+  description = "Fallback GCP region. The canonical region profile lives in terraform/config/general.json."
   default     = "europe-central2"
 }
 
 variable "aws_region" {
   type        = string
-  description = "AWS region for resources"
+  description = "Fallback AWS region. The canonical region profile lives in terraform/config/general.json."
   default     = "eu-north-1"
 }
 
@@ -48,13 +30,13 @@ variable "cloudflare_api_token" {
 
 variable "cloudflare_zone_id" {
   type        = string
-  description = "Cloudflare Zone ID for the domain"
+  description = "Fallback Cloudflare Zone ID. The canonical non-secret value lives in terraform/config/dns.json."
   default     = ""
 }
 
 variable "app_domain" {
   type        = string
-  description = "Root domain for the application (e.g. coinops-d.pp.ua)"
+  description = "Fallback root domain. The canonical non-secret value lives in terraform/config/deploy.json."
   default     = "coinops.test"
 }
 

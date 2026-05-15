@@ -1,11 +1,4 @@
 ---
-- name: Stop and disable legacy host nginx
-  service:
-    name: nginx
-    state: stopped
-    enabled: no
-  failed_when: false
-
 - name: Validate TLS mode
   assert:
     that:
@@ -220,11 +213,6 @@
     group: root
     mode: '0755'
 
-- name: Remove legacy synced ui source
-  file:
-    path: /opt/cognitor/ui/ui-react
-    state: absent
-
 - name: Render nginx gateway config
   template:
     src: nginx.gateway.conf.j2
@@ -236,7 +224,7 @@
 
 - name: Render compose file
   template:
-    src: "{{ playbook_dir }}/../deploy/compose/node-03.compose.yaml"
+    src: "{{ playbook_dir }}/../deploy/compose/ui-gateway.compose.yaml"
     dest: /opt/cognitor/ui/compose.yaml
   register: ui_compose
 

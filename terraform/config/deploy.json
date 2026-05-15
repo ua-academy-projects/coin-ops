@@ -1,0 +1,38 @@
+{
+    "deploy": {
+        "app_domain": "coinops-d.pp.ua",
+        "tls_mode": "certbot",
+        "certbot": {
+            "email_localpart": "admin",
+            "staging": true
+        },
+        "runtime_backend": "external",
+        "ghcr_username": "hrenchevskyi-d",
+        "internal_tls": {
+            "enabled": true,
+            "port": 8443
+        }
+    },
+    "images": {
+        "registry": "ghcr.io/ua-academy-projects",
+        "tag": "shabat-latest"
+    },
+    "ports": {
+        "https": 443,
+        "postgres": 5432,
+        "rabbitmq": 5672,
+        "rabbitmq_management": 15672,
+        "proxy": 8080,
+        "history": 8000
+    },
+    "ansible": {
+        "provisioning": {
+            "wait_for_connection_timeout": 600,
+            "wait_for_connection_delay": 5,
+            "wait_for_connection_sleep": 5,
+            "wait_for_cloud_init": true,
+            "apt_lock_timeout": 900,
+            "upgrade_packages": false
+        }
+    }
+}

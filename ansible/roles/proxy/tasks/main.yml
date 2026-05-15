@@ -12,16 +12,6 @@
     fail_msg: "RABBITMQ_PASSWORD must be present in GCP Secret Manager secret coinops-db-secrets when RUNTIME_BACKEND=external."
   when: runtime_backend == 'external'
 
-- name: Stop and disable legacy host services
-  service:
-    name: "{{ item }}"
-    state: stopped
-    enabled: no
-  loop:
-    - redis-server
-    - cognitor-proxy
-  failed_when: false
-
 - name: Allow incoming traffic on Proxy port (UFW)
   community.general.ufw:
     rule: allow
@@ -46,14 +36,9 @@
     group: root
     mode: '0755'
 
-- name: Remove legacy synced proxy source or binary
-  file:
-    path: /opt/cognitor/proxy/proxy
-    state: absent
-
 - name: Render compose file
   template:
-    src: "{{ playbook_dir }}/../deploy/compose/node-02.compose.yaml"
+    src: "{{ playbook_dir }}/../deploy/compose/backend-proxy.compose.yaml"
     dest: /opt/cognitor/proxy/compose.yaml
 
 - name: Validate proxy compose configuration

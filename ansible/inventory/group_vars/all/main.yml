@@ -1,5 +1,6 @@
-# Stable non-secret configuration lives in ansible/vars/deploy-config.yml.
-# Runtime secrets come from GCP Secret Manager.
+# Stable non-secret configuration lives in split JSON files under terraform/config/.
+# Runtime secret lookup is keyed by cloud. ansible/vars/deploy-config.yml is
+# only an optional Ansible-side override layer.
 
 repo_root: >-
   {{
@@ -7,12 +8,51 @@ repo_root: >-
     if (inventory_dir is defined)
     else (playbook_dir | dirname)
   }}
-deploy_defaults: "{{ lookup('file', repo_root ~ '/ansible/vars/deploy-config.yml') | from_yaml }}"
-infra_config_path: "{{ repo_root ~ '/terraform/config/config.json' }}"
-infra_config_text: "{{ lookup('file', infra_config_path) | string }}"
-infra_config: "{{ infra_config_text | from_json }}"
+deploy_defaults: "{{ (lookup('file', repo_root ~ '/ansible/vars/deploy-config.yml') | from_yaml) | default({}, true) }}"
+infra_config_dir: "{{ repo_root ~ '/terraform/config' }}"
+infra_config_clouds: "{{ lookup('file', infra_config_dir ~ '/clouds.json') | from_json }}"
+infra_config_general_file: "{{ lookup('file', infra_config_dir ~ '/general.json') | from_json }}"
+infra_config_deploy_file: "{{ lookup('file', infra_config_dir ~ '/deploy.json') | from_json }}"
+infra_config_dns_file: "{{ lookup('file', infra_config_dir ~ '/dns.json') | from_json }}"
+infra_config_instances_file: "{{ lookup('file', infra_config_dir ~ '/instances.json') | from_json }}"
+infra_config: >-
+  {{
+    infra_config_clouds
+    | combine(infra_config_general_file, recursive=True)
+    | combine(infra_config_deploy_file, recursive=True)
+    | combine(infra_config_dns_file, recursive=True)
+    | combine(infra_config_instances_file, recursive=True)
+  }}
+infra_clouds: "{{ infra_config.get('clouds', {}) }}"
+infra_cloud_providers: "{{ infra_clouds.get('providers', {}) }}"
 infra_general: "{{ infra_config.get('general', {}) }}"
+infra_deploy: "{{ infra_config.get('deploy', {}) }}"
+infra_images: "{{ infra_config.get('images', {}) }}"
+infra_ports: "{{ infra_config.get('ports', {}) }}"
+infra_ansible: "{{ infra_config.get('ansible', {}) }}"
+infra_provisioning: "{{ infra_ansible.get('provisioning', {}) }}"
 infra_instances: "{{ infra_config.get('instances', {}) }}"
+json_deploy_config:
+  gcp_project: "{{ infra_cloud_providers.get('gcp', {}).get('account', {}).get('project_id', '') }}"
+  secret_backend: "{{ infra_clouds.get('secret_backend', infra_clouds.get('control_plane', 'gcp')) }}"
+  runtime_backend: "{{ infra_deploy.get('runtime_backend', 'external') }}"
+  app_domain: "{{ infra_deploy.get('app_domain', 'coinops.test') }}"
+  tls_mode: "{{ infra_deploy.get('tls_mode', 'selfsigned') }}"
+  certbot_email_localpart: "{{ infra_deploy.get('certbot', {}).get('email_localpart', 'admin') }}"
+  certbot_staging: "{{ infra_deploy.get('certbot', {}).get('staging', false) }}"
+  image_registry: "{{ infra_images.get('registry', 'ghcr.io/ua-academy-projects') }}"
+  image_tag: "{{ infra_images.get('tag', 'shabat-latest') }}"
+  registry_username: "{{ infra_deploy.get('ghcr_username', '') }}"
+  proxy_port: "{{ infra_ports.get('proxy', 8080) }}"
+  history_port: "{{ infra_ports.get('history', 8000) }}"
+  internal_tls_enabled: "{{ infra_deploy.get('internal_tls', {}).get('enabled', true) }}"
+  internal_tls_port: "{{ infra_deploy.get('internal_tls', {}).get('port', 8443) }}"
+  provisioning_wait_for_connection_timeout: "{{ infra_provisioning.get('wait_for_connection_timeout', 600) }}"
+  provisioning_wait_for_connection_delay: "{{ infra_provisioning.get('wait_for_connection_delay', 5) }}"
+  provisioning_wait_for_connection_sleep: "{{ infra_provisioning.get('wait_for_connection_sleep', 5) }}"
+  provisioning_wait_for_cloud_init: "{{ infra_provisioning.get('wait_for_cloud_init', true) }}"
+  provisioning_apt_lock_timeout: "{{ infra_provisioning.get('apt_lock_timeout', 900) }}"
+  provisioning_upgrade_packages: "{{ infra_provisioning.get('upgrade_packages', false) }}"
 local_generated_config_path: "{{ repo_root ~ '/ansible/vars/local.generated.json' }}"
 local_generated_config_text: "{{ lookup('file', local_generated_config_path, errors='ignore') | default('{}', true) | string }}"
 local_generated_config: >-
@@ -20,7 +60,7 @@ local_generated_config: >-
     ((local_generated_config_text | trim | length) > 0)
     | ternary((local_generated_config_text | from_json), {})
   }}
-deploy_config: "{{ deploy_defaults | combine(local_generated_config, recursive=True) }}"
+deploy_config: "{{ json_deploy_config | combine(deploy_defaults, recursive=True) | combine(local_generated_config, recursive=True) }}"
 runtime_metadata_path: "{{ repo_root ~ '/terraform/config/ansible-runtime.json' }}"
 runtime_metadata_text: "{{ lookup('file', runtime_metadata_path, errors='ignore') | default('{}', true) | string }}"
 runtime_metadata: >-
@@ -31,7 +71,13 @@ runtime_metadata: >-
 
 my_cloud: "{{ cloud | default('gcp' if 'gcp' in groups else ('aws' if 'aws' in groups else '')) }}"
 cloud_runtime_metadata: "{{ runtime_metadata.get(my_cloud, {}) }}"
-backend_host: "{{ groups['role_app_backend'][0] if ('role_app_backend' in groups and (groups['role_app_backend'] | length > 0)) else '' }}"
+backend_hosts_for_cloud: "{{ groups.get('role_app_backend', []) | intersect(groups.get(my_cloud, [])) }}"
+backend_host: >-
+  {{
+    backend_hosts_for_cloud[0]
+    if (backend_hosts_for_cloud | length > 0)
+    else (groups['role_app_backend'][0] if ('role_app_backend' in groups and (groups['role_app_backend'] | length > 0)) else '')
+  }}
 infra_instance_key: "{{ (my_cloud == 'aws') | ternary((inventory_hostname | regex_replace('^aws-', '')), inventory_hostname) }}"
 host_instance_config: "{{ infra_instances.get(infra_instance_key, {}) }}"
 host_image_profile: "{{ host_instance_config.get('image_profile', infra_general.get('image_profile', '')) }}"
@@ -46,11 +92,12 @@ ansible_ssh_common_args: >-
   -F {{ repo_root ~ '/terraform/config/ssh_config' }}
   {{ '-o ProxyJump=coinops-' ~ my_cloud ~ '-jump-host' if 'role_jump_host' not in group_names else '' }}
 
-gcp_project: "{{ deploy_config.gcp_project }}"
+secret_backend: "{{ deploy_config.secret_backend | default(my_cloud, true) }}"
+gcp_project: "{{ deploy_config.gcp_project | default('', true) }}"
 gcp_service_account_file: "{{ repo_root ~ '/terraform/sa-key.json' }}"
 
-db_secrets_raw: "{{ lookup('google.cloud.gcp_secret_manager', key='coinops-db-secrets', project=gcp_project, auth_kind='serviceaccount', service_account_file=gcp_service_account_file) if my_cloud == 'gcp' else '{}' }}"
-app_secrets_raw: "{{ lookup('google.cloud.gcp_secret_manager', key='coinops-app-secrets', project=gcp_project, auth_kind='serviceaccount', service_account_file=gcp_service_account_file) if my_cloud == 'gcp' else '{}' }}"
+db_secrets_raw: "{{ lookup('google.cloud.gcp_secret_manager', key='coinops-db-secrets', project=gcp_project, auth_kind='serviceaccount', service_account_file=gcp_service_account_file) if secret_backend == 'gcp' and (gcp_project | length > 0) else '{}' }}"
+app_secrets_raw: "{{ lookup('google.cloud.gcp_secret_manager', key='coinops-app-secrets', project=gcp_project, auth_kind='serviceaccount', service_account_file=gcp_service_account_file) if secret_backend == 'gcp' and (gcp_project | length > 0) else '{}' }}"
 db_secrets: "{{ db_secrets_raw if (db_secrets_raw is mapping) else (db_secrets_raw | from_json) }}"
 app_secrets: "{{ app_secrets_raw if (app_secrets_raw is mapping) else (app_secrets_raw | from_json) }}"
 

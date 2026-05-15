@@ -20,7 +20,9 @@ tournament/
 
 # Terraform
 terraform/.terraform/
+terraform/.terraform.codex-bak/
 terraform/.terraform.lock.hcl
+terraform/backend.active.tf
 terraform/*.tfstate
 terraform/*.tfstate.backup
 terraform/terraform.tfstate.*.backup
@@ -68,6 +70,7 @@ ansible/group_vars/all/*.backup
 ansible/group_vars/all/secrets.yml
 runtime/__pycache__
 local/generated-env.sh
+local/generated-gcp-env.sh
 local/generated-aws-env.sh
 packer/**/*.pkrvars.hcl
 packer/**/*.manifest.json
@@ -76,3 +79,5 @@ packer/packer_cache/
 ssh_config
 coin-ops_infra_roadmap_120d8424.plan.md
 terraform/sa-key.json
+!terraform/scripts/
+!terraform/scripts/*.tpl

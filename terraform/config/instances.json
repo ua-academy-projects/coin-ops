@@ -1,0 +1,31 @@
+{
+    "instances": {
+        "jump-host": {
+            "subnet": "external",
+            "has_public_ip": true,
+            "role": "jump-host"
+        },
+        "nat-1": {
+            "subnet": "external",
+            "has_public_ip": true,
+            "role": "nat",
+            "can_ip_forward": true,
+            "startup_script": "scripts/nat-init.sh.tpl"
+        },
+        "app-1": {
+            "subnet": "external",
+            "has_public_ip": true,
+            "role": "app-ui",
+            "image_profile": "coinops-app-host",
+            "instance_size": "micro",
+            "disk_size": 20
+        },
+        "app-2": {
+            "subnet": "internal",
+            "role": "app-backend",
+            "image_profile": "coinops-app-host",
+            "instance_size": "small",
+            "disk_size": 20
+        }
+    }
+}
