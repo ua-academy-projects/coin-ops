@@ -19,8 +19,32 @@ variable "db_password" {
   sensitive   = true
 }
 
+variable "db_name" {
+  description = "Database name"
+  type        = string
+  default     = "cognitor"
+}
+
+variable "db_username" {
+  description = "Database username"
+  type        = string
+  default     = "cognitor"
+}
+
 variable "db_tier" {
   description = "CloudSQL machine tier"
   type        = string
   default     = "db-f1-micro"
+}
+
+variable "disk_type" {
+  description = "CloudSQL disk type"
+  type        = string
+  default     = "PD_HDD"
+}
+
+variable "disk_size" {
+  description = "CloudSQL disk size in GB"
+  type        = number
+  default     = 10
 }

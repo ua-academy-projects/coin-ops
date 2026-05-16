@@ -7,13 +7,28 @@ resource "local_file" "hosts" {
         ssh_port    = local.ssh_port
         instances   = try(module.gcp_instances[0].instance_ips, {})
         database_ip = try(module.gcp_database[0].private_ip, "")
+        database = {
+          host    = try(module.gcp_database[0].private_ip, "")
+          port    = local.db_port
+          name    = local.db_name
+          user    = local.db_username
+          managed = try(module.gcp_database[0].private_ip, "") != ""
+        }
       }
     } : {},
     local.aws_enabled ? {
       aws = {
-        ssh_user  = local.username
-        ssh_port  = local.ssh_port
-        instances = try(module.aws_instances[0].instance_ips, {})
+        ssh_user    = local.username
+        ssh_port    = local.ssh_port
+        instances   = try(module.aws_instances[0].instance_ips, {})
+        database_ip = try(module.aws_database[0].address, "")
+        database = {
+          host    = try(module.aws_database[0].address, "")
+          port    = try(module.aws_database[0].port, local.db_port)
+          name    = local.db_name
+          user    = local.db_username
+          managed = try(module.aws_database[0].address, "") != ""
+        }
       }
     } : {}
   ))
@@ -31,6 +46,11 @@ resource "local_file" "ssh_config" {
           ${inst.role != "jump-host" && local.gcp_jump_host_name != "" ? "ProxyJump coinops-gcp-${local.gcp_jump_host_name}" : ""}
           IdentityFile ${pathexpand(replace(var.ssh_public_key_path, ".pub", ""))}
           IdentitiesOnly yes
+          ServerAliveInterval 15
+          ServerAliveCountMax 4
+          ConnectionAttempts 3
+          ConnectTimeout 20
+          ControlMaster no
           StrictHostKeyChecking no
           UserKnownHostsFile /dev/null
       EOT
@@ -45,6 +65,11 @@ resource "local_file" "ssh_config" {
           ${inst.role != "jump-host" && local.aws_jump_host_name != "" ? "ProxyJump coinops-aws-${local.aws_jump_host_name}" : ""}
           IdentityFile ${pathexpand(replace(var.ssh_public_key_path, ".pub", ""))}
           IdentitiesOnly yes
+          ServerAliveInterval 15
+          ServerAliveCountMax 4
+          ConnectionAttempts 3
+          ConnectTimeout 20
+          ControlMaster no
           StrictHostKeyChecking no
           UserKnownHostsFile /dev/null
       EOT
@@ -60,12 +85,26 @@ resource "local_file" "ansible_runtime" {
       gcp = {
         database_ip    = try(module.gcp_database[0].private_ip, "")
         use_managed_db = try(module.gcp_database[0].private_ip, "") != ""
+        database = {
+          host    = try(module.gcp_database[0].private_ip, "")
+          port    = local.db_port
+          name    = local.db_name
+          user    = local.db_username
+          managed = try(module.gcp_database[0].private_ip, "") != ""
+        }
       }
     } : {},
     local.aws_enabled ? {
       aws = {
-        database_ip    = ""
-        use_managed_db = false
+        database_ip    = try(module.aws_database[0].address, "")
+        use_managed_db = try(module.aws_database[0].address, "") != ""
+        database = {
+          host    = try(module.aws_database[0].address, "")
+          port    = try(module.aws_database[0].port, local.db_port)
+          name    = local.db_name
+          user    = local.db_username
+          managed = try(module.aws_database[0].address, "") != ""
+        }
       }
     } : {}
   ))

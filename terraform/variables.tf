@@ -47,7 +47,7 @@ variable "ssh_public_key_path" {
 }
 
 variable "db_password" {
-  description = "Password for the CloudSQL database user"
+  description = "Password for the managed PostgreSQL database user"
   type        = string
   sensitive   = true
   default     = ""
@@ -83,7 +83,7 @@ variable "ghcr_token" {
 }
 
 variable "seed_secret_manager" {
-  description = "When true, seed/update GCP Secret Manager from local bootstrap secrets input."
+  description = "When true, seed/update enabled cloud secret managers from local bootstrap secrets input."
   type        = bool
   default     = false
 }

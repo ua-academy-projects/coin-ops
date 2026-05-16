@@ -6,15 +6,16 @@ It is a scope document, not a runbook. For operator steps, use [runbook.md](/D:/
 
 ## Current Position
 
-The repo supports a **GCP-first production-like path** and a **partial AWS parity path**. The file layout and bootstrap contract are now prepared for a future Azure path, but Azure resources are intentionally out of scope for the current implementation.
+The repo supports a **GCP-default production-like path** and an **AWS parity path** for the infrastructure primitives that are currently in scope. The file layout and bootstrap contract are prepared for a future Azure path, but Azure resources are intentionally out of scope for the current implementation.
 
 That means:
 
-- GCP is the primary supported cloud for the full bootstrap, secret-management, managed-database, TLS, and deploy workflow.
-- AWS support currently covers compute/network provisioning patterns, dynamic inventory, bastion/NAT access, and the same logical topology model.
+- GCP is the default control-plane cloud today.
+- AWS has matching backend storage, compute/network, secret-management, managed PostgreSQL, dynamic inventory, bastion/NAT access, and the same logical topology model.
+- `clouds.control_plane` selects the intended state/control-plane workflow; `clouds.secret_backend` selects the runtime secret source read by Ansible.
 - Every supported cloud bootstrap should prepare its own Terraform state storage and native lock-safe backend configuration so that the control-plane cloud can be changed intentionally later.
 - Future Azure support must include Azure Storage for state, Azure RBAC/IAM bootstrap, Key Vault, dynamic inventory, VM/network modules, and managed PostgreSQL parity before it is documented as supported.
-- "Multi-cloud" does not currently mean identical features, identical destroy flows, or identical secret/managed-service integrations across both providers.
+- DNS parity is intentionally out of scope. The root domain belongs to `dns.primary_cloud`; non-primary clouds are validated by public IP.
 
 ## Support Matrix
 
@@ -23,11 +24,11 @@ That means:
 | Terraform VM/network provisioning | Supported | Supported | Same logical topology model |
 | Dynamic Ansible inventory | Supported | Supported | `google.cloud.gcp_compute` / `amazon.aws.aws_ec2` |
 | Private-host access through jump host | Supported | Supported | Generated SSH config + ProxyJump |
-| Generated local bootstrap/env workflow | Supported | Partial | AWS bootstrap exists, but is less complete than GCP |
-| Runtime secret retrieval in Ansible | Supported | Not implemented | GCP Secret Manager only today |
-| Managed PostgreSQL path | Supported | Not implemented | Cloud SQL only today |
-| Safe compute-only destroy/recreate flow | Supported | Mostly aligned | Stateful-resource protections are defined around GCP path today |
-| Full stateful teardown helper | Supported | GCP-focused | Current helper removes GCP stateful protections |
+| Generated local bootstrap/env workflow | Supported | Supported | GCS/S3 backend artifacts are generated explicitly |
+| Runtime secret retrieval in Ansible | Supported | Supported | `clouds.secret_backend` selects GCP Secret Manager or AWS Secrets Manager |
+| Managed PostgreSQL path | Supported | Supported | Cloud SQL on GCP, RDS PostgreSQL on AWS |
+| Safe compute-only destroy/recreate flow | Supported | Supported | Compute targets preserve managed DB and secret stores |
+| Full stateful teardown helper | Supported | Supported | Helper removes GCP/AWS protections only in a temporary Terraform copy |
 | Cloudflare-backed TLS/origin flow | Supported | Potentially usable | Documented and validated on GCP-first path |
 
 ## What "Supported on Both Clouds" Means
@@ -49,36 +50,25 @@ The following are part of the intended cross-cloud contract:
 
 If a feature falls into this category, we should try to keep behavior conceptually aligned across clouds.
 
-## What Remains GCP-First
+## What Remains Intentionally Asymmetric
 
-The following are intentionally GCP-first today:
+The following are intentionally asymmetric today:
 
-- Secret Manager as the runtime secret source for Ansible
-- managed PostgreSQL through Cloud SQL
-- the full bootstrap path for seeding secrets and then running normal deploys
-- the validated stateful-resource protection and deliberate full-destroy helper flow
+- GCP remains the default active `control_plane`.
+- DNS is assigned only to `dns.primary_cloud`; AWS is validated by direct public IP unless selected as primary.
+- Full stateful destroy is deliberately opt-in and uses the same helper for GCP and AWS.
 
-These are not AWS bugs in the current phase; they are explicit scope limits.
+These are not AWS feature gaps in this phase; they are explicit operational boundaries.
 
-## AWS Gaps That Are Real Phase D Work
+## AWS Parity Included In This Phase
 
-These are the concrete AWS-side gaps still pending:
+This phase includes:
 
-1. Runtime secret-management parity.
-   - AWS needs a supported equivalent to the current GCP Secret Manager lookup flow.
-   - The target should be an Ansible runtime retrieval path, not a return to repo `.env`.
-
-2. Managed-database parity.
-   - AWS needs an explicit decision on RDS or another managed PostgreSQL path.
-   - The result should include runtime integration, protection expectations, and destroy/rebuild rules.
-
-3. Bootstrap parity.
-   - `terraform/bootstrap-aws.sh` exists, but the operator experience is not yet as complete and validated as GCP.
-   - The repo should not imply otherwise.
-
-4. Stateful lifecycle parity.
-   - Current stateful protection and deliberate full destroy are designed around GCP stateful resources.
-   - AWS equivalents should only be claimed after they exist and are tested.
+- AWS Secrets Manager resources with the same logical secret payloads as GCP.
+- AWS RDS PostgreSQL in private subnets with backend-only security group access.
+- Normalized Terraform-to-Ansible database metadata for both clouds.
+- Ansible secret lookup keyed by `clouds.secret_backend`.
+- AWS bootstrap permissions for S3 state, EC2/VPC, RDS, and Secrets Manager.
 
 ## Managed-Service Strategy Boundary
 
@@ -89,18 +79,18 @@ For now:
 
 That means:
 
-- AWS Secrets Manager and managed PostgreSQL are Phase D implementation candidates.
+- AWS Secrets Manager and managed PostgreSQL are implemented parity targets.
 - SQS, ElastiCache, and GCP equivalents remain later-phase design work unless promoted intentionally.
 
 ## Success Criteria For Phase D
 
-Phase D can be considered complete only when:
+This parity phase can be considered complete only when:
 
 - the repo documents exactly which workflows are supported on GCP and AWS
-- AWS secret-management parity is either implemented or explicitly deferred with rationale
-- AWS managed-database strategy is decided and documented
+- AWS secret-management parity is implemented and validated
+- AWS managed-database strategy is implemented with RDS PostgreSQL and validated
 - operator docs stop implying full cloud symmetry where it does not exist
 
-Until then, the honest repo statement is:
+The honest repo statement after this phase is:
 
-> `coin-ops` supports a full GCP-first infrastructure path and a partial AWS parity path.
+> `coin-ops` supports a GCP-default infrastructure path and an AWS parity path for state backend storage, secrets, managed PostgreSQL, network, compute, inventory, and deploy runtime. DNS remains primary-cloud-only.

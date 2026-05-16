@@ -32,6 +32,9 @@
             "wait_for_connection_sleep": 5,
             "wait_for_cloud_init": true,
             "apt_lock_timeout": 900,
+            "become_timeout": 60,
+            "host_batch_size": 4,
+            "workload_batch_size": 4,
             "upgrade_packages": false
         }
     }

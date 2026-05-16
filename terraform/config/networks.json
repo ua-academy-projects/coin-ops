@@ -13,7 +13,14 @@
         "egress_cidrs": ["0.0.0.0/0"]
     },
     "subnets": {
-        "internal": { "cidr": "10.10.1.0/24" },
+        "internal": {
+            "cidr": "10.10.1.0/24",
+            "availability_zone_key": "primary"
+        },
+        "database": {
+            "cidr": "10.10.3.0/24",
+            "availability_zone_key": "secondary"
+        },
         "external": { "cidr": "10.10.2.0/24", "public": true }
     },
     "firewall_rules": {

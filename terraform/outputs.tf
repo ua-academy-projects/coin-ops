@@ -23,6 +23,26 @@ output "ansible_runtime_file" {
   value       = local_file.ansible_runtime.filename
 }
 
+output "database_endpoints" {
+  description = "Managed PostgreSQL endpoints by cloud. Empty when the cloud uses the containerized fallback."
+  value = {
+    gcp = local.gcp_enabled ? {
+      host    = try(module.gcp_database[0].private_ip, "")
+      port    = local.db_port
+      name    = local.db_name
+      user    = local.db_username
+      managed = try(module.gcp_database[0].private_ip, "") != ""
+    } : null
+    aws = local.aws_enabled ? {
+      host    = try(module.aws_database[0].address, "")
+      port    = try(module.aws_database[0].port, local.db_port)
+      name    = local.db_name
+      user    = local.db_username
+      managed = try(module.aws_database[0].address, "") != ""
+    } : null
+  }
+}
+
 output "public_endpoints" {
   description = "Cloud-specific public UI endpoints. DNS is created only for dns.primary_cloud; non-primary clouds are tested by direct public IP."
   value = {

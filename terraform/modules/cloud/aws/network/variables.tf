@@ -19,3 +19,9 @@ variable "zone" {
   description = "AWS availability zone for subnets."
   default     = "eu-north-1a"
 }
+
+variable "zones" {
+  type        = map(string)
+  description = "Named AWS availability zones used by subnet availability_zone_key values."
+  default     = {}
+}

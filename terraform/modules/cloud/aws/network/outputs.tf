@@ -11,8 +11,12 @@ output "private_subnet_ids" {
   value       = { for name in keys(local.private_subnets) : name => aws_subnet.subnet[name].id }
 }
 
+output "database_subnet_ids" {
+  description = "Private subnet IDs used by managed database subnet groups."
+  value       = [for name in keys(local.private_subnets) : aws_subnet.subnet[name].id]
+}
+
 output "private_route_table_id" {
   description = "ID of the private route table (owned by aws_network). Pass to aws_nat_route."
   value       = aws_route_table.private.id
 }
-

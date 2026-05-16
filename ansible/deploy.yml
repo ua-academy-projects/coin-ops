@@ -15,12 +15,13 @@
           - runtime_backend in ['external', 'postgres']
         fail_msg: |
           runtime_backend must be one of: external, postgres.
-    - name: Validate GCP Secret Manager authentication path
+    - name: Validate configured Secret Manager authentication path
       assert:
         that:
-          - gcp_service_account_file | length > 0
-        fail_msg: "Run terraform/bootstrap-gcp.sh and source local/generated-gcp-env.sh before running deploy."
-      when: "'gcp' in groups"
+          - secret_backend in ['gcp', 'aws']
+          - secret_backend != 'gcp' or gcp_project | length > 0
+          - secret_backend != 'aws' or aws_region | length > 0
+        fail_msg: "Run the bootstrap for the configured secret backend and source the generated local env before running deploy."
 
 - name: Authenticate Docker registry on workload nodes
   hosts: role_app_ui:role_app_backend

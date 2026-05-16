@@ -3,19 +3,19 @@
   assert:
     that:
       - not (use_managed_db and runtime_backend == 'postgres')
-    fail_msg: "Managed CloudSQL is not supported with RUNTIME_BACKEND=postgres yet. Use RUNTIME_BACKEND=external or disable managed DB."
+    fail_msg: "Managed PostgreSQL is not supported with RUNTIME_BACKEND=postgres yet. Use RUNTIME_BACKEND=external or disable managed DB."
 
 - name: Validate history database secret availability
   assert:
     that:
       - db_password | length > 0
-    fail_msg: "DB_PASSWORD must be present in GCP Secret Manager secret coinops-db-secrets."
+    fail_msg: "DB_PASSWORD must be present in the configured secret backend secret {{ db_secret_name }}."
 
 - name: Validate RabbitMQ secret availability
   assert:
     that:
       - rabbitmq_password | length > 0
-    fail_msg: "RABBITMQ_PASSWORD must be present in GCP Secret Manager secret coinops-db-secrets when RUNTIME_BACKEND=external."
+    fail_msg: "RABBITMQ_PASSWORD must be present in the configured secret backend secret {{ db_secret_name }} when RUNTIME_BACKEND=external."
   when: runtime_backend == 'external'
 
 - name: Allow incoming traffic on History API port (UFW)
@@ -117,7 +117,7 @@
 - name: Apply PostgreSQL runtime schema before app startup
   shell: >-
     {% if use_managed_db %}
-    docker run --rm -i -e PGPASSWORD="{{ db_password }}" postgres:16-alpine psql -v ON_ERROR_STOP=1 -h {{ postgres_bind_ip }} -U {{ db_user }} -d {{ db_name }} < /opt/cognitor/history/schema.sql
+    docker run --rm -i -e PGPASSWORD="{{ db_password }}" postgres:16-alpine psql -v ON_ERROR_STOP=1 -h {{ postgres_bind_ip }} -p {{ postgres_port }} -U {{ db_user }} -d {{ db_name }} < /opt/cognitor/history/schema.sql
     {% else %}
     docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres psql -v ON_ERROR_STOP=1 -U {{ db_user }} -d {{ db_name }} < /opt/cognitor/history/schema.sql
     {% endif %}

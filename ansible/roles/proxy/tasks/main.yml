@@ -3,13 +3,13 @@
   assert:
     that:
       - db_password | length > 0
-    fail_msg: "DB_PASSWORD must be present in GCP Secret Manager secret coinops-db-secrets."
+    fail_msg: "DB_PASSWORD must be present in the configured secret backend secret {{ db_secret_name }}."
 
 - name: Validate RabbitMQ secret availability
   assert:
     that:
       - rabbitmq_password | length > 0
-    fail_msg: "RABBITMQ_PASSWORD must be present in GCP Secret Manager secret coinops-db-secrets when RUNTIME_BACKEND=external."
+    fail_msg: "RABBITMQ_PASSWORD must be present in the configured secret backend secret {{ db_secret_name }} when RUNTIME_BACKEND=external."
   when: runtime_backend == 'external'
 
 - name: Allow incoming traffic on Proxy port (UFW)

@@ -3,7 +3,9 @@ locals {
     try(jsondecode(file("${path.module}/config/clouds.json")), {}),
     try(jsondecode(file("${path.module}/config/general.json")), {}),
     try(jsondecode(file("${path.module}/config/deploy.json")), {}),
+    try(jsondecode(file("${path.module}/config/database.json")), {}),
     try(jsondecode(file("${path.module}/config/dns.json")), {}),
+    try(jsondecode(file("${path.module}/config/secrets.json")), {}),
     try(jsondecode(file("${path.module}/config/instances.json")), {})
   )
   mapping  = try(jsondecode(file("${path.module}/config/cloud_mappings.json")), {})
@@ -16,11 +18,14 @@ locals {
   gcp_account     = lookup(local.gcp_provider, "account", {})
   aws_account     = lookup(local.aws_provider, "account", {})
   deploy          = lookup(local.cfg, "deploy", {})
+  database        = lookup(local.cfg, "database", {})
   dns             = lookup(local.cfg, "dns", {})
   general         = lookup(local.cfg, "general", {})
+  secrets         = lookup(local.cfg, "secrets", {})
 
   enabled_clouds          = toset(try(local.clouds.enabled, ["gcp"]))
   control_plane_cloud     = try(local.clouds.control_plane, "gcp")
+  secret_backend          = try(local.clouds.secret_backend, local.control_plane_cloud)
   default_instance_clouds = try(tolist(local.clouds.default_instance_clouds), tolist(local.enabled_clouds))
 
   instances = lookup(local.cfg, "instances", {})
@@ -52,12 +57,29 @@ locals {
   aws_instance_sizes = try(local.mapping.instance_sizes.aws, {})
   gcp_regions        = try(local.mapping.regions.gcp, {})
   aws_regions        = try(local.mapping.regions.aws, {})
+  aws_zone_map       = try(local.aws_regions[local.region_profile].zones, {})
   gcp_images         = try(local.mapping.images.gcp, {})
   aws_images         = try(local.mapping.images.aws, {})
 
   ssh_public_key = fileexists(pathexpand(var.ssh_public_key_path)) ? file(pathexpand(var.ssh_public_key_path)) : ""
 
-  seed_secret_manager = local.gcp_enabled && var.seed_secret_manager
+  database_enabled = try(local.database.enabled, true)
+  secrets_enabled  = try(local.secrets.enabled, true)
+  secret_names     = try(local.secrets.names, {})
+  db_secret_name   = try(local.secret_names.db, "coinops-db-secrets")
+  app_secret_name  = try(local.secret_names.app, "coinops-app-secrets")
+
+  db_name        = try(local.database.name, "cognitor")
+  db_username    = try(local.database.username, "cognitor")
+  db_port        = try(local.database.port, 5432)
+  gcp_db_profile = try(local.database.cloud_profiles.gcp, {})
+  aws_db_profile = try(local.database.cloud_profiles.aws, {})
+
+  seed_secret_manager      = local.secrets_enabled && var.seed_secret_manager
+  read_gcp_secret_backend  = local.secrets_enabled && local.secret_backend == "gcp" && !local.seed_secret_manager
+  read_aws_secret_backend  = local.secrets_enabled && local.secret_backend == "aws" && !local.seed_secret_manager
+  write_gcp_secret_backend = local.secrets_enabled && local.gcp_enabled
+  write_aws_secret_backend = local.secrets_enabled && local.aws_enabled
 
   gcp_hosts = local.gcp_enabled ? try(module.gcp_instances[0].instance_ips, {}) : {}
   aws_hosts = local.aws_enabled ? try(module.aws_instances[0].instance_ips, {}) : {}
@@ -110,7 +132,8 @@ locals {
   }
 
   aws_cfg = {
-    zone = local.aws_zone
+    zone  = local.aws_zone
+    zones = local.aws_zone_map
   }
 
   gcp_instances_cfg = {
@@ -140,19 +163,32 @@ locals {
     )
   }
 
-  gcp_db_secrets  = local.gcp_enabled && !local.seed_secret_manager ? try(jsondecode(data.google_secret_manager_secret_version.db_secrets[0].secret_data), {}) : {}
-  gcp_app_secrets = local.gcp_enabled && !local.seed_secret_manager ? try(jsondecode(data.google_secret_manager_secret_version.app_secrets[0].secret_data), {}) : {}
+  gcp_db_secrets  = local.read_gcp_secret_backend ? try(jsondecode(data.google_secret_manager_secret_version.db_secrets[0].secret_data), {}) : {}
+  gcp_app_secrets = local.read_gcp_secret_backend ? try(jsondecode(data.google_secret_manager_secret_version.app_secrets[0].secret_data), {}) : {}
+  aws_db_secrets  = local.read_aws_secret_backend ? try(jsondecode(data.aws_secretsmanager_secret_version.db_secrets[0].secret_string), {}) : {}
+  aws_app_secrets = local.read_aws_secret_backend ? try(jsondecode(data.aws_secretsmanager_secret_version.app_secrets[0].secret_string), {}) : {}
 
-  effective_db_password = local.gcp_enabled ? (
-    local.seed_secret_manager ? var.db_password : try(local.gcp_db_secrets.DB_PASSWORD, "")
-  ) : var.db_password
-  effective_rabbitmq_password = local.gcp_enabled ? (
-    local.seed_secret_manager ? var.rabbitmq_password : try(local.gcp_db_secrets.RABBITMQ_PASSWORD, "")
-  ) : var.rabbitmq_password
-  effective_ghcr_token = local.gcp_enabled ? (
-    local.seed_secret_manager ? var.ghcr_token : try(local.gcp_app_secrets.GHCR_TOKEN, "")
-  ) : var.ghcr_token
-  effective_cloudflare_api_token = local.gcp_enabled ? (
-    local.seed_secret_manager ? var.cloudflare_api_token : try(local.gcp_app_secrets.CLOUDFLARE_API_TOKEN, "")
-  ) : var.cloudflare_api_token
+  active_db_secrets = (
+    local.secret_backend == "aws"
+    ? local.aws_db_secrets
+    : local.gcp_db_secrets
+  )
+  active_app_secrets = (
+    local.secret_backend == "aws"
+    ? local.aws_app_secrets
+    : local.gcp_app_secrets
+  )
+
+  effective_db_password = (
+    local.seed_secret_manager ? var.db_password : try(local.active_db_secrets.DB_PASSWORD, var.db_password)
+  )
+  effective_rabbitmq_password = (
+    local.seed_secret_manager ? var.rabbitmq_password : try(local.active_db_secrets.RABBITMQ_PASSWORD, var.rabbitmq_password)
+  )
+  effective_ghcr_token = (
+    local.seed_secret_manager ? var.ghcr_token : try(local.active_app_secrets.GHCR_TOKEN, var.ghcr_token)
+  )
+  effective_cloudflare_api_token = (
+    local.seed_secret_manager ? var.cloudflare_api_token : try(local.active_app_secrets.CLOUDFLARE_API_TOKEN, var.cloudflare_api_token)
+  )
 }

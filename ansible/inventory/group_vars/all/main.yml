@@ -14,7 +14,9 @@ infra_config_clouds: "{{ lookup('file', infra_config_dir ~ '/clouds.json') | fro
 infra_config_mappings_file: "{{ lookup('file', infra_config_dir ~ '/cloud_mappings.json') | from_json }}"
 infra_config_general_file: "{{ lookup('file', infra_config_dir ~ '/general.json') | from_json }}"
 infra_config_deploy_file: "{{ lookup('file', infra_config_dir ~ '/deploy.json') | from_json }}"
+infra_config_database_file: "{{ lookup('file', infra_config_dir ~ '/database.json') | from_json }}"
 infra_config_dns_file: "{{ lookup('file', infra_config_dir ~ '/dns.json') | from_json }}"
+infra_config_secrets_file: "{{ lookup('file', infra_config_dir ~ '/secrets.json') | from_json }}"
 infra_config_instances_file: "{{ lookup('file', infra_config_dir ~ '/instances.json') | from_json }}"
 infra_config: >-
   {{
@@ -22,21 +24,35 @@ infra_config: >-
     | combine(infra_config_mappings_file, recursive=True)
     | combine(infra_config_general_file, recursive=True)
     | combine(infra_config_deploy_file, recursive=True)
+    | combine(infra_config_database_file, recursive=True)
     | combine(infra_config_dns_file, recursive=True)
+    | combine(infra_config_secrets_file, recursive=True)
     | combine(infra_config_instances_file, recursive=True)
   }}
 infra_clouds: "{{ infra_config.get('clouds', {}) }}"
 infra_cloud_providers: "{{ infra_clouds.get('providers', {}) }}"
 infra_general: "{{ infra_config.get('general', {}) }}"
 infra_deploy: "{{ infra_config.get('deploy', {}) }}"
+infra_database: "{{ infra_config.get('database', {}) }}"
 infra_images: "{{ infra_config.get('images', {}) }}"
 infra_ports: "{{ infra_config.get('ports', {}) }}"
+infra_secrets: "{{ infra_config.get('secrets', {}) }}"
 infra_ansible: "{{ infra_config.get('ansible', {}) }}"
 infra_provisioning: "{{ infra_ansible.get('provisioning', {}) }}"
 infra_instances: "{{ infra_config.get('instances', {}) }}"
+infra_region_profile: "{{ infra_general.get('region_profile', 'europe-central') }}"
+infra_regions: "{{ infra_config.get('regions', {}) }}"
+infra_aws_region: "{{ infra_regions.get('aws', {}).get(infra_region_profile, {}).get('region', lookup('env', 'AWS_REGION') | default('eu-central-1', true)) }}"
+infra_secret_names: "{{ infra_secrets.get('names', {}) }}"
 json_deploy_config:
   gcp_project: "{{ infra_cloud_providers.get('gcp', {}).get('account', {}).get('project_id', '') }}"
+  aws_region: "{{ infra_aws_region }}"
   secret_backend: "{{ infra_clouds.get('secret_backend', infra_clouds.get('control_plane', 'gcp')) }}"
+  db_secret_name: "{{ infra_secret_names.get('db', 'coinops-db-secrets') }}"
+  app_secret_name: "{{ infra_secret_names.get('app', 'coinops-app-secrets') }}"
+  db_name: "{{ infra_database.get('name', 'cognitor') }}"
+  db_user: "{{ infra_database.get('username', 'cognitor') }}"
+  db_port: "{{ infra_database.get('port', 5432) }}"
   runtime_backend: "{{ infra_deploy.get('runtime_backend', 'external') }}"
   app_domain: "{{ infra_deploy.get('app_domain', 'coinops.test') }}"
   tls_mode: "{{ infra_deploy.get('tls_mode', 'selfsigned') }}"
@@ -54,6 +70,9 @@ json_deploy_config:
   provisioning_wait_for_connection_sleep: "{{ infra_provisioning.get('wait_for_connection_sleep', 5) }}"
   provisioning_wait_for_cloud_init: "{{ infra_provisioning.get('wait_for_cloud_init', true) }}"
   provisioning_apt_lock_timeout: "{{ infra_provisioning.get('apt_lock_timeout', 900) }}"
+  provisioning_become_timeout: "{{ infra_provisioning.get('become_timeout', 60) }}"
+  provisioning_host_batch_size: "{{ infra_provisioning.get('host_batch_size', 4) }}"
+  provisioning_workload_batch_size: "{{ infra_provisioning.get('workload_batch_size', 4) }}"
   provisioning_upgrade_packages: "{{ infra_provisioning.get('upgrade_packages', false) }}"
 local_generated_config_path: "{{ repo_root ~ '/ansible/vars/local.generated.json' }}"
 local_generated_config_text: "{{ lookup('file', local_generated_config_path, errors='ignore') | default('{}', true) | string }}"
@@ -95,6 +114,7 @@ host_uses_golden_image: >-
   }}
 
 ansible_ssh_private_key_file: "{{ lookup('env', 'SSH_KEY_PATH') | default(lookup('env', 'HOME') ~ '/.ssh/ssh-key-coin-ops', true) }}"
+ansible_become_timeout: "{{ deploy_config.provisioning_become_timeout | default(60) }}"
 ansible_user: "{{ infra_general.username }}"
 ansible_ssh_common_args: >-
   -o StrictHostKeyChecking=no
@@ -106,9 +126,30 @@ ansible_ssh_common_args: >-
 secret_backend: "{{ deploy_config.secret_backend | default(my_cloud, true) }}"
 gcp_project: "{{ deploy_config.gcp_project | default('', true) }}"
 gcp_service_account_file: "{{ repo_root ~ '/terraform/sa-key.json' }}"
+aws_region: "{{ lookup('env', 'AWS_REGION') | default(deploy_config.aws_region, true) }}"
+db_secret_name: "{{ deploy_config.db_secret_name | default('coinops-db-secrets', true) }}"
+app_secret_name: "{{ deploy_config.app_secret_name | default('coinops-app-secrets', true) }}"
 
-db_secrets_raw: "{{ lookup('google.cloud.gcp_secret_manager', key='coinops-db-secrets', project=gcp_project, auth_kind='serviceaccount', service_account_file=gcp_service_account_file) if secret_backend == 'gcp' and (gcp_project | length > 0) else '{}' }}"
-app_secrets_raw: "{{ lookup('google.cloud.gcp_secret_manager', key='coinops-app-secrets', project=gcp_project, auth_kind='serviceaccount', service_account_file=gcp_service_account_file) if secret_backend == 'gcp' and (gcp_project | length > 0) else '{}' }}"
+db_secrets_raw: >-
+  {{
+    lookup('google.cloud.gcp_secret_manager', key=db_secret_name, project=gcp_project, auth_kind='serviceaccount', service_account_file=gcp_service_account_file)
+    if secret_backend == 'gcp' and (gcp_project | length > 0)
+    else (
+      lookup('amazon.aws.aws_secret', db_secret_name, region=aws_region)
+      if secret_backend == 'aws'
+      else '{}'
+    )
+  }}
+app_secrets_raw: >-
+  {{
+    lookup('google.cloud.gcp_secret_manager', key=app_secret_name, project=gcp_project, auth_kind='serviceaccount', service_account_file=gcp_service_account_file)
+    if secret_backend == 'gcp' and (gcp_project | length > 0)
+    else (
+      lookup('amazon.aws.aws_secret', app_secret_name, region=aws_region)
+      if secret_backend == 'aws'
+      else '{}'
+    )
+  }}
 db_secrets: "{{ db_secrets_raw if (db_secrets_raw is mapping) else (db_secrets_raw | from_json) }}"
 app_secrets: "{{ app_secrets_raw if (app_secrets_raw is mapping) else (app_secrets_raw | from_json) }}"
 
@@ -118,8 +159,10 @@ registry_token: "{{ app_secrets.GHCR_TOKEN | default('', true) }}"
 cloudflare_api_token: "{{ app_secrets.CLOUDFLARE_API_TOKEN | default('', true) }}"
 
 rabbitmq_user: cognitor
-db_name: cognitor
-db_user: cognitor
+database_metadata: "{{ cloud_runtime_metadata.get('database', {}) }}"
+db_name: "{{ database_metadata.get('name', deploy_config.db_name | default('cognitor', true)) }}"
+db_user: "{{ database_metadata.get('user', deploy_config.db_user | default('cognitor', true)) }}"
+db_port: "{{ database_metadata.get('port', deploy_config.db_port | default(5432, true)) }}"
 db_user_urlencoded: "{{ db_user | urlencode }}"
 db_password_urlencoded: "{{ db_password | urlencode }}"
 rabbitmq_user_urlencoded: "{{ rabbitmq_user | urlencode }}"
@@ -137,8 +180,9 @@ history_port: "{{ deploy_config.history_port }}"
 internal_tls_enabled: "{{ lookup('env', 'INTERNAL_TLS_ENABLED') | default(deploy_config.internal_tls_enabled, true) | bool }}"
 internal_tls_port: "{{ deploy_config.internal_tls_port }}"
 backend_ip: "{{ (backend_host | length > 0) | ternary(hostvars[backend_host].ansible_host, '127.0.0.1') }}"
-postgres_bind_ip: "{{ cloud_runtime_metadata.get('database_ip', '') | default(backend_ip, true) }}"
-use_managed_db: "{{ cloud_runtime_metadata.get('use_managed_db', false) | bool }}"
+postgres_bind_ip: "{{ database_metadata.get('host', cloud_runtime_metadata.get('database_ip', '')) | default(backend_ip, true) }}"
+postgres_port: "{{ database_metadata.get('port', db_port) }}"
+use_managed_db: "{{ database_metadata.get('managed', cloud_runtime_metadata.get('use_managed_db', false)) | bool }}"
 
 tls_cert_dir: /etc/cognitor/tls
 tls_cert_path: "{{ tls_cert_dir }}/coinops.crt"
@@ -157,4 +201,4 @@ registry_username: "{{ lookup('env', 'GHCR_USERNAME') | default(deploy_config.re
 
 rabbitmq_url: "amqp://{{ rabbitmq_user_urlencoded }}:{{ rabbitmq_password_urlencoded }}@{{ backend_ip }}:5672/"
 internal_rabbitmq_url: "amqp://{{ rabbitmq_user_urlencoded }}:{{ rabbitmq_password_urlencoded }}@rabbitmq:5672/"
-app_database_url: "postgresql://{{ db_user_urlencoded }}:{{ db_password_urlencoded }}@{{ postgres_bind_ip }}:5432/{{ db_name }}"
+app_database_url: "postgresql://{{ db_user_urlencoded }}:{{ db_password_urlencoded }}@{{ postgres_bind_ip }}:{{ postgres_port }}/{{ db_name }}"

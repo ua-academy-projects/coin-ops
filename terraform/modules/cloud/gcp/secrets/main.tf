@@ -1,5 +1,5 @@
 resource "google_secret_manager_secret" "db_secrets" {
-  secret_id = "coinops-db-secrets"
+  secret_id = var.db_secret_name
 
   replication {
     auto {}
@@ -20,7 +20,7 @@ resource "google_secret_manager_secret_version" "db_secrets_data" {
 }
 
 resource "google_secret_manager_secret" "app_secrets" {
-  secret_id = "coinops-app-secrets"
+  secret_id = var.app_secret_name
 
   replication {
     auto {}

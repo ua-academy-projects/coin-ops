@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # Bootstrap script to set up GCP environment for Terraform
 # Before running this script, ensure your organization's policy allows Service Account key creation.
@@ -11,7 +12,7 @@ MAPPING_PATH="${SCRIPT_DIR}/config/cloud_mappings.json"
 CONFIG_DIR="${SCRIPT_DIR}/config"
 BACKEND_TEMPLATE_PATH="${SCRIPT_DIR}/backends/backend.gcp.tf.tmpl"
 BACKEND_ACTIVE_PATH="${SCRIPT_DIR}/backend.active.tf"
-CONFIG_FILES=(clouds.json general.json deploy.json dns.json instances.json)
+CONFIG_FILES=(clouds.json general.json deploy.json database.json dns.json secrets.json instances.json)
 
 if [ ! -f "${MAPPING_PATH}" ]; then
   echo "Missing cloud mappings file: ${MAPPING_PATH}"
@@ -39,7 +40,7 @@ import sys
 config_dir = pathlib.Path(sys.argv[1])
 expression = sys.argv[2]
 data = {}
-for name in ("clouds.json", "general.json", "deploy.json", "dns.json", "instances.json"):
+for name in ("clouds.json", "general.json", "deploy.json", "database.json", "dns.json", "secrets.json", "instances.json"):
     with (config_dir / name).open(encoding="utf-8") as handle:
         data.update(json.load(handle))
 
@@ -62,6 +63,7 @@ REGION="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding
 SA_KEY_PATH="${REPO_ROOT}/terraform/sa-key.json"
 SSH_PUBLIC_KEY_PATH="${HOME}/.ssh/ssh-key-coin-ops.pub"
 GENERATED_ENV_PATH="${REPO_ROOT}/local/generated-gcp-env.sh"
+GENERATED_ACTIVE_ENV_PATH="${REPO_ROOT}/local/generated-env.sh"
 
 BOOTSTRAP_ACCOUNT="${BOOTSTRAP_ACCOUNT:-$(gcloud config get-value account 2>/dev/null)}"
 
@@ -81,16 +83,25 @@ fi
 # Set default GCP project
 gcloud config set project "$PROJECT_ID" --account="$BOOTSTRAP_ACCOUNT"
 
-# Disable Policy to allow Service Account key creation
-gcloud resource-manager org-policies disable-enforce iam.disableServiceAccountKeyCreation \
-    --project=$PROJECT_ID
+# Disable policy to allow Service Account key creation when the operator has
+# permission to do so. Some projects do not expose this policy at project scope;
+# in that case the later key creation command gives the actionable failure.
+if ! gcloud resource-manager org-policies disable-enforce iam.disableServiceAccountKeyCreation \
+    --project="$PROJECT_ID" > /dev/null 2>&1; then
+  echo "Warning: could not disable iam.disableServiceAccountKeyCreation at project scope."
+  echo "Continuing; service-account key creation will fail later if the org policy is enforced."
+fi
 
 # Enable required GCP APIs
 echo "Enabling required APIs..."
 gcloud services enable iamcredentials.googleapis.com --account="$BOOTSTRAP_ACCOUNT" > /dev/null
 gcloud services enable iam.googleapis.com --account="$BOOTSTRAP_ACCOUNT" > /dev/null
+gcloud services enable cloudresourcemanager.googleapis.com --account="$BOOTSTRAP_ACCOUNT" > /dev/null
 gcloud services enable compute.googleapis.com --account="$BOOTSTRAP_ACCOUNT" > /dev/null
 gcloud services enable servicenetworking.googleapis.com --account="$BOOTSTRAP_ACCOUNT" > /dev/null
+gcloud services enable sqladmin.googleapis.com --account="$BOOTSTRAP_ACCOUNT" > /dev/null
+gcloud services enable secretmanager.googleapis.com --account="$BOOTSTRAP_ACCOUNT" > /dev/null
+gcloud services enable storage.googleapis.com --account="$BOOTSTRAP_ACCOUNT" > /dev/null
 
 # Create Service Account
 echo "Ensuring Service Account exists: $SA_NAME"
@@ -200,6 +211,8 @@ export CLOUDSDK_CORE_PROJECT="${PROJECT_ID}"
 export SSH_KEY_PATH="\${HOME}/.ssh/ssh-key-coin-ops"
 EOF
 chmod 600 "$GENERATED_ENV_PATH"
+cp "$GENERATED_ENV_PATH" "$GENERATED_ACTIVE_ENV_PATH"
+chmod 600 "$GENERATED_ACTIVE_ENV_PATH"
 
 # Create a gitignored bootstrap secret file for one-time Secret Manager seeding.
 BOOTSTRAP_TFVARS="${REPO_ROOT}/terraform/bootstrap.secrets.auto.tfvars"
@@ -217,6 +230,6 @@ echo "Bootstrap completed successfully."
 echo "Next steps:"
 echo "  1. Review terraform/local.generated.auto.tfvars.json and ansible/vars/local.generated.json"
 echo "  2. Edit terraform/bootstrap.secrets.auto.tfvars and replace placeholder secret values"
-echo "  3. Source local/generated-gcp-env.sh or add it to your ~/.bashrc"
+echo "  3. Source local/generated-gcp-env.sh (or local/generated-env.sh) or add it to your ~/.bashrc"
 echo "  4. Seed Secret Manager and infra: cd ${REPO_ROOT}/terraform && terraform init && terraform apply -var='seed_secret_manager=true'"
 echo "  5. Normal terraform/ansible runs can reuse the generated local env + local config files"

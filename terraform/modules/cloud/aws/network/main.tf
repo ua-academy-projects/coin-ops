@@ -23,7 +23,7 @@ resource "aws_subnet" "subnet" {
 
   vpc_id                  = aws_vpc.vpc.id
   cidr_block              = each.value.cidr
-  availability_zone       = var.zone
+  availability_zone       = lookup(var.zones, lookup(each.value, "availability_zone_key", "primary"), var.zone)
   map_public_ip_on_launch = lookup(each.value, "public", false)
 
   tags = { Name = "${each.key}-subnet" }

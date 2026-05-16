@@ -9,7 +9,7 @@
   assert:
     that:
       - cloudflare_api_token | length > 0
-    fail_msg: "CLOUDFLARE_API_TOKEN must be present in GCP Secret Manager secret coinops-app-secrets when TLS_MODE=certbot."
+    fail_msg: "CLOUDFLARE_API_TOKEN must be present in the configured secret backend secret {{ app_secret_name }} when TLS_MODE=certbot."
   when: tls_mode == 'certbot'
 
 - name: Create shared secrets directory

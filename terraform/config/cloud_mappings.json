@@ -27,11 +27,19 @@
         "aws": {
             "europe-central": {
                 "region": "eu-central-1",
-                "zone": "eu-central-1a"
+                "zone": "eu-central-1a",
+                "zones": {
+                    "primary": "eu-central-1a",
+                    "secondary": "eu-central-1b"
+                }
             },
             "europe-west": {
                 "region": "eu-west-1",
-                "zone": "eu-west-1a"
+                "zone": "eu-west-1a",
+                "zones": {
+                    "primary": "eu-west-1a",
+                    "secondary": "eu-west-1b"
+                }
             }
         }
     },

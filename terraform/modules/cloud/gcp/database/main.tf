@@ -42,9 +42,8 @@ resource "google_sql_database_instance" "main" {
       private_network = var.network_id
     }
 
-    # Cost optimization for dev
-    disk_type = "PD_HDD"
-    disk_size = 10
+    disk_type = var.disk_type
+    disk_size = var.disk_size
   }
 
   deletion_protection = true
@@ -56,7 +55,7 @@ resource "google_sql_database_instance" "main" {
 
 # The actual database
 resource "google_sql_database" "cognitor" {
-  name     = "cognitor"
+  name     = var.db_name
   instance = google_sql_database_instance.main.name
 
   lifecycle {
@@ -66,7 +65,7 @@ resource "google_sql_database" "cognitor" {
 
 # Database User
 resource "google_sql_user" "cognitor_user" {
-  name            = "cognitor"
+  name            = var.db_username
   instance        = google_sql_database_instance.main.name
   password        = var.db_password
   deletion_policy = "ABANDON"

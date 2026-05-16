@@ -1,12 +1,12 @@
 variable "db_secret_name" {
   type        = string
-  description = "Name of the Secret Manager secret storing database/runtime queue credentials."
+  description = "Name of the Secrets Manager secret storing database/runtime queue credentials."
   default     = "coinops-db-secrets"
 }
 
 variable "app_secret_name" {
   type        = string
-  description = "Name of the Secret Manager secret storing app/runtime integration credentials."
+  description = "Name of the Secrets Manager secret storing app/runtime integration credentials."
   default     = "coinops-app-secrets"
 }
 

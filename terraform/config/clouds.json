@@ -1,9 +1,9 @@
 {
     "clouds": {
-        "control_plane": "gcp",
-        "enabled": ["gcp", "aws"],
-        "default_instance_clouds": ["gcp", "aws"],
-        "secret_backend": "gcp",
+        "control_plane": "aws",
+        "enabled": ["aws"],
+        "default_instance_clouds": ["aws"],
+        "secret_backend": "aws",
         "providers": {
             "gcp": {
                 "account": {

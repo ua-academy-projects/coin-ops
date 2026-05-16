@@ -1,14 +1,14 @@
 data "google_secret_manager_secret_version" "db_secrets" {
-  count   = local.gcp_enabled && !local.seed_secret_manager ? 1 : 0
+  count   = local.read_gcp_secret_backend ? 1 : 0
   project = local.gcp_project_id
-  secret  = "coinops-db-secrets"
+  secret  = local.db_secret_name
   version = "latest"
 }
 
 data "google_secret_manager_secret_version" "app_secrets" {
-  count   = local.gcp_enabled && !local.seed_secret_manager ? 1 : 0
+  count   = local.read_gcp_secret_backend ? 1 : 0
   project = local.gcp_project_id
-  secret  = "coinops-app-secrets"
+  secret  = local.app_secret_name
   version = "latest"
 }
 
@@ -59,17 +59,24 @@ module "gcp_nat_route" {
 }
 
 module "gcp_database" {
-  count        = local.gcp_enabled ? 1 : 0
+  count        = local.gcp_enabled && local.database_enabled ? 1 : 0
   source       = "./modules/cloud/gcp/database"
   project_name = local.project_name
   region       = local.gcp_region
   network_id   = module.gcp_network[0].network_id
   db_password  = local.effective_db_password
+  db_name      = local.db_name
+  db_username  = local.db_username
+  db_tier      = try(local.gcp_db_profile.tier, "db-f1-micro")
+  disk_type    = try(local.gcp_db_profile.disk_type, "PD_HDD")
+  disk_size    = try(local.gcp_db_profile.disk_size, 10)
 }
 
 module "gcp_secrets" {
-  count                = local.gcp_enabled ? 1 : 0
+  count                = local.write_gcp_secret_backend ? 1 : 0
   source               = "./modules/cloud/gcp/secrets"
+  db_secret_name       = local.db_secret_name
+  app_secret_name      = local.app_secret_name
   db_password          = local.effective_db_password
   rabbitmq_password    = local.effective_rabbitmq_password
   ghcr_token           = local.effective_ghcr_token

@@ -3,6 +3,7 @@
         "jump-host": {
             "subnet": "external",
             "has_public_ip": true,
+            "instance_size": "small",
             "role": "jump-host"
         },
         "nat-1": {
@@ -10,6 +11,7 @@
             "has_public_ip": true,
             "role": "nat",
             "can_ip_forward": true,
+            "instance_size": "small",
             "startup_script": "scripts/nat-init.sh.tpl"
         },
         "app-1": {
