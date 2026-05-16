@@ -24,12 +24,13 @@ output "ansible_runtime_file" {
 }
 
 output "public_endpoints" {
-  description = "Cloud-specific public UI endpoints. Root domain belongs to dns.primary_cloud; other clouds use aliases."
+  description = "Cloud-specific public UI endpoints. DNS is created only for dns.primary_cloud; non-primary clouds are tested by direct public IP."
   value = {
     for cloud, ip in local.ui_public_ips : cloud => {
-      public_ip = ip
-      dns_name  = cloud == local.dns_primary_cloud ? local.app_domain : format("%s.%s", lookup(local.dns_cloud_subdomains, cloud, cloud), local.app_domain)
-      url       = format("https://%s", cloud == local.dns_primary_cloud ? local.app_domain : format("%s.%s", lookup(local.dns_cloud_subdomains, cloud, cloud), local.app_domain))
+      public_ip  = ip
+      direct_url = format("https://%s", ip)
+      dns_name   = cloud == local.dns_primary_cloud ? local.app_domain : null
+      dns_url    = cloud == local.dns_primary_cloud ? format("https://%s", local.app_domain) : null
     }
     if lookup(local.cloud_has_ui, cloud, false)
   }

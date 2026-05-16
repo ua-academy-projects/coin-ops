@@ -11,6 +11,7 @@ repo_root: >-
 deploy_defaults: "{{ (lookup('file', repo_root ~ '/ansible/vars/deploy-config.yml') | from_yaml) | default({}, true) }}"
 infra_config_dir: "{{ repo_root ~ '/terraform/config' }}"
 infra_config_clouds: "{{ lookup('file', infra_config_dir ~ '/clouds.json') | from_json }}"
+infra_config_mappings_file: "{{ lookup('file', infra_config_dir ~ '/cloud_mappings.json') | from_json }}"
 infra_config_general_file: "{{ lookup('file', infra_config_dir ~ '/general.json') | from_json }}"
 infra_config_deploy_file: "{{ lookup('file', infra_config_dir ~ '/deploy.json') | from_json }}"
 infra_config_dns_file: "{{ lookup('file', infra_config_dir ~ '/dns.json') | from_json }}"
@@ -18,6 +19,7 @@ infra_config_instances_file: "{{ lookup('file', infra_config_dir ~ '/instances.j
 infra_config: >-
   {{
     infra_config_clouds
+    | combine(infra_config_mappings_file, recursive=True)
     | combine(infra_config_general_file, recursive=True)
     | combine(infra_config_deploy_file, recursive=True)
     | combine(infra_config_dns_file, recursive=True)
@@ -81,7 +83,16 @@ backend_host: >-
 infra_instance_key: "{{ (my_cloud == 'aws') | ternary((inventory_hostname | regex_replace('^aws-', '')), inventory_hostname) }}"
 host_instance_config: "{{ infra_instances.get(infra_instance_key, {}) }}"
 host_image_profile: "{{ host_instance_config.get('image_profile', infra_general.get('image_profile', '')) }}"
-host_uses_golden_image: "{{ host_image_profile == 'coinops-app-host' }}"
+cloud_image_profiles: "{{ infra_images.get(my_cloud, {}) }}"
+base_image_profile_name: "{{ infra_general.get('image_profile', 'debian-12') }}"
+base_image_profile_config: "{{ cloud_image_profiles.get(base_image_profile_name, {}) }}"
+host_image_profile_config: "{{ cloud_image_profiles.get(host_image_profile, {}) }}"
+host_uses_golden_image: >-
+  {{
+    host_image_profile == 'coinops-app-host'
+    and host_image_profile_config != {}
+    and host_image_profile_config != base_image_profile_config
+  }}
 
 ansible_ssh_private_key_file: "{{ lookup('env', 'SSH_KEY_PATH') | default(lookup('env', 'HOME') ~ '/.ssh/ssh-key-coin-ops', true) }}"
 ansible_user: "{{ infra_general.username }}"
@@ -109,6 +120,10 @@ cloudflare_api_token: "{{ app_secrets.CLOUDFLARE_API_TOKEN | default('', true) }
 rabbitmq_user: cognitor
 db_name: cognitor
 db_user: cognitor
+db_user_urlencoded: "{{ db_user | urlencode }}"
+db_password_urlencoded: "{{ db_password | urlencode }}"
+rabbitmq_user_urlencoded: "{{ rabbitmq_user | urlencode }}"
+rabbitmq_password_urlencoded: "{{ rabbitmq_password | urlencode }}"
 
 runtime_backend: "{{ lookup('env', 'RUNTIME_BACKEND') | default(deploy_config.runtime_backend, true) }}"
 app_domain: "{{ lookup('env', 'APP_DOMAIN') | default(deploy_config.app_domain, true) }}"
@@ -122,7 +137,7 @@ history_port: "{{ deploy_config.history_port }}"
 internal_tls_enabled: "{{ lookup('env', 'INTERNAL_TLS_ENABLED') | default(deploy_config.internal_tls_enabled, true) | bool }}"
 internal_tls_port: "{{ deploy_config.internal_tls_port }}"
 backend_ip: "{{ (backend_host | length > 0) | ternary(hostvars[backend_host].ansible_host, '127.0.0.1') }}"
-postgres_bind_ip: "{{ cloud_runtime_metadata.get('database_ip', backend_ip) }}"
+postgres_bind_ip: "{{ cloud_runtime_metadata.get('database_ip', '') | default(backend_ip, true) }}"
 use_managed_db: "{{ cloud_runtime_metadata.get('use_managed_db', false) | bool }}"
 
 tls_cert_dir: /etc/cognitor/tls
@@ -140,6 +155,6 @@ postgres_runtime_image: "{{ image_registry }}/coin-ops-postgres-runtime:{{ image
 postgres_image: "{{ postgres_runtime_image if runtime_backend == 'postgres' else 'postgres:16-alpine' }}"
 registry_username: "{{ lookup('env', 'GHCR_USERNAME') | default(deploy_config.registry_username, true) }}"
 
-rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@{{ backend_ip }}:5672/"
-internal_rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@rabbitmq:5672/"
-app_database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ postgres_bind_ip }}:5432/{{ db_name }}"
+rabbitmq_url: "amqp://{{ rabbitmq_user_urlencoded }}:{{ rabbitmq_password_urlencoded }}@{{ backend_ip }}:5672/"
+internal_rabbitmq_url: "amqp://{{ rabbitmq_user_urlencoded }}:{{ rabbitmq_password_urlencoded }}@rabbitmq:5672/"
+app_database_url: "postgresql://{{ db_user_urlencoded }}:{{ db_password_urlencoded }}@{{ postgres_bind_ip }}:5432/{{ db_name }}"

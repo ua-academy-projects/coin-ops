@@ -65,7 +65,7 @@ Review the split SSOT files under `terraform/config/` and adjust the committed n
 - `clouds.json`: `clouds.control_plane`, `clouds.enabled`, `clouds.default_instance_clouds`, `clouds.providers`, and `clouds.backends`
 - `general.json`: project/user/SSH/region/image defaults
 - `deploy.json`: domain, TLS/certbot policy, runtime backend, image defaults, ports, and Ansible provisioning defaults
-- `dns.json`: `dns.primary_cloud`, aliases, and Cloudflare defaults
+- `dns.json`: `dns.primary_cloud` and Cloudflare defaults
 - `instances.json`: VM topology and per-VM cloud overrides
 
 ### 2. Run bootstrap
@@ -154,7 +154,7 @@ Notes:
 
 - External port `80` is intentionally closed.
 - Cloudflare proxy is the intended public entry point.
-- `dns.primary_cloud` owns `APP_DOMAIN`; other simultaneous cloud deployments use aliases such as `gcp.$APP_DOMAIN` and `aws.$APP_DOMAIN`.
+- `dns.primary_cloud` owns `APP_DOMAIN`; other simultaneous cloud deployments are not assigned DNS names and should be checked by direct public IP.
 - `TLS_MODE=certbot` requires a real public domain.
 - `deploy.certbot.staging` in `terraform/config/deploy.json` controls whether certbot requests staging certificates by default.
 - set `deploy.certbot.staging=true` for repeated validation; keep it `false` only when production certificate issuance is intentional
@@ -210,8 +210,17 @@ Check that:
 
 - only the selected cloud modules receive VMs
 - root/`www` DNS records point to `dns.primary_cloud`
-- secondary clouds expose `gcp.<app_domain>` / `aws.<app_domain>` aliases when DNS is enabled
-- `public_endpoints` contains usable endpoints when DNS is disabled or Cloudflare credentials are absent
+- no DNS records are created for non-primary clouds
+- `public_endpoints` contains `direct_url` for every public UI cloud, including when DNS is disabled or Cloudflare credentials are absent
+
+For direct IP checks, use HTTPS on port `443`:
+
+```bash
+terraform output -json public_endpoints
+curl -k https://<public-ip>/health
+```
+
+Browsers will warn because the certificate is issued for `APP_DOMAIN` or a self-signed DNS name, not for the raw IP address. That warning is expected for IP-only validation.
 
 Validate Ansible after Terraform has produced inventory artifacts:
 

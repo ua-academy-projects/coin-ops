@@ -10,7 +10,9 @@
 
 plugin: amazon.aws.aws_ec2
 regions:
-  - eu-north-1
+  # Match the active AWS region from the operator environment when available.
+  # Keep a sane fallback so inventory discovery still works in the default repo setup.
+  - "{{ lookup('env', 'AWS_REGION') | default(lookup('env', 'TF_VAR_aws_region'), true) | default('eu-central-1', true) }}"
 
 filters:
   tag:Project: coin-ops

@@ -1,9 +1,12 @@
 #!/bin/bash
-# User bootstrap: create ${username} with sudo and SSH key access,
-# then configure sshd to listen on port ${ssh_port}.
+# User bootstrap: set a stable hostname, create ${username} with sudo and SSH
+# key access, then configure sshd to listen on port ${ssh_port}.
 set -euo pipefail
 
 log() { echo "[user-init] $*"; }
+
+log "Setting hostname to '${hostname}'..."
+hostnamectl set-hostname "${hostname}"
 
 log "Creating user '${username}'..."
 if ! id "${username}" &>/dev/null; then

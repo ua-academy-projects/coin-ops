@@ -5,9 +5,9 @@ server {
 }
 
 server {
-    listen 443 ssl;
+    listen 443 ssl default_server;
     http2 on;
-    server_name {{ app_domain }};
+    server_name _ {{ app_domain }};
 
 {% if tls_mode == 'certbot' %}
     ssl_certificate /etc/letsencrypt/live/{{ app_domain }}/fullchain.pem;

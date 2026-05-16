@@ -83,7 +83,7 @@ Read from `terraform/config/*.json` via `jsondecode(file(...))` in `terraform/ma
 | `clouds.json` | control-plane cloud, enabled clouds, normalized cloud provider/account/terraform identity contract, and backend storage config |
 | `general.json` | project/user/SSH/region/image defaults |
 | `deploy.json` | domain, TLS/certbot, runtime backend, image defaults, ports, and Ansible provisioning defaults |
-| `dns.json` | primary DNS cloud, cloud aliases, and Cloudflare defaults |
+| `dns.json` | primary DNS cloud and Cloudflare defaults; non-primary clouds are checked by direct public IP |
 | `instances.json` | VM topology and per-instance overrides |
 | `networks.json` | `vpc_cidr`, `subnets`, `firewall_rules`, routing metadata |
 | `cloud_mappings.json` | cloud-specific mapping dictionaries for sizes, logical regions/zones, and image profiles |

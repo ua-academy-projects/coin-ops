@@ -45,6 +45,7 @@ The following are part of the intended cross-cloud contract:
   - `/history-api`
 - the same compose-based deploy model
 - the same config-driven instance sizing / region / image mapping approach
+- DNS belongs only to `dns.primary_cloud`; non-primary clouds are validated by public IP, not by cloud-specific subdomains.
 
 If a feature falls into this category, we should try to keep behavior conceptually aligned across clouds.
 

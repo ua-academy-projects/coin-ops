@@ -48,6 +48,7 @@ locals {
         username       = var.username
         ssh_public_key = var.ssh_public_key
         ssh_port       = var.ssh_port
+        hostname       = "gcp-${name}"
       }) : "",
       cfg.startup_script != "" ? templatefile("${path.root}/${cfg.startup_script}", {
         private_subnet_cidr = var.private_subnet_cidr

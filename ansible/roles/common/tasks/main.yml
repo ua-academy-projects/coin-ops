@@ -25,6 +25,10 @@
     executable: /bin/bash
   changed_when: false
 
+- name: Set stable system hostname from cloud and instance key
+  hostname:
+    name: "{{ my_cloud }}-{{ infra_instance_key }}"
+
 - name: Check whether ufw is installed
   stat:
     path: /usr/sbin/ufw
