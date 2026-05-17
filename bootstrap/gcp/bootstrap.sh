@@ -32,6 +32,8 @@ gcloud services enable compute.googleapis.com
 gcloud services enable storage.googleapis.com
 gcloud services enable iam.googleapis.com
 gcloud services enable cloudresourcemanager.googleapis.com
+gcloud services enable servicenetworking.googleapis.com   
+gcloud services enable sqladmin.googleapis.com            
 
 # === Step 5: Create service account ===
 echo "Creating service account: $SA_NAME..."
@@ -58,6 +60,14 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
 gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member="serviceAccount:$SA_EMAIL" \
   --role="roles/iam.serviceAccountUser"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:$SA_EMAIL" \
+  --role="roles/servicenetworking.networksAdmin"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:$SA_EMAIL" \
+  --role="roles/cloudsql.admin"
 
 # === Step 7: Create service account key ===
 echo "Creating key file..."

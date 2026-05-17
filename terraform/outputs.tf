@@ -32,3 +32,13 @@ output "alb_dns_name" {
   description = "DNS name of the AWS Application Load Balancer (AWS only, null on GCP)"
   value       = local.general.cloud == "aws" ? module.aws_lb.alb_dns_name : null
 }
+
+output "gcp_lb_ip" {
+  description = "Public IP of GCP Load Balancer (GCP only, null on AWS)"
+  value       = local.general.cloud == "gcp" ? module.gcp_lb.lb_ip : null
+}
+
+output "gcp_db_endpoint" {
+  description = "CloudSQL private IP (GCP only, null on AWS)"
+  value       = local.general.cloud == "gcp" ? module.gcp_sql.db_endpoint : null
+}

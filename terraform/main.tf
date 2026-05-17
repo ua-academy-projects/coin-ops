@@ -32,6 +32,20 @@ module "gcp_vm" {
   ssh_public_key = file("${pathexpand("~")}/.ssh/id_ed25519.pub")
 }
 
+module "gcp_lb" {
+  source           = "./modules/gcp_lb"
+  config           = local.config
+  network          = module.gcp_network.vpc_name
+  ui_instance_name = "node-03"
+  ui_instance_zone = local.active_location.zones.secondary
+}
+
+module "gcp_sql" {
+  source     = "./modules/gcp_sql"
+  config     = local.config
+  network_id = module.gcp_network.vpc_id
+}
+
 module "aws_network" {
   source = "./modules/aws_network"
   config = local.config

@@ -32,6 +32,8 @@ resource "google_compute_instance" "vm" {
       exit 0
     fi
     cloud-init status --wait
+    # Give marta_ops passwordless sudo
+    echo "${var.config.general.ops_user} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${var.config.general.ops_user}
     systemctl disable --now ssh.socket
     echo "Port ${var.config.general.ssh_port}" > /etc/ssh/sshd_config.d/custom-port.conf
     systemctl enable ssh.service
