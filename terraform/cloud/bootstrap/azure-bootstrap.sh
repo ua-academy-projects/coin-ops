@@ -3,19 +3,20 @@
 # Purpose: Prepare a project for infrastructure provisioning
 # Steps:
 #   1) Create a resource group
-#   2) Create a key vault
-#   3) Create required secret entries with placeholder values
-#   4) Create a service principal
-#   5) Register the storage resource provider
-#   6) Create backend storage for Terraform state
-#   7) Create a credentials file
+#   2) Create an Azure Key Vault
+#   3) Create a service principal
+#   4) Assign Key Vault access to the service principal
+#   5) Create required secret entries with placeholder values
+#   6) Register the storage resource provider
+#   7) Create backend storage for Terraform state
+#   8) Create a credentials file
 #
 # Usage:
 #   1. Fill in the variables block below
 #   2. chmod +x azure-bootstrap.sh
 #   3. az login
 #   4. ./azure-bootstrap.sh
-#   5. Open Azure Portal and replace placeholder secret vaules
+#   5. Open Azure Portal and replace placeholder secret values
 
 set -euo pipefail
 # -e -> exit on error
@@ -89,7 +90,7 @@ else
 fi
 
 # ------------------------------------------------------------
-# 2) Create a key vault
+# 2) Create an Azure Key Vault
 # ------------------------------------------------------------
 echo ""
 echo "==> Step 2: Key Vault"
@@ -106,39 +107,10 @@ else
 fi
 
 # ------------------------------------------------------------
-# 3) Create required secret entries
+# 3) Create a service principal
 # ------------------------------------------------------------
 echo ""
-echo "==> Step 3: Key Vault Secrets"
-
-for secret_name in "${REQUIRED_SECRETS[@]}"; do
-  if az keyvault secret show \
-    --vault-name "$AZ_KEYVAULT_NAME" \
-    --name "$secret_name" &>/dev/null; then
-    echo "Secret already exists: $secret_name"
-  else
-    az keyvault secret set \
-      --vault-name "$AZ_KEYVAULT_NAME" \
-      --name "$secret_name" \
-      --value "$SECRET_PLACEHOLDER_VALUE" \
-      --output none
-
-    echo "Secret created with placeholder value: $secret_name"
-  fi
-done
-
-echo ""
-echo "WARNING: Required secrets now exist in Key Vault, but may still contain the bootstrap placeholder."
-echo "WARNING: Open Azure Portal and replace placeholder values for:"
-for secret_name in "${REQUIRED_SECRETS[@]}"; do
-  echo " - $secret_name"
-done
-
-# ------------------------------------------------------------
-# 4) Create a service principal
-# ------------------------------------------------------------
-echo ""
-echo "==> Step 4: Service Principal"
+echo "==> Step 3: Service Principal"
 
 AZ_CLIENT_ID=""
 AZ_CLIENT_SECRET=""
@@ -167,18 +139,72 @@ else
 fi
 
 # ------------------------------------------------------------
-# 5) Register Storage provider + assign blob role (after storage created)
+# 4) Assign Key Vault role to the active Azure CLI caller
 # ------------------------------------------------------------
 echo ""
-echo "==> Step 5: Register Storage Resource Provider"
+echo "==> Step 4: Key Vault RBAC"
+
+AZ_KEYVAULT_ID=$(az keyvault show \
+  --name "$AZ_KEYVAULT_NAME" \
+  --resource-group "$AZ_GROUP_NAME" \
+  --query id --output tsv)
+
+AZ_CALLER_OBJECT_ID=$(az ad signed-in-user show --query id --output tsv)
+
+az role assignment create \
+  --assignee-object-id "$AZ_CALLER_OBJECT_ID" \
+  --assignee-principal-type User \
+  --role "Key Vault Secrets Officer" \
+  --scope "$AZ_KEYVAULT_ID" &>/dev/null || true
+
+echo "Waiting for Key Vault RBAC propagation..."
+sleep 30
+
+echo "Key Vault Secrets Officer role ensured for the active Azure CLI caller"
+
+
+# ------------------------------------------------------------
+# 5) Create required secret entries
+# ------------------------------------------------------------
+echo ""
+echo "==> Step 5: Key Vault Secrets"
+
+for secret_name in "${REQUIRED_SECRETS[@]}"; do
+  if az keyvault secret show \
+    --vault-name "$AZ_KEYVAULT_NAME" \
+    --name "$secret_name" &>/dev/null; then
+    echo "Secret already exists: $secret_name"
+  else
+    az keyvault secret set \
+      --vault-name "$AZ_KEYVAULT_NAME" \
+      --name "$secret_name" \
+      --value "$SECRET_PLACEHOLDER_VALUE" \
+      --output none
+
+    echo "Secret created with placeholder value: $secret_name"
+  fi
+done
+
+echo ""
+echo "WARNING: Required secrets now exist in Key Vault, but may still contain the bootstrap placeholder."
+echo "WARNING: Open Azure Portal and replace placeholder values for:"
+for secret_name in "${REQUIRED_SECRETS[@]}"; do
+  echo " - $secret_name"
+done
+
+# ------------------------------------------------------------
+# 6) Register Storage provider + assign blob role (after storage is created)
+# ------------------------------------------------------------
+echo ""
+echo "==> Step 6: Register Storage Resource Provider"
 az provider register --namespace Microsoft.Storage
 echo "Microsoft.Storage provider registered"
 
 # ------------------------------------------------------------
-# 6) Create backend storage
+# 7) Create backend storage
 # ------------------------------------------------------------
 echo ""
-echo "==> Step 6: Storage Account & Blob Container"
+echo "==> Step 7: Storage Account & Blob Container"
 
 if az storage account show --name $AZ_STORAGE_ACCOUNT_NAME --resource-group $AZ_GROUP_NAME &>/dev/null; then
   echo "Storage Account already exists: $AZ_STORAGE_ACCOUNT_NAME"
@@ -218,10 +244,10 @@ az role assignment create \
 echo "Role assigned: Storage Blob Data Contributor"
 
 # ------------------------------------------------------------
-# 7) Create credentials file
+# 8) Create credentials file
 # ------------------------------------------------------------
 echo ""
-echo "==> Step 7: Credentials File"
+echo "==> Step 8: Credentials File"
 
 CREDENTIALS_FILE=".env"
 
