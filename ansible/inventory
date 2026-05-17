@@ -1,14 +1,14 @@
 [history]
-node-01 ansible_host=10.0.2.215
+node-01 ansible_host=10.0.2.196
 
 [proxy]
-node-02 ansible_host=10.0.2.90
+node-02 ansible_host=10.0.2.202
 
 [ui]
-node-03 ansible_host=10.0.1.163
+node-03 ansible_host=10.0.5.40
 
 [all:vars]
 ansible_user=marta_ops
 ansible_port=9922
 ansible_ssh_private_key_file=~/.ssh/id_ed25519
-ansible_ssh_common_args=-o ProxyJump=marta_ops@18.199.142.189:9922 -o StrictHostKeyChecking=no
+ansible_ssh_common_args=-o ProxyJump=marta_ops@63.177.243.223:9922 -o StrictHostKeyChecking=no
