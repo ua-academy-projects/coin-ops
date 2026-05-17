@@ -1,234 +1,335 @@
-# Currency Rates Tracker
+# coinops — Multi-Cloud Infrastructure
 
-Currency Rates Tracker is a multi-service crypto price application. It collects live prices, stores historical data, and serves a web UI through an AWS Application Load Balancer.
+Currency rates tracking app deployed across AWS, GCP, and Azure using Terraform and Ansible.
 
-The current working tree has moved from the older local/Vagrant deployment model to an AWS cloud deployment model with Terraform, Ansible, Docker Compose, ALB, private app/database VMs, and optional Cloudflare DNS.
+**Live (AWS):** http://app.coin-ops.pp.ua
 
-## What Changed From The GitHub Baseline
+---
 
-Compared with `origin/kurdupel` on `https://github.com/rkurdupel/status`, the new implementation changes the deployment architecture.
+## Table of Contents
 
-Major changes:
+- [Architecture](#architecture)
+- [Project Structure](#project-structure)
+- [Prerequisites](#prerequisites)
+- [Environment Variables](#environment-variables)
+- [Bootstrap](#bootstrap)
+- [Deploy](#deploy)
+- [Per-Instance Cloud Selection](#per-instance-cloud-selection)
+- [Useful Commands](#useful-commands)
+- [Cost Estimates](#cost-estimates)
+- [FAQ](#faq)
 
-1. Replaced the old single `devops-data` Vagrant-style data VM flow with AWS infrastructure.
-2. Added AWS public/private networking:
-   - public subnet for bastion and ALB
-   - private subnet for DB and app VMs
-   - NAT Gateway for private VM outbound internet access
-   - second public subnet in another Availability Zone for ALB
-3. Added an Application Load Balancer:
-   - public HTTP entry point
-   - target group for app VMs
-   - `/health` checks
-   - load balancing across `app-1` and `app-2`
-   - sticky sessions with ALB cookie
-4. Split VM roles:
-   - `bastion` is public and used for SSH jump access
-   - `db` is private and runs PostgreSQL, RabbitMQ, and Redis
-   - `app-1` and `app-2` are private and run nginx, UI, proxy, and history containers
-5. Added separate security groups:
-   - bastion accepts SSH only from the operator IP
-   - app VMs accept HTTP only from the ALB
-   - DB VM accepts PostgreSQL, RabbitMQ, and Redis only from app VMs
-6. Added Cloudflare DNS support:
-   - creates a CNAME record pointing a hostname to the ALB DNS name
-7. Replaced old Ansible roles for native PostgreSQL/RabbitMQ/Redis installs with Docker Compose templates on cloud VMs.
-8. Added Terraform outputs for generated Ansible inventory and SSH config.
-9. Changed `history_service` to read `POSTGRES_PASSWORD` and connect to PostgreSQL with `sslmode=disable`.
+---
 
-Security note: do not commit real AWS keys, Cloudflare tokens, passwords, or generated Terraform provider directories. If any real credentials were committed or shared, rotate them.
+## Architecture
 
-## Current Architecture
+### AWS (Full Stack)
 
-```mermaid
-flowchart LR
-    User[User Browser]
-    DNS[Cloudflare DNS]
-    ALB[AWS Application Load Balancer]
-    App1[Private App VM 1<br/>nginx + ui + proxy + history]
-    App2[Private App VM 2<br/>nginx + ui + proxy + history]
-    Bastion[Public Bastion VM]
-    DB[Private DB VM<br/>PostgreSQL + RabbitMQ + Redis]
-    Coinbase[Coinbase API]
-
-    User --> DNS
-    DNS --> ALB
-    ALB --> App1
-    ALB --> App2
-    Bastion -. SSH jump .-> App1
-    Bastion -. SSH jump .-> App2
-    Bastion -. SSH jump .-> DB
-    App1 --> DB
-    App2 --> DB
-    App1 --> Coinbase
-    App2 --> Coinbase
+```
+User
+  ↓
+app.coin-ops.pp.ua (Cloudflare DNS)
+  ↓
+AWS Application Load Balancer (port 443)
+  ↓
+  ├── app-1 VM (10.10.1.12)         app-2 VM (10.10.1.13)
+  │   nginx + ui + proxy + history   nginx + ui + proxy + history
+  └──────────────────┬───────────────────────────┘
+                     ↓
+               db VM (10.10.1.11)
+               rabbitmq + redis
+                     ↓
+               RDS PostgreSQL
 ```
 
-Request flow:
+### Azure / GCP (VM Only)
 
-1. User opens the Cloudflare hostname or ALB DNS name.
-2. ALB receives HTTP traffic on port `80`.
-3. ALB forwards the request to a healthy app VM.
-4. nginx on the app VM serves `/health` directly and proxies app traffic to containers.
-5. UI calls the proxy service for live prices.
-6. Proxy fetches live prices from Coinbase and publishes messages to RabbitMQ.
-7. History service consumes RabbitMQ messages and stores rows in PostgreSQL.
-8. UI reads historical/chart data from the history service.
-9. UI stores session state in Redis.
-
-## Repository Structure
-
-```text
-.
-├── config/config.yml
-├── terraform/
-│   ├── main.tf
-│   ├── provider.tf
-│   ├── versions.tf
-│   ├── variables.tf
-│   ├── outputs.tf
-│   └── modules/aws/
-│       ├── network/
-│       ├── firewall/
-│       ├── vm/
-│       └── load_balancer/
-├── ansible/
-│   ├── cloud-provision.yml
-│   ├── cloud-deploy.yml
-│   ├── inventory.cloud
-│   ├── roles/
-│   └── templates/
-├── scripts/
-│   ├── post-apply.sh
-│   └── verify_failover.sh
-├── ui/
-├── proxy_service/
-└── history_service/
+```
+User
+  ↓
+bastion (public IP)
+  ↓ SSH jump
+  ├── app-1 VM
+  ├── app-2 VM
+  └── db VM
 ```
 
-Important files:
+### AWS Resources
 
-- `config/config.yml` controls cloud, region, CIDRs, VM names, VM IPs, and tags.
-- `terraform/modules/aws/network` creates VPC, public/private subnets, route tables, Internet Gateway, NAT Gateway, and second public subnet for ALB.
-- `terraform/modules/aws/firewall` creates bastion, app/private, DB, and ALB security groups.
-- `terraform/modules/aws/load_balancer` creates the ALB, target group, listener, health check, and stickiness.
-- `terraform/modules/aws/main.tf` wires VMs, ALB target attachments, and Cloudflare DNS.
-- `ansible/cloud-provision.yml` installs common packages and Docker on cloud VMs.
-- `ansible/cloud-deploy.yml` deploys Docker Compose stacks to DB and app VMs.
-- `ansible/templates/cloud-nginx.conf.j2` defines `/health`, `/api`, `/history-api`, and UI proxying.
+| Resource | Purpose |
+|---|---|
+| VPC `10.10.0.0/16` | Isolated network |
+| Public subnet `10.10.0.0/24` | Bastion |
+| Private subnet `10.10.1.0/24` | App and DB VMs |
+| Public subnet `10.10.2.0/24` | Second AZ for ALB |
+| NAT Gateway | Private VMs outbound internet |
+| Application Load Balancer | Traffic distribution across app VMs |
+| RDS PostgreSQL | Managed database |
+| Cloudflare DNS | Domain → ALB |
+
+### Security Groups (AWS)
+
+```
+bastion-sg:  SSH port 22 from operator IP only
+app-sg:      HTTP port 80 from ALB only, SSH from bastion only
+db-sg:       postgres/rabbitmq/redis from app VMs, SSH from bastion
+lb-sg:       HTTP 80 and HTTPS 443 from internet
+rds-sg:      postgres 5432 from app VMs only
+```
+
+---
+
+## Project Structure
+
+```
+coinops/
+  config/
+    config.yml                     ← master config: cloud, VMs, network, firewall
+
+  terraform/
+    main.tf                        ← calls aws/gcp/azure modules based on instances
+    locals.tf                      ← reads config.yml, filters instances per cloud
+    outputs.tf                     ← merges VM IPs from all active clouds
+    backend.tf                     ← S3 state bucket
+    provider.tf                    ← AWS, GCP, Cloudflare, Azure providers
+    versions.tf                    ← provider version constraints
+    variables.tf                   ← Cloudflare, DB, domain variables
+    modules/
+      aws/                         ← full stack: network, firewall, vm, alb, rds, acm
+      gcp/                         ← vm only: network, firewall, vm
+      azure/                       ← vm only: network, firewall, vm
+
+  ansible/
+    ansible.cfg                    ← SSH key, host key settings
+    inventory.cloud                ← AUTO-GENERATED by post-apply.sh
+    cloud-provision.yml            ← installs Docker on all VMs
+    cloud-deploy.yml               ← deploys app on VMs
+    group_vars/
+      all/main.yml                 ← reads secrets from environment
+    templates/
+      cloud-nginx.conf.j2          ← nginx routing
+      cloud-app.compose.yaml.j2    ← docker compose for app VMs
+      cloud-db.compose.yaml.j2     ← docker compose for db VM
+      cloud-app.env.j2             ← .env for app containers
+      cloud-db.env.j2              ← .env for db containers
+
+  scripts/
+    bootstrap-aws.sh               ← one-time AWS setup (IAM, S3, DynamoDB)
+    bootstrap-gcp.sh               ← one-time GCP setup (project, SA, bucket)
+    bootstrap-azure.sh             ← one-time Azure setup (SP, storage, identity)
+    post-apply.sh                  ← updates SSH config + inventory after apply
+    lab.sh                         ← one command deploy pipeline
+    verify_failover.sh             ← stops 1 VM, confirms failover works
+
+  ui/                              ← Flask UI service
+  proxy_service/                   ← Flask proxy (fetches currency prices)
+  history_service/                 ← Go history service (saves to postgres)
+  docker-compose.yml               ← local development only
+  .env.example                     ← environment variables template
+```
+
+---
 
 ## Prerequisites
 
-Install locally:
+| Tool | Version | Install |
+|---|---|---|
+| Terraform | >= 1.5.0 | `brew install terraform` |
+| Ansible | >= 2.14 | `pip install ansible` |
+| AWS CLI | >= 2.0 | `brew install awscli` |
+| Azure CLI | >= 2.0 | `brew install azure-cli` |
+| GCP CLI | >= 400.0 | `brew install google-cloud-sdk` |
+| Python 3 | >= 3.10 | built-in on Mac |
+| jq | any | `brew install jq` |
 
-- Terraform
-- AWS CLI
-- Ansible
-- SSH client
-- Docker only if you also run the local compose stack
+---
 
-You need:
+## Environment Variables
 
-- AWS credentials with permission to create VPC, EC2, security groups, NAT Gateway, ALB, target groups, and S3 backend access.
-- Existing S3 backend bucket configured in `terraform/backend.tf`.
-- SSH public key path from `config/config.yml`.
-- Cloudflare API token with DNS edit permission for the target zone.
-- Cloudflare zone ID.
-
-## Required Environment Variables
-
-Export these before Terraform and Ansible.
+Copy `.env.example` to `.env` and fill in your values:
 
 ```bash
-export AWS_ACCESS_KEY_ID="<aws-access-key>"
-export AWS_SECRET_ACCESS_KEY="<aws-secret-key>"
-export AWS_DEFAULT_REGION="eu-central-1"
-
-export SSH_KEY_PATH="$HOME/.ssh/id_ed25519"
-
-export POSTGRES_USER="currency_app_user"
-export POSTGRES_PASS="<postgres-password>"
-export POSTGRES_DB="currency_rates_tracker"
-export POSTGRES_TABLE="currency_rates"
-
-export RABBITMQ_USER="currency_app_user"
-export RABBITMQ_PASS="<rabbitmq-password>"
-export RABBITMQ_QUEUE="currency_rates"
-
-export REDIS_PASSWORD="<redis-password>"
-export SECRET_KEY="<flask-secret-key>"
-
-export TF_VAR_cloudflare_api_token="<cloudflare-api-token>"
-export TF_VAR_cloudflare_zone_id="<cloudflare-zone-id>"
+cp .env.example .env
 ```
 
-Cloudflare token format must be only the raw token. Do not include `Bearer`, quotes inside the value, spaces, or newlines.
+Never commit `.env` — it is in `.gitignore`.
 
-## Deploy To AWS
+Key variables:
 
-### 1. Review Config
+```bash
+# Azure
+SUBSCRIPTION_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+AZURE_AUTH_LOCATION=~/.secrets/azure/sp-key.json
+AZURE_IDENTITY_ID=/subscriptions/.../userAssignedIdentities/coinops-dev-identity
 
-Check `config/config.yml`:
+# AWS
+AWS_ACCESS_KEY_ID=your_key
+AWS_SECRET_ACCESS_KEY=your_secret
+AWS_DEFAULT_REGION=eu-central-1
+
+# App secrets
+POSTGRES_USER=currency_app_user
+POSTGRES_PASS=yourpassword
+POSTGRES_DB=currency_rates_tracker
+POSTGRES_TABLE=currency_rates
+RABBITMQ_USER=currency_app_user
+RABBITMQ_PASS=yourpassword
+RABBITMQ_QUEUE=currency_rates
+REDIS_PASSWORD=yourpassword
+SECRET_KEY=yoursecretkey
+
+# SSH
+SSH_KEY_PATH=~/.ssh/id_ed25519
+```
+
+---
+
+## Bootstrap
+
+Bootstrap creates the prerequisites for Terraform state storage and cloud authentication. Run once per cloud.
+
+### AWS Bootstrap
+
+Creates IAM user, S3 bucket for state, DynamoDB for state locking:
+
+```bash
+bash scripts/bootstrap-aws.sh
+source .env
+```
+
+### GCP Bootstrap
+
+Creates GCP project, Service Account, GCS bucket for state:
+
+```bash
+export BILLING_ACCOUNT_ID=your_billing_account_id
+bash scripts/bootstrap-gcp.sh
+source .env
+```
+
+### Azure Bootstrap
+
+Creates Resource Group, Service Principal, Storage Account + Container for state, User Assigned Identity:
+
+```bash
+export SUBSCRIPTION_ID=your_subscription_id
+bash scripts/bootstrap-azure.sh
+source .env
+```
+
+---
+
+## Deploy
+
+### Quick Deploy (one command)
+
+```bash
+source .env
+./scripts/lab.sh full
+```
+
+### Manual Step by Step
+
+**Step 1 — Set cloud in config:**
 
 ```yaml
-cloud: aws
-location: eu-central-1
-
-network:
-  cidr: 10.10.0.0/16
-  subnet_cidr: 10.10.0.0/24
-  private_subnet_cidr: 10.10.1.0/24
-  second_public_subnet_cidr: 10.10.2.0/24
-
-instances:
-  bastion:
-    public: true
-    private_ip: 10.10.0.10
-  db:
-    public: false
-    private_ip: 10.10.1.11
-  app-1:
-    public: false
-    private_ip: 10.10.1.12
-  app-2:
-    public: false
-    private_ip: 10.10.1.13
+# config/config.yml
+cloud: aws  # aws | gcp | azure
 ```
 
-### 2. Create Infrastructure
+**Step 2 — Terraform: create infrastructure**
 
 ```bash
 cd terraform
-terraform init -upgrade
+terraform init
 terraform plan
 terraform apply
+cd ..
 ```
 
-Useful outputs:
-
-```bash
-terraform output alb_dns_name
-terraform output bastion_public_ip
-terraform output -raw ansible_inventory
-terraform output -raw ssh_config
-```
-
-### 3. Generate Inventory And SSH Config
-
-From repo root:
+**Step 3 — Generate SSH config and Ansible inventory**
 
 ```bash
 ./scripts/post-apply.sh
 ```
 
-This writes:
-
-- `ansible/inventory.cloud`
-- `~/.ssh/coinops-aws.generated`
-
-It also adds an `Include` line to `~/.ssh/config` if needed.
-
 Test SSH:
+```bash
+ssh coinops-bastion
+ssh coinops-db
+ssh coinops-app-1
+ssh coinops-app-2
+```
+
+**Step 4 — Install Docker on all VMs (AWS only)**
+
+```bash
+source .env
+ansible-playbook -i ansible/inventory.cloud ansible/cloud-provision.yml
+```
+
+**Step 5 — Deploy app (AWS only)**
+
+```bash
+ansible-playbook -i ansible/inventory.cloud ansible/cloud-deploy.yml
+```
+
+**Step 6 — Verify**
+
+```bash
+# AWS with ALB
+curl http://app.coin-ops.pp.ua/health
+
+# Azure/GCP via SSH tunnel
+ssh -N -L 19080:127.0.0.1:80 -J rkurdupel@<bastion-ip> rkurdupel@10.10.1.12
+open http://127.0.0.1:19080
+```
+
+**Step 7 — Destroy when done**
+
+```bash
+cd terraform && terraform destroy
+```
+
+---
+
+## Per-Instance Cloud Selection
+
+Each VM can be deployed to a different cloud. If no cloud is specified for an instance it uses the top-level `cloud:` value.
+
+**Config example:**
+
+```yaml
+cloud: aws  # default cloud for instances without cloud specified
+
+instances:
+  bastion:
+    cloud: aws      # explicitly on AWS
+    private_ip: 10.10.0.10
+  db:
+    cloud: azure    # explicitly on Azure
+    private_ip: 10.10.1.11
+  app-1:
+    cloud: gcp      # explicitly on GCP
+    private_ip: 10.10.1.12
+  app-2:
+              # no cloud → uses default: aws
+    private_ip: 10.10.1.13
+```
+
+Result:
+- bastion → AWS
+- db → Azure
+- app-1 → GCP
+- app-2 → AWS (default)
+
+**Important:** VMs on different clouds cannot communicate by default. Cross-cloud networking requires VPN or overlay network (e.g. Tailscale).
+
+---
+
+## Useful Commands
+
+### SSH into VMs
 
 ```bash
 ssh coinops-bastion
@@ -237,260 +338,140 @@ ssh coinops-app-1
 ssh coinops-app-2
 ```
 
-### 4. Provision VMs
-
-From repo root:
+### Check running containers
 
 ```bash
-ansible-playbook -i ansible/inventory.cloud ansible/cloud-provision.yml
+# app VMs
+ssh coinops-app-1 'sudo docker ps'
+ssh coinops-app-1 'sudo docker logs cloud-app-nginx-1 --tail 20'
+ssh coinops-app-1 'sudo docker logs cloud-app-ui-1 --tail 20'
+ssh coinops-app-1 'sudo docker logs cloud-app-proxy-1 --tail 20'
+ssh coinops-app-1 'sudo docker logs cloud-app-history-1 --tail 20'
+
+# db VM
+ssh coinops-db 'sudo docker ps'
+ssh coinops-db 'sudo docker logs cloud-db-postgres-1 --tail 20'
 ```
 
-This installs common packages and Docker on all cloud nodes, then creates persistent data directories on the DB VM.
-
-### 5. Deploy Containers
+### Redeploy after code changes
 
 ```bash
 ansible-playbook -i ansible/inventory.cloud ansible/cloud-deploy.yml
 ```
 
-This deploys:
-
-- DB VM:
-  - PostgreSQL on `5432`
-  - RabbitMQ on `5672`
-  - Redis on `6379`
-- App VMs:
-  - nginx on host port `80`
-  - UI container on `5000`
-  - proxy container on `5001`
-  - history container on `5002`
-
-The app deploy uses `docker compose up -d --build --remove-orphans`, so code changes are rebuilt during deployment.
-
-### 6. Open The Website
-
-For AWS deployments, use the ALB DNS name:
+### Terraform outputs
 
 ```bash
-terraform -chdir=terraform output -raw alb_dns_name
+cd terraform
+terraform output bastion_public_ip
+terraform output alb_dns_name
+terraform output ansible_inventory
+terraform output vm_ips
 ```
 
-Then open:
-
-```text
-http://<alb-dns-name>
-```
-
-If Cloudflare DNS was applied, open the configured hostname, for example:
-
-```text
-http://app.<your-domain>
-```
-
-For the current GCP setup in this repo, the app VMs are private and do not expose a public website endpoint. Use an SSH tunnel through the bastion to reach `app-1` from your browser:
+### Update SSH config after terraform apply
 
 ```bash
-ssh -N -L 19080:127.0.0.1:80 -J rkurdupel@<bastion-public-ip> rkurdupel@10.10.1.12
+./scripts/post-apply.sh
 ```
 
-Then open:
-
-```text
-http://127.0.0.1:19080
-```
-
-## Verify Deployment
-
-Check ALB health:
+### Clear old SSH host keys
 
 ```bash
-curl -i "http://$(terraform -chdir=terraform output -raw alb_dns_name)/health"
+ssh-keygen -R 10.10.0.10
+ssh-keygen -R 10.10.1.11
+ssh-keygen -R 10.10.1.12
+ssh-keygen -R 10.10.1.13
 ```
 
-Expected:
-
-```text
-HTTP/1.1 200 OK
-{"status": "ok"}
-```
-
-Check app VMs directly through SSH:
+### Check ALB target health (AWS)
 
 ```bash
-ssh coinops-app-1 'curl -i http://localhost/health'
-ssh coinops-app-2 'curl -i http://localhost/health'
+aws elbv2 describe-target-health \
+  --target-group-arn YOUR_TARGET_GROUP_ARN \
+  --region eu-central-1
 ```
 
-Check containers:
-
-```bash
-ssh coinops-db 'cd /opt/coinops/cloud-db && sudo docker compose ps'
-ssh coinops-app-1 'cd /opt/coinops/cloud-app && sudo docker compose ps'
-ssh coinops-app-2 'cd /opt/coinops/cloud-app && sudo docker compose ps'
-```
-
-Check logs:
-
-```bash
-ssh coinops-app-1 'sudo docker logs cloud-app-nginx-1 --tail 50'
-ssh coinops-app-1 'sudo docker logs cloud-app-ui-1 --tail 50'
-ssh coinops-app-1 'sudo docker logs cloud-app-proxy-1 --tail 50'
-ssh coinops-app-1 'sudo docker logs cloud-app-history-1 --tail 50'
-```
-
-## Failover Test
-
-The helper script checks that the app still responds after one app VM is stopped:
+### Verify failover (AWS)
 
 ```bash
 ./scripts/verify_failover.sh
 ```
 
-Review the hard-coded ALB URL, AWS region, and target group ARN in the script before running it in a new environment.
-
-## How The ALB Works
-
-The ALB is the public website entry point:
-
-```text
-User -> ALB -> app-1/app-2
-```
-
-The app VMs are private. Users do not access them directly.
-
-The ALB target group:
-
-- sends traffic only to registered app VMs
-- calls `/health` every 30 seconds
-- marks a VM healthy after 2 successful checks
-- marks a VM unhealthy after 3 failed checks
-- stops sending traffic to unhealthy VMs
-
-Stickiness is enabled with an ALB cookie:
-
-```hcl
-stickiness {
-  type            = "lb_cookie"
-  cookie_duration = 86400
-  enabled         = true
-}
-```
-
-This keeps the same browser on the same app VM for a day. It helps avoid inconsistent UI session behavior when a user clicks between coins or ranges while multiple app VMs are running.
-
-## Troubleshooting
-
-### ALB Returns 504
-
-Meaning: ALB accepted the request but did not get a timely response from a target.
-
-Check:
+### Switch cloud
 
 ```bash
-curl -i "http://$(terraform -chdir=terraform output -raw alb_dns_name)/health"
-ssh coinops-app-1 'curl -i http://localhost/health'
-ssh coinops-app-2 'curl -i http://localhost/health'
+# edit config/config.yml
+cloud: azure  # change to aws | gcp | azure
+
+# destroy old cloud resources
+cd terraform && terraform destroy
+
+# apply new cloud
+terraform apply
 ```
 
-If app VMs answer locally but ALB returns `504`, check:
+---
 
-- ALB security group egress
-- app VM security group allowing port `80` from ALB security group
-- target group registered targets
-- target health in AWS
+## Cost Estimates
 
-### ALB Returns 503
+### AWS (per hour)
 
-Meaning: ALB has no healthy targets.
+| Resource | Cost |
+|---|---|
+| 4x t3.micro EC2 | ~$0.084/h |
+| NAT Gateway | ~$0.045/h |
+| ALB | ~$0.008/h |
+| RDS t3.micro | ~$0.017/h |
+| Elastic IP | ~$0.005/h |
+| **Total** | **~$0.16/h (~$3.84/day)** |
 
-Check:
+### Azure (per hour)
 
-```bash
-aws elbv2 describe-target-health \
-  --target-group-arn "<target-group-arn>" \
-  --region eu-central-1
-```
+| Resource | Cost |
+|---|---|
+| 4x Standard_F1als_v7 | ~$0.02/h |
+| NAT Gateway | ~$0.045/h |
+| Public IP | ~$0.004/h |
+| **Total** | **~$0.07/h (~$1.68/day)** |
 
-### `/health` Works But Website Hangs
+### GCP (per hour)
 
-Meaning: nginx is alive, but the app path behind `/` is waiting on UI or backend dependencies.
+| Resource | Cost |
+|---|---|
+| 4x e2-micro | ~$0.032/h |
+| Cloud NAT | ~$0.044/h |
+| **Total** | **~$0.08/h (~$1.92/day)** |
 
-Check:
+Always run `terraform destroy` when not using it.
 
-```bash
-ssh coinops-app-1 'curl -i --max-time 10 http://localhost/'
-ssh coinops-app-1 'sudo docker logs cloud-app-ui-1 --tail 50'
-ssh coinops-app-1 'sudo docker logs cloud-app-history-1 --tail 50'
-```
+---
 
-### History Service: SSL Is Not Enabled On The Server
+## FAQ
 
-The history service must connect to PostgreSQL with SSL disabled:
+**Q: Why does switching cloud destroy existing VMs?**
+When you change `cloud:` in config.yml and run `terraform apply`, Terraform destroys resources from the previous cloud. Use per-instance cloud selection to keep VMs on multiple clouds simultaneously.
 
-```go
-sslmode=disable
-```
+**Q: Why can't VMs on different clouds communicate?**
+Each cloud has its own private network. Without VPN or overlay networking (Tailscale, Cloudflare Tunnel) they cannot reach each other's private IPs.
 
-If the code is correct but logs still show:
+**Q: Why does Azure need a NIC as a separate resource?**
+Azure requires explicit Network Interface Card creation unlike AWS and GCP which handle it internally. The NIC connects the VM to the subnet and holds the private/public IP configuration.
 
-```text
-pq: SSL is not enabled on the server
-```
+**Q: Why does Azure need a NAT Gateway?**
+Private VMs have no public IP. NAT Gateway gives them outbound internet access (apt update, docker pull) without being reachable from the internet.
 
-Rebuild the history image on app VMs:
+**Q: What is a Service Principal?**
+Azure's equivalent of an AWS IAM user or GCP Service Account. A non-interactive identity used by Terraform to authenticate to Azure without browser login.
 
-```bash
-ssh coinops-app-1 'cd /opt/coinops/cloud-app && sudo docker compose build --no-cache history && sudo docker compose up -d history'
-ssh coinops-app-2 'cd /opt/coinops/cloud-app && sudo docker compose build --no-cache history && sudo docker compose up -d history'
-```
+**Q: What is a User Assigned Identity?**
+A Managed Identity created separately and attached to VMs. VMs use it to authenticate to Azure services (Key Vault, Container Registry) without storing credentials.
 
-### Cloudflare Provider Error
+**Q: Why does `post-apply.sh` need to run after every `terraform apply`?**
+Every apply may change VM IPs (especially bastion after destroy+apply). `post-apply.sh` reads new IPs from Terraform outputs and updates local SSH config and Ansible inventory.
 
-If Terraform tries to download `hashicorp/cloudflare`, the child module is missing the provider source declaration.
+**Q: Why Standard_F1als_v7 for Azure instead of B1s?**
+`Standard_B1s` is unavailable in most European Azure regions due to capacity constraints on free tier subscriptions. `Standard_F1als_v7` is a 1 vCPU size available in West Europe with no restrictions.
 
-Required in `terraform/modules/aws/versions.tf`:
-
-```hcl
-terraform {
-  required_providers {
-    aws = {
-      source = "hashicorp/aws"
-    }
-    cloudflare = {
-      source = "cloudflare/cloudflare"
-    }
-  }
-}
-```
-
-Then run:
-
-```bash
-cd terraform
-terraform init -upgrade
-```
-
-### Cloudflare Token Validation Error
-
-Cloudflare API tokens may contain only:
-
-```text
-a-z A-Z 0-9 - _
-```
-
-Check token format without printing it:
-
-```bash
-printf '%s' "$TF_VAR_cloudflare_api_token" | LC_ALL=C grep -q '[^A-Za-z0-9_-]' && echo "bad chars" || echo "format ok"
-```
-
-## Cleanup
-
-Destroy cloud infrastructure:
-
-```bash
-cd terraform
-terraform destroy
-```
-
-This removes AWS resources managed by Terraform. It does not rotate exposed secrets or clean local generated files.
+**Q: How much does this cost on Azure per hour?**
+4x `Standard_F1als_v7` + NAT Gateway + Public IP ≈ $0.07/hour. Always destroy when not in use.

@@ -1,21 +1,21 @@
 variable "cloudflare_api_token" {
-    type = string
+  type = string
 }
 
 variable "cloudflare_zone_id" {
-    type = string
+  type = string
 }
 
 variable "db_name" {
-    type = string
+  type = string
 }
 
 variable "db_user" {
-    type = string
+  type = string
 }
 
 variable "db_password" {
-    type = string
+  type = string
 }
 
 variable "domain_name" {

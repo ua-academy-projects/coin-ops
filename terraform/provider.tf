@@ -7,6 +7,9 @@ provider "google" {
   region  = local.config.region_map.gcp
 }
 
+provider "azurerm" {
+  features {}
+}
 
 provider "cloudflare" {
   api_token = var.cloudflare_api_token

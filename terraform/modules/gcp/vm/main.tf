@@ -15,7 +15,7 @@ resource "google_compute_instance" "this" {
     # give internal ip to vm
     subnetwork = var.subnetwork_self_link
 
-    network_ip = null # tell gcp to assign an internal ip from the subnet
+    network_ip = var.private_ip
 
     # if public ip = true - create access_config else do not
     # dynamic to handle presence of public_ip = != true

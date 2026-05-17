@@ -26,3 +26,8 @@ variable "db_password" {
 variable "domain_name" {
   type = string
 }
+
+variable "instances" {
+  type    = any
+  default = null
+}

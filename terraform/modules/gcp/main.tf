@@ -1,5 +1,5 @@
 locals {
-  cloud = lookup(var.config, "cloud", "gcp")
+  cloud = "gcp"
 }
 
 module "network" {
@@ -7,7 +7,7 @@ module "network" {
 
   network_name            = lookup(var.config.network, "name", "coinops-network")
   subnetwork_name         = lookup(var.config.network, "subnet_name", "coinops-subnet")
-  subnetwork_cidr         = lookup(var.config.network, "subnet_cidr", "10.10.0.0/24")
+  subnetwork_cidr         = lookup(var.config.network, "cidr", "10.10.0.0/16")
   auto_create_subnetworks = lookup(var.config.network, "gcp_auto_create_subnetworks", false)
   region = lookup(var.config.region_map, "gcp", "europe-central2")
 }
@@ -57,7 +57,9 @@ module "private_ssh" {
 
 module "vm" {
   source   = "./vm"
-  for_each = lookup(var.config, "instances", {}) # looping vm block from config
+  # if instances if empty - no vm to this cloud is created
+  for_each = var.instances
+  
   name     = each.key                      #  name of the vm from so config (bastion, private-1)
   zone     = lookup(var.config.zone_map, local.cloud, "europe-central2-a")
   machine_type = lookup(

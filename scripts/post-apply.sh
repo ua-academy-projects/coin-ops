@@ -43,9 +43,14 @@ ssh-keygen -R 10.10.10.12 2>/dev/null || true
 ssh-keygen -R 10.10.10.13 2>/dev/null || true
 ssh-keygen -R 10.10.0.10 2>/dev/null || true
 
+BASTION_IP=$(terraform output -raw bastion_public_ip)
+ssh-keygen -R "${BASTION_IP}" 2>/dev/null || true
+
 echo ""
 echo "=== Done ==="
 echo "Bastion IP: $(terraform output -raw bastion_public_ip)"
+
+
 RDS_ENDPOINT=$(terraform output -raw rds_endpoint)
 if grep -q "RDS_ENDPOINT" "${REPO_ROOT}/.env" 2>/dev/null; then
     sed -i '' "s|export RDS_ENDPOINT=.*|export RDS_ENDPOINT=${RDS_ENDPOINT}|" "${REPO_ROOT}/.env"

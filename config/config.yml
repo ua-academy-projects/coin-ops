@@ -1,5 +1,5 @@
 cloud: aws
-# cloud: aws / gcp
+# cloud: aws / gcp / azure
 
 name_prefix: coinops
 location: eu-central-1
@@ -9,6 +9,8 @@ clouds:
     profile: default
   gcp:
     project_id: coinops-dev
+  azure:
+    resource_group: coinops-dev-rg
 
 defaults:
   size: small
@@ -25,6 +27,7 @@ ssh:
 region_map:
   aws: eu-central-1
   gcp: europe-central2
+  azure: eastus2
 zone_map: 
   aws: 
     first: eu-central-1a
@@ -35,14 +38,19 @@ instance_type_map:
   small:
     aws: t3.micro
     gcp: e2-micro
+    azure: Standard_F1als_v7
+
 
   medium:
     aws: t3.small
     gcp: e2-small
+    azure: Standard_F1als_v7
 
   large:
     aws: t3.medium
     gcp: e2-medium
+    azure: Standard_F1als_v7
+
 
 image_map:
     ubuntu_2404:
@@ -50,41 +58,46 @@ image_map:
         owner: "099720109477"
         name_pattern: "ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"
       gcp: "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64"
+      azure: "Canonical:ubuntu-24_04-lts:server:latest"
 
     ubuntu_2204:
       aws:
         owner: "099720109477"
         name_pattern: "ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"
       gcp: "projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts"
+      azure: "Canonical:ubuntu-22_04-lts:server:latest"
 
     debian_12:
       aws:
         owner: "136693071363"
         name_pattern: "debian-12-amd64-*"
       gcp: "projects/debian-cloud/global/images/family/debian-12"
+      azure: "Debian:debian-12-daily:12-gen2:0.20260514.2480"
 
     debian_13:
       aws:
         owner: "136693071363"
         name_pattern: "debian-13-amd64-*"
       gcp: "projects/debian-cloud/global/images/family/debian-13"
+      azure: "Debian:debian-13-daily:13-gen2:0.20260516.2480"
 
 network:
   name: coinops-network
   subnet_name: coinops-subnet
   cidr: 10.10.0.0/16
   subnet_cidr: 10.10.0.0/24 # Bastion public subnet
-  private_subnetwork_cidr: 10.10.10.0/24  # App and DB private subnet
+  private_subnetwork_cidr: 10.10.1.0/24  # App and DB private subnet
   gcp_auto_create_subnetworks: false
   aws_dns_support: true
   aws_dns_hostnames: true
-  second_public_subnet_cidr: 10.10.1.0/24 # ALB public subnet
+  second_public_subnet_cidr: 10.10.2.0/24 # ALB public subnet
   private_subnetwork_2_cidr: 10.10.11.0/24  #RDS private subnet
 
 
 
 instances:
   bastion:
+    cloud: azure
     size: small
     image: ubuntu_2404
     public: true
@@ -93,24 +106,26 @@ instances:
       - bastion
 
   db:
+    cloud: gcp
     size: small
     image: ubuntu_2404
     public: false
-    private_ip: 10.10.10.11
+    private_ip: 10.10.1.11
     tags:
       - db
   app-1:
+    cloud: azure
     size: small
     image: ubuntu_2404
     public: false
-    private_ip: 10.10.10.12
+    private_ip: 10.10.1.12
     tags:
       - app
   app-2:
     size: small
     image: ubuntu_2404
     public: false
-    private_ip: 10.10.10.13
+    private_ip: 10.10.1.13
     tags:
       - app
 

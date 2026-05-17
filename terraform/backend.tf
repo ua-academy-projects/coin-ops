@@ -16,5 +16,14 @@ terraform {
   }
 }
 
+# terraform {
+#   backend "azurerm" {
+#     resource_group_name = "devops-dev-rg"
+#     storage_account_name = "coinopsdevtfstate"
+#     container_name = "tfstate"
+#     key = "terraform/azure/state/default.tfstate"
+#   }
+# }
+
 #   terraform init -reconfigure
 # DESTROY BEFORE CHANGING BACKGROUND

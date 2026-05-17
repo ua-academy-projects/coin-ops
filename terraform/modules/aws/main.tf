@@ -1,5 +1,5 @@
 locals {
-  cloud = lookup(var.config, "cloud", "aws")
+  cloud = "aws"
 }
 
 # Register the public SSH key in AWS EC2 (VM) as a key pair named after the VM
@@ -64,7 +64,9 @@ module "firewall" {
 
 module "vm" {
   source   = "./vm"
-  for_each = lookup(var.config, "instances", {})
+
+  # if instances if empty - no vm to this cloud is created
+  for_each = var.instances
 
   key_name = aws_key_pair.this.key_name
 
