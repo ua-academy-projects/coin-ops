@@ -34,8 +34,8 @@ AZ_CONTAINER_NAME="tfstate"
 AZ_KEYVAULT_NAME="coin-ops-kv"
 
 REQUIRED_SECRETS=(
-  "ghrc-username"
-  "ghrc-token"
+  "ghcr-username"
+  "ghcr-token"
   "rabbitmq-password"
   "db-password"
 )
