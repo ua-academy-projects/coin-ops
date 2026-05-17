@@ -36,12 +36,12 @@
                 { "protocol": "icmp" }
             ],
             "source_cidrs": ["10.10.1.0/24"],
-            "target_role": "nat"
+            "target_role": "jump-host"
         },
         "allow-nat-admin-from-jump": {
             "protocols": [{ "protocol": "tcp", "ports": ["53725"] }],
             "source_role": "jump-host",
-            "target_role": "nat"
+            "target_role": "jump-host"
         },
         "allow-http-https-app-ui": {
             "protocols": [{ "protocol": "tcp", "ports": ["443"] }],

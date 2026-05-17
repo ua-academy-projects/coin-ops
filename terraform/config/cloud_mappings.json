@@ -13,8 +13,8 @@
             "large": "c7i-flex.large"
         },
         "azure": {
-            "micro": "Standard_B1s",
-            "small": "Standard_B2s",
+            "micro": "Standard_B2s_v2",
+            "small": "Standard_B2s_v2",
             "medium": "Standard_D2s_v5",
             "large": "Standard_D4s_v5"
         }
@@ -50,10 +50,10 @@
         },
         "azure": {
             "europe-central": {
-                "location": "germanywestcentral"
+                "location": "austriaeast"
             },
             "europe-west": {
-                "location": "francecentral"
+                "location": "austriaeast"
             }
         }
     },

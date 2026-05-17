@@ -21,6 +21,12 @@ resource "azurerm_virtual_network" "this" {
   address_space       = [var.vpc_cidr]
 }
 
+resource "time_sleep" "after_virtual_network" {
+  create_duration = "20s"
+
+  depends_on = [azurerm_virtual_network.this]
+}
+
 resource "azurerm_subnet" "this" {
   for_each             = local.subnets
   name                 = "${each.key}-subnet"
@@ -40,4 +46,12 @@ resource "azurerm_subnet" "this" {
       }
     }
   }
+
+  depends_on = [time_sleep.after_virtual_network]
+}
+
+resource "time_sleep" "after_subnets" {
+  create_duration = "20s"
+
+  depends_on = [azurerm_subnet.this]
 }

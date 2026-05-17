@@ -63,16 +63,19 @@ locals {
   private_default_route = lookup(local.routing, "private_default_route", {})
   egress_cidrs          = lookup(local.security, "egress_cidrs", ["0.0.0.0/0"])
 
-  gcp_instance_sizes   = try(local.mapping.instance_sizes.gcp, {})
-  aws_instance_sizes   = try(local.mapping.instance_sizes.aws, {})
-  azure_instance_sizes = try(local.mapping.instance_sizes.azure, {})
-  gcp_regions          = try(local.mapping.regions.gcp, {})
-  aws_regions          = try(local.mapping.regions.aws, {})
-  azure_regions        = try(local.mapping.regions.azure, {})
-  aws_zone_map         = try(local.aws_regions[local.region_profile].zones, {})
-  gcp_images           = try(local.mapping.images.gcp, {})
-  aws_images           = try(local.mapping.images.aws, {})
-  azure_images         = try(local.mapping.images.azure, {})
+  gcp_instance_sizes = try(local.mapping.instance_sizes.gcp, {})
+  aws_instance_sizes = try(local.mapping.instance_sizes.aws, {})
+  azure_instance_sizes = merge(
+    try(local.mapping.instance_sizes.azure, {}),
+    try(local.general.azure_instance_sizes, {})
+  )
+  gcp_regions   = try(local.mapping.regions.gcp, {})
+  aws_regions   = try(local.mapping.regions.aws, {})
+  azure_regions = try(local.mapping.regions.azure, {})
+  aws_zone_map  = try(local.aws_regions[local.region_profile].zones, {})
+  gcp_images    = try(local.mapping.images.gcp, {})
+  aws_images    = try(local.mapping.images.aws, {})
+  azure_images  = try(local.mapping.images.azure, {})
 
   ssh_public_key = fileexists(pathexpand(var.ssh_public_key_path)) ? file(pathexpand(var.ssh_public_key_path)) : ""
 
@@ -108,7 +111,10 @@ locals {
   gcp_nat_host_name = local.gcp_compute_enabled ? try([
     for name, cfg in local.gcp_instances_base : name
     if lookup(cfg, "role", "") == "nat"
-  ][0], "") : ""
+    ][0], try([
+      for name, cfg in local.gcp_instances_base : name
+      if lookup(cfg, "can_ip_forward", false)
+  ][0], "")) : ""
   aws_jump_host_name = local.aws_compute_enabled ? try([
     for name, cfg in local.aws_instances_base : name
     if lookup(cfg, "role", "") == "jump-host" && lookup(cfg, "has_public_ip", false)
@@ -116,7 +122,10 @@ locals {
   aws_nat_host_name = local.aws_compute_enabled ? try([
     for name, cfg in local.aws_instances_base : name
     if lookup(cfg, "role", "") == "nat"
-  ][0], "") : ""
+    ][0], try([
+      for name, cfg in local.aws_instances_base : name
+      if lookup(cfg, "can_ip_forward", false)
+  ][0], "")) : ""
   azure_jump_host_name = local.azure_compute_enabled ? try([
     for name, cfg in local.azure_instances_base : name
     if lookup(cfg, "role", "") == "jump-host" && lookup(cfg, "has_public_ip", false)
@@ -124,7 +133,10 @@ locals {
   azure_nat_host_name = local.azure_compute_enabled ? try([
     for name, cfg in local.azure_instances_base : name
     if lookup(cfg, "role", "") == "nat"
-  ][0], "") : ""
+    ][0], try([
+      for name, cfg in local.azure_instances_base : name
+      if lookup(cfg, "can_ip_forward", false)
+  ][0], "")) : ""
 
   gcp_has_nat_host   = local.gcp_nat_host_name != ""
   aws_has_nat_host   = local.aws_nat_host_name != ""
@@ -148,7 +160,7 @@ locals {
   image_profile         = try(local.general.image_profile, "debian-12")
   aws_region            = try(local.aws_regions[local.region_profile].region, try(local.general.aws_region, var.aws_region))
   gcp_region            = try(local.gcp_regions[local.region_profile].region, try(local.general.gcp_region, var.gcp_region))
-  azure_location        = try(local.azure_regions[local.region_profile].location, try(local.general.azure_location, var.azure_location))
+  azure_location        = trimspace(try(local.general.azure_location, "")) != "" ? trimspace(local.general.azure_location) : try(local.azure_regions[local.region_profile].location, var.azure_location)
   gcp_zone              = try(local.gcp_regions[local.region_profile].zone, "${local.gcp_region}-a")
   aws_zone              = try(local.aws_regions[local.region_profile].zone, "${local.aws_region}a")
 

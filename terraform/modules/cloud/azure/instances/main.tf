@@ -97,7 +97,7 @@ resource "azurerm_linux_virtual_machine" "vm" {
   name                            = "azure-${each.key}"
   resource_group_name             = var.resource_group_name
   location                        = var.location
-  size                            = local.sizes[each.value.instance_size]
+  size                            = try(each.value.azure_vm_size, "") != "" ? each.value.azure_vm_size : local.sizes[each.value.instance_size]
   admin_username                  = var.username
   network_interface_ids           = [azurerm_network_interface.vm[each.key].id]
   disable_password_authentication = true

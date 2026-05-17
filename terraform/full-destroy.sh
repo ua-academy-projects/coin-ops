@@ -1,23 +1,61 @@
 #!/bin/bash
 set -euo pipefail
 
-if [[ "${1:-}" != "--yes-really-destroy-stateful" ]]; then
+usage() {
   cat <<'EOF'
 Usage:
-  bash full-destroy.sh --yes-really-destroy-stateful [terraform destroy args...]
+  bash full-destroy.sh --yes-really-destroy-stateful [--cloud all|gcp|aws|azure] [terraform destroy args...]
 
-This script performs a deliberate full teardown of compute and protected
-stateful resources across all enabled clouds by:
+This script performs a deliberate teardown of compute and protected stateful
+resources by:
   1. copying the Terraform root into a temporary directory
-  2. removing GCP/AWS/Azure hard destroy protections in the temporary copy only
+  2. removing hard destroy protections in the temporary copy only
   3. running terraform destroy there against the same backend state
+
+By default, it destroys resources across all enabled clouds. Use `--cloud` to
+limit the destroy to a single cloud's Terraform modules.
 
 The checked-in Terraform files remain unchanged.
 EOF
+}
+
+if [[ "${1:-}" != "--yes-really-destroy-stateful" ]]; then
+  usage
   exit 1
 fi
 
 shift
+
+TARGET_CLOUD="all"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --cloud)
+      if [[ $# -lt 2 ]]; then
+        echo "--cloud requires one of: all, gcp, aws, azure" >&2
+        exit 1
+      fi
+      TARGET_CLOUD="$2"
+      shift 2
+      ;;
+    --cloud=*)
+      TARGET_CLOUD="${1#*=}"
+      shift
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+case "${TARGET_CLOUD}" in
+  all|gcp|aws|azure)
+    ;;
+  *)
+    echo "Unsupported --cloud value: ${TARGET_CLOUD}" >&2
+    usage
+    exit 1
+    ;;
+esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TERRAFORM_DIR="$SCRIPT_DIR"
@@ -33,7 +71,7 @@ mkdir -p "${TMP_TERRAFORM_DIR}"
 cp -a "${TERRAFORM_DIR}/." "${TMP_TERRAFORM_DIR}/"
 rm -rf "${TMP_TERRAFORM_DIR}/.terraform"
 
-python3 - <<'PY' "${TMP_TERRAFORM_DIR}"
+python3 - <<'PY' "${TMP_TERRAFORM_DIR}" "${TARGET_CLOUD}"
 import json
 import pathlib
 import re
@@ -41,6 +79,7 @@ import shutil
 import sys
 
 terraform_dir = pathlib.Path(sys.argv[1])
+target_cloud = sys.argv[2]
 
 clouds = json.loads((terraform_dir / "config" / "clouds.json").read_text(encoding="utf-8")).get("clouds", {})
 enabled_clouds = set(clouds.get("enabled", []))
@@ -138,14 +177,15 @@ module "azure_secrets" {
     if azurerm_refs:
         raise SystemExit("Azure provider references remain in full-destroy copy: " + ", ".join(azurerm_refs))
 
-files = [
-    terraform_dir / "modules" / "cloud" / "gcp" / "database" / "main.tf",
-    terraform_dir / "modules" / "cloud" / "gcp" / "secrets" / "main.tf",
-    terraform_dir / "modules" / "cloud" / "aws" / "database" / "main.tf",
-    terraform_dir / "modules" / "cloud" / "aws" / "secrets" / "main.tf",
-    terraform_dir / "modules" / "cloud" / "azure" / "database" / "main.tf",
-    terraform_dir / "modules" / "cloud" / "azure" / "secrets" / "main.tf",
-]
+clouds_to_unguard = ["gcp", "aws", "azure"] if target_cloud == "all" else [target_cloud]
+files = []
+for name in clouds_to_unguard:
+    files.extend(
+        [
+            terraform_dir / "modules" / "cloud" / name / "database" / "main.tf",
+            terraform_dir / "modules" / "cloud" / name / "secrets" / "main.tf",
+        ]
+    )
 
 lifecycle_pattern = re.compile(
     r"\n\s*lifecycle\s*\{\s*\n\s*prevent_destroy\s*=\s*true\s*\n\s*\}\s*\n",
@@ -167,9 +207,10 @@ cat <<EOF
 Prepared an isolated Terraform copy for full teardown:
   ${TMP_TERRAFORM_DIR}
 
-GCP, AWS, and Azure protected resources are unguarded only inside this temporary copy.
-AWS RDS final snapshots are disabled in the temporary copy to keep repeated lab
-teardowns deterministic.
+Target cloud scope: ${TARGET_CLOUD}
+Protected resources are unguarded only inside this temporary copy.
+AWS RDS final snapshots are disabled in the temporary copy when AWS is targeted
+to keep repeated lab teardowns deterministic.
 Running terraform destroy against the existing backend state now...
 EOF
 
@@ -212,6 +253,21 @@ disable_aws_rds_deletion_protection() {
     fi
 
     echo "Disabling deletion protection on ${identifier}..."
+    local describe_error=""
+    if ! describe_error="$(
+      aws rds describe-db-instances \
+        --db-instance-identifier "${identifier}" \
+        2>&1 >/dev/null
+    )"; then
+      if grep -q "DBInstanceNotFound" <<<"${describe_error}"; then
+        echo "DB instance ${identifier} was not found in AWS; skipping deletion protection disable."
+        continue
+      fi
+
+      echo "${describe_error}" >&2
+      return 1
+    fi
+
     aws rds modify-db-instance \
       --db-instance-identifier "${identifier}" \
       --no-deletion-protection \
@@ -222,5 +278,53 @@ disable_aws_rds_deletion_protection() {
   done
 }
 
-disable_aws_rds_deletion_protection
-terraform destroy "$@"
+build_destroy_command() {
+  local target_cloud="$1"
+  shift
+
+  local cmd=(terraform destroy)
+  if [[ "${target_cloud}" != "all" ]]; then
+    case "${target_cloud}" in
+      gcp)
+        cmd+=(
+          -target=module.gcp_nat_route
+          -target=module.gcp_instances
+          -target=module.gcp_firewall
+          -target=module.gcp_database
+          -target=module.gcp_secrets
+          -target=module.gcp_network
+        )
+        ;;
+      aws)
+        cmd+=(
+          -target=module.aws_nat_route
+          -target=module.aws_instances
+          -target=module.aws_security_groups
+          -target=module.aws_database
+          -target=module.aws_secrets
+          -target=module.aws_network
+        )
+        ;;
+      azure)
+        cmd+=(
+          -target=module.azure_nat_route
+          -target=module.azure_instances
+          -target=module.azure_security_groups
+          -target=module.azure_database
+          -target=module.azure_secrets
+          -target=module.azure_network
+        )
+        ;;
+    esac
+  fi
+
+  cmd+=("$@")
+  printf '%s\n' "${cmd[@]}"
+}
+
+if [[ "${TARGET_CLOUD}" == "all" || "${TARGET_CLOUD}" == "aws" ]]; then
+  disable_aws_rds_deletion_protection
+fi
+
+mapfile -t destroy_cmd < <(build_destroy_command "${TARGET_CLOUD}" "$@")
+"${destroy_cmd[@]}"

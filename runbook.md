@@ -311,6 +311,21 @@ bash full-destroy.sh --yes-really-destroy-stateful
 
 This helper creates a temporary Terraform copy, removes GCP/AWS/Azure hard destroy protections there, and runs `terraform destroy` against the same backend state. The checked-in Terraform files remain unchanged. Disabled clouds are stubbed inside the temporary copy, so an AWS/GCP-only destroy does not configure the Azure provider.
 
+To fully destroy only one cloud without touching the others, pass `--cloud`.
+For example, to remove only Azure-managed infrastructure, including protected
+database and secret resources:
+
+```bash
+cd /mnt/d/Internship/coin-ops-local/coin-ops
+source local/generated-gcp-env.sh
+cd terraform
+bash full-destroy.sh --yes-really-destroy-stateful --cloud azure
+```
+
+Supported values are `all`, `gcp`, `aws`, and `azure`. Single-cloud mode uses
+targeted module destroys inside the temporary copy instead of removing other
+clouds from `clouds.enabled`.
+
 If a full destroy is interrupted and the next Terraform run fails to acquire the
 S3 native lock, first verify that no Terraform process is still running. Then
 remove only the stale `.tflock` object for the active backend:

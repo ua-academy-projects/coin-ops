@@ -4,7 +4,7 @@
         "region_profile": "europe-central",
         "image_profile": "debian-12",
         "instance_size": "micro",
-        "disk_size": 10,
+        "disk_size": 30,
         "has_public_ip": false,
         "username": "coinops",
         "user_init_script": "scripts/user-init.sh.tpl",
