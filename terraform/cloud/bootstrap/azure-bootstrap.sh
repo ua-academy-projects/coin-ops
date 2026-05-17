@@ -126,6 +126,13 @@ for secret_name in "${REQUIRED_SECRETS[@]}"; do
   fi
 done
 
+echo ""
+echo "WARNING: Required secrets now exist in Key Vault, but may still contain the bootstrap placeholder."
+echo "WARNING: Open Azure Portal and replace placeholder values for:"
+for secret_name in "${REQUIRED_SECRETS[@]}"; do
+  echo " - $secret_name"
+done
+
 # ------------------------------------------------------------
 # 4) Create a service principal
 # ------------------------------------------------------------
