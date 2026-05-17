@@ -1,0 +1,26 @@
+---
+# Azure dynamic inventory - azure.azcollection.azure_rm plugin.
+# Credentials: use the generated ARM_* environment variables from bootstrap-azure.sh.
+
+plugin: azure.azcollection.azure_rm
+auth_source: auto
+include_vm_resource_groups:
+  - "{{ lookup('env', 'AZURE_RESOURCE_GROUP') | default('coin-ops-azure-rg', true) }}"
+plain_host_names: true
+
+hostnames:
+  - tags.inventoryName
+  - default
+
+keyed_groups:
+  - key: tags.role
+    prefix: role
+    separator: "_"
+  - key: "'azure'"
+    prefix: ""
+    separator: ""
+
+compose:
+  ansible_host: "(public_ipv4_addresses[0] | default('')) if tags.get('role') == 'jump-host' and (public_ipv4_addresses | default([]) | length > 0) else (private_ipv4_addresses[0] | default(''))"
+  ansible_port: "53725"
+  cloud: "'azure'"

@@ -8,6 +8,10 @@
   hosts: localhost
   connection: local
   gather_facts: no
+  pre_tasks:
+    - name: Resolve runtime configuration for provisioning validation
+      include_role:
+        name: runtime_config
   tasks:
     - name: Validate configured runtime backend
       assert:
@@ -18,9 +22,10 @@
     - name: Validate configured Secret Manager authentication path
       assert:
         that:
-          - secret_backend in ['gcp', 'aws']
+          - secret_backend in ['gcp', 'aws', 'azure']
           - secret_backend != 'gcp' or gcp_project | length > 0
           - secret_backend != 'aws' or aws_region | length > 0
+          - secret_backend != 'azure' or azure_key_vault_name | length > 0
         fail_msg: "Run the bootstrap for the configured secret backend and source the generated local env before running provision."
 
 - name: Common setup - all nodes

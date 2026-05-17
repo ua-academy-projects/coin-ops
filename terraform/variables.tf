@@ -16,6 +16,24 @@ variable "aws_region" {
   default     = "eu-north-1"
 }
 
+variable "azure_subscription_id" {
+  type        = string
+  description = "Fallback Azure subscription ID. The canonical value lives in terraform/config/clouds.json."
+  default     = ""
+}
+
+variable "azure_tenant_id" {
+  type        = string
+  description = "Fallback Azure tenant ID. The canonical value lives in terraform/config/clouds.json."
+  default     = ""
+}
+
+variable "azure_location" {
+  type        = string
+  description = "Fallback Azure location. The canonical region profile lives in terraform/config/general.json."
+  default     = "swedencentral"
+}
+
 variable "cloudflare_api_token" {
   type        = string
   description = "Cloudflare API Token with DNS:Edit permissions"

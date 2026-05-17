@@ -4,9 +4,13 @@
 
 repo_root: >-
   {{
-    (inventory_dir | dirname | dirname)
-    if (inventory_dir is defined)
-    else (playbook_dir | dirname)
+    lookup('env', 'COINOPS_REPO_ROOT')
+    if (lookup('env', 'COINOPS_REPO_ROOT') | length > 0)
+    else (
+      (playbook_dir | dirname)
+      if (playbook_dir is defined)
+      else (inventory_dir | dirname | dirname)
+    )
   }}
 deploy_defaults: "{{ (lookup('file', repo_root ~ '/ansible/vars/deploy-config.yml') | from_yaml) | default({}, true) }}"
 infra_config_dir: "{{ repo_root ~ '/terraform/config' }}"
@@ -43,10 +47,16 @@ infra_instances: "{{ infra_config.get('instances', {}) }}"
 infra_region_profile: "{{ infra_general.get('region_profile', 'europe-central') }}"
 infra_regions: "{{ infra_config.get('regions', {}) }}"
 infra_aws_region: "{{ infra_regions.get('aws', {}).get(infra_region_profile, {}).get('region', lookup('env', 'AWS_REGION') | default('eu-central-1', true)) }}"
+infra_azure_location: "{{ infra_regions.get('azure', {}).get(infra_region_profile, {}).get('location', lookup('env', 'TF_VAR_azure_location') | default('swedencentral', true)) }}"
 infra_secret_names: "{{ infra_secrets.get('names', {}) }}"
 json_deploy_config:
   gcp_project: "{{ infra_cloud_providers.get('gcp', {}).get('account', {}).get('project_id', '') }}"
   aws_region: "{{ infra_aws_region }}"
+  azure_subscription_id: "{{ infra_cloud_providers.get('azure', {}).get('account', {}).get('subscription_id', lookup('env', 'AZURE_SUBSCRIPTION_ID') | default('', true)) }}"
+  azure_tenant_id: "{{ infra_cloud_providers.get('azure', {}).get('account', {}).get('tenant_id', lookup('env', 'AZURE_TENANT_ID') | default('', true)) }}"
+  azure_resource_group_name: "{{ infra_cloud_providers.get('azure', {}).get('account', {}).get('resource_group_name', lookup('env', 'AZURE_RESOURCE_GROUP') | default('coin-ops-azure-rg', true)) }}"
+  azure_key_vault_name: "{{ infra_cloud_providers.get('azure', {}).get('account', {}).get('key_vault_name', lookup('env', 'AZURE_KEYVAULT_NAME') | default('', true)) }}"
+  azure_location: "{{ infra_azure_location }}"
   secret_backend: "{{ infra_clouds.get('secret_backend', infra_clouds.get('control_plane', 'gcp')) }}"
   db_secret_name: "{{ infra_secret_names.get('db', 'coinops-db-secrets') }}"
   app_secret_name: "{{ infra_secret_names.get('app', 'coinops-app-secrets') }}"
@@ -90,7 +100,7 @@ runtime_metadata: >-
     | ternary((runtime_metadata_text | from_json), {})
   }}
 
-my_cloud: "{{ cloud | default('gcp' if 'gcp' in groups else ('aws' if 'aws' in groups else '')) }}"
+my_cloud: "{{ cloud | default('gcp' if 'gcp' in groups else ('aws' if 'aws' in groups else ('azure' if 'azure' in groups else ''))) }}"
 cloud_runtime_metadata: "{{ runtime_metadata.get(my_cloud, {}) }}"
 backend_hosts_for_cloud: "{{ groups.get('role_app_backend', []) | intersect(groups.get(my_cloud, [])) }}"
 backend_host: >-
@@ -99,7 +109,16 @@ backend_host: >-
     if (backend_hosts_for_cloud | length > 0)
     else (groups['role_app_backend'][0] if ('role_app_backend' in groups and (groups['role_app_backend'] | length > 0)) else '')
   }}
-infra_instance_key: "{{ (my_cloud == 'aws') | ternary((inventory_hostname | regex_replace('^aws-', '')), inventory_hostname) }}"
+infra_instance_key: >-
+  {{
+    (inventory_hostname | regex_replace('^aws-', ''))
+    if my_cloud == 'aws'
+    else (
+      (inventory_hostname | regex_replace('^azure-', ''))
+      if my_cloud == 'azure'
+      else inventory_hostname
+    )
+  }}
 host_instance_config: "{{ infra_instances.get(infra_instance_key, {}) }}"
 host_image_profile: "{{ host_instance_config.get('image_profile', infra_general.get('image_profile', '')) }}"
 cloud_image_profiles: "{{ infra_images.get(my_cloud, {}) }}"
@@ -123,40 +142,25 @@ ansible_ssh_common_args: >-
   -F {{ repo_root ~ '/terraform/config/ssh_config' }}
   {{ '-o ProxyJump=coinops-' ~ my_cloud ~ '-jump-host' if 'role_jump_host' not in group_names else '' }}
 
-secret_backend: "{{ deploy_config.secret_backend | default(my_cloud, true) }}"
-gcp_project: "{{ deploy_config.gcp_project | default('', true) }}"
+secret_backend: "{{ lookup('env', 'COINOPS_SECRET_BACKEND') | default(local_generated_config.get('secret_backend', deploy_defaults.get('secret_backend', infra_clouds.get('secret_backend', infra_clouds.get('control_plane', 'gcp')))), true) }}"
+gcp_project: "{{ local_generated_config.get('gcp_project', deploy_defaults.get('gcp_project', infra_cloud_providers.get('gcp', {}).get('account', {}).get('project_id', ''))) }}"
 gcp_service_account_file: "{{ repo_root ~ '/terraform/sa-key.json' }}"
-aws_region: "{{ lookup('env', 'AWS_REGION') | default(deploy_config.aws_region, true) }}"
-db_secret_name: "{{ deploy_config.db_secret_name | default('coinops-db-secrets', true) }}"
-app_secret_name: "{{ deploy_config.app_secret_name | default('coinops-app-secrets', true) }}"
+aws_region: "{{ lookup('env', 'AWS_REGION') | default(local_generated_config.get('aws_region', deploy_defaults.get('aws_region', infra_aws_region)), true) }}"
+azure_subscription_id: "{{ lookup('env', 'AZURE_SUBSCRIPTION_ID') | default(local_generated_config.get('azure_subscription_id', deploy_defaults.get('azure_subscription_id', infra_cloud_providers.get('azure', {}).get('account', {}).get('subscription_id', ''))), true) }}"
+azure_tenant_id: "{{ lookup('env', 'AZURE_TENANT_ID') | default(local_generated_config.get('azure_tenant_id', deploy_defaults.get('azure_tenant_id', infra_cloud_providers.get('azure', {}).get('account', {}).get('tenant_id', ''))), true) }}"
+azure_resource_group_name: "{{ lookup('env', 'AZURE_RESOURCE_GROUP') | default(local_generated_config.get('azure_resource_group_name', deploy_defaults.get('azure_resource_group_name', infra_cloud_providers.get('azure', {}).get('account', {}).get('resource_group_name', 'coin-ops-azure-rg'))), true) }}"
+azure_key_vault_name: "{{ lookup('env', 'AZURE_KEYVAULT_NAME') | default(local_generated_config.get('azure_key_vault_name', deploy_defaults.get('azure_key_vault_name', infra_cloud_providers.get('azure', {}).get('account', {}).get('key_vault_name', ''))), true) }}"
+azure_key_vault_url: "{{ lookup('env', 'AZURE_KEYVAULT_URL') | default(('https://' ~ azure_key_vault_name ~ '.vault.azure.net/') if (azure_key_vault_name | length > 0) else '', true) }}"
+db_secret_name: "{{ local_generated_config.get('db_secret_name', deploy_defaults.get('db_secret_name', infra_secret_names.get('db', 'coinops-db-secrets'))) }}"
+app_secret_name: "{{ local_generated_config.get('app_secret_name', deploy_defaults.get('app_secret_name', infra_secret_names.get('app', 'coinops-app-secrets'))) }}"
 
-db_secrets_raw: >-
-  {{
-    lookup('google.cloud.gcp_secret_manager', key=db_secret_name, project=gcp_project, auth_kind='serviceaccount', service_account_file=gcp_service_account_file)
-    if secret_backend == 'gcp' and (gcp_project | length > 0)
-    else (
-      lookup('amazon.aws.aws_secret', db_secret_name, region=aws_region)
-      if secret_backend == 'aws'
-      else '{}'
-    )
-  }}
-app_secrets_raw: >-
-  {{
-    lookup('google.cloud.gcp_secret_manager', key=app_secret_name, project=gcp_project, auth_kind='serviceaccount', service_account_file=gcp_service_account_file)
-    if secret_backend == 'gcp' and (gcp_project | length > 0)
-    else (
-      lookup('amazon.aws.aws_secret', app_secret_name, region=aws_region)
-      if secret_backend == 'aws'
-      else '{}'
-    )
-  }}
-db_secrets: "{{ db_secrets_raw if (db_secrets_raw is mapping) else (db_secrets_raw | from_json) }}"
-app_secrets: "{{ app_secrets_raw if (app_secrets_raw is mapping) else (app_secrets_raw | from_json) }}"
+db_secrets: {}
+app_secrets: {}
 
-db_password: "{{ db_secrets.DB_PASSWORD | default('', true) }}"
-rabbitmq_password: "{{ db_secrets.RABBITMQ_PASSWORD | default('', true) }}"
-registry_token: "{{ app_secrets.GHCR_TOKEN | default('', true) }}"
-cloudflare_api_token: "{{ app_secrets.CLOUDFLARE_API_TOKEN | default('', true) }}"
+db_password: ""
+rabbitmq_password: ""
+registry_token: ""
+cloudflare_api_token: ""
 
 rabbitmq_user: cognitor
 database_metadata: "{{ cloud_runtime_metadata.get('database', {}) }}"

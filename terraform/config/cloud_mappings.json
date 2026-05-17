@@ -11,6 +11,12 @@
             "small": "t3.small",
             "medium": "m7i-flex.large",
             "large": "c7i-flex.large"
+        },
+        "azure": {
+            "micro": "Standard_B1s",
+            "small": "Standard_B2s",
+            "medium": "Standard_D2s_v5",
+            "large": "Standard_D4s_v5"
         }
     },
     "regions": {
@@ -41,6 +47,14 @@
                     "secondary": "eu-west-1b"
                 }
             }
+        },
+        "azure": {
+            "europe-central": {
+                "location": "germanywestcentral"
+            },
+            "europe-west": {
+                "location": "francecentral"
+            }
         }
     },
     "images": {
@@ -60,6 +74,20 @@
             "coinops-app-host": {
                 "ami_filter": "debian-12-amd64-*",
                 "ami_owner": "136693071363"
+            }
+        },
+        "azure": {
+            "debian-12": {
+                "publisher": "Debian",
+                "offer": "debian-12",
+                "sku": "12-gen2",
+                "version": "latest"
+            },
+            "coinops-app-host": {
+                "publisher": "Debian",
+                "offer": "debian-12",
+                "sku": "12-gen2",
+                "version": "latest"
             }
         }
     }

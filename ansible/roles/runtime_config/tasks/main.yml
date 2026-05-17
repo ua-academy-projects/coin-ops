@@ -1,0 +1,76 @@
+---
+- name: Materialize cloud secret backend selection
+  set_fact:
+    secret_backend: "{{ lookup('env', 'COINOPS_SECRET_BACKEND') | default(local_generated_config.get('secret_backend', deploy_defaults.get('secret_backend', infra_clouds.get('secret_backend', infra_clouds.get('control_plane', 'gcp')))), true) }}"
+    gcp_project: "{{ local_generated_config.get('gcp_project', deploy_defaults.get('gcp_project', infra_cloud_providers.get('gcp', {}).get('account', {}).get('project_id', ''))) }}"
+    aws_region: "{{ lookup('env', 'AWS_REGION') | default(local_generated_config.get('aws_region', deploy_defaults.get('aws_region', infra_aws_region)), true) }}"
+    db_secret_name: "{{ local_generated_config.get('db_secret_name', deploy_defaults.get('db_secret_name', infra_secret_names.get('db', 'coinops-db-secrets'))) }}"
+    app_secret_name: "{{ local_generated_config.get('app_secret_name', deploy_defaults.get('app_secret_name', infra_secret_names.get('app', 'coinops-app-secrets'))) }}"
+
+- name: Materialize Azure secret backend settings
+  set_fact:
+    azure_subscription_id: "{{ lookup('env', 'AZURE_SUBSCRIPTION_ID') | default(local_generated_config.get('azure_subscription_id', deploy_defaults.get('azure_subscription_id', infra_cloud_providers.get('azure', {}).get('account', {}).get('subscription_id', ''))), true) }}"
+    azure_tenant_id: "{{ lookup('env', 'AZURE_TENANT_ID') | default(local_generated_config.get('azure_tenant_id', deploy_defaults.get('azure_tenant_id', infra_cloud_providers.get('azure', {}).get('account', {}).get('tenant_id', ''))), true) }}"
+    azure_resource_group_name: "{{ lookup('env', 'AZURE_RESOURCE_GROUP') | default(local_generated_config.get('azure_resource_group_name', deploy_defaults.get('azure_resource_group_name', infra_cloud_providers.get('azure', {}).get('account', {}).get('resource_group_name', 'coin-ops-azure-rg'))), true) }}"
+    azure_key_vault_name: "{{ lookup('env', 'AZURE_KEYVAULT_NAME') | default(local_generated_config.get('azure_key_vault_name', deploy_defaults.get('azure_key_vault_name', infra_cloud_providers.get('azure', {}).get('account', {}).get('key_vault_name', ''))), true) }}"
+
+- name: Materialize Azure Key Vault URL
+  set_fact:
+    azure_key_vault_url: "{{ lookup('env', 'AZURE_KEYVAULT_URL') | default(('https://' ~ azure_key_vault_name ~ '.vault.azure.net/') if (azure_key_vault_name | length > 0) else '', true) }}"
+
+- name: Show resolved secret backend selector
+  debug:
+    msg:
+      secret_backend: "{{ secret_backend }}"
+      aws_region: "{{ aws_region }}"
+      gcp_project_set: "{{ gcp_project | length > 0 }}"
+      azure_key_vault_url_set: "{{ azure_key_vault_url | length > 0 }}"
+      db_secret_name: "{{ db_secret_name }}"
+      app_secret_name: "{{ app_secret_name }}"
+  when: lookup('env', 'DEBUG_SECRET_LOOKUP') | default('false', true) | bool
+
+- name: Materialize runtime secret payloads
+  set_fact:
+    db_secrets_raw: >-
+      {{
+        lookup('google.cloud.gcp_secret_manager', key=db_secret_name, project=gcp_project, auth_kind='serviceaccount', service_account_file=gcp_service_account_file)
+        if secret_backend == 'gcp' and (gcp_project | length > 0)
+        else (
+          lookup('amazon.aws.aws_secret', db_secret_name, region=aws_region)
+          if secret_backend == 'aws'
+          else (
+            lookup('azure.azcollection.azure_keyvault_secret', db_secret_name, vault_url=azure_key_vault_url)
+            if secret_backend == 'azure' and (azure_key_vault_url | length > 0)
+            else '{}'
+          )
+        )
+      }}
+    app_secrets_raw: >-
+      {{
+        lookup('google.cloud.gcp_secret_manager', key=app_secret_name, project=gcp_project, auth_kind='serviceaccount', service_account_file=gcp_service_account_file)
+        if secret_backend == 'gcp' and (gcp_project | length > 0)
+        else (
+          lookup('amazon.aws.aws_secret', app_secret_name, region=aws_region)
+          if secret_backend == 'aws'
+          else (
+            lookup('azure.azcollection.azure_keyvault_secret', app_secret_name, vault_url=azure_key_vault_url)
+            if secret_backend == 'azure' and (azure_key_vault_url | length > 0)
+            else '{}'
+          )
+        )
+      }}
+  no_log: "{{ not (lookup('env', 'DEBUG_SECRET_LOOKUP') | default('false', true) | bool) }}"
+
+- name: Materialize runtime secret maps
+  set_fact:
+    db_secrets: "{{ db_secrets_raw if (db_secrets_raw is mapping) else (db_secrets_raw | from_json) }}"
+    app_secrets: "{{ app_secrets_raw if (app_secrets_raw is mapping) else (app_secrets_raw | from_json) }}"
+  no_log: true
+
+- name: Materialize common secret values
+  set_fact:
+    db_password: "{{ db_secrets.DB_PASSWORD | default('', true) }}"
+    rabbitmq_password: "{{ db_secrets.RABBITMQ_PASSWORD | default('', true) }}"
+    registry_token: "{{ app_secrets.GHCR_TOKEN | default('', true) }}"
+    cloudflare_api_token: "{{ app_secrets.CLOUDFLARE_API_TOKEN | default('', true) }}"
+  no_log: true

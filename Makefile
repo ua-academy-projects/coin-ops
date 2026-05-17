@@ -17,7 +17,7 @@ ANSIBLE_CMD = $(ENV_PREFIX) ANSIBLE_CONFIG="$(REPO_ROOT)/ansible.cfg"
 
 .PHONY: help \
 	local-up local-down local-logs local-ps local-restart local-config \
-	tf-plan tf-apply tf-destroy-compute tf-full-destroy \
+	tf-check-backend tf-plan tf-apply tf-destroy-compute tf-full-destroy \
 	inventory-graph inventory-host ssh-host \
 	provision deploy
 
@@ -31,6 +31,7 @@ help:
 	@echo "  make local-config            - Render local docker compose config"
 	@echo ""
 	@echo "Terraform / infrastructure:"
+	@echo "  make tf-check-backend        - Verify backend.active.tf matches clouds.control_plane"
 	@echo "  make tf-plan                 - Source generated env and run terraform plan"
 	@echo "  make tf-apply                - Source generated env and run terraform apply"
 	@echo "  make tf-destroy-compute      - Destroy only compute/runtime artifacts"
@@ -71,18 +72,23 @@ local-restart:
 local-config:
 	$(COMPOSE) config
 
+tf-check-backend:
+	cd "$(TF_DIR)" && bash check-backend.sh
+
 tf-plan:
-	$(ENV_PREFIX) cd "$(TF_DIR)" && terraform plan
+	$(ENV_PREFIX) cd "$(TF_DIR)" && bash check-backend.sh && terraform plan
 
 tf-apply:
-	$(ENV_PREFIX) cd "$(TF_DIR)" && terraform apply $(TF_APPLY_ARGS)
+	$(ENV_PREFIX) cd "$(TF_DIR)" && bash check-backend.sh && terraform apply $(TF_APPLY_ARGS)
 
 tf-destroy-compute:
-	$(ENV_PREFIX) cd "$(TF_DIR)" && terraform destroy \
+	$(ENV_PREFIX) cd "$(TF_DIR)" && bash check-backend.sh && terraform destroy \
 		-target=module.gcp_nat_route \
 		-target=module.gcp_instances \
 		-target=module.aws_instances \
 		-target=module.aws_nat_route \
+		-target=module.azure_instances \
+		-target=module.azure_nat_route \
 		-target=local_file.hosts \
 		-target=local_file.ssh_config \
 		-target=local_file.ansible_runtime \
@@ -90,7 +96,7 @@ tf-destroy-compute:
 		$(TF_DESTROY_ARGS)
 
 tf-full-destroy:
-	$(ENV_PREFIX) cd "$(TF_DIR)" && bash full-destroy.sh --yes-really-destroy-stateful $(TF_DESTROY_ARGS)
+	$(ENV_PREFIX) cd "$(TF_DIR)" && bash check-backend.sh && bash full-destroy.sh --yes-really-destroy-stateful $(TF_DESTROY_ARGS)
 
 inventory-graph:
 	$(ANSIBLE_CMD) ansible-inventory -i "$(INVENTORY)" --graph

@@ -27,7 +27,7 @@ module "aws_security_groups" {
 }
 
 module "aws_instances" {
-  count               = local.aws_enabled ? 1 : 0
+  count               = local.aws_compute_enabled ? 1 : 0
   source              = "./modules/cloud/aws/instances"
   instances           = local.aws_instances_cfg
   defaults            = local.general
@@ -43,7 +43,7 @@ module "aws_instances" {
 }
 
 module "aws_nat_route" {
-  count                    = local.aws_enabled && local.aws_has_nat_host ? 1 : 0
+  count                    = local.aws_compute_enabled && local.aws_has_nat_host ? 1 : 0
   source                   = "./modules/cloud/aws/nat_route"
   private_route_table_id   = module.aws_network[0].private_route_table_id
   nat_network_interface_id = module.aws_instances[0].instance_primary_network_interface_ids[local.aws_nat_host_name]

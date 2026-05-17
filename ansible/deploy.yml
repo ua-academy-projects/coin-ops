@@ -18,15 +18,28 @@
     - name: Validate configured Secret Manager authentication path
       assert:
         that:
-          - secret_backend in ['gcp', 'aws']
+          - secret_backend in ['gcp', 'aws', 'azure']
           - secret_backend != 'gcp' or gcp_project | length > 0
           - secret_backend != 'aws' or aws_region | length > 0
+          - secret_backend != 'azure' or azure_key_vault_name | length > 0
         fail_msg: "Run the bootstrap for the configured secret backend and source the generated local env before running deploy."
 
 - name: Authenticate Docker registry on workload nodes
   hosts: role_app_ui:role_app_backend
   become: yes
+  pre_tasks:
+    - name: Resolve runtime configuration for deploy
+      include_role:
+        name: runtime_config
   tasks:
+    - name: Validate configured registry credentials before login
+      assert:
+        that:
+          - registry_username | length > 0
+          - registry_token | length > 0
+        fail_msg: "Registry credentials are incomplete. Check {{ app_secret_name }} in the configured secret backend ({{ secret_backend }}) and ensure GHCR_TOKEN is populated."
+      when: image_registry_host == 'ghcr.io'
+
     - name: Log in to configured container registry
       community.docker.docker_login:
         registry_url: "{{ image_registry_host }}"
@@ -46,12 +59,20 @@
 - name: Deploy History Service (app-2)
   hosts: "{{ target_backend_group | default('role_app_backend') }}"
   become: yes
+  pre_tasks:
+    - name: Resolve runtime configuration for history
+      include_role:
+        name: runtime_config
   roles:
     - history
 
 - name: Deploy Proxy Service (app-2)
   hosts: "{{ target_backend_group | default('role_app_backend') }}"
   become: yes
+  pre_tasks:
+    - name: Resolve runtime configuration for proxy
+      include_role:
+        name: runtime_config
   roles:
     - proxy
 
@@ -64,5 +85,9 @@
 - name: Deploy Web UI (app-1)
   hosts: "{{ target_ui_group | default('role_app_ui') }}"
   become: yes
+  pre_tasks:
+    - name: Resolve runtime configuration for UI
+      include_role:
+        name: runtime_config
   roles:
     - ui

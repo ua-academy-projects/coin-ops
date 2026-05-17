@@ -8,7 +8,7 @@ resource "terraform_data" "backend_active_guard" {
   lifecycle {
     precondition {
       condition     = local.backend_active_present
-      error_message = "Missing terraform/backend.active.tf. Run terraform/bootstrap-gcp.sh or terraform/bootstrap-aws.sh before terraform plan/apply so the selected control-plane backend is explicit."
+      error_message = "Missing terraform/backend.active.tf. Run terraform/bootstrap-gcp.sh, terraform/bootstrap-aws.sh, or terraform/bootstrap-azure.sh before terraform plan/apply so the selected control-plane backend is explicit."
     }
   }
 }

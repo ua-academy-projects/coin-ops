@@ -1,9 +1,9 @@
 {
     "clouds": {
-        "control_plane": "aws",
-        "enabled": ["aws"],
-        "default_instance_clouds": ["aws"],
-        "secret_backend": "aws",
+        "control_plane": "gcp",
+        "enabled": ["gcp", "aws", "azure"],
+        "default_instance_clouds": ["azure"],
+        "secret_backend": "azure",
         "providers": {
             "gcp": {
                 "account": {
@@ -22,6 +22,21 @@
                     "kind": "iam_user",
                     "name": "bootstrap-terraform-user"
                 }
+            },
+            "azure": {
+                "account": {
+                    "subscription_id": "0e972cef-0193-41c1-ac2c-4b355e762b5c",
+                    "tenant_id": "7631cd62-5187-4e15-8b8e-ef653e366e7a",
+                    "resource_group_name": "coin-ops-azure-rg",
+                    "state_resource_group_name": "coin-ops-tfstate-rg",
+                    "storage_account_name": "coinopstfstate",
+                    "storage_container_name": "tfstate",
+                    "key_vault_name": "coinops-hrenchevskyi-kv"
+                },
+                "terraform_identity": {
+                    "kind": "service_principal",
+                    "name": "coin-ops-terraform-sp"
+                }
             }
         },
         "backends": {
@@ -31,6 +46,12 @@
             },
             "aws": {
                 "bucket_prefix": "coinops-terraform-state",
+                "key": "infra/state/terraform.tfstate"
+            },
+            "azure": {
+                "resource_group_name": "coin-ops-tfstate-rg",
+                "storage_account_name": "coinopstfstate",
+                "container_name": "tfstate",
                 "key": "infra/state/terraform.tfstate"
             }
         }

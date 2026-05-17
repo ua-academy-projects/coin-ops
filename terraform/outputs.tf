@@ -8,6 +8,11 @@ output "aws_instance_ips" {
   value       = try(module.aws_instances[0].instance_ips, {})
 }
 
+output "azure_instance_ips" {
+  description = "Azure instance IP addresses"
+  value       = try(module.azure_instances[0].instance_ips, {})
+}
+
 output "hosts_file" {
   description = "Path to the generated hosts.json artifact for operator/debugging use"
   value       = local_file.hosts.filename
@@ -39,6 +44,13 @@ output "database_endpoints" {
       name    = local.db_name
       user    = local.db_username
       managed = try(module.aws_database[0].address, "") != ""
+    } : null
+    azure = local.azure_enabled ? {
+      host    = try(module.azure_database[0].fqdn, "")
+      port    = try(module.azure_database[0].port, local.db_port)
+      name    = local.db_name
+      user    = local.db_username
+      managed = try(module.azure_database[0].fqdn, "") != ""
     } : null
   }
 }

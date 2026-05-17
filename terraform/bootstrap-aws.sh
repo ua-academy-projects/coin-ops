@@ -186,6 +186,7 @@ export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
 export TF_VAR_aws_region="${REGION}"
 export AWS_REGION="\${TF_VAR_aws_region}"
 export ANSIBLE_CONFIG="${REPO_ROOT}/ansible.cfg"
+export COINOPS_REPO_ROOT="${REPO_ROOT}"
 export SSH_KEY_PATH="\${HOME}/.ssh/ssh-key-coin-ops"
 EOF
 chmod 600 "$GENERATED_AWS_ENV_PATH"

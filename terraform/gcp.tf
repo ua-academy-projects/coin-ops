@@ -28,7 +28,7 @@ module "gcp_firewall" {
 }
 
 module "gcp_instances" {
-  count               = local.gcp_enabled ? 1 : 0
+  count               = local.gcp_compute_enabled ? 1 : 0
   source              = "./modules/cloud/gcp/instances"
   instances           = local.gcp_instances_cfg
   defaults            = local.general
@@ -46,7 +46,7 @@ module "gcp_instances" {
 }
 
 module "gcp_nat_route" {
-  count            = local.gcp_enabled && local.gcp_has_nat_host ? 1 : 0
+  count            = local.gcp_compute_enabled && local.gcp_has_nat_host ? 1 : 0
   source           = "./modules/cloud/gcp/nat_route"
   name             = local.nat_route_name
   network_id       = module.gcp_network[0].network_id

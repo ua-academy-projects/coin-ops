@@ -5,7 +5,7 @@ resource "local_file" "hosts" {
       gcp = {
         ssh_user    = local.username
         ssh_port    = local.ssh_port
-        instances   = try(module.gcp_instances[0].instance_ips, {})
+        instances   = local.gcp_compute_enabled ? try(module.gcp_instances[0].instance_ips, {}) : {}
         database_ip = try(module.gcp_database[0].private_ip, "")
         database = {
           host    = try(module.gcp_database[0].private_ip, "")
@@ -20,7 +20,7 @@ resource "local_file" "hosts" {
       aws = {
         ssh_user    = local.username
         ssh_port    = local.ssh_port
-        instances   = try(module.aws_instances[0].instance_ips, {})
+        instances   = local.aws_compute_enabled ? try(module.aws_instances[0].instance_ips, {}) : {}
         database_ip = try(module.aws_database[0].address, "")
         database = {
           host    = try(module.aws_database[0].address, "")
@@ -30,6 +30,21 @@ resource "local_file" "hosts" {
           managed = try(module.aws_database[0].address, "") != ""
         }
       }
+    } : {},
+    local.azure_enabled ? {
+      azure = {
+        ssh_user    = local.username
+        ssh_port    = local.ssh_port
+        instances   = local.azure_compute_enabled ? try(module.azure_instances[0].instance_ips, {}) : {}
+        database_ip = try(module.azure_database[0].fqdn, "")
+        database = {
+          host    = try(module.azure_database[0].fqdn, "")
+          port    = try(module.azure_database[0].port, local.db_port)
+          name    = local.db_name
+          user    = local.db_username
+          managed = try(module.azure_database[0].fqdn, "") != ""
+        }
+      }
     } : {}
   ))
 }
@@ -37,7 +52,7 @@ resource "local_file" "hosts" {
 resource "local_file" "ssh_config" {
   filename = "${path.module}/config/ssh_config"
   content = trimspace(join("\n\n", concat(
-    local.gcp_enabled ? [
+    local.gcp_compute_enabled ? [
       for name, inst in local.gcp_hosts : trimspace(<<-EOT
         Host coinops-gcp-${name}
           HostName ${inst.role == "jump-host" ? inst.public_ip : inst.private_ip}
@@ -56,13 +71,32 @@ resource "local_file" "ssh_config" {
       EOT
       )
     ] : [],
-    local.aws_enabled ? [
+    local.aws_compute_enabled ? [
       for name, inst in local.aws_hosts : trimspace(<<-EOT
         Host coinops-aws-${name}
           HostName ${inst.role == "jump-host" ? inst.public_ip : inst.private_ip}
           User ${local.username}
           Port ${local.ssh_port}
           ${inst.role != "jump-host" && local.aws_jump_host_name != "" ? "ProxyJump coinops-aws-${local.aws_jump_host_name}" : ""}
+          IdentityFile ${pathexpand(replace(var.ssh_public_key_path, ".pub", ""))}
+          IdentitiesOnly yes
+          ServerAliveInterval 15
+          ServerAliveCountMax 4
+          ConnectionAttempts 3
+          ConnectTimeout 20
+          ControlMaster no
+          StrictHostKeyChecking no
+          UserKnownHostsFile /dev/null
+      EOT
+      )
+    ] : [],
+    local.azure_compute_enabled ? [
+      for name, inst in local.azure_hosts : trimspace(<<-EOT
+        Host coinops-azure-${name}
+          HostName ${inst.role == "jump-host" ? inst.public_ip : inst.private_ip}
+          User ${local.username}
+          Port ${local.ssh_port}
+          ${inst.role != "jump-host" && local.azure_jump_host_name != "" ? "ProxyJump coinops-azure-${local.azure_jump_host_name}" : ""}
           IdentityFile ${pathexpand(replace(var.ssh_public_key_path, ".pub", ""))}
           IdentitiesOnly yes
           ServerAliveInterval 15
@@ -104,6 +138,19 @@ resource "local_file" "ansible_runtime" {
           name    = local.db_name
           user    = local.db_username
           managed = try(module.aws_database[0].address, "") != ""
+        }
+      }
+    } : {},
+    local.azure_enabled ? {
+      azure = {
+        database_ip    = try(module.azure_database[0].fqdn, "")
+        use_managed_db = try(module.azure_database[0].fqdn, "") != ""
+        database = {
+          host    = try(module.azure_database[0].fqdn, "")
+          port    = try(module.azure_database[0].port, local.db_port)
+          name    = local.db_name
+          user    = local.db_username
+          managed = try(module.azure_database[0].fqdn, "") != ""
         }
       }
     } : {}

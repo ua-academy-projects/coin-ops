@@ -72,6 +72,7 @@ runtime/__pycache__
 local/generated-env.sh
 local/generated-gcp-env.sh
 local/generated-aws-env.sh
+local/generated-azure-env.sh
 packer/**/*.pkrvars.hcl
 packer/**/*.manifest.json
 packer/packer_cache/
