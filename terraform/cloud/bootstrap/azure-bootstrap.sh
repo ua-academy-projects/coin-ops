@@ -88,6 +88,22 @@ else
 fi
 
 # ------------------------------------------------------------
+# 2) Create Key Vault
+# ------------------------------------------------------------
+echo ""
+echo "==> Step 2: Key Vault"
+
+if az keyvault show --name "$AZ_KEYVAULT_NAME" --resource-group "$AZ_GROUP_NAME" &>/dev/null; then
+  echo "Key Vault already exists: $AZ_KEYVAULT_NAME"
+else
+  az keyvault create \
+    --name "$AZ_KEYVAULT_NAME" \
+    --resource-group "$AZ_GROUP_NAME" \
+    --location "$AZ_GROUP_LOCATION"
+
+  echo "Key Vault created: $AZ_KEYVAULT_NAME"
+fi
+
 # 2) Create a service principal
 # ------------------------------------------------------------
 echo ""
