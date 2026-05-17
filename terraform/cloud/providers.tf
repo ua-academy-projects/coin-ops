@@ -10,6 +10,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "6.44.0"
     }
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "=4.1.0"
+    }
     local = {
       source  = "hashicorp/local"
       version = "2.5.3"
@@ -20,3 +24,5 @@ terraform {
 provider "google" {}
 
 provider "aws" {}
+
+provider "azurerm" { features {} }

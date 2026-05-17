@@ -91,3 +91,6 @@ module "aws_instances" {
   security_group_ids = module.aws_security[0].security_group_ids
   workloads          = var.workloads
 }
+
+
+# azure

@@ -7,8 +7,8 @@ variable "cloud" {
   type = string
 
   validation {
-    condition     = contains(["gcp", "aws"], var.cloud)
-    error_message = "Cloud must be either \"gcp\" or \"aws\"."
+    condition     = contains(["gcp", "aws", "azure"], var.cloud)
+    error_message = "Cloud must be either \"gcp\", \"azure\" or \"aws\"."
   }
 }
 
