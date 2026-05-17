@@ -1,89 +1,145 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude when working in this repository.
+
+## Branch Context
+`dev-penina-cloud` — personal cloud deployment branch off `dev`.
+Owner: Marta Penina (@MartaPenina)
+Cloud: AWS (primary), GCP (in progress), Azure (planned)
+Runtime: `external` (RabbitMQ + Redis)
 
 ## Architecture
 
-Three services across three Hyper-V VMs on an internal switch (172.31.0.0/20):
+| VM | Role | Services | IP type |
+|----|------|---------|---------|
+| jump-host | SSH gateway | none | public |
+| node-01 | History + Queue | RabbitMQ, history-consumer, history-api | private |
+| node-02 | Proxy + Cache | Go proxy, Redis | private |
+| node-03 | Frontend | nginx, React SPA | public |
+| AWS RDS | Database | PostgreSQL (managed) | private endpoint |
 
-| VM | IP | Service |
-|----|-----|---------|
-| node-01 | 172.31.1.10 | History consumer + FastAPI + PostgreSQL + RabbitMQ |
-| node-02 | 172.31.1.11 | Go proxy + Redis |
-| node-03 | 172.31.1.12 | React SPA + nginx |
+SSH access: always through jump-host on port 9922 as marta_ops.
 
-**Data flow:** Browser → nginx (node-03:80) → Go proxy (node-02:8080) → Polymarket/CoinGecko/NBU APIs → publishes to RabbitMQ → Python consumer (node-01) inserts into PostgreSQL → History API (node-01:8000) serves historical data back to browser.
+## Data Flow
 
-**Proxy** (`proxy/main.go`) — stateless Go service. Fetches 20 live Polymarket markets, whale leaderboard, and BTC/ETH/UAH prices. Caches whales (5 min) and prices (60s). Publishes market and price events to RabbitMQ. Stores session state in Redis (non-critical; 503 if Redis unavailable).
+```
+Browser
+  → ALB (AWS Load Balancer)
+  → nginx on node-03:80
+  → /api/ → Go proxy on node-02:8080
+      → checks Redis cache (localhost:6379)
+      → if miss: fetches CoinGecko + NBU APIs
+      → publishes to RabbitMQ on node-01:5672
+      → returns data to browser
+  → /history-api/ → History API on node-01:8000
+      → reads from AWS RDS PostgreSQL
+      → returns historical records to browser
 
-**History** (`history/`) — two Python processes sharing the same codebase:
-- `consumer.py` — pika RabbitMQ consumer, routes by `type` field: market events → `market_snapshots`, price events → `price_snapshots`. Idempotent writes via `ON CONFLICT DO NOTHING`.
-- `main.py` — FastAPI server on port 8000 with endpoints: `/history`, `/history/{slug}`, `/prices/history/{coin}`, `/health`.
-
-**UI** (`ui-react/`) — React + Vite + Recharts SPA. Service URLs come from Vite env vars (`VITE_PROXY_URL`, `VITE_HISTORY_URL`) written by Ansible at build time.
-
-## Commands
-
-### Proxy (Go)
-```bash
-cd proxy
-make build    # cross-compile → proxy-linux (GOOS=linux GOARCH=amd64)
-make run      # local run
-make tidy     # go mod tidy
-go test ./... # fast unit tests (no Docker/Redis/RabbitMQ/PostgreSQL required)
+Background:
+  RabbitMQ → history-consumer → AWS RDS PostgreSQL
 ```
 
-### UI (React)
+## Infrastructure Stack
+
+### Terraform (`terraform/`)
+Single codebase for AWS and GCP.
+Switch cloud: change `general.cloud` in `config.yaml`.
+State: GCS bucket (GCP) or S3 bucket (AWS) — see backend.tf.
+
+**AWS modules:**
+- `aws_network` — VPC, 4 subnets, IGW, NAT gateway, route tables
+- `aws_security` — security groups (jump_host, internal, web, rds)
+- `aws_vm` — EC2 instances (jump-host, node-01, node-02, node-03)
+- `aws_lb` — Application Load Balancer, target group, listener
+- `aws_rds` — managed PostgreSQL database
+
+**GCP modules:**
+- `gcp_network` — VPC, subnet, firewall rules
+- `gcp_security` — firewall rules
+- `gcp_vm` — compute instances
+- `gcp_lb` — ⚠️ MISSING, needs implementation
+- `gcp_sql` — ⚠️ MISSING, needs implementation
+
+### Ansible (`ansible/`)
+- `provision.yml` — installs Docker + system packages on all VMs
+- `deploy.yml` — renders Jinja2 compose templates, pulls GHCR images, starts containers
+- `inventory` — VM IPs (must update manually after terraform apply)
+- `group_vars/all/main.yml` — shared variables for all nodes
+- `roles/common/` — base packages, UFW firewall
+- `roles/docker/` — Docker Engine installation
+- `roles/history/` — deploys node-01 (RabbitMQ + history services)
+- `roles/proxy/` — deploys node-02 (Go proxy + Redis)
+- `roles/ui/` — deploys node-03 (nginx + React)
+
+### Docker Compose (`deploy/compose/`)
+Per-node Jinja2 templates rendered by Ansible:
+- `node-01.compose.yaml` — RabbitMQ, history-consumer, history-api
+- `node-02.compose.yaml` — Go proxy, Redis
+- `node-03.compose.yaml` — nginx + React UI
+
+Uses pre-built GHCR images — never builds from source on VMs.
+Default image tag: `shabat-latest`
+
+## Bootstrap (run once per cloud)
+
 ```bash
-cd ui-react
-npm run dev      # dev server on :3000
-npm run build    # production build → dist/
-npm run lint     # tsc --noEmit
+# GCP
+cd bootstrap/gcp
+./bootstrap.sh
+export GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/key.json
+
+# AWS
+cd bootstrap/aws
+./bootstrap.sh
+# creates S3 bucket + DynamoDB lock table
 ```
 
-### History (Python)
-No local runner — deploy via Ansible or run manually: `python3 main.py` / `python3 consumer.py`.
-
-## Deployment
-
-**Prerequisites:** `source .env` before any Ansible or Terraform command.
+## Deploy Workflow
 
 ```bash
-# First-time VM provisioning
+# 1. Load secrets
+source .env
+
+# 2. Provision infrastructure
 terraform -chdir=terraform apply
 
-# OS setup (Go, Python, PostgreSQL, RabbitMQ, UFW)
+# 3. Update inventory with new IPs from terraform output
+terraform -chdir=terraform output
+# edit ansible/inventory with new IPs
+# edit ansible/group_vars/all/main.yml rds_endpoint with new RDS endpoint
+
+# 4. Install Docker on VMs
 ansible-playbook -i ansible/inventory ansible/provision.yml
 
-# Deploy / update all services
-ansible-playbook -i ansible/inventory ansible/deploy.yml
-
-# Redeploy a single service
-ansible-playbook -i ansible/inventory ansible/deploy.yml --limit softserve-node-02,localhost
-# Note: always include 'localhost' when limiting — the React build runs on localhost
+# 5. Deploy app containers
+IMAGE_TAG=shabat-latest ansible-playbook -i ansible/inventory ansible/deploy.yml
 ```
 
-Ansible builds the React app on `localhost`, syncs `dist/` to node-03, builds the Go binary on node-02, and deploys Python to node-01. Service configs land in `/etc/cognitor/` on each VM; systemd units are managed by Ansible.
+## After terraform destroy + apply
+These values change and must be updated manually:
+- `ansible/inventory` — all VM IPs
+- `ansible/group_vars/all/main.yml` — `rds_endpoint`
 
-## Infrastructure Details
+## Key Variables (`ansible/group_vars/all/main.yml`)
 
-- **Terraform** uses WinRM to talk to the Windows Hyper-V host. Provider: `taliesins/hyperv`.
-- **Secrets** flow: `.env` → Ansible group_vars (`lookup('env', ...)`) → written to `/etc/cognitor/*.env` on VMs at deploy time. Never hardcoded.
-- **WSL chmod** on `/mnt/f/` requires `/etc/wsl.conf` with `[automount] options = "metadata"`, otherwise chmod is a no-op and SSH rejects the key.
-- **After terraform destroy+apply:** re-run `New-NetIPAddress` + `New-NetNat` in PowerShell Admin (switch loses host IP), and `ssh-keygen -R 172.31.1.{10,11,12}` (host keys change).
-- Base VHDX must be pre-resized to ≥20 GB with `Resize-VHD` in PowerShell Admin before `terraform apply`. Cloud-init `growpart` expands the partition automatically on first boot.
-- Hyper-V Gen 2 Secure Boot requires `MicrosoftUEFICertificateAuthority` template (not the default `MicrosoftWindows`).
+| Variable | Value | Meaning |
+|----------|-------|---------|
+| `use_rds` | `true` | uses AWS RDS, no local PostgreSQL container |
+| `runtime_backend` | `external` | uses RabbitMQ + Redis |
+| `tls_mode` | `off` | no TLS on node-03, ALB handles HTTPS |
+| `image_tag` | `shabat-latest` | override with IMAGE_TAG env var |
+| `proxy_port` | `8080` | Go proxy port |
+| `history_port` | `8000` | History API port |
 
-## Database Schema
+## Secrets
+Never committed to Git. Stored in:
+- `.env` — RABBITMQ_PASSWORD, DB_PASSWORD, SSH_KEY_PATH, RUNTIME_BACKEND
+- `terraform/terraform.tfvars` — aws_access_key, aws_secret_key, db_password
+- `bootstrap/gcp/key.json` — GCP service account (gitignored)
+- `bootstrap/aws/` — no key file, uses AWS CLI credentials
 
-Tables in PostgreSQL on node-01 (`history/schema.sql`):
-- `market_snapshots` — one row per market per `/current` call; UNIQUE(slug, fetched_at)
-- `price_snapshots` — BTC/ETH/USD_UAH prices; UNIQUE(coin, fetched_at)
-- `whales`, `whale_positions` — leaderboard + open positions
-
-## Known Provider Quirks (taliesins/hyperv Terraform provider)
-
-- `enable_secure_boot` expects `"On"`/`"Off"` strings, not booleans.
-- MAC address: must set both `static_mac_address` AND `dynamic_mac_address = false`.
-- Memory: use either `dynamic_memory = true` OR `static_memory = true`, never both.
-- Stop VMs before `terraform apply` when changing hardware (DVD drive resource pool lock).
+## Known Issues (being fixed)
+- GCP missing `gcp_lb` and `gcp_sql` modules
+- `ansible/inventory` IPs must be updated manually after every redeploy
+- `rds_endpoint` hardcoded in group_vars, must update after redeploy
+- `backend.tf` needs migration from local to remote backend (S3 or GCS)

@@ -44,14 +44,16 @@ module "aws_security" {
 }
 
 module "aws_vm" {
-  source            = "./modules/aws_vm"
-  config            = local.config
-  ssh_public_key    = file("${pathexpand("~")}/.ssh/id_ed25519.pub")
-  public_subnet_id  = module.aws_network.public_subnet_id
-  private_subnet_id = module.aws_network.private_subnet_id
-  jump_host_sg_id   = module.aws_security.jump_host_sg_id
-  internal_sg_id    = module.aws_security.internal_sg_id
-  web_sg_id         = module.aws_security.web_sg_id
+  source              = "./modules/aws_vm"
+  config              = local.config
+  ssh_public_key      = file("${pathexpand("~")}/.ssh/id_ed25519.pub")
+  public_subnet_id    = module.aws_network.public_subnet_id
+  private_subnet_id   = module.aws_network.private_subnet_id
+  public_subnet_b_id  = module.aws_network.public_subnet_b_id
+  private_subnet_b_id = module.aws_network.private_subnet_b_id
+  jump_host_sg_id     = module.aws_security.jump_host_sg_id
+  internal_sg_id      = module.aws_security.internal_sg_id
+  web_sg_id           = module.aws_security.web_sg_id
 }
 
 module "aws_lb" {
@@ -74,6 +76,3 @@ module "aws_rds" {
   rds_sg_id           = module.aws_security.rds_sg_id
 }
 
-output "alb_dns_name" {
-  value = module.aws_lb.alb_dns_name
-}

@@ -11,7 +11,11 @@ resource "aws_instance" "vm" {
   ami           = var.config.images.ubuntu_2404.aws
   instance_type = var.config.sizes[each.value.size].aws
 
-  subnet_id = each.value.public_ip ? var.public_subnet_id : var.private_subnet_id
+  subnet_id = each.value.public_ip ? (
+    each.value.zone == "secondary" ? var.public_subnet_b_id : var.public_subnet_id
+  ) : (
+    each.value.zone == "secondary" ? var.private_subnet_b_id : var.private_subnet_id
+  )
 
   associate_public_ip_address = each.value.public_ip
 

@@ -21,8 +21,7 @@ rds_endpoint: "coinops-db.cj8kme8e0kqa.eu-central-1.rds.amazonaws.com"
 
 # Public entrypoint / TLS
 app_domain: "{{ lookup('env', 'APP_DOMAIN') | default('coinops-penina.pp.ua', true) }}"
-tls_mode: "{{ lookup('env', 'TLS_MODE') | default('selfsigned', true) }}"
-tls_enabled: "{{ tls_mode != 'off' }}"
+tls_mode: "{{ lookup('env', 'TLS_MODE') | default('off', true) }}"
 tls_cert_dir: /etc/cognitor/tls
 tls_cert_path: "{{ tls_cert_dir }}/coinops.crt"
 tls_key_path: "{{ tls_cert_dir }}/coinops.key"
