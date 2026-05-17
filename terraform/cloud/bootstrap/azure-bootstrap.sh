@@ -7,6 +7,7 @@
 #   3) Assign proper permissions to the service principal
 #   4) Create a backend storage for Terraform state files
 #   5) Create a credentials file
+#   6) Prepare secrets
 #
 # Usage:
 #   1. Fill in the variables block below
@@ -27,6 +28,17 @@ AZ_GROUP_LOCATION="westeurope"
 AZ_SP_NAME="coin-ops-sp"
 AZ_STORAGE_ACCOUNT_NAME="coinopstfstate"
 AZ_CONTAINER_NAME="tfstate"
+
+AZ_KEYVAULT_NAME="coin-ops-kv"
+
+REQUIRED_SECRETS=(
+  "ghrc-username"
+  "ghrc-token"
+  "rabbitmq-password"
+  "db-password"
+)
+
+SECRET_PLACEHOLDER_VALUE="CHANGE_ME_IN_AZURE_PORTAL"
 # ============================================================
 
 # ------------------------------------------------------------
