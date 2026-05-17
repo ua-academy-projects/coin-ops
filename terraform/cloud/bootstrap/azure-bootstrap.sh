@@ -104,10 +104,33 @@ else
   echo "Key Vault created: $AZ_KEYVAULT_NAME"
 fi
 
-# 2) Create a service principal
+# ------------------------------------------------------------
+# 3) Create required secret entries
 # ------------------------------------------------------------
 echo ""
-echo "==> Step 2: Service Principal"
+echo "==> Step 3: Key Vault Secrets"
+
+for secret_name in "${REQUIRED_SECRETS[@]}"; do
+  if az keyvault secret show \
+    --vault-name "$AZ_KEYVAULT_NAME" \
+    --name "$secret_name" &>/dev/null; then
+    echo "Secret already exists: $secret_name"
+  else
+    az keyvault secret set \
+      --vault-name "$AZ_KEYVAULT_NAME" \
+      --name "$secret_name" \
+      --value "$SECRET_PLACEHOLDER_VALUE" \
+      --output none
+
+    echo "Secret created with placeholder vaule: $secret_name"
+  fi
+done
+
+# ------------------------------------------------------------
+# 4) Create a service principal
+# ------------------------------------------------------------
+echo ""
+echo "==> Step 4: Service Principal"
 
 AZ_CLIENT_ID=""
 AZ_CLIENT_SECRET=""
@@ -136,18 +159,18 @@ else
 fi
 
 # ------------------------------------------------------------
-# 3) Register Storage provider + assign blob role (after storage created)
+# 5) Register Storage provider + assign blob role (after storage created)
 # ------------------------------------------------------------
 echo ""
-echo "==> Step 3: Register Storage Resource Provider"
+echo "==> Step 5: Register Storage Resource Provider"
 az provider register --namespace Microsoft.Storage
 echo "Microsoft.Storage provider registered"
 
 # ------------------------------------------------------------
-# 4) Create backend storage
+# 6) Create backend storage
 # ------------------------------------------------------------
 echo ""
-echo "==> Step 4: Storage Account & Blob Container"
+echo "==> Step 6: Storage Account & Blob Container"
 
 if az storage account show --name $AZ_STORAGE_ACCOUNT_NAME --resource-group $AZ_GROUP_NAME &>/dev/null; then
   echo "Storage Account already exists: $AZ_STORAGE_ACCOUNT_NAME"
@@ -187,10 +210,10 @@ az role assignment create \
 echo "Role assigned: Storage Blob Data Contributor"
 
 # ------------------------------------------------------------
-# 5) Create credentials file
+# 7) Create credentials file
 # ------------------------------------------------------------
 echo ""
-echo "==> Step 5: Credentials File"
+echo "==> Step 7: Credentials File"
 
 CREDENTIALS_FILE=".env"
 
