@@ -1,6 +1,6 @@
 locals {
   fallback_sizes = {
-    micro  = "Standard_B1s"
+    micro  = "Standard_B2s"
     small  = "Standard_B2s"
     medium = "Standard_D2s_v5"
     large  = "Standard_D4s_v5"

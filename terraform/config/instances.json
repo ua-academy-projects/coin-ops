@@ -6,7 +6,8 @@
             "instance_size": "small",
             "can_ip_forward": true,
             "role": "jump-host",
-            "startup_script": "scripts/nat-init.sh.tpl"
+            "startup_script": "scripts/nat-init.sh.tpl",
+            "clouds": ["gcp", "aws"]
         },
         "app-1": {
             "subnet": "external",
@@ -14,14 +15,16 @@
             "role": "app-ui",
             "image_profile": "coinops-app-host",
             "instance_size": "micro",
-            "disk_size": 30
+            "disk_size": 30,
+            "clouds": ["gcp"]
         },
         "app-2": {
             "subnet": "internal",
             "role": "app-backend",
             "image_profile": "coinops-app-host",
             "instance_size": "small",
-            "disk_size": 30
+            "disk_size": 30,
+            "clouds": ["aws"]
         }
     }
 }
