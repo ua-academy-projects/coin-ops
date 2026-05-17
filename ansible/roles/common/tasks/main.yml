@@ -27,6 +27,7 @@
     name: systemd-timesyncd
     enabled: yes
     state: started
+  failed_when: false
 
 - name: Install UFW
   apt:
