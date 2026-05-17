@@ -3,26 +3,28 @@
 # Purpose: Prepare a project for infrastructure provisioning
 # Steps:
 #   1) Create a resource group
-#   2) Create a service principal
-#   3) Assign proper permissions to the service principal
-#   4) Create a backend storage for Terraform state files
-#   5) Create a credentials file
-#   6) Prepare secrets
+#   2) Create a key vault
+#   3) Create required secret entries with placeholder values
+#   4) Create a service principal
+#   5) Register the storage resource provider
+#   6) Create backend storage for Terraform state
+#   7) Create a credentials file
 #
 # Usage:
 #   1. Fill in the variables block below
 #   2. chmod +x azure-bootstrap.sh
 #   3. az login
 #   4. ./azure-bootstrap.sh
+#   5. Open Azure Portal and replace placeholder secret vaules
 
 set -euo pipefail
 # -e -> exit on error
 # -u -> exit on unset variable
 # -o pipefail -> exit on pipe failure
 
-# ============================================================
-# Variables — fill in before running
-# ============================================================
+# ------------------------------------------------------------
+# Variables
+# ------------------------------------------------------------
 AZ_GROUP_NAME="coin-ops-rg"
 AZ_GROUP_LOCATION="westeurope"
 AZ_SP_NAME="coin-ops-sp"
@@ -39,7 +41,6 @@ REQUIRED_SECRETS=(
 )
 
 SECRET_PLACEHOLDER_VALUE="CHANGE_ME_IN_AZURE_PORTAL"
-# ============================================================
 
 # ------------------------------------------------------------
 # Validate required variables
@@ -88,7 +89,7 @@ else
 fi
 
 # ------------------------------------------------------------
-# 2) Create Key Vault
+# 2) Create a key vault
 # ------------------------------------------------------------
 echo ""
 echo "==> Step 2: Key Vault"
@@ -122,7 +123,7 @@ for secret_name in "${REQUIRED_SECRETS[@]}"; do
       --value "$SECRET_PLACEHOLDER_VALUE" \
       --output none
 
-    echo "Secret created with placeholder vaule: $secret_name"
+    echo "Secret created with placeholder value: $secret_name"
   fi
 done
 
