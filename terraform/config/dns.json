@@ -1,6 +1,6 @@
 {
     "dns": {
-        "primary_cloud": "aws",
+        "primary_cloud": "azure",
         "cloudflare": {
             "zone_id": "de9eabb2b5b0b9b25b7ee2decc5d161b",
             "proxied": false,

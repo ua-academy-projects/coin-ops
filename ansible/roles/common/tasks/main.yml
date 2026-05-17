@@ -8,6 +8,10 @@
     path: /usr/sbin/ufw
   register: ufw_binary
 
+- name: Determine whether this host forwards traffic
+  set_fact:
+    common_is_forwarder: "{{ host_instance_config.get('can_ip_forward', false) | bool }}"
+
 - name: Prepare non-image-based hosts
   when: not host_uses_golden_image
   block:
@@ -94,24 +98,53 @@
       timezone:
         name: UTC
 
-    - name: Ensure systemd-timesyncd is running
+    - name: Collect service facts for time sync selection
+      service_facts:
+
+    - name: Select available time sync service
+      set_fact:
+        common_time_sync_service: >-
+          {{
+            'systemd-timesyncd'
+            if 'systemd-timesyncd.service' in ansible_facts.services
+            else (
+              'chrony'
+              if 'chrony.service' in ansible_facts.services
+              else (
+                'chronyd'
+                if 'chronyd.service' in ansible_facts.services
+                else ''
+              )
+            )
+          }}
+
+    - name: Ensure available time sync service is running
       systemd:
-        name: systemd-timesyncd
+        name: "{{ common_time_sync_service }}"
         enabled: yes
         state: started
+      when: common_time_sync_service != ''
+
+    - name: Assert a supported time sync service is present
+      assert:
+        that:
+          - common_time_sync_service != ''
+        fail_msg: >-
+          No supported time sync service was found. Expected one of:
+          systemd-timesyncd, chrony, or chronyd.
 
     - name: Install UFW
       apt:
         name: ufw
         state: present
         lock_timeout: "{{ provisioning_apt_lock_timeout | default(900) }}"
-      when: "'role_nat' not in group_names"
+      when: not common_is_forwarder
 
-- name: Disable UFW on nat hosts to avoid interfering with forwarded traffic
+- name: Disable UFW on traffic-forwarding hosts to avoid interfering with forwarded traffic
   community.general.ufw:
     state: disabled
   when:
-    - "'role_nat' in group_names"
+    - common_is_forwarder
     - ufw_binary.stat.exists
 
 - name: Validate baked common host tooling on golden-image hosts
@@ -141,26 +174,43 @@
     - name: Collect service facts on golden-image hosts
       service_facts:
 
-    - name: Assert systemd-timesyncd is available and running
+    - name: Select available time sync service on golden-image hosts
+      set_fact:
+        common_time_sync_service: >-
+          {{
+            'systemd-timesyncd'
+            if 'systemd-timesyncd.service' in ansible_facts.services
+            else (
+              'chrony'
+              if 'chrony.service' in ansible_facts.services
+              else (
+                'chronyd'
+                if 'chronyd.service' in ansible_facts.services
+                else ''
+              )
+            )
+          }}
+
+    - name: Assert selected time sync service is available and running
       assert:
         that:
-          - "'systemd-timesyncd.service' in ansible_facts.services"
-          - ansible_facts.services['systemd-timesyncd.service'].state == 'running'
-        fail_msg: "Golden-image app hosts must keep systemd-timesyncd running."
+          - common_time_sync_service != ''
+          - ansible_facts.services[common_time_sync_service ~ '.service'].state == 'running'
+        fail_msg: "Golden-image app hosts must keep a supported time sync service running."
 
 - name: Set UFW default deny incoming
   community.general.ufw:
     direction: incoming
     policy: deny
   notify: Reload UFW
-  when: "'role_nat' not in group_names"
+  when: not common_is_forwarder
 
 - name: Set UFW default allow outgoing
   community.general.ufw:
     direction: outgoing
     policy: allow
   notify: Reload UFW
-  when: "'role_nat' not in group_names"
+  when: not common_is_forwarder
 
 - name: Allow configured ports through UFW
   community.general.ufw:
@@ -169,13 +219,13 @@
     proto: tcp
   loop: "{{ common_allowed_ports }}"
   notify: Reload UFW
-  when: "'role_nat' not in group_names"
+  when: not common_is_forwarder
 
 - name: Enable UFW
   community.general.ufw:
     state: enabled
-  when: "'role_nat' not in group_names"
+  when: not common_is_forwarder
 
 - name: Reset SSH connection after host firewall changes
   meta: reset_connection
-  when: "'role_nat' not in group_names"
+  when: not common_is_forwarder

@@ -92,6 +92,47 @@ GENERATED_AZURE_ENV_PATH="${REPO_ROOT}/local/generated-azure-env.sh"
 GENERATED_ACTIVE_ENV_PATH="${REPO_ROOT}/local/generated-env.sh"
 SSH_PUBLIC_KEY_PATH="${HOME}/.ssh/ssh-key-coin-ops.pub"
 
+load_existing_sp_credentials() {
+  if [[ -f "${GENERATED_AZURE_ENV_PATH}" ]]; then
+    # shellcheck disable=SC1090
+    set +u
+    source "${GENERATED_AZURE_ENV_PATH}"
+    set -u
+  fi
+}
+
+check_ansible_azure_python_deps() {
+  if python3 - <<'PY' >/dev/null 2>&1
+import importlib
+for name in (
+    "azure.cli.core",
+    "azure.identity",
+    "azure.mgmt.compute",
+    "msgraph_core",
+):
+    importlib.import_module(name)
+PY
+  then
+    return 0
+  fi
+
+  cat >&2 <<'EOF'
+Azure Ansible inventory dependencies are missing on this control host.
+The azure.azcollection inventory plugin requires Azure Python SDK packages that
+are not installed here, so Ansible cannot discover Azure VMs yet.
+
+Install the collection's Python requirements on the control host, then rerun:
+
+  bash ${REPO_ROOT}/ansible/install-azure-control-deps.sh
+
+After that, rerun:
+
+  source ${GENERATED_AZURE_ENV_PATH}
+  ansible-inventory -i ansible/inventory --graph
+EOF
+  return 1
+}
+
 if [[ "${CONTROL_PLANE}" == "azure" ]]; then
   ACTIVATE_BACKEND=true
 fi
@@ -122,24 +163,47 @@ do
 done
 
 echo "Creating or refreshing Azure service principal: ${SP_NAME}"
+SP_JSON=""
+SP_OBJECT_ID=""
+SP_MANAGED=true
+
 if az ad sp list --display-name "${SP_NAME}" --query '[0].appId' -o tsv | grep -q .; then
   APP_ID="$(az ad sp list --display-name "${SP_NAME}" --query '[0].appId' -o tsv)"
-  SP_JSON="$(az ad app credential reset --id "${APP_ID}" --display-name codex-bootstrap -o json)"
+  if ! SP_JSON="$(az ad app credential reset --id "${APP_ID}" --display-name codex-bootstrap -o json 2>/tmp/coinops-azure-sp.err)"; then
+    echo "Warning: could not refresh Azure service principal credentials; will try existing local credentials." >&2
+    SP_MANAGED=false
+  fi
 else
-  SP_JSON="$(az ad sp create-for-rbac --name "${SP_NAME}" --role Contributor --scopes "/subscriptions/${SUBSCRIPTION_ID}" -o json)"
-  APP_ID="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["appId"])' <<< "${SP_JSON}")"
+  if ! SP_JSON="$(az ad sp create-for-rbac --name "${SP_NAME}" --role Contributor --scopes "/subscriptions/${SUBSCRIPTION_ID}" -o json 2>/tmp/coinops-azure-sp.err)"; then
+    echo "Warning: could not create Azure service principal; will try existing local credentials." >&2
+    SP_MANAGED=false
+  fi
 fi
 
-CLIENT_ID="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["appId"])' <<< "${SP_JSON}")"
-CLIENT_SECRET="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["password"])' <<< "${SP_JSON}")"
-TENANT_ID_FROM_SP="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["tenant"])' <<< "${SP_JSON}")"
-TENANT_ID="${TENANT_ID:-$TENANT_ID_FROM_SP}"
+if [[ "${SP_MANAGED}" == "true" ]]; then
+  CLIENT_ID="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["appId"])' <<< "${SP_JSON}")"
+  CLIENT_SECRET="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["password"])' <<< "${SP_JSON}")"
+  TENANT_ID_FROM_SP="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["tenant"])' <<< "${SP_JSON}")"
+  TENANT_ID="${TENANT_ID:-$TENANT_ID_FROM_SP}"
+  SP_OBJECT_ID="$(az ad sp show --id "${CLIENT_ID}" --query id -o tsv)"
 
-SP_OBJECT_ID="$(az ad sp show --id "${CLIENT_ID}" --query id -o tsv)"
+  echo "Assigning Azure roles..."
+  az role assignment create --assignee-object-id "${SP_OBJECT_ID}" --assignee-principal-type ServicePrincipal --role "Contributor" --scope "/subscriptions/${SUBSCRIPTION_ID}" > /dev/null 2>&1 || true
+  az role assignment create --assignee-object-id "${SP_OBJECT_ID}" --assignee-principal-type ServicePrincipal --role "Key Vault Administrator" --scope "/subscriptions/${SUBSCRIPTION_ID}" > /dev/null 2>&1 || true
+else
+  load_existing_sp_credentials
+  CLIENT_ID="${ARM_CLIENT_ID:-${AZURE_CLIENT_ID:-}}"
+  CLIENT_SECRET="${ARM_CLIENT_SECRET:-${AZURE_CLIENT_SECRET:-${AZURE_SECRET:-}}}"
+  TENANT_ID="${TENANT_ID:-${ARM_TENANT_ID:-${AZURE_TENANT:-${AZURE_TENANT_ID:-}}}}"
 
-echo "Assigning Azure roles..."
-az role assignment create --assignee-object-id "${SP_OBJECT_ID}" --assignee-principal-type ServicePrincipal --role "Contributor" --scope "/subscriptions/${SUBSCRIPTION_ID}" > /dev/null 2>&1 || true
-az role assignment create --assignee-object-id "${SP_OBJECT_ID}" --assignee-principal-type ServicePrincipal --role "Key Vault Administrator" --scope "/subscriptions/${SUBSCRIPTION_ID}" > /dev/null 2>&1 || true
+  if [[ -z "${CLIENT_ID}" || -z "${CLIENT_SECRET}" || -z "${TENANT_ID}" ]]; then
+    echo "Azure AD denied service principal management, and no existing local Azure service principal credentials were found." >&2
+    echo "Expected one of: current shell env or ${GENERATED_AZURE_ENV_PATH} with ARM_CLIENT_ID/ARM_CLIENT_SECRET/ARM_TENANT_ID." >&2
+    exit 1
+  fi
+
+  echo "Reusing existing local Azure service principal credentials."
+fi
 
 if [[ "${ACTIVATE_BACKEND}" == "true" ]]; then
   echo "Ensuring backend resource group exists: ${STATE_RESOURCE_GROUP_NAME}"
@@ -163,7 +227,9 @@ if [[ "${ACTIVATE_BACKEND}" == "true" ]]; then
     --auth-mode login > /dev/null
 
   STORAGE_SCOPE="$(az storage account show --name "${STORAGE_ACCOUNT_NAME}" --resource-group "${STATE_RESOURCE_GROUP_NAME}" --query id -o tsv)"
-  az role assignment create --assignee-object-id "${SP_OBJECT_ID}" --assignee-principal-type ServicePrincipal --role "Storage Blob Data Owner" --scope "${STORAGE_SCOPE}" > /dev/null 2>&1 || true
+  if [[ -n "${SP_OBJECT_ID}" ]]; then
+    az role assignment create --assignee-object-id "${SP_OBJECT_ID}" --assignee-principal-type ServicePrincipal --role "Storage Blob Data Owner" --scope "${STORAGE_SCOPE}" > /dev/null 2>&1 || true
+  fi
 
   echo "Writing active Terraform backend at ${BACKEND_ACTIVE_PATH}..."
   python3 - <<'PY' "${BACKEND_TEMPLATE_PATH}" "${BACKEND_ACTIVE_PATH}" "${STATE_RESOURCE_GROUP_NAME}" "${STORAGE_ACCOUNT_NAME}" "${CONTAINER_NAME}" "${STATE_KEY}"
@@ -213,6 +279,11 @@ export ARM_CLIENT_ID="${CLIENT_ID}"
 export ARM_CLIENT_SECRET="${CLIENT_SECRET}"
 export ARM_TENANT_ID="${TENANT_ID}"
 export ARM_SUBSCRIPTION_ID="${SUBSCRIPTION_ID}"
+export AZURE_CLIENT_ID="${CLIENT_ID}"
+export AZURE_CLIENT_SECRET="${CLIENT_SECRET}"
+export AZURE_SECRET="${CLIENT_SECRET}"
+export AZURE_TENANT="${TENANT_ID}"
+export ANSIBLE_AZURE_AUTH_SOURCE="env"
 export ANSIBLE_CONFIG="${REPO_ROOT}/ansible.cfg"
 export AZURE_SUBSCRIPTION_ID="${SUBSCRIPTION_ID}"
 export AZURE_TENANT_ID="${TENANT_ID}"
@@ -224,6 +295,9 @@ export TF_VAR_azure_tenant_id="${TENANT_ID}"
 export TF_VAR_azure_location="${LOCATION}"
 export COINOPS_REPO_ROOT="${REPO_ROOT}"
 export SSH_KEY_PATH="\${HOME}/.ssh/ssh-key-coin-ops"
+if [[ -f "${REPO_ROOT}/local/generated-azure-python-env.sh" ]]; then
+  source "${REPO_ROOT}/local/generated-azure-python-env.sh"
+fi
 EOF
 chmod 600 "${GENERATED_AZURE_ENV_PATH}"
 if [[ "${ACTIVATE_BACKEND}" == "true" ]]; then
@@ -243,6 +317,7 @@ EOF
 fi
 
 echo "Bootstrap completed successfully."
+check_ansible_azure_python_deps || true
 if [[ "${ACTIVATE_BACKEND}" == "true" ]]; then
   echo "Next steps:"
   echo "  1. Source ${GENERATED_AZURE_ENV_PATH} (or local/generated-env.sh)"

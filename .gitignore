@@ -82,3 +82,6 @@ coin-ops_infra_roadmap_120d8424.plan.md
 terraform/sa-key.json
 !terraform/scripts/
 !terraform/scripts/*.tpl
+
+.venv/*
+local/generated-azure-python-env.sh

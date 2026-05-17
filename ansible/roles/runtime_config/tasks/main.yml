@@ -29,7 +29,65 @@
       app_secret_name: "{{ app_secret_name }}"
   when: lookup('env', 'DEBUG_SECRET_LOOKUP') | default('false', true) | bool
 
-- name: Materialize runtime secret payloads
+- name: Validate Azure secret backend inputs
+  assert:
+    that:
+      - azure_key_vault_name | length > 0
+      - azure_key_vault_url | length > 0
+      - db_secret_name | length > 0
+      - app_secret_name | length > 0
+    fail_msg: >-
+      Azure secret backend is selected, but one or more required settings are missing.
+      key_vault_name='{{ azure_key_vault_name }}', key_vault_url='{{ azure_key_vault_url }}',
+      db_secret_name='{{ db_secret_name }}', app_secret_name='{{ app_secret_name }}'.
+      Re-run Terraform with -var='seed_secret_manager=true' if Azure Key Vault was recreated.
+  when: secret_backend == 'azure'
+
+- name: Check Azure db secret exists
+  command:
+    argv:
+      - az
+      - keyvault
+      - secret
+      - show
+      - --vault-name
+      - "{{ azure_key_vault_name }}"
+      - --name
+      - "{{ db_secret_name }}"
+      - --query
+      - id
+      - -o
+      - tsv
+  register: azure_db_secret_check
+  changed_when: false
+  failed_when: azure_db_secret_check.rc != 0
+  delegate_to: localhost
+  become: false
+  when: secret_backend == 'azure'
+
+- name: Check Azure app secret exists
+  command:
+    argv:
+      - az
+      - keyvault
+      - secret
+      - show
+      - --vault-name
+      - "{{ azure_key_vault_name }}"
+      - --name
+      - "{{ app_secret_name }}"
+      - --query
+      - id
+      - -o
+      - tsv
+  register: azure_app_secret_check
+  changed_when: false
+  failed_when: azure_app_secret_check.rc != 0
+  delegate_to: localhost
+  become: false
+  when: secret_backend == 'azure'
+
+- name: Materialize runtime secret payloads from GCP or AWS
   set_fact:
     db_secrets_raw: >-
       {{
@@ -37,12 +95,7 @@
         if secret_backend == 'gcp' and (gcp_project | length > 0)
         else (
           lookup('amazon.aws.aws_secret', db_secret_name, region=aws_region)
-          if secret_backend == 'aws'
-          else (
-            lookup('azure.azcollection.azure_keyvault_secret', db_secret_name, vault_url=azure_key_vault_url)
-            if secret_backend == 'azure' and (azure_key_vault_url | length > 0)
-            else '{}'
-          )
+          if secret_backend == 'aws' else '{}'
         )
       }}
     app_secrets_raw: >-
@@ -51,15 +104,62 @@
         if secret_backend == 'gcp' and (gcp_project | length > 0)
         else (
           lookup('amazon.aws.aws_secret', app_secret_name, region=aws_region)
-          if secret_backend == 'aws'
-          else (
-            lookup('azure.azcollection.azure_keyvault_secret', app_secret_name, vault_url=azure_key_vault_url)
-            if secret_backend == 'azure' and (azure_key_vault_url | length > 0)
-            else '{}'
-          )
+          if secret_backend == 'aws' else '{}'
         )
       }}
   no_log: "{{ not (lookup('env', 'DEBUG_SECRET_LOOKUP') | default('false', true) | bool) }}"
+  when: secret_backend in ['gcp', 'aws']
+
+- name: Read Azure db secret payload
+  command:
+    argv:
+      - az
+      - keyvault
+      - secret
+      - show
+      - --vault-name
+      - "{{ azure_key_vault_name }}"
+      - --name
+      - "{{ db_secret_name }}"
+      - --query
+      - value
+      - -o
+      - tsv
+  register: azure_db_secret_value
+  changed_when: false
+  delegate_to: localhost
+  become: false
+  no_log: "{{ not (lookup('env', 'DEBUG_SECRET_LOOKUP') | default('false', true) | bool) }}"
+  when: secret_backend == 'azure'
+
+- name: Read Azure app secret payload
+  command:
+    argv:
+      - az
+      - keyvault
+      - secret
+      - show
+      - --vault-name
+      - "{{ azure_key_vault_name }}"
+      - --name
+      - "{{ app_secret_name }}"
+      - --query
+      - value
+      - -o
+      - tsv
+  register: azure_app_secret_value
+  changed_when: false
+  delegate_to: localhost
+  become: false
+  no_log: "{{ not (lookup('env', 'DEBUG_SECRET_LOOKUP') | default('false', true) | bool) }}"
+  when: secret_backend == 'azure'
+
+- name: Materialize runtime secret payloads from Azure
+  set_fact:
+    db_secrets_raw: "{{ azure_db_secret_value.stdout }}"
+    app_secrets_raw: "{{ azure_app_secret_value.stdout }}"
+  no_log: "{{ not (lookup('env', 'DEBUG_SECRET_LOOKUP') | default('false', true) | bool) }}"
+  when: secret_backend == 'azure'
 
 - name: Materialize runtime secret maps
   set_fact:
