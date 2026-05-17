@@ -3,10 +3,9 @@ resource "aws_db_subnet_group" "main" {
   name  = "coinops-db-subnet-group"
 
   subnet_ids = [
-    var.private_subnet_id,
-    var.private_subnet_b_id,
-    "subnet-01886c757ce10dbd8"
-  ]
+  var.private_subnet_id,
+  var.private_subnet_b_id,
+]
 
   tags = {
     Name = "coinops-db-subnet-group"
