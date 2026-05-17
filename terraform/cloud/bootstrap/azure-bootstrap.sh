@@ -44,12 +44,24 @@ SECRET_PLACEHOLDER_VALUE="CHANGE_ME_IN_AZURE_PORTAL"
 # ------------------------------------------------------------
 # Validate required variables
 # ------------------------------------------------------------
-for var in AZ_GROUP_NAME AZ_GROUP_LOCATION AZ_SP_NAME AZ_STORAGE_ACCOUNT_NAME AZ_CONTAINER_NAME; do
+for var in \
+  AZ_GROUP_NAME \
+  AZ_GROUP_LOCATION \
+  AZ_SP_NAME \
+  AZ_STORAGE_ACCOUNT_NAME \
+  AZ_CONTAINER_NAME \
+  AZ_KEYVAULT_NAME \
+  SECRET_PLACEHOLDER_VALUE; do
   if [[ -z "${!var}" ]]; then
     echo "ERROR: $var is not set. Fill in the variables block before running."
     exit 1
   fi
 done
+
+if [[ ${#REQUIRED_SECRETS[@]} -eq 0 ]]; then
+  echo "ERROR: REQUIRED_SECRETS is empty. Add at least one secret name."
+  exit 1
+fi
 
 # ------------------------------------------------------------
 # Check required tools
