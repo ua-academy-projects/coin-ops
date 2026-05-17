@@ -2,46 +2,42 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "networks.schema.json",
   "title": "Networks Configuration",
-  "description": "VPC networks and subnets configuration",
+  "description": "Cloud-agnostic VPC networks and subnets configuration",
   "type": "object",
-  "required": ["networks", "subnets"],
+  "required": [
+    "networks",
+    "subnets"
+  ],
   "additionalProperties": false,
   "properties": {
     "networks": {
       "type": "object",
-      "description": "Map of VPC networks to create",
       "additionalProperties": {
         "type": "object",
-        "required": [],
         "additionalProperties": false,
         "properties": {
           "description": {
-            "type": "string",
-            "description": "Human-readable description of the network"
+            "type": "string"
           }
         }
       }
     },
     "subnets": {
       "type": "object",
-      "description": "Map of subnets to create",
       "additionalProperties": {
         "type": "object",
-        "required": ["network", "cidr", "region"],
+        "required": [
+          "network",
+          "cidr"
+        ],
         "additionalProperties": false,
         "properties": {
           "network": {
-            "type": "string",
-            "description": "Name of the parent VPC network"
+            "type": "string"
           },
           "cidr": {
             "type": "string",
-            "description": "CIDR range for the subnet",
             "pattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$"
-          },
-          "region": {
-            "type": "string",
-            "description": "GCP region for the subnet"
           }
         }
       }

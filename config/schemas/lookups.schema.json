@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "lookups.schema.json",
+  "title": "Lookup Tables",
+  "description": "Cloud-specific lookup tables for abstract VM defaults",
+  "type": "object",
+  "required": [
+    "machine_types",
+    "os_images",
+    "disk_types",
+    "ssh_users"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "machine_types": {
+      "$ref": "#/definitions/providerLookup"
+    },
+    "os_images": {
+      "$ref": "#/definitions/providerLookup"
+    },
+    "disk_types": {
+      "$ref": "#/definitions/providerLookup"
+    },
+    "ssh_users": {
+      "type": "object",
+      "required": [
+        "aws",
+        "azure"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "aws": {
+          "$ref": "#/definitions/stringMap"
+        },
+        "azure": {
+          "$ref": "#/definitions/stringMap"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "providerLookup": {
+      "type": "object",
+      "required": [
+        "gcp",
+        "aws",
+        "azure"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "gcp": {
+          "$ref": "#/definitions/stringMap"
+        },
+        "aws": {
+          "$ref": "#/definitions/stringMap"
+        },
+        "azure": {
+          "$ref": "#/definitions/stringMap"
+        }
+      }
+    },
+    "stringMap": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

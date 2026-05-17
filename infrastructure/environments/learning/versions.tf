@@ -6,5 +6,13 @@ terraform {
       source  = "hashicorp/google"
       version = ">= 5.0, < 6.0"
     }
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0, < 6.0"
+    }
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 4.0"
+    }
   }
 }

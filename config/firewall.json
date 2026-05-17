@@ -1,53 +1,69 @@
 {
-    "firewall_rules": {
-        "allow-ssh-jump": {
-            "network": "terraform-network",
-            "protocol": "tcp",
-            "ports": [
-                "47832"
-            ],
-            "source_ranges": [
-                "37.52.252.218/32"
-            ],
-            "source_tags": [],
-            "target_tags": [
-                "jump-host"
-            ],
-            "description": "Allow SSH to jump host from trusted IP only"
-        },
-        "allow-internal": {
-            "network": "terraform-network",
-            "protocols": [
-                "tcp",
-                "udp",
-                "icmp"
-            ],
-            "ports": [
-                "0-65535"
-            ],
-            "source_ranges": [
-                "10.0.0.0/24"
-            ],
-            "source_tags": [],
-            "target_tags": [
-                "internal-vm"
-            ],
-            "description": "Allow all internal traffic between VMs"
-        },
-        "allow-ssh-from-jump": {
-            "network": "terraform-network",
-            "protocol": "tcp",
-            "ports": [
-                "47832"
-            ],
-            "source_ranges": [],
-            "source_tags": [
-                "jump-host"
-            ],
-            "target_tags": [
-                "internal-vm"
-            ],
-            "description": "Allow SSH from jump host to internal VMs"
-        }
+  "firewall_rules": {
+    "allow-ssh-jump": {
+      "network": "terraform-network",
+      "protocol": "tcp",
+      "ports": [
+        "47832"
+      ],
+      "source_ranges": [
+        "37.52.252.218/32"
+      ],
+      "source_tags": [],
+      "target_tags": [
+        "jump-host"
+      ],
+      "description": "Allow SSH to jump host from trusted IP only"
+    },
+    "allow-web-to-jump": {
+      "network": "terraform-network",
+      "protocol": "tcp",
+      "ports": [
+        "80",
+        "443"
+      ],
+      "source_ranges": [
+        "0.0.0.0/0"
+      ],
+      "source_tags": [],
+      "target_tags": [
+        "jump-host"
+      ],
+      "description": "Allow public HTTP and HTTPS traffic to the UI node"
+    },
+    "allow-internal": {
+      "network": "terraform-network",
+      "protocols": [
+        "tcp",
+        "udp",
+        "icmp"
+      ],
+      "ports": [
+        "0-65535"
+      ],
+      "source_ranges": [
+        "10.0.0.0/24"
+      ],
+      "source_tags": [],
+      "target_tags": [
+        "internal-vm"
+      ],
+      "description": "Allow all internal traffic between VMs"
+    },
+    "allow-ssh-from-jump": {
+      "network": "terraform-network",
+      "protocol": "tcp",
+      "ports": [
+        "47832"
+      ],
+      "source_ranges": [],
+      "source_tags": [
+        "jump-host"
+      ],
+      "target_tags": [
+        "internal-vm"
+      ],
+      "description": "Allow SSH from jump host to internal VMs"
     }
+  }
 }

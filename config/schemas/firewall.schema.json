@@ -2,46 +2,56 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "firewall.schema.json",
   "title": "Firewall Rules Configuration",
-  "description": "Firewall rules for VPC networks",
+  "description": "Cloud-agnostic firewall and security group rules",
   "type": "object",
-  "required": ["firewall_rules"],
+  "required": [
+    "firewall_rules"
+  ],
   "additionalProperties": false,
   "properties": {
     "firewall_rules": {
       "type": "object",
-      "description": "Map of firewall rules to create",
       "additionalProperties": {
         "type": "object",
-        "required": ["network", "target_tags", "description"],
+        "required": [
+          "network",
+          "target_tags",
+          "description"
+        ],
         "additionalProperties": false,
         "properties": {
           "network": {
-            "type": "string",
-            "description": "Name of the VPC network"
+            "type": "string"
           },
           "protocol": {
             "type": "string",
-            "description": "Protocol for single-protocol rules",
-            "enum": ["tcp", "udp", "icmp", "all"]
+            "enum": [
+              "tcp",
+              "udp",
+              "icmp",
+              "all"
+            ]
           },
           "protocols": {
             "type": "array",
-            "description": "List of protocols for multi-protocol rules",
             "items": {
               "type": "string",
-              "enum": ["tcp", "udp", "icmp", "all"]
+              "enum": [
+                "tcp",
+                "udp",
+                "icmp",
+                "all"
+              ]
             }
           },
           "ports": {
             "type": "array",
-            "description": "List of ports or port ranges",
             "items": {
               "type": "string"
             }
           },
           "source_ranges": {
             "type": "array",
-            "description": "Source CIDR ranges",
             "items": {
               "type": "string"
             },
@@ -49,7 +59,6 @@
           },
           "source_tags": {
             "type": "array",
-            "description": "Source network tags",
             "items": {
               "type": "string"
             },
@@ -57,14 +66,12 @@
           },
           "target_tags": {
             "type": "array",
-            "description": "Target network tags",
             "items": {
               "type": "string"
             }
           },
           "description": {
-            "type": "string",
-            "description": "Human-readable description of the rule"
+            "type": "string"
           }
         }
       }

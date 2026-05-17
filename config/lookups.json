@@ -1,0 +1,65 @@
+{
+  "machine_types": {
+    "gcp": {
+      "small": "e2-micro",
+      "medium": "e2-small",
+      "large": "e2-medium"
+    },
+    "aws": {
+      "small": "t3.micro",
+      "medium": "t3.small",
+      "large": "t3.medium"
+    },
+    "azure": {
+      "small": "Standard_F1als_v7",
+      "medium": "Standard_F1als_v7",
+      "large": "Standard_F1als_v7"
+    }
+  },
+  "os_images": {
+    "gcp": {
+      "debian-12": "debian-cloud/debian-12",
+      "debian-11": "debian-cloud/debian-11",
+      "ubuntu-22": "ubuntu-os-cloud/ubuntu-2204-lts"
+    },
+    "aws": {
+      "debian-12": "ami-064519b8c76274859",
+      "debian-11": "ami-0a7a4e87939439934",
+      "ubuntu-22": "ami-0c7217cdde317cfec"
+    },
+    "azure": {
+      "debian-12": "Debian:debian-12:12-gen2:latest",
+      "debian-11": "Debian:debian-11:11:latest",
+      "ubuntu-22": "Canonical:0001-com-ubuntu-server-jammy:22_04-lts:latest"
+    }
+  },
+  "disk_types": {
+    "gcp": {
+      "standard": "pd-standard",
+      "balanced": "pd-balanced",
+      "ssd": "pd-ssd"
+    },
+    "aws": {
+      "standard": "gp3",
+      "balanced": "gp3",
+      "ssd": "io2"
+    },
+    "azure": {
+      "standard": "Standard_LRS",
+      "balanced": "StandardSSD_LRS",
+      "ssd": "Premium_LRS"
+    }
+  },
+  "ssh_users": {
+    "aws": {
+      "debian-12": "admin",
+      "debian-11": "admin",
+      "ubuntu-22": "ubuntu"
+    },
+    "azure": {
+      "debian-12": "azureuser",
+      "debian-11": "azureuser",
+      "ubuntu-22": "azureuser"
+    }
+  }
+}

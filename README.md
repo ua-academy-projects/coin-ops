@@ -1,162 +1,142 @@
-# GCP Terraform Bootstrap
+# Multi-Cloud Terraform Bootstrap
 
-Bootstrap a GCP project for Terraform using a Service Account, remote state in GCS,
-and a modular infrastructure with JSON-driven configuration.
+This project is a learning Terraform setup that can deploy the same logical environment to GCP, AWS, or Azure. One Terraform environment is used for all clouds, and the target cloud is selected with a single variable.
 
-## Architecture
+## Workflow
 
-    Local Machine (Mac)
-        |
-        | ssh -A -i ~/.ssh/gcp_jump -p 47832 terraform@JUMP_HOST_IP
-        v
-    +--------------------------------------------------+
-    |           VPC: terraform-network                 |
-    |           Subnet: 10.0.0.0/24                    |
-    |                                                  |
-    |   +-----------------+                            |
-    |   |   vm-4-jump     | <-- public IP, port 47832  |
-    |   +--------+--------+                            |
-    |            |                                     |
-    |      +-----+-----+                               |
-    |      v     v     v                               |
-    |   +----++----++----+                             |
-    |   |vm-1||vm-2||vm-3|  <-- internal only          |
-    |   +----++----++----+                             |
-    |                                                  |
-    +--------------------------------------------------+
+Run all commands from the repository root.
 
-    State: gs://tfstate-project-8888321c-.../environments/learning/
+Set the SSH public key for VM access:
+
+```bash
+export TF_VAR_ssh_public_key="$(cat ~/.ssh/gcp_jump.pub)"
+```
+
+Azure additionally requires Service Principal credentials in the environment:
+
+```bash
+export ARM_CLIENT_ID="<service-principal-app-id>"
+export ARM_CLIENT_SECRET="$(security find-generic-password -a terraform-sp -s azure-arm-secret -w)"
+export ARM_TENANT_ID="<tenant-id>"
+export ARM_SUBSCRIPTION_ID="<subscription-id>"
+```
+
+Deploy to a cloud (replace `gcp` with `aws` or `azure`):
+
+```bash
+./deploy.sh gcp init
+./deploy.sh gcp plan
+./deploy.sh gcp apply
+```
+
+Destroy:
+
+```bash
+./deploy.sh gcp destroy
+```
 
 ## Repository Structure
 
-    .
-    |-- bootstrap.sh                          # Creates SA, bucket, key, .env
-    |-- .gitignore
-    |-- .pre-commit-config.yaml               # Auto-checks before every commit
-    |-- .tflint.hcl                           # Terraform linter rules
-    |-- .terraform-version                    # Pinned Terraform version (1.9.5)
-    |
-    |-- config/                               # Single Source of Truth
-    |   |-- general.json                      # Project defaults (region, OS, SSH port)
-    |   |-- networks.json                     # VPC networks and subnets
-    |   |-- firewall.json                     # Firewall rules
-    |   |-- vms.json                          # VM instances
-    |   |-- schemas/                          # JSON Schema validation
-    |       |-- general.schema.json
-    |       |-- networks.schema.json
-    |       |-- firewall.schema.json
-    |       |-- vms.schema.json
-    |
-    |-- infrastructure/
-    |   |-- modules/                          # Reusable Terraform modules
-    |   |   |-- network/                      # Creates VPC + subnets
-    |   |   |-- firewall/                     # Creates one firewall rule
-    |   |   |-- vm/                           # Creates one VM
-    |   |
-    |   |-- environments/
-    |       |-- learning/                     # Entry point for terraform commands
-    |           |-- backend.tf                # Remote state in GCS
-    |           |-- versions.tf               # Terraform and provider versions
-    |           |-- providers.tf              # Google provider config
-    |           |-- variables.tf              # Input variables (SSH key)
-    |           |-- locals.tf                 # Reads JSON config files
-    |           |-- main.tf                   # Calls modules with JSON data
-    |           |-- outputs.tf                # Outputs after apply
-    |
-    |-- docs/
-        |-- SERVICE_ACCOUNT.md                # SA permissions
-        |-- STATE.md                          # Remote state documentation
-        |-- JUMP_HOST.md                      # Jump host architecture and SSH access
+```text
+.
+|-- bootstrap/
+|   |-- gcp/bootstrap.sh
+|   |-- aws/bootstrap.sh
+|   `-- azure/bootstrap.sh
+|-- config/
+|   |-- general.json
+|   |-- networks.json
+|   |-- firewall.json
+|   |-- vms.json
+|   |-- lookups.json
+|   `-- schemas/
+|       |-- general.schema.json
+|       |-- networks.schema.json
+|       |-- firewall.schema.json
+|       |-- vms.schema.json
+|       `-- lookups.schema.json
+|-- infrastructure/
+|   |-- modules/
+|   |   |-- gcp/
+|   |   |   |-- network/
+|   |   |   |-- firewall/
+|   |   |   `-- vm/
+|   |   |-- aws/
+|   |   |   |-- network/
+|   |   |   |-- firewall/
+|   |   |   `-- vm/
+|   |   `-- azure/
+|   |       |-- network/
+|   |       |-- firewall/
+|   |       `-- vm/
+|   `-- environments/
+|       `-- learning/
+|           |-- versions.tf
+|           |-- providers.tf
+|           |-- variables.tf
+|           |-- locals.tf
+|           |-- main.tf
+|           |-- outputs.tf
+|           |-- backend.tf
+|           `-- backends/
+|               |-- gcp.hcl
+|               |-- aws.hcl
+|               |-- azure.hcl
+|               |-- backend-gcp.tf.template
+|               |-- backend-aws.tf.template
+|               `-- backend-azure.tf.template
+`-- deploy.sh
+```
 
-## How It Works
+## How Cloud Switching Works
 
-All infrastructure is described in JSON files under `config/`.
-Terraform reads these files and passes the data to reusable modules.
-To add a new VM — add a block to `config/vms.json` and run `terraform apply`.
-No `.tf` files need to be changed.
+`config/*.json` contains cloud-neutral resource definitions. Terraform filters those resources by `var.cloud`, and `main.tf` uses `count` or empty `for_each` maps so only the selected cloud creates resources.
 
-### Override Logic
+```bash
+terraform apply -var="cloud=gcp"
+terraform apply -var="cloud=aws"
+terraform apply -var="cloud=azure"
+```
 
-Each VM uses defaults from `general.json`. Any parameter can be overridden
-per VM in `vms.json`:
+The backend type cannot be dynamic in Terraform, so `deploy.sh` copies the matching backend template into `infrastructure/environments/learning/backend.tf` before running Terraform.
 
-    "vm-5-worker": {
-      "network": "terraform-network",
-      "subnet": "terraform-network-subnet",
-      "machine_type": "e2-small",         <- overrides default e2-micro
-      "disk_size_gb": 20,                 <- overrides default 10
-      "assign_public_ip": false,
-      "tags": ["internal-vm", "terraform-managed"],
-      "labels": { "role": "worker" }
-    }
+## Per-VM Provider Override
 
-## Prerequisites
+By default every VM is created in the cloud passed via `var.cloud`. A VM can be pinned to a specific cloud by adding an optional `provider` field in `config/vms.json`:
 
-- Google Cloud SDK (gcloud)
-- Terraform >= 1.5.0
-- GCP project with billing enabled
-- pre-commit, tflint, tfsec, terraform-docs
+```json
+"vm-1": {
+  "provider": "azure",
+  "network": "terraform-network",
+  "subnet": "terraform-network-subnet"
+}
+```
 
-        brew install pre-commit tflint tfsec terraform-docs jq
+Rules:
 
-## Quick Start
+- VM **without** a `provider` field is created in whatever cloud `var.cloud` selects.
+- VM **with** a `provider` field is created only when `var.cloud` matches that provider; otherwise it is skipped for that run.
 
-1. Run the bootstrap script:
+This logic lives in `infrastructure/environments/learning/locals.tf`, where each VM's target cloud is resolved with `lookup(vm, "provider", var.cloud)` and the VM map is filtered accordingly.
 
-        ./bootstrap.sh
+## State Backends
 
-2. Generate SSH key pair:
+Each cloud stores Terraform state in its own backend:
 
-        ssh-keygen -t ed25519 -f ~/.ssh/gcp_jump -C "terraform" -N ""
+```text
+GCP    gs://tfstate-project-8888321c-54a9-4dac-86d/environments/learning/
+AWS    s3://tfstate-kazachuk-aws-learning/environments/learning/terraform.tfstate
+Azure  Storage Account tfstatekazachukazure, container tfstate, key environments/learning/terraform.tfstate
+```
 
-3. Load environment variables:
+AWS state locking uses the DynamoDB table `terraform-state-lock`. Azure state locking is handled natively through blob leases. GCP uses native object-based locking.
 
-        source .env
+## Authentication
 
-4. Go to the environment directory:
+- **GCP** — service account key flow with `sa-key.json`.
+- **AWS** — credentials configured by `aws configure`.
+- **Azure** — Service Principal credentials supplied through the `ARM_*` environment variables shown in the Workflow section.
 
-        cd infrastructure/environments/learning
+## Configuration
 
-5. Initialize Terraform:
-
-        terraform init
-
-6. Review the plan:
-
-        terraform plan
-
-7. Apply:
-
-        terraform apply
-
-8. Connect to jump host (SSH command is shown in outputs):
-
-        ssh-add ~/.ssh/gcp_jump
-        ssh -A -i ~/.ssh/gcp_jump -p 47832 terraform@JUMP_HOST_IP
-
-9. From jump host, connect to internal VMs:
-
-        ssh -p 47832 terraform@INTERNAL_VM_IP
-
-10. Destroy when done:
-
-        terraform destroy
-
-## Security
-
-- `sa-key.json` and `.env` are excluded from Git
-- State stored in versioned, access-controlled GCS bucket with state locking
-- Service Account follows least privilege principle
-- SSH on non-default port 47832 (configured via startup script)
-- Root login disabled, password authentication disabled
-- Jump host accepts SSH only from a specific trusted IP
-- Internal VMs have no public IP
-- SSH agent forwarding used — no private keys stored on jump host
-- JSON Schema validates config files in VS Code before terraform runs
-- pre-commit hooks run fmt, validate, tflint, tfsec before every commit
-
-## Documentation
-
-- [Service Account Permissions](docs/SERVICE_ACCOUNT.md)
-- [Terraform Remote State](docs/STATE.md)
-- [Jump Host Architecture](docs/JUMP_HOST.md)
+`config/lookups.json` maps abstract values such as `small`, `debian-12`, and `standard` to provider-specific machine types, images, and disk types for all three clouds. This keeps `general.json` and `vms.json` cloud-neutral.
