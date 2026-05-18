@@ -75,13 +75,19 @@ the refresh graph and disable secret-version reads:
 ```bash
 cd /mnt/d/Internship/coin-ops-local/coin-ops/terraform
 terraform state pull > state-before-repair-$(date +%Y%m%d-%H%M%S).json
-bash repair-refresh.sh --enabled gcp plan
-bash repair-refresh.sh --enabled gcp apply
+bash repair-refresh.sh --enabled gcp plan -var='suppress_secret_manager_reads=true'
+bash repair-refresh.sh --enabled gcp apply -var='suppress_secret_manager_reads=true'
 ```
 
 Use `apply` only after reviewing the `plan` output. The helper runs from a
 temporary Terraform copy against the selected backend state; checked-in
 Terraform files remain unchanged.
+
+`suppress_secret_manager_reads=true` is the recovery switch for situations
+where the configured secret backend was already deleted or is temporarily
+unreachable. It prevents Terraform from reading secret **versions** during
+plan/refresh/destroy while still allowing the rest of the graph to be
+reconciled or torn down.
 
 ## Very First Start of Infrastructure
 
@@ -95,7 +101,47 @@ Review the split SSOT files under `terraform/config/` and adjust the committed n
 - `database.json`: managed PostgreSQL defaults plus GCP/AWS/Azure sizing profiles
 - `dns.json`: `dns.primary_cloud` and Cloudflare defaults
 - `secrets.json`: logical secret names used by all cloud secret managers
-- `instances.json`: VM topology and per-VM cloud overrides
+- `instances.json`: VM topology, per-VM cloud overrides, and explicit `gateway` hosts
+- `networks.json`: per-cloud CIDR/subnet layout, firewall rules, Tailscale settings, remote route metadata, and optional workload static-route fallback roles
+
+For the current architecture, keep `tailscale.snat_subnet_routes = true`
+unless the gateway design is changed to something stronger than a single-NIC
+external-subnet router. Disabling SNAT breaks return-path routing for private
+workload hosts behind that gateway.
+
+Remote cloud CIDRs should normally be delivered through cloud-native route
+tables. Leave `tailscale.static_route_roles` empty unless you are explicitly
+debugging with host-level fallback routes.
+
+### Multicloud acceptance
+
+After `terraform apply`, `ansible/provision.yml`, and `ansible/deploy.yml`,
+check the routing path in this order:
+
+```bash
+ssh -F /home/notebook/projects/coin-ops/terraform/config/ssh_config coinops-gcp-gateway 'sudo tailscale status'
+ssh -F /home/notebook/projects/coin-ops/terraform/config/ssh_config coinops-gcp-gateway 'sudo iptables -t nat -S POSTROUTING | grep tailscale0'
+ssh -F /home/notebook/projects/coin-ops/terraform/config/ssh_config coinops-aws-app-2 'curl -vk https://localhost:8443/health'
+ssh -F /home/notebook/projects/coin-ops/terraform/config/ssh_config coinops-gcp-app-1 'curl -vk --connect-timeout 5 https://10.30.1.95:8443/health'
+```
+
+The second command should show a rule like:
+
+```bash
+-A POSTROUTING -s 10.20.0.0/16 -o tailscale0 -j MASQUERADE
+```
+
+If the backend is healthy locally on `app-2` but the final cross-cloud curl
+fails, check for stale fallback routes on workload hosts:
+
+```bash
+ssh -F /home/notebook/projects/coin-ops/terraform/config/ssh_config coinops-gcp-app-1 'ip route'
+ssh -F /home/notebook/projects/coin-ops/terraform/config/ssh_config coinops-aws-app-2 'ip route'
+```
+
+`app-ui` and `app-backend` should not keep `via ... onlink` routes for remote
+cloud CIDRs unless `tailscale.static_route_roles` was intentionally enabled for
+debugging.
 
 ### 2. Run bootstrap
 
@@ -264,7 +310,7 @@ ansible-playbook -i ansible/inventory ansible/provision.yml --syntax-check
 ansible-playbook -i ansible/inventory ansible/deploy.yml --syntax-check
 ```
 
-The inventory graph should contain cloud groups and role groups such as `gcp`, `aws`, `azure`, `role_app_ui`, `role_app_backend`, `role_jump_host`, and `role_nat`.
+The inventory graph should contain cloud groups and role groups such as `gcp`, `aws`, `azure`, `role_app_ui`, `role_app_backend`, `role_jump_host`, `role_gateway`, and `role_nat`.
 
 ## Correctly Destroy Infrastructure Without Affecting Important Parts
 
@@ -310,6 +356,27 @@ bash full-destroy.sh --yes-really-destroy-stateful
 ```
 
 This helper creates a temporary Terraform copy, removes GCP/AWS/Azure hard destroy protections there, and runs `terraform destroy` against the same backend state. The checked-in Terraform files remain unchanged. Disabled clouds are stubbed inside the temporary copy, so an AWS/GCP-only destroy does not configure the Azure provider.
+
+When recovering from a broken destroy or from already-deleted secret versions,
+pass the recovery switch through to the helper:
+
+```bash
+cd /mnt/d/Internship/coin-ops-local/coin-ops
+source local/generated-gcp-env.sh
+cd terraform
+bash full-destroy.sh --yes-really-destroy-stateful --cloud gcp -var='suppress_secret_manager_reads=true'
+```
+
+`full-destroy.sh` now also performs provider-side pre-cleanup for stateful
+resources before the final Terraform destroy:
+
+- disables AWS RDS deletion protection
+- disables and deletes GCP Cloud SQL instances found in state
+- deletes GCP private service connections
+- deletes GCP reserved private-service-access peering ranges
+
+Use plain `terraform destroy` only for compute-only teardown or normal
+day-to-day iteration. Use `full-destroy.sh` for intentional stateful teardown.
 
 To fully destroy only one cloud without touching the others, pass `--cloud`.
 For example, to remove only Azure-managed infrastructure, including protected

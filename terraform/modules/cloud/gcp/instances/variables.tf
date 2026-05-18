@@ -51,6 +51,12 @@ variable "private_subnet_cidr" {
   default     = ""
 }
 
+variable "vpc_cidr" {
+  type        = string
+  description = "CIDR of the cloud VPC. Injected into gateway startup templates for Tailscale-side SNAT."
+  default     = ""
+}
+
 variable "username" {
   type        = string
   description = "Custom OS user to create on every VM (e.g. 'coinops'). Injected into user_init_script template."

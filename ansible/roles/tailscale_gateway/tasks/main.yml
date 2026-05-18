@@ -1,0 +1,171 @@
+---
+- name: Install gateway routing prerequisites
+  apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+      - iptables-persistent
+      - netfilter-persistent
+    state: present
+    lock_timeout: "{{ provisioning_apt_lock_timeout | default(900) }}"
+
+- name: Ensure Tailscale apt keyring directory exists
+  file:
+    path: /usr/share/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Install Tailscale signing key
+  shell: |
+    set -euo pipefail
+    curl -fsSL https://pkgs.tailscale.com/stable/debian/{{ ansible_distribution_release }}.noarmor.gpg \
+      -o /usr/share/keyrings/tailscale-archive-keyring.gpg
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Install Tailscale apt repository
+  copy:
+    dest: /etc/apt/sources.list.d/tailscale.list
+    mode: "0644"
+    content: |
+      deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] https://pkgs.tailscale.com/stable/debian {{ ansible_distribution_release }} main
+
+- name: Refresh apt cache after adding Tailscale repository
+  apt:
+    update_cache: yes
+    lock_timeout: "{{ provisioning_apt_lock_timeout | default(900) }}"
+
+- name: Install Tailscale
+  apt:
+    name: tailscale
+    state: present
+    lock_timeout: "{{ provisioning_apt_lock_timeout | default(900) }}"
+
+- name: Ensure gateway sysctl settings are present
+  copy:
+    dest: /etc/sysctl.d/99-coinops-gateway.conf
+    mode: "0644"
+    content: |
+      net.ipv4.ip_forward = 1
+      net.ipv6.conf.all.forwarding = 1
+
+- name: Apply gateway sysctl settings
+  command: sysctl --system
+  changed_when: false
+
+- name: Persist gateway masquerade rules
+  copy:
+    dest: /usr/local/sbin/coinops-gateway-nat.sh
+    mode: "0755"
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      IFACE=$(ip route show default | awk '/default/ { print $5 }' | head -1)
+      iptables -t nat -C POSTROUTING -o "$IFACE" -j MASQUERADE 2>/dev/null || \
+        iptables -t nat -A POSTROUTING -o "$IFACE" -j MASQUERADE
+      iptables -t nat -C POSTROUTING -s {{ cloud_vpc_cidr }} -o tailscale0 -j MASQUERADE 2>/dev/null || \
+        iptables -t nat -A POSTROUTING -s {{ cloud_vpc_cidr }} -o tailscale0 -j MASQUERADE
+      iptables -C FORWARD -i "$IFACE" -o tailscale0 -j ACCEPT 2>/dev/null || \
+        iptables -A FORWARD -i "$IFACE" -o tailscale0 -j ACCEPT
+      iptables -C FORWARD -i tailscale0 -o "$IFACE" -j ACCEPT 2>/dev/null || \
+        iptables -A FORWARD -i tailscale0 -o "$IFACE" -j ACCEPT
+      iptables -C FORWARD -i "$IFACE" -o "$IFACE" -j ACCEPT 2>/dev/null || \
+        iptables -A FORWARD -i "$IFACE" -o "$IFACE" -j ACCEPT
+      iptables -C FORWARD -i "$IFACE" -o "$IFACE" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || \
+        iptables -A FORWARD -i "$IFACE" -o "$IFACE" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+      netfilter-persistent save
+
+- name: Install gateway NAT persistence unit
+  copy:
+    dest: /etc/systemd/system/coinops-gateway-nat.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Coin-ops gateway NAT bootstrap
+      Wants=network-online.target
+      After=network-online.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/coinops-gateway-nat.sh
+      RemainAfterExit=yes
+
+      [Install]
+      WantedBy=multi-user.target
+
+- name: Enable gateway NAT persistence unit
+  systemd:
+    daemon_reload: yes
+    name: coinops-gateway-nat.service
+    enabled: yes
+    state: restarted
+
+- name: Verify gateway Tailscale masquerade rule is present
+  command: iptables -t nat -S POSTROUTING
+  register: gateway_postrouting_rules
+  changed_when: false
+  failed_when: >-
+    ('-A POSTROUTING -s ' ~ cloud_vpc_cidr ~ ' -o tailscale0 -j MASQUERADE')
+    not in gateway_postrouting_rules.stdout
+
+- name: Ensure tailscaled service is running
+  systemd:
+    name: tailscaled
+    enabled: yes
+    state: started
+
+- name: Configure Tailscale subnet router
+  command:
+    argv:
+      - tailscale
+      - up
+      - --authkey={{ tailscale_auth_key }}
+      - --advertise-routes={{ tailscale_advertised_routes | join(',') }}
+      - --advertise-tags={{ tailscale_tags | join(',') }}
+      - --hostname={{ my_cloud }}-{{ infra_instance_key }}
+      - --accept-routes={{ 'true' if tailscale_accept_routes else 'false' }}
+      - --snat-subnet-routes={{ 'true' if tailscale_snat_subnet_routes else 'false' }}
+      - --reset
+  no_log: true
+  changed_when: false
+
+- name: Install gateway tailscale route script
+  copy:
+    dest: /usr/local/sbin/coinops-gateway-tailscale-routes.sh
+    mode: "0755"
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      {% for cidr in tailscale_remote_route_cidrs %}
+      ip route replace {{ cidr }} dev tailscale0
+      {% endfor %}
+  when: tailscale_remote_route_cidrs | length > 0
+
+- name: Install gateway tailscale route unit
+  copy:
+    dest: /etc/systemd/system/coinops-gateway-tailscale-routes.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Coin-ops gateway tailscale routes
+      Wants=network-online.target tailscaled.service
+      After=network-online.target tailscaled.service
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/coinops-gateway-tailscale-routes.sh
+      RemainAfterExit=yes
+
+      [Install]
+      WantedBy=multi-user.target
+  when: tailscale_remote_route_cidrs | length > 0
+
+- name: Enable gateway tailscale route unit
+  systemd:
+    daemon_reload: yes
+    name: coinops-gateway-tailscale-routes.service
+    enabled: yes
+    state: restarted
+  when: tailscale_remote_route_cidrs | length > 0

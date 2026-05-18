@@ -1,27 +1,87 @@
 {
-    "vpc_name": "coin-ops-vpc",
-    "vpc_cidr": "10.10.0.0/16",
     "routing": {
         "private_default_route": {
             "destination_cidr": "0.0.0.0/0",
             "priority": 800,
             "target_tags": ["internal-vm"],
-            "name": "coin-ops-private-default-via-nat"
-        }
+            "name": "coin-ops-private-default-via-gateway"
+        },
+        "remote_target_tags": ["internal-vm", "app-ui", "app-backend"]
     },
     "security": {
         "egress_cidrs": ["0.0.0.0/0"]
     },
-    "subnets": {
-        "internal": {
-            "cidr": "10.10.1.0/24",
-            "availability_zone_key": "primary"
+    "cloud_networks": {
+        "gcp": {
+            "vpc_name": "coin-ops-gcp-vpc",
+            "vpc_cidr": "10.20.0.0/16",
+            "subnets": {
+                "internal": {
+                    "cidr": "10.20.1.0/24",
+                    "availability_zone_key": "primary"
+                },
+                "database": {
+                    "cidr": "10.20.3.0/24",
+                    "availability_zone_key": "secondary"
+                },
+                "external": {
+                    "cidr": "10.20.2.0/24",
+                    "public": true
+                }
+            }
         },
-        "database": {
-            "cidr": "10.10.3.0/24",
-            "availability_zone_key": "secondary"
+        "aws": {
+            "vpc_name": "coin-ops-aws-vpc",
+            "vpc_cidr": "10.30.0.0/16",
+            "subnets": {
+                "internal": {
+                    "cidr": "10.30.1.0/24",
+                    "availability_zone_key": "primary"
+                },
+                "database": {
+                    "cidr": "10.30.3.0/24",
+                    "availability_zone_key": "secondary"
+                },
+                "external": {
+                    "cidr": "10.30.2.0/24",
+                    "public": true
+                }
+            }
         },
-        "external": { "cidr": "10.10.2.0/24", "public": true }
+        "azure": {
+            "vpc_name": "coin-ops-azure-vpc",
+            "vpc_cidr": "10.40.0.0/16",
+            "subnets": {
+                "internal": {
+                    "cidr": "10.40.1.0/24",
+                    "availability_zone_key": "primary"
+                },
+                "database": {
+                    "cidr": "10.40.3.0/24",
+                    "availability_zone_key": "secondary"
+                },
+                "external": {
+                    "cidr": "10.40.2.0/24",
+                    "public": true
+                }
+            }
+        }
+    },
+    "tailscale": {
+        "enabled": true,
+        "control_plane": "saas",
+        "auth_key_secret_name": "TAILSCALE_AUTH_KEY",
+        "accept_routes": true,
+        "snat_subnet_routes": true,
+        "static_route_roles": [],
+        "tags": {
+            "gateway": ["tag:coinops-gateway"]
+        },
+        "advertised_routes_per_cloud": {
+            "gcp": ["10.20.0.0/16"],
+            "aws": ["10.30.0.0/16"],
+            "azure": ["10.40.0.0/16"]
+        }
     },
     "firewall_rules": {
         "allow-ssh-jump-host": {
@@ -29,24 +89,38 @@
             "source_cidrs": ["0.0.0.0/0"],
             "target_role": "jump-host"
         },
-        "allow-nat-from-internal-to-nat": {
+        "allow-http-https-app-ui": {
+            "protocols": [{ "protocol": "tcp", "ports": ["443"] }],
+            "source_cidrs": ["0.0.0.0/0"],
+            "target_role": "app-ui"
+        },
+        "allow-tailscale-gateway-udp": {
+            "protocols": [{ "protocol": "udp", "ports": ["41641"] }],
+            "source_cidrs": ["0.0.0.0/0"],
+            "target_role": "gateway"
+        },
+        "allow-gateway-forwarding": {
             "protocols": [
                 { "protocol": "tcp", "ports": ["1-65535"] },
                 { "protocol": "udp", "ports": ["1-65535"] },
                 { "protocol": "icmp" }
             ],
-            "source_cidrs": ["10.10.1.0/24"],
+            "source_cidrs": ["10.20.0.0/16", "10.30.0.0/16", "10.40.0.0/16"],
+            "target_role": "gateway"
+        },
+        "allow-fallback-nat-to-jump-host": {
+            "protocols": [
+                { "protocol": "tcp", "ports": ["1-65535"] },
+                { "protocol": "udp", "ports": ["1-65535"] },
+                { "protocol": "icmp" }
+            ],
+            "source_cidrs": ["10.20.0.0/16", "10.30.0.0/16", "10.40.0.0/16"],
             "target_role": "jump-host"
         },
-        "allow-nat-admin-from-jump": {
+        "allow-gateway-admin-from-jump": {
             "protocols": [{ "protocol": "tcp", "ports": ["53725"] }],
             "source_role": "jump-host",
-            "target_role": "jump-host"
-        },
-        "allow-http-https-app-ui": {
-            "protocols": [{ "protocol": "tcp", "ports": ["443"] }],
-            "source_cidrs": ["0.0.0.0/0"],
-            "target_role": "app-ui"
+            "target_role": "gateway"
         },
         "allow-app-ui-from-jump": {
             "protocols": [{ "protocol": "tcp", "ports": ["53725"] }],
@@ -54,13 +128,26 @@
             "target_role": "app-ui"
         },
         "allow-app-backend-from-jump": {
-            "protocols": [{ "protocol": "tcp", "ports": ["53725", "8443"] }],
+            "protocols": [{ "protocol": "tcp", "ports": ["53725"] }],
             "source_role": "jump-host",
             "target_role": "app-backend"
         },
-        "allow-backend-from-ui": {
-            "protocols": [{ "protocol": "tcp", "ports": ["8443"] }],
-            "source_role": "app-ui",
+        "allow-app-ui-from-multicloud": {
+            "protocols": [
+                { "protocol": "tcp", "ports": ["1-65535"] },
+                { "protocol": "udp", "ports": ["1-65535"] },
+                { "protocol": "icmp" }
+            ],
+            "source_cidrs": ["10.20.0.0/16", "10.30.0.0/16", "10.40.0.0/16"],
+            "target_role": "app-ui"
+        },
+        "allow-app-backend-from-multicloud": {
+            "protocols": [
+                { "protocol": "tcp", "ports": ["1-65535"] },
+                { "protocol": "udp", "ports": ["1-65535"] },
+                { "protocol": "icmp" }
+            ],
+            "source_cidrs": ["10.20.0.0/16", "10.30.0.0/16", "10.40.0.0/16"],
             "target_role": "app-backend"
         }
     }

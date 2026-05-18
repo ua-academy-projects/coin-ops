@@ -51,6 +51,7 @@ locals {
       }) : "",
       cfg.startup_script != "" ? templatefile("${path.root}/${cfg.startup_script}", {
         private_subnet_cidr = var.private_subnet_cidr
+        vpc_cidr            = var.vpc_cidr
       }) : "",
     ]))
   }

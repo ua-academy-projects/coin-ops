@@ -100,8 +100,21 @@ variable "ghcr_token" {
   }
 }
 
+variable "tailscale_auth_key" {
+  description = "Tailscale auth key used by gateway subnet routers."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "seed_secret_manager" {
   description = "When true, seed/update enabled cloud secret managers from local bootstrap secrets input."
+  type        = bool
+  default     = false
+}
+
+variable "suppress_secret_manager_reads" {
+  description = "When true, skip reading existing secret manager payloads. Useful for cleanup/repair after manual resource deletion."
   type        = bool
   default     = false
 }

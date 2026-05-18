@@ -37,6 +37,12 @@ variable "db_tier" {
   default     = "db-f1-micro"
 }
 
+variable "edition" {
+  description = "Cloud SQL edition"
+  type        = string
+  default     = "ENTERPRISE"
+}
+
 variable "disk_type" {
   description = "CloudSQL disk type"
   type        = string

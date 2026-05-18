@@ -7,7 +7,16 @@
             "can_ip_forward": true,
             "role": "jump-host",
             "startup_script": "scripts/nat-init.sh.tpl",
-            "clouds": ["gcp", "aws"]
+            "clouds": ["gcp", "aws", "azure"]
+        },
+        "gateway": {
+            "subnet": "external",
+            "has_public_ip": true,
+            "instance_size": "small",
+            "can_ip_forward": true,
+            "role": "gateway",
+            "startup_script": "scripts/gateway-init.sh.tpl",
+            "clouds": ["gcp", "aws", "azure"]
         },
         "app-1": {
             "subnet": "external",

@@ -35,7 +35,8 @@ resource "google_sql_database_instance" "main" {
   depends_on = [google_service_networking_connection.default]
 
   settings {
-    tier = var.db_tier
+    edition = var.edition
+    tier    = var.db_tier
 
     ip_configuration {
       ipv4_enabled    = false

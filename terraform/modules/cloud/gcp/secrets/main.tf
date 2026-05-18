@@ -37,5 +37,6 @@ resource "google_secret_manager_secret_version" "app_secrets_data" {
   secret_data = jsonencode({
     GHCR_TOKEN           = var.ghcr_token
     CLOUDFLARE_API_TOKEN = var.cloudflare_api_token
+    TAILSCALE_AUTH_KEY   = var.tailscale_auth_key
   })
 }

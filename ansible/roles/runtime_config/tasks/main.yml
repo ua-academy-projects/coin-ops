@@ -173,4 +173,5 @@
     rabbitmq_password: "{{ db_secrets.RABBITMQ_PASSWORD | default('', true) }}"
     registry_token: "{{ app_secrets.GHCR_TOKEN | default('', true) }}"
     cloudflare_api_token: "{{ app_secrets.CLOUDFLARE_API_TOKEN | default('', true) }}"
+    tailscale_auth_key: "{{ app_secrets[tailscale_auth_key_secret_name] | default('', true) }}"
   no_log: true

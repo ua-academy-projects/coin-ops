@@ -221,6 +221,95 @@
   notify: Reload UFW
   when: not common_is_forwarder
 
+- name: Determine whether this host needs persistent multicloud static routes
+  set_fact:
+    common_manage_multicloud_routes: >-
+      {{
+        tailscale_enabled
+        and host_instance_config.get('role', '') in tailscale_static_route_roles
+        and (gateway_ip | length > 0)
+        and (tailscale_remote_route_cidrs | length > 0)
+      }}
+
+- name: Install persistent multicloud static route script
+  copy:
+    dest: /usr/local/sbin/coinops-static-routes.sh
+    mode: "0755"
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      GATEWAY_IP="{{ gateway_ip }}"
+      ROUTE_IFACE="$(ip route get "$GATEWAY_IP" | awk '/dev/ {for (i = 1; i <= NF; i++) if ($i == "dev") { print $(i+1); exit }}')"
+      if [[ -z "$ROUTE_IFACE" ]]; then
+        echo "Could not determine route interface for gateway $GATEWAY_IP" >&2
+        exit 1
+      fi
+      {% for cidr in tailscale_remote_route_cidrs %}
+      ip route replace {{ cidr }} via "$GATEWAY_IP" dev "$ROUTE_IFACE" onlink
+      {% endfor %}
+  when: common_manage_multicloud_routes
+
+- name: Install persistent multicloud static route unit
+  copy:
+    dest: /etc/systemd/system/coinops-static-routes.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Coin-ops multicloud static routes
+      Wants=network-online.target
+      After=network-online.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/coinops-static-routes.sh
+      RemainAfterExit=yes
+
+      [Install]
+      WantedBy=multi-user.target
+  when: common_manage_multicloud_routes
+
+- name: Enable multicloud static route unit
+  systemd:
+    daemon_reload: yes
+    name: coinops-static-routes.service
+    enabled: yes
+    state: restarted
+  when: common_manage_multicloud_routes
+
+- name: Remove persistent multicloud route unit when not needed
+  systemd:
+    daemon_reload: yes
+    name: coinops-static-routes.service
+    enabled: no
+    state: stopped
+  failed_when: false
+  when: not common_manage_multicloud_routes
+
+- name: Delete persistent multicloud route unit file when not needed
+  file:
+    path: /etc/systemd/system/coinops-static-routes.service
+    state: absent
+  when: not common_manage_multicloud_routes
+
+- name: Remove persistent multicloud route script when not needed
+  file:
+    path: /usr/local/sbin/coinops-static-routes.sh
+    state: absent
+  when: not common_manage_multicloud_routes
+
+- name: Remove stale multicloud static routes when host-level routing is disabled
+  shell: |
+    set -euo pipefail
+    {% for cidr in tailscale_remote_route_cidrs %}
+    ip route del {{ cidr }} >/dev/null 2>&1 || true
+    {% endfor %}
+  args:
+    executable: /bin/bash
+  changed_when: false
+  when:
+    - tailscale_enabled
+    - not common_manage_multicloud_routes
+
 - name: Enable UFW
   community.general.ufw:
     state: enabled

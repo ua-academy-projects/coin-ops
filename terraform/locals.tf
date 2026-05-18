@@ -54,14 +54,71 @@ locals {
   aws_compute_enabled   = local.aws_enabled && length(local.aws_instances_base) > 0
   azure_compute_enabled = local.azure_enabled && length(local.azure_instances_base) > 0
 
-  subnets               = lookup(local.networks, "subnets", {})
-  firewall_rules        = lookup(local.networks, "firewall_rules", {})
-  routing               = lookup(local.networks, "routing", {})
-  security              = lookup(local.networks, "security", {})
-  vpc_name              = lookup(local.networks, "vpc_name", "vpc-network")
-  vpc_cidr              = lookup(local.networks, "vpc_cidr", "10.10.0.0/16")
-  private_default_route = lookup(local.routing, "private_default_route", {})
-  egress_cidrs          = lookup(local.security, "egress_cidrs", ["0.0.0.0/0"])
+  cloud_networks = lookup(local.networks, "cloud_networks", {})
+  routing        = lookup(local.networks, "routing", {})
+  security       = lookup(local.networks, "security", {})
+  firewall_rules = lookup(local.networks, "firewall_rules", {})
+  default_network_cfg = {
+    vpc_name = "coin-ops-vpc"
+    vpc_cidr = "10.10.0.0/16"
+    subnets = {
+      internal = { cidr = "10.10.1.0/24" }
+      database = { cidr = "10.10.3.0/24" }
+      external = { cidr = "10.10.2.0/24", public = true }
+    }
+    remote_routes = []
+  }
+  gcp_network_cfg_raw   = merge(local.default_network_cfg, lookup(local.cloud_networks, "gcp", {}))
+  aws_network_cfg_raw   = merge(local.default_network_cfg, lookup(local.cloud_networks, "aws", {}))
+  azure_network_cfg_raw = merge(local.default_network_cfg, lookup(local.cloud_networks, "azure", {}))
+  gcp_network_cfg = merge(local.gcp_network_cfg_raw, {
+    remote_routes = length(try(local.gcp_network_cfg_raw.remote_routes, [])) > 0 ? local.gcp_network_cfg_raw.remote_routes : [
+      for remote_cloud, remote_cfg in {
+        aws   = local.aws_network_cfg_raw
+        azure = local.azure_network_cfg_raw
+        } : {
+        name             = "coin-ops-gcp-to-${remote_cloud}"
+        destination_cidr = remote_cfg.vpc_cidr
+      } if contains(local.enabled_clouds, remote_cloud)
+    ]
+  })
+  aws_network_cfg = merge(local.aws_network_cfg_raw, {
+    remote_routes = length(try(local.aws_network_cfg_raw.remote_routes, [])) > 0 ? local.aws_network_cfg_raw.remote_routes : [
+      for remote_cloud, remote_cfg in {
+        gcp   = local.gcp_network_cfg_raw
+        azure = local.azure_network_cfg_raw
+        } : {
+        name             = "coin-ops-aws-to-${remote_cloud}"
+        destination_cidr = remote_cfg.vpc_cidr
+      } if contains(local.enabled_clouds, remote_cloud)
+    ]
+  })
+  azure_network_cfg = merge(local.azure_network_cfg_raw, {
+    remote_routes = length(try(local.azure_network_cfg_raw.remote_routes, [])) > 0 ? local.azure_network_cfg_raw.remote_routes : [
+      for remote_cloud, remote_cfg in {
+        gcp = local.gcp_network_cfg_raw
+        aws = local.aws_network_cfg_raw
+        } : {
+        name             = "coin-ops-azure-to-${remote_cloud}"
+        destination_cidr = remote_cfg.vpc_cidr
+      } if contains(local.enabled_clouds, remote_cloud)
+    ]
+  })
+  private_default_route     = lookup(local.routing, "private_default_route", {})
+  remote_target_tags        = try(local.routing.remote_target_tags, ["internal-vm", "app-ui", "app-backend"])
+  egress_cidrs              = lookup(local.security, "egress_cidrs", ["0.0.0.0/0"])
+  gcp_vpc_name              = try(local.gcp_network_cfg.vpc_name, "coin-ops-gcp-vpc")
+  gcp_vpc_cidr              = try(local.gcp_network_cfg.vpc_cidr, "10.20.0.0/16")
+  gcp_subnets               = try(local.gcp_network_cfg.subnets, local.default_network_cfg.subnets)
+  gcp_private_subnet_cidr   = try(local.gcp_subnets["internal"].cidr, "10.20.1.0/24")
+  aws_vpc_name              = try(local.aws_network_cfg.vpc_name, "coin-ops-aws-vpc")
+  aws_vpc_cidr              = try(local.aws_network_cfg.vpc_cidr, "10.30.0.0/16")
+  aws_subnets               = try(local.aws_network_cfg.subnets, local.default_network_cfg.subnets)
+  aws_private_subnet_cidr   = try(local.aws_subnets["internal"].cidr, "10.30.1.0/24")
+  azure_vpc_name            = try(local.azure_network_cfg.vpc_name, "coin-ops-azure-vpc")
+  azure_vpc_cidr            = try(local.azure_network_cfg.vpc_cidr, "10.40.0.0/16")
+  azure_subnets             = try(local.azure_network_cfg.subnets, local.default_network_cfg.subnets)
+  azure_private_subnet_cidr = try(local.azure_subnets["internal"].cidr, "10.40.1.0/24")
 
   gcp_instance_sizes = try(local.mapping.instance_sizes.gcp, {})
   aws_instance_sizes = try(local.mapping.instance_sizes.aws, {})
@@ -93,9 +150,9 @@ locals {
   azure_db_profile = try(local.database.cloud_profiles.azure, {})
 
   seed_secret_manager        = local.secrets_enabled && var.seed_secret_manager
-  read_gcp_secret_backend    = local.secrets_enabled && local.secret_backend == "gcp" && !local.seed_secret_manager
-  read_aws_secret_backend    = local.secrets_enabled && local.secret_backend == "aws" && !local.seed_secret_manager
-  read_azure_secret_backend  = local.secrets_enabled && local.secret_backend == "azure" && !local.seed_secret_manager
+  read_gcp_secret_backend    = local.secrets_enabled && local.secret_backend == "gcp" && !local.seed_secret_manager && !var.suppress_secret_manager_reads
+  read_aws_secret_backend    = local.secrets_enabled && local.secret_backend == "aws" && !local.seed_secret_manager && !var.suppress_secret_manager_reads
+  read_azure_secret_backend  = local.secrets_enabled && local.secret_backend == "azure" && !local.seed_secret_manager && !var.suppress_secret_manager_reads
   write_gcp_secret_backend   = local.secrets_enabled && local.gcp_enabled
   write_aws_secret_backend   = local.secrets_enabled && local.aws_enabled
   write_azure_secret_backend = local.secrets_enabled && local.azure_enabled
@@ -108,45 +165,126 @@ locals {
     for name, cfg in local.gcp_instances_base : name
     if lookup(cfg, "role", "") == "jump-host" && lookup(cfg, "has_public_ip", false)
   ][0], "") : ""
+  gcp_gateway_host_name = local.gcp_compute_enabled ? try([
+    for name, cfg in local.gcp_instances_base : name
+    if lookup(cfg, "role", "") == "gateway"
+  ][0], "") : ""
   gcp_nat_host_name = local.gcp_compute_enabled ? try([
     for name, cfg in local.gcp_instances_base : name
     if lookup(cfg, "role", "") == "nat"
     ][0], try([
       for name, cfg in local.gcp_instances_base : name
-      if lookup(cfg, "can_ip_forward", false)
-  ][0], "")) : ""
+      if lookup(cfg, "role", "") == "gateway"
+      ][0], try([
+        for name, cfg in local.gcp_instances_base : name
+        if lookup(cfg, "can_ip_forward", false)
+  ][0], ""))) : ""
   aws_jump_host_name = local.aws_compute_enabled ? try([
     for name, cfg in local.aws_instances_base : name
     if lookup(cfg, "role", "") == "jump-host" && lookup(cfg, "has_public_ip", false)
+  ][0], "") : ""
+  aws_gateway_host_name = local.aws_compute_enabled ? try([
+    for name, cfg in local.aws_instances_base : name
+    if lookup(cfg, "role", "") == "gateway"
   ][0], "") : ""
   aws_nat_host_name = local.aws_compute_enabled ? try([
     for name, cfg in local.aws_instances_base : name
     if lookup(cfg, "role", "") == "nat"
     ][0], try([
       for name, cfg in local.aws_instances_base : name
-      if lookup(cfg, "can_ip_forward", false)
-  ][0], "")) : ""
+      if lookup(cfg, "role", "") == "gateway"
+      ][0], try([
+        for name, cfg in local.aws_instances_base : name
+        if lookup(cfg, "can_ip_forward", false)
+  ][0], ""))) : ""
   azure_jump_host_name = local.azure_compute_enabled ? try([
     for name, cfg in local.azure_instances_base : name
     if lookup(cfg, "role", "") == "jump-host" && lookup(cfg, "has_public_ip", false)
+  ][0], "") : ""
+  azure_gateway_host_name = local.azure_compute_enabled ? try([
+    for name, cfg in local.azure_instances_base : name
+    if lookup(cfg, "role", "") == "gateway"
   ][0], "") : ""
   azure_nat_host_name = local.azure_compute_enabled ? try([
     for name, cfg in local.azure_instances_base : name
     if lookup(cfg, "role", "") == "nat"
     ][0], try([
       for name, cfg in local.azure_instances_base : name
-      if lookup(cfg, "can_ip_forward", false)
-  ][0], "")) : ""
+      if lookup(cfg, "role", "") == "gateway"
+      ][0], try([
+        for name, cfg in local.azure_instances_base : name
+        if lookup(cfg, "can_ip_forward", false)
+  ][0], ""))) : ""
 
-  gcp_has_nat_host   = local.gcp_nat_host_name != ""
-  aws_has_nat_host   = local.aws_nat_host_name != ""
-  azure_has_nat_host = local.azure_nat_host_name != ""
+  gcp_route_host_name   = local.gcp_gateway_host_name != "" ? local.gcp_gateway_host_name : local.gcp_nat_host_name
+  aws_route_host_name   = local.aws_gateway_host_name != "" ? local.aws_gateway_host_name : local.aws_nat_host_name
+  azure_route_host_name = local.azure_gateway_host_name != "" ? local.azure_gateway_host_name : local.azure_nat_host_name
 
-  nat_route_name       = try(local.private_default_route.name, "private-default-via-nat")
+  gcp_has_route_host   = local.gcp_route_host_name != ""
+  aws_has_route_host   = local.aws_route_host_name != ""
+  azure_has_route_host = local.azure_route_host_name != ""
+
+  nat_route_name       = try(local.private_default_route.name, "private-default-via-gateway")
   nat_destination_cidr = try(local.private_default_route.destination_cidr, "0.0.0.0/0")
   nat_priority         = try(local.private_default_route.priority, 800)
   nat_target_tags      = try(local.private_default_route.target_tags, ["internal-vm"])
-  private_subnet_cidr  = try(local.subnets["internal"].cidr, "10.10.1.0/24")
+  gcp_default_route_specs = local.gcp_has_route_host ? {
+    (local.nat_route_name) = {
+      destination_cidr = local.nat_destination_cidr
+      priority         = local.nat_priority
+      target_tags      = local.nat_target_tags
+    }
+  } : {}
+  gcp_remote_route_specs = local.gcp_has_route_host ? {
+    for route in try(local.gcp_network_cfg.remote_routes, []) :
+    lookup(route, "name", "coin-ops-gcp-route-${replace(route.destination_cidr, "/", "-")}") => {
+      destination_cidr = route.destination_cidr
+      priority         = try(route.priority, local.nat_priority + 10)
+      target_tags      = try(route.target_tags, local.remote_target_tags)
+    }
+  } : {}
+  gcp_route_specs = merge(
+    local.gcp_default_route_specs,
+    local.gcp_remote_route_specs
+  )
+  aws_private_route_specs = local.aws_has_route_host ? merge(
+    {
+      (local.nat_route_name) = {
+        destination_cidr = local.nat_destination_cidr
+      }
+    },
+    {
+      for route in try(local.aws_network_cfg.remote_routes, []) :
+      lookup(route, "name", "coin-ops-aws-route-${replace(route.destination_cidr, "/", "-")}") => {
+        destination_cidr = route.destination_cidr
+      }
+    }
+  ) : {}
+  aws_public_route_specs = local.aws_has_route_host ? {
+    for route in try(local.aws_network_cfg.remote_routes, []) :
+    lookup(route, "name", "coin-ops-aws-route-${replace(route.destination_cidr, "/", "-")}") => {
+      destination_cidr = route.destination_cidr
+    }
+  } : {}
+  azure_private_route_specs = local.azure_has_route_host ? merge(
+    {
+      "default-via-gateway" = {
+        destination_cidr = local.nat_destination_cidr
+      }
+    },
+    {
+      for route in try(local.azure_network_cfg.remote_routes, []) :
+      lookup(route, "name", "coin-ops-azure-route-${replace(route.destination_cidr, "/", "-")}") => {
+        destination_cidr = route.destination_cidr
+      }
+    }
+  ) : {}
+  azure_public_route_specs = local.azure_has_route_host ? {
+    for route in try(local.azure_network_cfg.remote_routes, []) :
+    lookup(route, "name", "coin-ops-azure-route-${replace(route.destination_cidr, "/", "-")}") => {
+      destination_cidr = route.destination_cidr
+    }
+  } : {}
 
   username = trimspace(try(local.general.username, ""))
   ssh_port = try(local.general.ssh_port, 22)
@@ -264,5 +402,8 @@ locals {
   )
   effective_cloudflare_api_token = (
     local.seed_secret_manager ? var.cloudflare_api_token : try(local.active_app_secrets.CLOUDFLARE_API_TOKEN, var.cloudflare_api_token)
+  )
+  effective_tailscale_auth_key = (
+    local.seed_secret_manager ? var.tailscale_auth_key : try(local.active_app_secrets.TAILSCALE_AUTH_KEY, var.tailscale_auth_key)
   )
 }

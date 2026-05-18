@@ -1,8 +1,10 @@
 resource "google_compute_route" "nat_route" {
-  name        = var.name
+  for_each = var.routes
+
+  name        = each.key
   network     = var.network_id
-  dest_range  = var.destination_cidr
-  priority    = var.priority
-  tags        = var.target_tags
+  dest_range  = each.value.destination_cidr
+  priority    = lookup(each.value, "priority", 800)
+  tags        = lookup(each.value, "target_tags", ["internal-vm"])
   next_hop_ip = var.next_hop_ip
 }

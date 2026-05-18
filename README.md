@@ -197,6 +197,10 @@ terraform -chdir=terraform plan
 terraform -chdir=terraform apply
 ```
 
+For recovery and teardown details, including stateful full destroy and
+`suppress_secret_manager_reads=true`, use the infrastructure docs in
+[runbook.md](runbook.md) and [terraform/README.md](terraform/README.md).
+
 Install host dependencies and Docker:
 
 ```bash

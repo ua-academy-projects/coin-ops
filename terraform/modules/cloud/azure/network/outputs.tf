@@ -15,7 +15,17 @@ output "subnet_ids" {
 }
 
 output "private_subnet_ids" {
-  value = { for name in keys(local.private_subnets) : name => azurerm_subnet.this[name].id }
+  value = { for name, subnet in azurerm_subnet.this : name => subnet.id if contains(keys(local.private_subnets), name) }
+
+  depends_on = [time_sleep.after_subnets]
+}
+
+output "public_subnet_ids" {
+  value = {
+    for name, subnet in azurerm_subnet.this :
+    name => subnet.id
+    if lookup(local.subnets[name], "public", false)
+  }
 
   depends_on = [time_sleep.after_subnets]
 }

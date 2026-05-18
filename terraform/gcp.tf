@@ -15,9 +15,9 @@ data "google_secret_manager_secret_version" "app_secrets" {
 module "gcp_network" {
   count    = local.gcp_enabled ? 1 : 0
   source   = "./modules/cloud/gcp/network"
-  vpc_name = local.vpc_name
+  vpc_name = local.gcp_vpc_name
   region   = local.gcp_region
-  subnets  = local.subnets
+  subnets  = local.gcp_subnets
 }
 
 module "gcp_firewall" {
@@ -37,7 +37,8 @@ module "gcp_instances" {
   network_id          = module.gcp_network[0].network_id
   subnet_ids          = module.gcp_network[0].subnet_ids
   ssh_public_key      = local.ssh_public_key
-  private_subnet_cidr = local.private_subnet_cidr
+  private_subnet_cidr = local.gcp_private_subnet_cidr
+  vpc_cidr            = local.gcp_vpc_cidr
   username            = local.username
   ssh_port            = local.ssh_port
   project_name        = local.project_name
@@ -46,14 +47,11 @@ module "gcp_instances" {
 }
 
 module "gcp_nat_route" {
-  count            = local.gcp_compute_enabled && local.gcp_has_nat_host ? 1 : 0
-  source           = "./modules/cloud/gcp/nat_route"
-  name             = local.nat_route_name
-  network_id       = module.gcp_network[0].network_id
-  destination_cidr = local.nat_destination_cidr
-  priority         = local.nat_priority
-  target_tags      = local.nat_target_tags
-  next_hop_ip      = module.gcp_instances[0].instance_ips[local.gcp_nat_host_name].private_ip
+  count       = local.gcp_compute_enabled && local.gcp_has_route_host ? 1 : 0
+  source      = "./modules/cloud/gcp/nat_route"
+  network_id  = module.gcp_network[0].network_id
+  routes      = local.gcp_route_specs
+  next_hop_ip = try(module.gcp_instances[0].instance_ips[local.gcp_route_host_name].private_ip, "")
 
   depends_on = [module.gcp_instances]
 }
@@ -81,4 +79,5 @@ module "gcp_secrets" {
   rabbitmq_password    = local.effective_rabbitmq_password
   ghcr_token           = local.effective_ghcr_token
   cloudflare_api_token = local.effective_cloudflare_api_token
+  tailscale_auth_key   = local.effective_tailscale_auth_key
 }

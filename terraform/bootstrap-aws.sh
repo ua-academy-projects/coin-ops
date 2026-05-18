@@ -1,6 +1,33 @@
 #!/bin/bash
 set -euo pipefail
 
+usage() {
+  cat <<'EOF'
+Usage:
+  bash bootstrap-aws.sh [--activate-backend]
+
+Bootstraps AWS account-side prerequisites for coin-ops:
+  - creates or refreshes the Terraform IAM user
+  - grants IAM policies needed for Terraform
+  - creates or reuses the S3 state bucket
+  - writes local AWS env / tfvars / ansible config helpers
+
+Backend behavior:
+  - if terraform/config/clouds.json sets clouds.control_plane = "aws",
+    the script rewrites terraform/backend.active.tf
+  - otherwise, backend.active.tf is left untouched unless you pass
+    --activate-backend explicitly
+EOF
+}
+
+ACTIVATE_BACKEND=false
+if [[ "${1:-}" == "--activate-backend" ]]; then
+  ACTIVATE_BACKEND=true
+elif [[ -n "${1:-}" ]]; then
+  usage
+  exit 1
+fi
+
 # Bootstrap script to set up AWS environment for Terraform.
 # This prepares AWS as a possible full control-plane by creating state storage,
 # native S3 lockfile support, IAM credentials, and local operator credentials.
@@ -52,6 +79,7 @@ PY
 }
 
 IAM_USER_NAME="$(read_config 'data["clouds"]["providers"]["aws"]["terraform_identity"]["name"]')"
+CONTROL_PLANE="$(read_config 'data["clouds"]["control_plane"]')"
 REGION_PROFILE="$(read_config 'data["general"]["region_profile"]')"
 REGION="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); print(data["regions"]["aws"][sys.argv[2]]["region"])' "${MAPPING_PATH}" "${REGION_PROFILE}")"
 STATE_BUCKET_PREFIX="$(read_config 'data["clouds"]["backends"]["aws"].get("bucket_prefix", "coinops-terraform-state")')"
@@ -81,6 +109,10 @@ BUCKET_NAME="${STATE_BUCKET_PREFIX}-${ACCOUNT_ID}-${REGION}"
 GENERATED_AWS_ENV_PATH="${REPO_ROOT}/local/generated-aws-env.sh"
 GENERATED_ACTIVE_ENV_PATH="${REPO_ROOT}/local/generated-env.sh"
 SSH_PUBLIC_KEY_PATH="${HOME}/.ssh/ssh-key-coin-ops.pub"
+
+if [[ "${CONTROL_PLANE}" == "aws" ]]; then
+  ACTIVATE_BACKEND=true
+fi
 
 echo "Starting AWS bootstrap process in account ${ACCOUNT_ID}, region ${REGION}"
 echo "Active AWS identity: ${CALLER_ARN}"
@@ -150,8 +182,9 @@ else
   AWS_SECRET_ACCESS_KEY="$(echo "$CREDENTIALS" | awk '{print $2}')"
 fi
 
-echo "Writing active Terraform backend at ${BACKEND_ACTIVE_PATH}..."
-python3 - <<'PY' "${BACKEND_TEMPLATE_PATH}" "${BACKEND_ACTIVE_PATH}" "${BUCKET_NAME}" "${STATE_KEY}" "${REGION}"
+if [[ "${ACTIVATE_BACKEND}" == "true" ]]; then
+  echo "Writing active Terraform backend at ${BACKEND_ACTIVE_PATH}..."
+  python3 - <<'PY' "${BACKEND_TEMPLATE_PATH}" "${BACKEND_ACTIVE_PATH}" "${BUCKET_NAME}" "${STATE_KEY}" "${REGION}"
 import pathlib
 import sys
 
@@ -162,6 +195,10 @@ content = content.replace("__AWS_STATE_KEY__", key)
 content = content.replace("__AWS_STATE_REGION__", region)
 pathlib.Path(output_path).write_text(content, encoding="utf-8")
 PY
+else
+  echo "AWS account bootstrap completed without switching Terraform backend."
+  echo "Leaving ${BACKEND_ACTIVE_PATH} untouched because clouds.control_plane=${CONTROL_PLANE}."
+fi
 
 LOCAL_TERRAFORM_TFVARS="${REPO_ROOT}/terraform/local.generated.auto.tfvars.json"
 echo "Writing local Terraform config at ${LOCAL_TERRAFORM_TFVARS}..."

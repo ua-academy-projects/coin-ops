@@ -22,6 +22,7 @@ infra_config_database_file: "{{ lookup('file', infra_config_dir ~ '/database.jso
 infra_config_dns_file: "{{ lookup('file', infra_config_dir ~ '/dns.json') | from_json }}"
 infra_config_secrets_file: "{{ lookup('file', infra_config_dir ~ '/secrets.json') | from_json }}"
 infra_config_instances_file: "{{ lookup('file', infra_config_dir ~ '/instances.json') | from_json }}"
+infra_networks_file: "{{ lookup('file', infra_config_dir ~ '/networks.json') | from_json }}"
 infra_config: >-
   {{
     infra_config_clouds
@@ -32,6 +33,7 @@ infra_config: >-
     | combine(infra_config_dns_file, recursive=True)
     | combine(infra_config_secrets_file, recursive=True)
     | combine(infra_config_instances_file, recursive=True)
+    | combine(infra_networks_file, recursive=True)
   }}
 infra_clouds: "{{ infra_config.get('clouds', {}) }}"
 infra_cloud_providers: "{{ infra_clouds.get('providers', {}) }}"
@@ -44,6 +46,8 @@ infra_secrets: "{{ infra_config.get('secrets', {}) }}"
 infra_ansible: "{{ infra_config.get('ansible', {}) }}"
 infra_provisioning: "{{ infra_ansible.get('provisioning', {}) }}"
 infra_instances: "{{ infra_config.get('instances', {}) }}"
+infra_networks: "{{ infra_config.get('cloud_networks', {}) }}"
+infra_tailscale: "{{ infra_config.get('tailscale', {}) }}"
 infra_region_profile: "{{ infra_general.get('region_profile', 'europe-central') }}"
 infra_regions: "{{ infra_config.get('regions', {}) }}"
 infra_aws_region: "{{ infra_regions.get('aws', {}).get(infra_region_profile, {}).get('region', lookup('env', 'AWS_REGION') | default('eu-central-1', true)) }}"
@@ -103,11 +107,22 @@ runtime_metadata: >-
 my_cloud: "{{ cloud | default('gcp' if 'gcp' in groups else ('aws' if 'aws' in groups else ('azure' if 'azure' in groups else ''))) }}"
 cloud_runtime_metadata: "{{ runtime_metadata.get(my_cloud, {}) }}"
 backend_hosts_for_cloud: "{{ groups.get('role_app_backend', []) | intersect(groups.get(my_cloud, [])) }}"
+gateway_hosts_for_cloud: "{{ groups.get('role_gateway', []) | intersect(groups.get(my_cloud, [])) }}"
 backend_host: >-
   {{
     backend_hosts_for_cloud[0]
     if (backend_hosts_for_cloud | length > 0)
     else (groups['role_app_backend'][0] if ('role_app_backend' in groups and (groups['role_app_backend'] | length > 0)) else '')
+  }}
+gateway_host: >-
+  {{
+    gateway_hosts_for_cloud[0]
+    if (gateway_hosts_for_cloud | length > 0)
+    else (
+      (groups.get('role_jump_host', []) | intersect(groups.get(my_cloud, [])) | first)
+      if (groups.get('role_jump_host', []) | intersect(groups.get(my_cloud, [])) | length > 0)
+      else ''
+    )
   }}
 infra_instance_key: >-
   {{
@@ -120,6 +135,10 @@ infra_instance_key: >-
     )
   }}
 host_instance_config: "{{ infra_instances.get(infra_instance_key, {}) }}"
+cloud_network_config: "{{ infra_networks.get(my_cloud, {}) }}"
+cloud_subnets: "{{ cloud_network_config.get('subnets', {}) }}"
+cloud_vpc_cidr: "{{ cloud_network_config.get('vpc_cidr', '') }}"
+cloud_remote_routes: "{{ cloud_network_config.get('remote_routes', []) }}"
 host_image_profile: "{{ host_instance_config.get('image_profile', infra_general.get('image_profile', '')) }}"
 cloud_image_profiles: "{{ infra_images.get(my_cloud, {}) }}"
 base_image_profile_name: "{{ infra_general.get('image_profile', 'debian-12') }}"
@@ -162,6 +181,7 @@ db_password: ""
 rabbitmq_password: ""
 registry_token: ""
 cloudflare_api_token: ""
+tailscale_auth_key: ""
 
 rabbitmq_user: cognitor
 database_metadata: "{{ cloud_runtime_metadata.get('database', {}) }}"
@@ -185,6 +205,7 @@ history_port: "{{ deploy_config.history_port }}"
 internal_tls_enabled: "{{ lookup('env', 'INTERNAL_TLS_ENABLED') | default(deploy_config.internal_tls_enabled, true) | bool }}"
 internal_tls_port: "{{ deploy_config.internal_tls_port }}"
 backend_ip: "{{ (backend_host | length > 0) | ternary(hostvars[backend_host].ansible_host, '127.0.0.1') }}"
+gateway_ip: "{{ (gateway_host | length > 0) | ternary(hostvars[gateway_host].ansible_host, '') }}"
 postgres_bind_ip: "{{ database_metadata.get('host', cloud_runtime_metadata.get('database_ip', '')) | default(backend_ip, true) }}"
 postgres_port: "{{ database_metadata.get('port', db_port) }}"
 use_managed_db: "{{ database_metadata.get('managed', cloud_runtime_metadata.get('use_managed_db', false)) | bool }}"
@@ -203,6 +224,27 @@ ui_image: "{{ image_registry }}/coin-ops-ui:{{ image_tag }}"
 postgres_runtime_image: "{{ image_registry }}/coin-ops-postgres-runtime:{{ image_tag }}"
 postgres_image: "{{ postgres_runtime_image if runtime_backend == 'postgres' else 'postgres:16-alpine' }}"
 registry_username: "{{ lookup('env', 'GHCR_USERNAME') | default(deploy_config.registry_username, true) }}"
+tailscale_enabled: "{{ infra_tailscale.get('enabled', false) | bool }}"
+tailscale_control_plane: "{{ infra_tailscale.get('control_plane', 'saas') }}"
+tailscale_auth_key_secret_name: "{{ infra_tailscale.get('auth_key_secret_name', 'TAILSCALE_AUTH_KEY') }}"
+tailscale_accept_routes: "{{ infra_tailscale.get('accept_routes', true) | bool }}"
+tailscale_snat_subnet_routes: "{{ infra_tailscale.get('snat_subnet_routes', false) | bool }}"
+tailscale_tags: "{{ infra_tailscale.get('tags', {}).get(host_instance_config.get('role', ''), []) }}"
+tailscale_advertised_routes: "{{ infra_tailscale.get('advertised_routes_per_cloud', {}).get(my_cloud, []) }}"
+tailscale_remote_route_cidrs: >-
+  {{
+    cloud_remote_routes | map(attribute='destination_cidr') | list
+    if (cloud_remote_routes | length > 0)
+    else (
+      infra_tailscale.get('advertised_routes_per_cloud', {})
+      | dict2items
+      | rejectattr('key', 'equalto', my_cloud)
+      | map(attribute='value')
+      | list
+      | flatten
+    )
+  }}
+tailscale_static_route_roles: "{{ infra_tailscale.get('static_route_roles', []) }}"
 
 rabbitmq_url: "amqp://{{ rabbitmq_user_urlencoded }}:{{ rabbitmq_password_urlencoded }}@{{ backend_ip }}:5672/"
 internal_rabbitmq_url: "amqp://{{ rabbitmq_user_urlencoded }}:{{ rabbitmq_password_urlencoded }}@rabbitmq:5672/"

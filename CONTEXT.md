@@ -85,7 +85,7 @@ Read from `terraform/config/*.json` via `jsondecode(file(...))` in `terraform/ma
 | `deploy.json` | domain, TLS/certbot, runtime backend, image defaults, ports, and Ansible provisioning defaults |
 | `dns.json` | primary DNS cloud and Cloudflare defaults; non-primary clouds are checked by direct public IP |
 | `instances.json` | VM topology and per-instance overrides |
-| `networks.json` | `vpc_cidr`, `subnets`, `firewall_rules`, routing metadata |
+| `networks.json` | per-cloud VPC/subnet CIDR config, `firewall_rules`, Tailscale overlay settings, and routing metadata |
 | `cloud_mappings.json` | cloud-specific mapping dictionaries for sizes, logical regions/zones, and image profiles |
 | `hosts.json` | **generated** by `terraform apply` — do not commit |
 | `ssh_config` | **generated** — do not commit |
@@ -106,10 +106,16 @@ Committed non-secret bootstrap, deploy, DNS, cloud, and topology defaults now li
 
 `local/generated-gcp-env.sh` is the default shell entrypoint before normal Terraform or Ansible work; AWS bootstrap writes `local/generated-aws-env.sh`.
 
-### Network model (VPC `10.10.0.0/16`)
+### Network model
 
-- **external** subnet (`10.10.2.0/24`): public-facing; hosts jump-host, nat-1, and app-1.
-- **internal** subnet (`10.10.1.0/24`): private; hosts app-2; default route via **nat-1** (GCP route + AWS private RT/route to the NAT ENI + `scripts/nat-init.sh`).
+- Networks are now defined per cloud in `terraform/config/networks.json` under `cloud_networks.<cloud>`.
+- Each cloud can have its own `vpc_cidr` plus `external`, `internal`, and `database` subnets.
+- Cross-cloud routing metadata also lives there, alongside Tailscale settings for gateway-based subnet routing.
+- The intended role split is:
+  - `jump-host`: bastion / fallback path
+  - `gateway`: primary private-subnet egress and inter-cloud transit node
+  - `app-1`: public UI edge
+  - `app-2`: private backend host
 
 ### Current public ingress policy
 
@@ -168,7 +174,7 @@ Example (conceptual): `general.disk_size = 20` overrides `fallback.disk_size` wh
 - **Topology:** `app-1` is the UI gateway on public HTTPS; `app-2` runs all backend services on private IPs. Nginx `proxy_pass` targets app-2 over internal TLS.
 - **DNS & TLS:** Terraform manages Cloudflare DNS records, currently intended to be proxied through Cloudflare. Ansible provisions Certbot DNS-challenge TLS on the origin.
 - **Managed DB:** Cloud SQL is integrated via Terraform. Ansible uses generated runtime metadata to decide whether to target managed DB or local Postgres.
-- **Safety:** Secret Manager secret containers and Cloud SQL resources are protected from casual `terraform destroy` by hard Terraform guards. Intentional full teardown should use `terraform/full-destroy.sh`, which strips protections only in a temporary Terraform copy.
+- **Safety:** Secret Manager secret containers and managed database resources are protected from casual `terraform destroy` by hard Terraform guards. Intentional full teardown should use `terraform/full-destroy.sh`, which strips protections only in a temporary Terraform copy and now performs provider-side pre-cleanup for GCP Cloud SQL / private-service-access and AWS RDS deletion protection before the final destroy.
 - **Image-aware provisioning:** `app-1` and `app-2` can use the `coinops-app-host` golden image profile. In that mode, Ansible still provisions runtime-specific pieces but skips most host-preparation work already baked into the image; `jump-host` remains on the full provisioning path.
 - **Golden-image validation contract:** On `coinops-app-host` nodes, Ansible now validates the baked baseline (common CLI tools, UTC timezone, `systemd-timesyncd`, Docker, Compose plugin, and `ufw`) instead of reinstalling that baseline during provision.
 - **Internal backend TLS:** When `internal_tls_enabled=true`, `app-2` runs an internal TLS gateway on `8443` with a locally generated CA and backend certificate. `app-1` trusts that CA and proxies `/api/` and `/history-api/` to the backend over HTTPS instead of direct HTTP.
@@ -205,7 +211,8 @@ The current goal is to avoid persisting repo-managed runtime env files on the VM
 - **`pathexpand`:** required for `~` in `ssh_public_key_path` on Windows-side workflows.
 - **`local_file` hosts/ssh_config:** overwritten every apply.
 - **Cloudflare provider:** initialized even when DNS records are disabled; provider config uses a placeholder token fallback so init/plan still succeed without live DNS credentials.
-- **Stateful destroy protection:** `prevent_destroy` is hardcoded on important GCP stateful resources; intentional full teardown should use `terraform/full-destroy.sh` rather than direct `terraform destroy`.
+- **Stateful destroy protection:** `prevent_destroy` is hardcoded on important stateful resources. Intentional full teardown should use `terraform/full-destroy.sh` rather than direct `terraform destroy`.
+- **Recovery switch:** `-var='suppress_secret_manager_reads=true'` is the supported break-glass option when the secret backend or secret versions were already deleted and Terraform must still repair drift or finish teardown.
 
 ### AWS
 

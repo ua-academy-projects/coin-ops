@@ -79,6 +79,30 @@
   roles:
     - docker
 
+- name: Configure multicloud gateways
+  hosts: role_gateway
+  become: yes
+  gather_facts: no
+  serial: "{{ provisioning_host_batch_size | default(4) }}"
+  strategy: free
+  pre_tasks:
+    - name: Resolve runtime configuration for gateway provisioning
+      include_role:
+        name: runtime_config
+
+    - name: Validate Tailscale gateway inputs
+      assert:
+        that:
+          - tailscale_enabled
+          - tailscale_control_plane == 'saas'
+          - tailscale_auth_key | length > 0
+          - tailscale_advertised_routes | length > 0
+        fail_msg: >-
+          Gateway provisioning requires tailscale.enabled=true, tailscale.control_plane=saas,
+          a non-empty {{ tailscale_auth_key_secret_name }}, and at least one advertised route.
+  roles:
+    - tailscale_gateway
+
 - name: Provision backend node (app-2) - data directories
   hosts: "{{ target_backend_group | default('role_app_backend') }}"
   become: yes

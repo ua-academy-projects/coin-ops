@@ -47,3 +47,8 @@ variable "cloudflare_api_token" {
   type      = string
   sensitive = true
 }
+
+variable "tailscale_auth_key" {
+  type      = string
+  sensitive = true
+}

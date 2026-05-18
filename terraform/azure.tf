@@ -19,9 +19,9 @@ data "azurerm_key_vault_secret" "app_secrets" {
 module "azure_network" {
   count               = local.azure_enabled ? 1 : 0
   source              = "./modules/cloud/azure/network"
-  vpc_name            = local.vpc_name
-  vpc_cidr            = local.vpc_cidr
-  subnets             = local.subnets
+  vpc_name            = local.azure_vpc_name
+  vpc_cidr            = local.azure_vpc_cidr
+  subnets             = local.azure_subnets
   location            = local.azure_location
   resource_group_name = local.azure_resource_group_name
 }
@@ -46,7 +46,8 @@ module "azure_instances" {
   nsg_ids             = module.azure_security_groups[0].nsg_ids
   asg_ids             = module.azure_security_groups[0].asg_ids
   ssh_public_key      = local.ssh_public_key
-  private_subnet_cidr = local.private_subnet_cidr
+  private_subnet_cidr = local.azure_private_subnet_cidr
+  vpc_cidr            = local.azure_vpc_cidr
   username            = local.username
   ssh_port            = local.ssh_port
   project_name        = local.project_name
@@ -55,14 +56,16 @@ module "azure_instances" {
 }
 
 module "azure_nat_route" {
-  count               = local.azure_compute_enabled && local.azure_has_nat_host ? 1 : 0
+  count               = local.azure_compute_enabled && local.azure_has_route_host ? 1 : 0
   source              = "./modules/cloud/azure/nat_route"
   resource_group_name = module.azure_network[0].resource_group_name
   location            = local.azure_location
-  subnet_ids          = module.azure_network[0].private_subnet_ids
+  private_subnet_ids  = module.azure_network[0].private_subnet_ids
+  public_subnet_ids   = module.azure_network[0].public_subnet_ids
   route_table_name    = local.nat_route_name
-  destination_cidr    = local.nat_destination_cidr
-  next_hop_ip         = module.azure_instances[0].instance_ips[local.azure_nat_host_name].private_ip
+  private_routes      = local.azure_private_route_specs
+  public_routes       = local.azure_public_route_specs
+  next_hop_ip         = try(module.azure_instances[0].instance_ips[local.azure_route_host_name].private_ip, "")
 
   depends_on = [module.azure_instances]
 }
@@ -97,4 +100,5 @@ module "azure_secrets" {
   rabbitmq_password    = local.effective_rabbitmq_password
   ghcr_token           = local.effective_ghcr_token
   cloudflare_api_token = local.effective_cloudflare_api_token
+  tailscale_auth_key   = local.effective_tailscale_auth_key
 }

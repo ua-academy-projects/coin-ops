@@ -89,16 +89,16 @@ locals_path.write_text(locals_content, encoding="utf-8")
 gcp_path = terraform_dir / "gcp.tf"
 gcp_content = gcp_path.read_text(encoding="utf-8")
 gcp_content = gcp_content.replace(
-    "next_hop_ip      = module.gcp_instances[0].instance_ips[local.gcp_nat_host_name].private_ip",
-    'next_hop_ip      = try(module.gcp_instances[0].instance_ips[local.gcp_nat_host_name].private_ip, "")',
+    "next_hop_ip      = module.gcp_instances[0].instance_ips[local.gcp_route_host_name].private_ip",
+    'next_hop_ip      = try(module.gcp_instances[0].instance_ips[local.gcp_route_host_name].private_ip, "")',
 )
 gcp_path.write_text(gcp_content, encoding="utf-8")
 
 aws_path = terraform_dir / "aws.tf"
 aws_content = aws_path.read_text(encoding="utf-8")
 aws_content = aws_content.replace(
-    "nat_network_interface_id = module.aws_instances[0].instance_primary_network_interface_ids[local.aws_nat_host_name]",
-    'nat_network_interface_id = try(module.aws_instances[0].instance_primary_network_interface_ids[local.aws_nat_host_name], "")',
+    "nat_network_interface_id = module.aws_instances[0].instance_primary_network_interface_ids[local.aws_route_host_name]",
+    'nat_network_interface_id = try(module.aws_instances[0].instance_primary_network_interface_ids[local.aws_route_host_name], "")',
 )
 aws_content = aws_content.replace(
     'backend_security_group_id = module.aws_security_groups[0].sg_ids["app-backend"]',

@@ -1,30 +1,12 @@
-variable "name" {
-  type        = string
-  description = "Route name."
-  default     = "private-default-via-nat"
-}
-
 variable "network_id" {
   type        = string
   description = "GCP VPC network ID."
 }
 
-variable "destination_cidr" {
-  type        = string
-  description = "Destination CIDR for NAT route."
-  default     = "0.0.0.0/0"
-}
-
-variable "priority" {
-  type        = number
-  description = "Route priority."
-  default     = 800
-}
-
-variable "target_tags" {
-  type        = list(string)
-  description = "Network tags this route applies to."
-  default     = ["internal-vm"]
+variable "routes" {
+  type        = map(any)
+  description = "Map of route name to route configuration (destination_cidr, optional priority, optional target_tags)."
+  default     = {}
 }
 
 variable "next_hop_ip" {
