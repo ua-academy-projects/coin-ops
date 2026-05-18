@@ -27,12 +27,12 @@ set -euo pipefail
 # Variables
 # ------------------------------------------------------------
 AZ_GROUP_NAME="coin-ops-rg"
-AZ_GROUP_LOCATION="westeurope"
+AZ_GROUP_LOCATION="austriaeast"
 AZ_SP_NAME="coin-ops-sp"
 AZ_STORAGE_ACCOUNT_NAME="coinopstfstate"
 AZ_CONTAINER_NAME="tfstate"
 
-AZ_KEYVAULT_NAME="coin-ops-kv"
+AZ_KEYVAULT_NAME="coin-ops-keyvault-98123"
 
 REQUIRED_SECRETS=(
   "ghcr-username"
@@ -90,7 +90,7 @@ else
 fi
 
 # ------------------------------------------------------------
-# 2) Create an Azure Key Vault
+# 2) Create a key vault
 # ------------------------------------------------------------
 echo ""
 echo "==> Step 2: Key Vault"
@@ -139,7 +139,7 @@ else
 fi
 
 # ------------------------------------------------------------
-# 4) Assign Key Vault role to the active Azure CLI caller
+# 4) Assign a key vault role to the active azure cli caller
 # ------------------------------------------------------------
 echo ""
 echo "==> Step 4: Key Vault RBAC"
