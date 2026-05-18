@@ -46,6 +46,43 @@ module "gcp_sql" {
   network_id = module.gcp_network.vpc_id
 }
 
+module "azure_network" {
+  source = "./modules/azure_network"
+  config = local.config
+}
+
+module "azure_security" {
+  source   = "./modules/azure_security"
+  config   = local.config
+  vnet_name = module.azure_network.vnet_name
+}
+
+module "azure_vm" {
+  source             = "./modules/azure_vm"
+  config             = local.config
+  ssh_public_key     = file("${pathexpand("~")}/.ssh/id_ed25519.pub")
+  public_subnet_id   = module.azure_network.public_subnet_id
+  public_subnet_b_id = module.azure_network.public_subnet_b_id
+  private_subnet_id  = module.azure_network.private_subnet_id
+  private_subnet_b_id = module.azure_network.private_subnet_b_id
+  jump_host_nsg_id   = module.azure_security.jump_host_nsg_id
+  internal_nsg_id    = module.azure_security.internal_nsg_id
+  web_nsg_id         = module.azure_security.web_nsg_id
+}
+
+module "azure_lb" {
+  source    = "./modules/azure_lb"
+  config    = local.config
+  ui_nic_id = module.azure_vm.ui_nic_id
+}
+
+module "azure_db" {
+  source    = "./modules/azure_db"
+  config    = local.config
+  vnet_id   = module.azure_network.vnet_id
+  vnet_name = module.azure_network.vnet_name
+}
+
 module "aws_network" {
   source = "./modules/aws_network"
   config = local.config

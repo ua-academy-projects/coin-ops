@@ -18,7 +18,11 @@ locations:
       zones:
         primary: "eu-central-1a"
         secondary: "eu-central-1b"
-
+    azure:
+      region: "germanywestcentral"
+      zones:
+        primary: "1"
+        secondary: "2"
   us:
     gcp:
       region: "us-central1"
@@ -30,19 +34,27 @@ locations:
       zones:
         primary: "us-east-1a"
         secondary: "us-east-1b"
+    azure:
+      region: "eastus2"
+      zones:
+        primary: "1"
+        secondary: "2"
 
 images:
   ubuntu_2404:
     gcp: "ubuntu-os-cloud/ubuntu-2404-lts-amd64"
     aws: "ami-0084a47cc718c111a"
+    azure: "Canonical:ubuntu-24_04-lts:server:latest"
 
 sizes:
   small:
     gcp: "e2-micro"
     aws: "t3.micro"
+    azure: "Standard_B1s"
   medium:
     gcp: "e2-small"
     aws: "t3.small"
+    azure: "Standard_B2s"
 
 vms:
   jump-host:
@@ -50,7 +62,7 @@ vms:
     zone: primary
     tags: ["jump-host"]
     public_ip: true
-
+    
   node-01:
     size: small
     zone: primary
