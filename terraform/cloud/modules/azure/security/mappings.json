@@ -1,0 +1,14 @@
+{
+  "direction": {
+    "INGRESS": "Inbound",
+    "INBOUND": "Inbound",
+    "EGRESS": "Outbound",
+    "OUTBOUND": "Outbound"
+  },
+  "protocol": {
+    "tcp": "Tcp",
+    "udp": "Udp",
+    "icmp": "Icmp",
+    "*": "*"
+  }
+}

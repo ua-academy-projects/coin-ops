@@ -1,0 +1,10 @@
+{
+  "subnet_exposure": {
+    "public": {
+      "is_public": true
+    },
+    "private": {
+      "is_public": false
+    }
+  }
+}

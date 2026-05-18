@@ -1,36 +1,25 @@
-# variables.tf
-
-
-# access
-
-variable "ssh_user" {
+variable "resource_group_name" {
   type = string
 }
 
-variable "ssh_public_key_path" {
+variable "key_vault_name" {
   type = string
 }
 
-
-# network
-
-variable "network_name" {
-  type = string
-}
-
-variable "subnetworks" {
-  type = map(string)
-}
-
-variable "service_accounts" {
+variable "secrets" {
   type = map(object({
-    name         = string
-    display_name = string
+    secret_id = string
   }))
 }
 
-
-# instances
+variable "secret_access" {
+  type = map(object({
+    identity        = optional(string)
+    service_account = optional(string)
+    secrets         = list(string)
+  }))
+  default = {}
+}
 
 variable "workloads" {
   type = map(object({
@@ -45,4 +34,10 @@ variable "workloads" {
     identity        = optional(string)
     service_account = optional(string)
   }))
+  default = {}
+}
+
+variable "managed_identity_principal_ids" {
+  type    = map(string)
+  default = {}
 }

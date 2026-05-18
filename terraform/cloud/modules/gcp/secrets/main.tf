@@ -15,7 +15,7 @@ locals {
         for secret in cfg.secrets : {
           key                = "${key}-${secret}"
           secret_resource_id = google_secret_manager_secret.this[secret].id
-          service_account    = var.service_accounts[cfg.service_account].email
+          service_account    = var.service_accounts[try(cfg.identity, cfg.service_account)].email
         }
       ]
     ]) : binding.key => binding

@@ -1,0 +1,35 @@
+{
+  "instance_type": {
+    "nano": "Standard_B1ls",
+    "micro": "Standard_B2s_v2",
+    "small": "Standard_B1ms",
+    "medium": "Standard_B2s",
+    "large": "Standard_B2ms",
+    "xlarge": "Standard_D4s_v5",
+    "compute_small": "Standard_F2s_v2",
+    "compute_medium": "Standard_F4s_v2",
+    "memory_small": "Standard_E2s_v5",
+    "memory_medium": "Standard_E4s_v5"
+  },
+  "image_family": {
+    "ubuntu_22": "Canonical:0001-com-ubuntu-server-jammy:22_04-lts:latest",
+    "ubuntu_24": "Canonical:ubuntu-24_04-lts:server:latest",
+    "debian_12": "Debian:debian-12:12:latest",
+    "rocky_9": "erockyenterprisesoftwarefoundationinc:rockylinux:9:latest",
+    "al2023": "amazon:al2023:latest:latest"
+  },
+  "placement": {
+    "primary": {
+      "instance_zone": "1"
+    },
+    "secondary": {
+      "instance_zone": "2"
+    },
+    "tertiary": {
+      "instance_zone": "3"
+    },
+    "dr": {
+      "instance_zone": "1"
+    }
+  }
+}

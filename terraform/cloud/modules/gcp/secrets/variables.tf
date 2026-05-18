@@ -6,7 +6,8 @@ variable "secrets" {
 
 variable "secret_access" {
   type = map(object({
-    service_account = string
+    identity        = optional(string)
+    service_account = optional(string)
     secrets         = list(string)
   }))
   default = {}

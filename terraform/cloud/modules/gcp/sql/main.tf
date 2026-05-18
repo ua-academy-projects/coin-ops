@@ -1,9 +1,9 @@
 data "google_client_config" "current" {}
 
-data "google_secret_manager_secret_version" "db_password" {
-  secret  = var.db_password_secret_id
-  version = "latest"
-}
+# data "google_secret_manager_secret_version" "db_password" {
+#   secret  = var.db_password_secret_id
+#   version = "latest"
+# }
 
 resource "google_compute_global_address" "this" {
   name          = local.instance.private_range_name
@@ -54,5 +54,5 @@ resource "google_sql_database" "this" {
 resource "google_sql_user" "this" {
   name     = var.user.name
   instance = google_sql_database_instance.this.name
-  password = data.google_secret_manager_secret_version.db_password.secret_data
+  #  password = data.google_secret_manager_secret_version.db_password.secret_data
 }

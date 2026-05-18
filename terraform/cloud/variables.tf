@@ -17,6 +17,21 @@ variable "ssh_public_key_path" {
   default = "~/.ssh/coinops_gcp.pub"
 }
 
+variable "azure_resource_group_name" {
+  type    = string
+  default = null
+}
+
+variable "azure_key_vault_name" {
+  type    = string
+  default = null
+}
+
+variable "azure_location" {
+  type    = string
+  default = null
+}
+
 
 # network
 
@@ -63,6 +78,7 @@ variable "workloads" {
     disk_size_gb    = number
     public_ip       = bool
     can_ip_forward  = bool
+    identity        = optional(string)
     service_account = optional(string)
   }))
 }
@@ -86,6 +102,30 @@ variable "security_rules" {
 
 # secrets
 
+variable "secrets" {
+  type = map(object({
+    secret_id = string
+  }))
+  default = {}
+}
+
+variable "workload_identities" {
+  type = map(object({
+    name         = string
+    display_name = string
+  }))
+  default = {}
+}
+
+variable "secret_access" {
+  type = map(object({
+    identity        = optional(string)
+    service_account = optional(string)
+    secrets         = list(string)
+  }))
+  default = {}
+}
+
 variable "gsm_secrets" {
   type = map(object({
     secret_id = string
@@ -97,14 +137,6 @@ variable "service_accounts" {
   type = map(object({
     name         = string
     display_name = string
-  }))
-  default = {}
-}
-
-variable "secret_access" {
-  type = map(object({
-    service_account = string
-    secrets         = list(string)
   }))
   default = {}
 }

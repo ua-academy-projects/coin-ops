@@ -1,0 +1,22 @@
+{
+  "database_version": {
+    "postgres_16": "16"
+  },
+  "instance_type": {
+    "economical": "B_Standard_B1ms"
+  },
+  "placement": {
+    "primary": {
+      "instance_zone": "1"
+    },
+    "secondary": {
+      "instance_zone": "2"
+    },
+    "tertiary": {
+      "instance_zone": "3"
+    },
+    "dr": {
+      "instance_zone": "1"
+    }
+  }
+}

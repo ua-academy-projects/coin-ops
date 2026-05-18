@@ -1,9 +1,8 @@
-# variables.tf
+variable "resource_group_name" {
+  type = string
+}
 
-
-# access
-
-variable "ssh_user" {
+variable "location" {
   type = string
 }
 
@@ -11,26 +10,14 @@ variable "ssh_public_key_path" {
   type = string
 }
 
-
-# network
-
-variable "network_name" {
-  type = string
-}
-
-variable "subnetworks" {
+variable "subnet_ids" {
   type = map(string)
 }
 
-variable "service_accounts" {
-  type = map(object({
-    name         = string
-    display_name = string
-  }))
+variable "application_security_group_ids" {
+  type    = map(string)
+  default = {}
 }
-
-
-# instances
 
 variable "workloads" {
   type = map(object({
