@@ -14,6 +14,12 @@ terraform plan
 terraform apply
 ```
 
+When Azure is the control plane, remember that the backend Storage account name
+must be globally unique across Azure. `bootstrap-azure.sh` now checks this and
+fails early with a clear message if the configured name is already taken
+outside the expected resource group. It also validates Azure naming rules:
+3-24 characters, lowercase letters and numbers only.
+
 When the secret backend has already been torn down or you are repairing drift,
 disable secret-version reads during planning:
 
@@ -159,6 +165,13 @@ and keeps the checked-in files untouched. In that temporary copy it:
 - disables and deletes GCP Cloud SQL instances found in state before teardown
 - deletes GCP private service connections and reserved peering ranges that can
   otherwise outlive Cloud SQL and block VPC deletion
+- retries GCP private service connection deletion while Google is still
+  releasing producer services such as Cloud SQL from Service Networking
+- treats the connection as already gone if Service Networking stops listing it
+  even while delete calls still return stale cleanup errors
+- falls back immediately to deleting or request-deleting any remaining Compute
+  Engine peerings on the target VPC when Service Networking reports that a
+  producer service is still blocking connection deletion
 - then runs `terraform destroy` against the same backend state
 
 If the secret backend or its versions were already removed, pass the recovery

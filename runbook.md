@@ -164,6 +164,13 @@ cd /mnt/d/Internship/coin-ops-local/coin-ops/terraform
 bash bootstrap-azure.sh
 ```
 
+Note: Azure Storage account names are globally unique across Azure, not just
+inside your subscription. If `bootstrap-azure.sh` says the configured backend
+storage account name is already taken, pick a new unique value in
+`terraform/config/clouds.json` under `clouds.backends.azure.storage_account_name`.
+The name must also be valid Azure Storage syntax: 3-24 characters, lowercase
+letters and numbers only.
+
 Bootstrap chooses only the Terraform backend/operator environment. It does not change DNS ownership. DNS is controlled separately by `terraform/config/dns.json` through `dns.primary_cloud`.
 
 ### 3. Fill the bootstrap secrets file
@@ -183,6 +190,12 @@ source local/generated-gcp-env.sh
 ```
 
 Use the cloud-matching generated file for AWS or Azure.
+
+For Azure, always source the generated env file from `bootstrap-azure.sh`
+before running `terraform init` or `terraform apply`. It now exports
+`ARM_USE_AZUREAD=true` and `ARM_USE_CLI=false` so Terraform uses the generated
+service principal for backend blob access instead of any cached Azure CLI user
+login.
 
 ### 5. Seed secret managers and create infrastructure
 
@@ -374,6 +387,14 @@ resources before the final Terraform destroy:
 - disables and deletes GCP Cloud SQL instances found in state
 - deletes GCP private service connections
 - deletes GCP reserved private-service-access peering ranges
+- retries GCP private service connection deletion while Service Networking is
+  still waiting for producer-service cleanup
+- treats the GCP private service connection as absent once it disappears from
+  `gcloud services vpc-peerings list`, even if delete operations still return
+  stale producer-cleanup errors
+- immediately escalates to a break-glass delete/request-delete of any remaining
+  Compute Engine peerings on the target VPC when Service Networking reports a
+  producer-blocked delete
 
 Use plain `terraform destroy` only for compute-only teardown or normal
 day-to-day iteration. Use `full-destroy.sh` for intentional stateful teardown.

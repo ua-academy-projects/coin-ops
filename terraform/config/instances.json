@@ -7,7 +7,11 @@
             "can_ip_forward": true,
             "role": "jump-host",
             "startup_script": "scripts/nat-init.sh.tpl",
-            "clouds": ["gcp", "aws", "azure"]
+            "clouds": [
+                "gcp",
+                "aws",
+                "azure"
+            ]
         },
         "gateway": {
             "subnet": "external",
@@ -16,7 +20,11 @@
             "can_ip_forward": true,
             "role": "gateway",
             "startup_script": "scripts/gateway-init.sh.tpl",
-            "clouds": ["gcp", "aws", "azure"]
+            "clouds": [
+                "gcp",
+                "aws",
+                "azure"
+            ]
         },
         "app-1": {
             "subnet": "external",
@@ -25,7 +33,9 @@
             "image_profile": "coinops-app-host",
             "instance_size": "micro",
             "disk_size": 30,
-            "clouds": ["gcp"]
+            "clouds": [
+                "gcp"
+            ]
         },
         "app-2": {
             "subnet": "internal",
@@ -33,7 +43,9 @@
             "image_profile": "coinops-app-host",
             "instance_size": "small",
             "disk_size": 30,
-            "clouds": ["aws"]
+            "clouds": [
+                "aws"
+            ]
         }
     }
 }

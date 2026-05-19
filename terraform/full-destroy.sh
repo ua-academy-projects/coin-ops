@@ -386,6 +386,113 @@ wait_for_gcp_sql_instance_absent() {
   return 1
 }
 
+gcp_private_service_connection_exists() {
+  local network_name="$1"
+  local peerings_output=""
+
+  if ! peerings_output="$(
+    gcloud services vpc-peerings list \
+      --network="${network_name}" \
+      --service=servicenetworking.googleapis.com \
+      --format='value(network)' 2>/dev/null
+  )"; then
+    return 1
+  fi
+
+  [[ -n "${peerings_output}" ]]
+}
+
+list_gcp_network_peerings() {
+  local network_name="$1"
+
+  gcloud compute networks peerings list \
+    --network="${network_name}" \
+    --format='value(name)' 2>/dev/null || true
+}
+
+force_delete_gcp_compute_peerings() {
+  local network_name="$1"
+  local peering_names=()
+  local peering_name
+
+  mapfile -t peering_names < <(list_gcp_network_peerings "${network_name}")
+
+  if [[ "${#peering_names[@]}" -eq 0 ]]; then
+    return 0
+  fi
+
+  echo "Attempting break-glass delete of all Compute Engine peerings for ${network_name}..."
+
+  for peering_name in "${peering_names[@]}"; do
+    [[ -n "${peering_name}" ]] || continue
+
+    if gcloud compute networks peerings delete "${peering_name}" \
+      --network="${network_name}" \
+      --quiet >/dev/null 2>&1; then
+      continue
+    fi
+
+    gcloud compute networks peerings request-delete "${peering_name}" \
+      --network="${network_name}" \
+      --quiet >/dev/null 2>&1 || true
+  done
+}
+
+delete_gcp_private_service_connection_with_retry() {
+  local network_name="$1"
+  local attempts=12
+  local sleep_seconds=10
+  local delete_error=""
+  local forced_compute_cleanup=false
+
+  for ((i = 1; i <= attempts; i++)); do
+    if ! gcp_private_service_connection_exists "${network_name}"; then
+      echo "Private service connection for ${network_name} is already absent."
+      return 0
+    fi
+
+    if delete_error="$(
+      gcloud services vpc-peerings delete \
+        --network="${network_name}" \
+        --service=servicenetworking.googleapis.com \
+        --quiet 2>&1 >/dev/null
+    )"; then
+      return 0
+    fi
+
+    if grep -Eqi 'NOT_FOUND|not found|does not exist|There are no private service connections' <<<"${delete_error}"; then
+      return 0
+    fi
+
+    if grep -Eqi 'Producer services .* are still using this connection|FLOW_SN_DC_RESOURCE_PREVENTING_DELETE_CONNECTION|PreconditionFailure' <<<"${delete_error}"; then
+      if ! gcp_private_service_connection_exists "${network_name}"; then
+        echo "Private service connection for ${network_name} disappeared while GCP was still reporting producer cleanup."
+        return 0
+      fi
+
+      if [[ "${forced_compute_cleanup}" == false ]]; then
+        force_delete_gcp_compute_peerings "${network_name}"
+        forced_compute_cleanup=true
+        if ! gcp_private_service_connection_exists "${network_name}"; then
+          echo "Private service connection for ${network_name} disappeared after break-glass Compute peering delete."
+          return 0
+        fi
+      fi
+
+      echo "Private service connection for ${network_name} is still in use by a producer service. Waiting for GCP cleanup (${i}/${attempts})..."
+      sleep "${sleep_seconds}"
+      continue
+    fi
+
+    echo "${delete_error}" >&2
+    return 1
+  done
+
+  echo "Timed out waiting for private service connection on ${network_name} to become deletable." >&2
+  echo "${delete_error}" >&2
+  return 1
+}
+
 remove_state_if_present() {
   local address="$1"
   if terraform state show -no-color "${address}" >/dev/null 2>&1; then
@@ -454,7 +561,7 @@ delete_gcp_private_service_access() {
   local connection_addresses=()
   mapfile -t connection_addresses < <(terraform state list | grep 'google_service_networking_connection' || true)
 
-  local address network_name delete_error
+  local address network_name
   for address in "${connection_addresses[@]}"; do
     network_name="$(
       terraform state show -no-color "${address}" \
@@ -470,19 +577,7 @@ delete_gcp_private_service_access() {
 
     if [[ -n "${network_name}" ]]; then
       echo "Deleting private service connection for network ${network_name}..."
-      if ! delete_error="$(
-        gcloud services vpc-peerings delete \
-          --network="${network_name}" \
-          --service=servicenetworking.googleapis.com \
-          --quiet 2>&1 >/dev/null
-      )"; then
-        if grep -Eqi 'NOT_FOUND|not found|does not exist|There are no private service connections' <<<"${delete_error}"; then
-          echo "Private service connection for ${network_name} is already absent; pruning state."
-        else
-          echo "${delete_error}" >&2
-          return 1
-        fi
-      fi
+      delete_gcp_private_service_connection_with_retry "${network_name}"
     fi
 
     remove_state_if_present "${address}"

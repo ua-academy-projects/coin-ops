@@ -133,6 +133,38 @@ EOF
   return 1
 }
 
+create_role_assignment() {
+  local assignee_object_id="$1"
+  local principal_type="$2"
+  local role_name="$3"
+  local scope="$4"
+  local required="${5:-false}"
+  local error_file
+  error_file="$(mktemp "${TMPDIR:-/tmp}/coinops-azure-role.XXXXXX.err")"
+
+  if az role assignment create \
+    --assignee-object-id "${assignee_object_id}" \
+    --assignee-principal-type "${principal_type}" \
+    --role "${role_name}" \
+    --scope "${scope}" > /dev/null 2>"${error_file}"; then
+    rm -f "${error_file}"
+    return 0
+  fi
+
+  if [[ "${required}" == "true" ]]; then
+    echo "Failed to assign required Azure role '${role_name}' on scope '${scope}'." >&2
+    cat "${error_file}" >&2
+    echo "Re-run bootstrap-azure.sh while authenticated as a human Azure principal with permission to create role assignments (for example Owner or User Access Administrator on the target scope)." >&2
+    rm -f "${error_file}"
+    exit 1
+  fi
+
+  echo "Warning: could not assign Azure role '${role_name}' on scope '${scope}'." >&2
+  cat "${error_file}" >&2
+  rm -f "${error_file}"
+  return 1
+}
+
 if [[ "${CONTROL_PLANE}" == "azure" ]]; then
   ACTIVATE_BACKEND=true
 fi
@@ -188,8 +220,8 @@ if [[ "${SP_MANAGED}" == "true" ]]; then
   SP_OBJECT_ID="$(az ad sp show --id "${CLIENT_ID}" --query id -o tsv)"
 
   echo "Assigning Azure roles..."
-  az role assignment create --assignee-object-id "${SP_OBJECT_ID}" --assignee-principal-type ServicePrincipal --role "Contributor" --scope "/subscriptions/${SUBSCRIPTION_ID}" > /dev/null 2>&1 || true
-  az role assignment create --assignee-object-id "${SP_OBJECT_ID}" --assignee-principal-type ServicePrincipal --role "Key Vault Administrator" --scope "/subscriptions/${SUBSCRIPTION_ID}" > /dev/null 2>&1 || true
+  create_role_assignment "${SP_OBJECT_ID}" "ServicePrincipal" "Contributor" "/subscriptions/${SUBSCRIPTION_ID}" false
+  create_role_assignment "${SP_OBJECT_ID}" "ServicePrincipal" "Key Vault Administrator" "/subscriptions/${SUBSCRIPTION_ID}" false
 else
   load_existing_sp_credentials
   CLIENT_ID="${ARM_CLIENT_ID:-${AZURE_CLIENT_ID:-}}"
@@ -205,12 +237,40 @@ else
   echo "Reusing existing local Azure service principal credentials."
 fi
 
+if [[ -z "${SP_OBJECT_ID}" && -n "${CLIENT_ID}" ]]; then
+  SP_OBJECT_ID="$(az ad sp show --id "${CLIENT_ID}" --query id -o tsv 2>/dev/null || true)"
+fi
+
 if [[ "${ACTIVATE_BACKEND}" == "true" ]]; then
   echo "Ensuring backend resource group exists: ${STATE_RESOURCE_GROUP_NAME}"
   az group create --name "${STATE_RESOURCE_GROUP_NAME}" --location "${LOCATION}" > /dev/null
 
   echo "Ensuring storage account exists: ${STORAGE_ACCOUNT_NAME}"
-  if ! az storage account show --name "${STORAGE_ACCOUNT_NAME}" --resource-group "${STATE_RESOURCE_GROUP_NAME}" > /dev/null 2>&1; then
+  STORAGE_ACCOUNT_ID="$(
+    az storage account show \
+      --name "${STORAGE_ACCOUNT_NAME}" \
+      --resource-group "${STATE_RESOURCE_GROUP_NAME}" \
+      --query id -o tsv 2>/dev/null || true
+  )"
+
+  if [[ -z "${STORAGE_ACCOUNT_ID}" ]]; then
+    CHECK_NAME_JSON="$(az storage account check-name --name "${STORAGE_ACCOUNT_NAME}" -o json)"
+    NAME_AVAILABLE="$(python3 -c 'import json,sys; print(str(json.load(sys.stdin).get("nameAvailable", "")).lower())' <<< "${CHECK_NAME_JSON}")"
+    if [[ "${NAME_AVAILABLE}" != "true" ]]; then
+      CHECK_REASON="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("reason",""))' <<< "${CHECK_NAME_JSON}")"
+      CHECK_MESSAGE="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("message",""))' <<< "${CHECK_NAME_JSON}")"
+      echo "Azure storage account name '${STORAGE_ACCOUNT_NAME}' is not usable." >&2
+      if [[ -n "${CHECK_REASON}" ]]; then
+        echo "Reason: ${CHECK_REASON}" >&2
+      fi
+      if [[ -n "${CHECK_MESSAGE}" ]]; then
+        echo "Azure says: ${CHECK_MESSAGE}" >&2
+      fi
+      echo "Pick a valid, globally unique backend storage account name in terraform/config/clouds.json under clouds.backends.azure.storage_account_name." >&2
+      echo "Azure storage account names must be 3-24 characters long and use only lowercase letters and numbers." >&2
+      exit 1
+    fi
+
     az storage account create \
       --name "${STORAGE_ACCOUNT_NAME}" \
       --resource-group "${STATE_RESOURCE_GROUP_NAME}" \
@@ -218,6 +278,13 @@ if [[ "${ACTIVATE_BACKEND}" == "true" ]]; then
       --sku Standard_LRS \
       --kind StorageV2 \
       --allow-blob-public-access false > /dev/null
+
+    STORAGE_ACCOUNT_ID="$(
+      az storage account show \
+        --name "${STORAGE_ACCOUNT_NAME}" \
+        --resource-group "${STATE_RESOURCE_GROUP_NAME}" \
+        --query id -o tsv
+    )"
   fi
 
   echo "Ensuring state container exists: ${CONTAINER_NAME}"
@@ -226,9 +293,11 @@ if [[ "${ACTIVATE_BACKEND}" == "true" ]]; then
     --account-name "${STORAGE_ACCOUNT_NAME}" \
     --auth-mode login > /dev/null
 
-  STORAGE_SCOPE="$(az storage account show --name "${STORAGE_ACCOUNT_NAME}" --resource-group "${STATE_RESOURCE_GROUP_NAME}" --query id -o tsv)"
+  STORAGE_SCOPE="${STORAGE_ACCOUNT_ID}"
   if [[ -n "${SP_OBJECT_ID}" ]]; then
-    az role assignment create --assignee-object-id "${SP_OBJECT_ID}" --assignee-principal-type ServicePrincipal --role "Storage Blob Data Owner" --scope "${STORAGE_SCOPE}" > /dev/null 2>&1 || true
+    create_role_assignment "${SP_OBJECT_ID}" "ServicePrincipal" "Storage Blob Data Owner" "${STORAGE_SCOPE}" true
+  else
+    echo "Warning: could not resolve Azure service principal object id for ${CLIENT_ID}; skipping Storage Blob Data Owner assignment." >&2
   fi
 
   echo "Writing active Terraform backend at ${BACKEND_ACTIVE_PATH}..."
@@ -279,6 +348,8 @@ export ARM_CLIENT_ID="${CLIENT_ID}"
 export ARM_CLIENT_SECRET="${CLIENT_SECRET}"
 export ARM_TENANT_ID="${TENANT_ID}"
 export ARM_SUBSCRIPTION_ID="${SUBSCRIPTION_ID}"
+export ARM_USE_AZUREAD=true
+export ARM_USE_CLI=false
 export AZURE_CLIENT_ID="${CLIENT_ID}"
 export AZURE_CLIENT_SECRET="${CLIENT_SECRET}"
 export AZURE_SECRET="${CLIENT_SECRET}"

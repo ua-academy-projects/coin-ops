@@ -1,8 +1,16 @@
 {
     "clouds": {
         "control_plane": "gcp",
-        "enabled": ["gcp", "aws", "azure"],
-        "default_instance_clouds": ["gcp", "aws","azure"],
+        "enabled": [
+            "gcp",
+            "aws",
+            "azure"
+        ],
+        "default_instance_clouds": [
+            "gcp",
+            "aws",
+            "azure"
+        ],
         "secret_backend": "gcp",
         "providers": {
             "gcp": {
@@ -29,7 +37,7 @@
                     "tenant_id": "7631cd62-5187-4e15-8b8e-ef653e366e7a",
                     "resource_group_name": "coin-ops-azure-rg",
                     "state_resource_group_name": "coin-ops-tfstate-rg",
-                    "storage_account_name": "coinopstfstate",
+                    "storage_account_name": "coinopsrandomdimatfstate",
                     "storage_container_name": "tfstate",
                     "key_vault_name": "coinops-hrenchevskyi-kv"
                 },
@@ -50,7 +58,7 @@
             },
             "azure": {
                 "resource_group_name": "coin-ops-tfstate-rg",
-                "storage_account_name": "coinopstfstate",
+                "storage_account_name": "coinopsrandomdimatfstate",
                 "container_name": "tfstate",
                 "key": "infra/state/terraform.tfstate"
             }
