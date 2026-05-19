@@ -20,13 +20,3 @@ variable "network" {
     error_message = "Each subnet exposure must be either \"public\" or \"private\"."
   }
 }
-
-variable "nat_route" {
-  type = object({
-    name              = string
-    destination_range = string
-    next_hop_ip       = string
-  })
-  default  = null
-  nullable = true
-}

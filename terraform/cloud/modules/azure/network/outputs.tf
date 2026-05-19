@@ -20,7 +20,3 @@ output "private_subnet_ids" {
     if contains(keys(local.private_subnets), key)
   }
 }
-
-output "route_table_id" {
-  value = try(azurerm_route_table.private_egress[0].id, null)
-}
