@@ -5,20 +5,27 @@ locals {
     for name, cfg in var.workloads : name => {
 
       # mapped values
-      vm_size            = local.mappings.instance_type[cfg.instance_type]
-      zone               = local.mappings.placement[cfg.placement].instance_zone
-      image              = local.mappings.image_family[cfg.image_family]
+      vm_size = local.mappings.instance_type[cfg.instance_type]
+      zone    = local.mappings.placement[cfg.placement].instance_zone
+      image   = local.mappings.image_family[cfg.image_family]
 
       # directly from input
-      assign_public_ip   = cfg.public_ip
-      can_ip_forward     = cfg.can_ip_forward
-      tags               = distinct(concat(cfg.tags, [name]))
-      disk_size_gb       = max(cfg.disk_size_gb, 30)
-      managed_identity   = try(cfg.identity, cfg.service_account, null) != null
+      assign_public_ip = cfg.public_ip
+      can_ip_forward   = cfg.can_ip_forward
+      tags             = distinct(concat(cfg.tags, [name]))
+      disk_size_gb     = max(cfg.disk_size_gb, 30)
+      managed_identity = try(cfg.identity, null) != null
+      secrets          = try(cfg.secrets, null)
 
       # from other modules
       application_sg_ids = lookup(var.application_security_group_ids, name, null) != null ? [var.application_security_group_ids[name]] : []
       subnet_id          = var.subnet_ids[cfg.subnet]
     }
+  }
+
+  access_bindings = {
+    for name, cfg in local.instances : name => cfg
+    if cfg.managed_identity &&                                                           # managed Identity is enabled in config
+    length(try(cfg.secrets, [])) > 0                                                     # instance has at least one secret to access
   }
 }

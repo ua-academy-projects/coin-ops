@@ -41,6 +41,14 @@ resource "azurerm_network_interface_application_security_group_association" "thi
   application_security_group_id = var.application_security_group_ids[each.key]
 }
 
+resource "azurerm_role_assignment" "key_vault_secrets_user" {
+  for_each = local.access_bindings
+
+  scope                = data.azurerm_key_vault.this.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_linux_virtual_machine.this[each.key].identity[0].principal_id
+}
+
 resource "azurerm_linux_virtual_machine" "this" {
   for_each = local.instances
 
