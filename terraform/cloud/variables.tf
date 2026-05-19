@@ -70,16 +70,16 @@ variable "nat_route" {
 
 variable "workloads" {
   type = map(object({
-    instance_type   = string
-    image_family    = string
-    placement       = string
-    subnet          = string
-    tags            = list(string)
-    disk_size_gb    = number
-    public_ip       = bool
-    can_ip_forward  = bool
-    identity        = optional(string)
-    service_account = optional(string)
+    instance_type  = string
+    image_family   = string
+    placement      = string
+    subnet         = string
+    tags           = list(string)
+    disk_size_gb   = number
+    public_ip      = bool
+    can_ip_forward = bool
+    identity       = optional(string)
+    secrets        = optional(list(string))
   }))
 }
 
@@ -99,9 +99,6 @@ variable "security_rules" {
   }))
 }
 
-
-# secrets
-
 variable "secrets" {
   type = map(object({
     secret_id = string
@@ -109,37 +106,16 @@ variable "secrets" {
   default = {}
 }
 
-variable "workload_identities" {
-  type = map(object({
-    name         = string
-    display_name = string
-  }))
-  default = {}
-}
-
 variable "secret_access" {
   type = map(object({
-    identity        = optional(string)
-    service_account = optional(string)
-    secrets         = list(string)
+    identity = optional(string)
+    secrets  = list(string)
   }))
   default = {}
 }
 
-variable "gsm_secrets" {
-  type = map(object({
-    secret_id = string
-  }))
-  default = {}
-}
 
-variable "service_accounts" {
-  type = map(object({
-    name         = string
-    display_name = string
-  }))
-  default = {}
-}
+# database
 
 variable "sql" {
   type = object({

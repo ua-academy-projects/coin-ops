@@ -3,13 +3,14 @@
 # Purpose: Prepare a project for infrastructure provisioning
 # Steps:
 #   1) Create a resource group
-#   2) Create an Azure Key Vault
+#   2) Create a key vault
 #   3) Create a service principal
 #   4) Assign Key Vault access to the service principal
 #   5) Create required secret entries with placeholder values
 #   6) Register the storage resource provider
 #   7) Create backend storage for Terraform state
-#   8) Create a credentials file
+#   8) Assign 
+#   9) Create a credentials file
 #
 # Usage:
 #   1. Fill in the variables block below
@@ -28,20 +29,20 @@ set -euo pipefail
 # ------------------------------------------------------------
 AZ_GROUP_NAME="coin-ops-rg"
 AZ_GROUP_LOCATION="austriaeast"
+
 AZ_SP_NAME="coin-ops-sp"
+
 AZ_STORAGE_ACCOUNT_NAME="coinopstfstate"
 AZ_CONTAINER_NAME="tfstate"
 
 AZ_KEYVAULT_NAME="coin-ops-keyvault-98123"
-
+SECRET_PLACEHOLDER_VALUE="CHANGE_ME_IN_AZURE_PORTAL"
 REQUIRED_SECRETS=(
   "ghcr-username"
   "ghcr-token"
   "rabbitmq-password"
   "db-password"
 )
-
-SECRET_PLACEHOLDER_VALUE="CHANGE_ME_IN_AZURE_PORTAL"
 
 # ------------------------------------------------------------
 # Validate required variables
@@ -193,7 +194,7 @@ for secret_name in "${REQUIRED_SECRETS[@]}"; do
 done
 
 # ------------------------------------------------------------
-# 6) Register Storage provider + assign blob role (after storage is created)
+# 6) Register storage provider 
 # ------------------------------------------------------------
 echo ""
 echo "==> Step 6: Register Storage Resource Provider"
@@ -230,8 +231,11 @@ else
   echo "Blob Container created: $AZ_CONTAINER_NAME"
 fi
 
-# Assign Storage Blob Data Contributor to the Service Principal
-echo "Assigning Storage Blob Data Contributor role..."
+# ------------------------------------------------------------
+# 8) Assign storage blob role to service principal 
+# ------------------------------------------------------------
+echo ""
+echo "==> Step 8: Assigning Storage Blob Data Contributor role..."
 AZ_STORAGE_ID=$(az storage account show \
   --name $AZ_STORAGE_ACCOUNT_NAME \
   --resource-group $AZ_GROUP_NAME \
@@ -244,10 +248,10 @@ az role assignment create \
 echo "Role assigned: Storage Blob Data Contributor"
 
 # ------------------------------------------------------------
-# 8) Create credentials file
+# 9) Create credentials file
 # ------------------------------------------------------------
 echo ""
-echo "==> Step 8: Credentials File"
+echo "==> Step 9: Credentials File"
 
 CREDENTIALS_FILE=".env"
 

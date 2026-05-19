@@ -8,7 +8,6 @@ module "azure_network" {
 
   resource_group_name = local.azure.resource_group_name
   network             = var.network
-  nat_route           = null
 }
 
 module "azure_security" {
@@ -30,6 +29,7 @@ module "azure_instances" {
   resource_group_name            = local.azure.resource_group_name
   location                       = local.azure.location
   ssh_public_key_path            = pathexpand(var.ssh_public_key_path)
+  key_vault_name                 = local.azure.key_vault_name
   subnet_ids                     = module.azure_network[0].subnetwork_ids
   application_security_group_ids = module.azure_security[0].application_security_group_ids
   workloads                      = var.workloads
@@ -65,21 +65,10 @@ module "azure_routing" {
   private_subnet_ids = module.azure_network[0].private_subnet_ids
 }
 
-module "azure_secrets" {
-  source = "./modules/azure/secrets"
-  count  = var.cloud == "azure" ? 1 : 0
-
-  resource_group_name            = local.azure.resource_group_name
-  key_vault_name                 = local.azure.key_vault_name
-  secrets                        = local.normalized_secrets
-  secret_access                  = var.secret_access
-  workloads                      = var.workloads
-  managed_identity_principal_ids = module.azure_instances[0].managed_identity_principal_ids
-}
-
 # ------------------------------------------------------------
 # GCP
 # ------------------------------------------------------------
+
 module "gcp_network" {
   source = "./modules/gcp/network"
   count  = var.cloud == "gcp" ? 1 : 0
@@ -140,6 +129,7 @@ module "gcp_sql" {
 # ------------------------------------------------------------
 # AWS
 # ------------------------------------------------------------
+
 module "aws_network" {
   source = "./modules/aws/network"
   count  = var.cloud == "aws" ? 1 : 0

@@ -5,26 +5,8 @@ locals {
     location            = var.azure_location
   }
 
-  normalized_secrets             = length(var.secrets) > 0 ? var.secrets : var.gsm_secrets
-  normalized_workload_identities = length(var.workload_identities) > 0 ? var.workload_identities : var.service_accounts
-
-  # Previous 5-node layout:
-  # inventory_hosts = {
-  #   history = "coinops-history"
-  #   proxy   = "coinops-proxy"
-  #   ui      = "coinops-ui"
-  #   bastion = "coinops-nat"
-  #   nat     = "coinops-nat"
-  # }
-  inventory_hosts = {
-    history  = "coinops-backend"
-    proxy    = "coinops-backend"
-    ui       = "coinops-frontend"
-    bastion  = "coinops-frontend"
-    nat      = "coinops-frontend"
-    backend  = "coinops-backend"
-    frontend = "coinops-frontend"
-  }
+  normalized_secrets             = var.secrets
+  normalized_workload_identities = {}
 
   private_ips = var.cloud == "gcp" ? try(module.gcp_instances[0].private_ips, {}) : (
     var.cloud == "azure" ? try(module.azure_instances[0].private_ips, {}) : try(module.aws_instances[0].private_ips, {})
@@ -33,37 +15,35 @@ locals {
     var.cloud == "azure" ? try(module.azure_instances[0].public_ips, {}) : try(module.aws_instances[0].public_ips, {})
   )
 
-  # Previous 5-node inventory template:
-  # inventory_content = <<-INV
-  #   [history]
-  #   ${local.inventory_hosts.history} ansible_host=${local.private_ips[local.inventory_hosts.history]} private_ip=${local.private_ips[local.inventory_hosts.history]}
-  #
-  #   [proxy]
-  #   ${local.inventory_hosts.proxy} ansible_host=${local.private_ips[local.inventory_hosts.proxy]} private_ip=${local.private_ips[local.inventory_hosts.proxy]}
-  #
-  #   [ui]
-  #   ${local.inventory_hosts.ui} ansible_host=${local.private_ips[local.inventory_hosts.ui]} private_ip=${local.private_ips[local.inventory_hosts.ui]}
-  #
-  #   [bastion]
-  #   ${local.inventory_hosts.bastion} ansible_host=${local.public_ips[local.inventory_hosts.bastion]} private_ip=${local.private_ips[local.inventory_hosts.bastion]}
-  #
-  #   [nat]
-  #   ${local.inventory_hosts.nat} ansible_host=${local.public_ips[local.inventory_hosts.nat]} private_ip=${local.private_ips[local.inventory_hosts.nat]}
-  # INV
-  inventory_content = <<-INV
-    [history]
-    ${local.inventory_hosts.history} ansible_host=${local.private_ips[local.inventory_hosts.history]} private_ip=${local.private_ips[local.inventory_hosts.history]}
+  inventory_role_tags = {
+    history = "history-api"
+    proxy   = "proxy-api"
+    ui      = "ui"
+    bastion = "bastion"
+    nat     = "nat"
+  }
 
-    [proxy]
-    ${local.inventory_hosts.proxy} ansible_host=${local.private_ips[local.inventory_hosts.proxy]} private_ip=${local.private_ips[local.inventory_hosts.proxy]}
+  inventory_hosts = {
+    for role, tag in local.inventory_role_tags :
+    role => one([
+      for name, workload in var.workloads : name
+      if contains(workload.tags, tag)
+    ])
+  }
 
-    [ui]
-    ${local.inventory_hosts.ui} ansible_host=${local.private_ips[local.inventory_hosts.ui]} private_ip=${local.private_ips[local.inventory_hosts.ui]}
+  inventory_host_records = {
+    for role, host in local.inventory_hosts :
+    role => {
+      name         = host
+      private_ip   = local.private_ips[host]
+      ansible_host = contains(["bastion", "nat"], role) ? local.public_ips[host] : local.private_ips[host]
+    }
+  }
 
-    [bastion]
-    ${local.inventory_hosts.bastion} ansible_host=${local.public_ips[local.inventory_hosts.bastion]} private_ip=${local.private_ips[local.inventory_hosts.bastion]}
-
-    [nat]
-    ${local.inventory_hosts.nat} ansible_host=${local.public_ips[local.inventory_hosts.nat]} private_ip=${local.private_ips[local.inventory_hosts.nat]}
-  INV
+  inventory_content = join("\n\n", [
+    for role in sort(keys(local.inventory_host_records)) : join("\n", [
+      "[${role}]",
+      "${local.inventory_host_records[role].name} ansible_host=${local.inventory_host_records[role].ansible_host} private_ip=${local.inventory_host_records[role].private_ip}",
+    ])
+  ])
 }
