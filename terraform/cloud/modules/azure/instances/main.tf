@@ -10,6 +10,10 @@ resource "azurerm_public_ip" "this" {
   allocation_method   = "Dynamic"
   sku                 = "Standard"
   zones               = [each.value.zone]
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "azurerm_network_interface" "this" {
