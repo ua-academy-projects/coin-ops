@@ -8,20 +8,84 @@ locals {
 
   # normalized input
   normalized_secrets = var.secrets
+  supported_clouds   = ["gcp", "azure", "aws"]
+
+  normalized_networks = {
+    for name, network in var.networks : name => network
+  }
+
+  normalized_workloads = {
+    for name, workload in var.workloads : name => merge(workload, {
+      cloud = coalesce(try(workload.cloud, null), var.cloud)
+    })
+  }
+
+  network_names_by_cloud = {
+    for cloud in local.supported_clouds : cloud => [
+      for name, network in local.normalized_networks : name
+      if network.cloud == cloud
+    ]
+  }
+
+  networks_by_cloud = {
+    for cloud in local.supported_clouds : cloud => (
+      length(local.network_names_by_cloud[cloud]) == 1
+      ? local.normalized_networks[local.network_names_by_cloud[cloud][0]]
+      : null
+    )
+  }
+
+  workloads_by_cloud = {
+    for cloud in local.supported_clouds : cloud => {
+      for name, workload in local.normalized_workloads : name => workload
+      if workload.cloud == cloud
+    }
+  }
+
+  network_clouds_with_multiple_networks = [
+    for cloud in local.supported_clouds : cloud
+    if length(local.network_names_by_cloud[cloud]) > 1
+  ]
+
+  workload_clouds_without_network = distinct([
+    for _, workload in local.normalized_workloads : workload.cloud
+    if try(local.networks_by_cloud[workload.cloud], null) == null
+  ])
+
+  invalid_workload_subnet_refs = [
+    for name, workload in local.normalized_workloads : name
+    if try(local.networks_by_cloud[workload.cloud].subnets[workload.subnet], null) == null
+  ]
+
+  active_workload_clouds = distinct([for _, workload in local.normalized_workloads : workload.cloud])
+  mixed_cloud_enabled    = length(local.active_workload_clouds) > 1
+
+  default_cloud = var.cloud
+
+  default_cloud_network   = local.networks_by_cloud[local.default_cloud]
+  default_cloud_workloads = local.workloads_by_cloud[local.default_cloud]
+
+  default_cloud_security_rules = var.security_rules
+  default_cloud_sql            = var.sql
+  default_cloud_nat_route      = var.nat_route
 
   # shared instance outputs
-  private_ips = var.cloud == "gcp" ? try(module.gcp_instances[0].private_ips, {}) : (
-    var.cloud == "azure" ? try(module.azure_instances[0].private_ips, {}) : try(module.aws_instances[0].private_ips, {})
+  private_ips = merge(
+    try(module.gcp_instances[0].private_ips, {}),
+    try(module.azure_instances[0].private_ips, {}),
+    try(module.aws_instances[0].private_ips, {})
   )
-  public_ips = var.cloud == "gcp" ? try(module.gcp_instances[0].public_ips, {}) : (
-    var.cloud == "azure" ? try(module.azure_instances[0].public_ips, {}) : try(module.aws_instances[0].public_ips, {})
+  public_ips = merge(
+    try(module.gcp_instances[0].public_ips, {}),
+    try(module.azure_instances[0].public_ips, {}),
+    try(module.aws_instances[0].public_ips, {})
   )
 
   # inventory roles
   inventory_role_names = sort(keys(var.role_definitions))
 
   inventory_bastion_host = try(one([
-    for name, workload in var.workloads : name
+    for name, workload in local.normalized_workloads : name
     if contains(workload.roles, "bastion")
   ]), null)
 
@@ -29,15 +93,16 @@ locals {
 
   # inventory hosts
   inventory_hosts = {
-    for name, workload in var.workloads : name => {
+    for name, workload in local.normalized_workloads : name => {
+      cloud        = workload.cloud
       roles        = workload.roles
-      private_ip   = local.private_ips[name]
+      private_ip   = try(local.private_ips[name], "")
       public_ip    = try(local.public_ips[name], null)
-      ansible_host = try(local.public_ips[name], null) != null ? local.public_ips[name] : local.private_ips[name]
+      ansible_host = try(local.public_ips[name], null) != null ? local.public_ips[name] : try(local.private_ips[name], "")
       allowed_ports = distinct(flatten([
         for role in workload.roles : try(var.role_definitions[role].allowed_ports, [])
       ]))
-      required_secrets        = distinct(try(workload.secrets, []))
+      required_secrets        = distinct(coalesce(try(workload.secrets, null), []))
       ansible_ssh_common_args = try(local.public_ips[name], null) == null && local.inventory_bastion_host_public_ip != null ? "-o StrictHostKeyChecking=no -o ForwardAgent=yes -o ProxyJump=deployer@${local.inventory_bastion_host_public_ip}" : null
     }
   }
@@ -60,7 +125,7 @@ locals {
           for host_name in sort(keys(local.inventory_hosts)) :
           trimspace(join(" ", compact([
             host_name,
-            "cloud=${var.cloud}",
+            "cloud=${local.inventory_hosts[host_name].cloud}",
             "ansible_host=${local.inventory_hosts[host_name].ansible_host}",
             "private_ip=${local.inventory_hosts[host_name].private_ip}",
             local.inventory_hosts[host_name].public_ip != null ? "public_ip=${local.inventory_hosts[host_name].public_ip}" : null,

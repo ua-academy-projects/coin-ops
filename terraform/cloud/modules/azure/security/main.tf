@@ -17,7 +17,7 @@ resource "azurerm_network_security_group" "subnet" {
 resource "azurerm_network_security_rule" "cidr" {
   for_each = local.cidr_rules
 
-  name                        = substr(replace(replace(replace(replace(replace(each.key, ":", "-"), "/", "-"), "?", "-"), "%", "-"), "*", "any"), 0, 80)
+  name                        = each.value.name
   resource_group_name         = data.azurerm_resource_group.this.name
   network_security_group_name = azurerm_network_security_group.subnet[local.workload_subnets[each.value.target_workload]].name
   priority                    = each.value.priority
@@ -33,7 +33,7 @@ resource "azurerm_network_security_rule" "cidr" {
 resource "azurerm_network_security_rule" "workload" {
   for_each = local.workload_rules
 
-  name                                       = substr(replace(replace(replace(replace(replace(each.key, ":", "-"), "/", "-"), "?", "-"), "%", "-"), "*", "any"), 0, 80)
+  name                                       = each.value.name
   resource_group_name                        = data.azurerm_resource_group.this.name
   network_security_group_name                = azurerm_network_security_group.subnet[local.workload_subnets[each.value.target_workload]].name
   priority                                   = each.value.priority

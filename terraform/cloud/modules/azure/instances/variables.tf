@@ -26,6 +26,7 @@ variable "key_vault_name" {
 variable "workloads" {
   type = map(object({
     roles          = list(string)
+    cloud          = optional(string)
     instance_type  = string
     image_family   = string
     placement      = string

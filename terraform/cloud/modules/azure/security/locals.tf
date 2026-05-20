@@ -86,15 +86,22 @@ locals {
     split("|", ordered_key)[2] => 100 + idx
   }
 
+  rule_names = {
+    for rule in local.all_rule_pairs :
+    rule.key => substr(replace(replace(replace(replace(replace(rule.key, ":", "-"), "/", "-"), "?", "-"), "%", "-"), "*", "any"), 0, 80)
+  }
+
   cidr_rules = {
     for rule in local.cidr_rule_pairs : rule.key => merge(rule, {
       priority = local.priority_by_key[rule.key]
+      name     = local.rule_names[rule.key]
     })
   }
 
   workload_rules = {
     for rule in local.source_workload_rule_pairs : rule.key => merge(rule, {
       priority = local.priority_by_key[rule.key]
+      name     = local.rule_names[rule.key]
     })
   }
 }

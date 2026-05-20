@@ -35,21 +35,31 @@ variable "azure_location" {
 
 # network
 
-variable "network" {
-  type = object({
-    name = string
-    cidr = string
+variable "networks" {
+  type = map(object({
+    cloud = string
+    name  = string
+    cidr  = string
     subnets = map(object({
       cidr      = string
       placement = string
       exposure  = string
     }))
-  })
+  }))
 
   validation {
     condition = alltrue([
-      for _, subnet in var.network.subnets : contains(["public", "private"], subnet.exposure)
+      for _, network in var.networks : contains(["gcp", "aws", "azure"], network.cloud)
     ])
+    error_message = "Each network cloud must be one of: gcp, azure, aws."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for _, network in var.networks : [
+        for _, subnet in network.subnets : contains(["public", "private"], subnet.exposure)
+      ]
+    ]))
     error_message = "Each subnet exposure must be either \"public\" or \"private\"."
   }
 }
@@ -71,6 +81,7 @@ variable "nat_route" {
 variable "workloads" {
   type = map(object({
     roles          = list(string)
+    cloud          = optional(string)
     instance_type  = string
     image_family   = string
     placement      = string
@@ -82,6 +93,13 @@ variable "workloads" {
     identity       = optional(string)
     secrets        = optional(list(string))
   }))
+
+  validation {
+    condition = alltrue([
+      for _, workload in var.workloads : try(workload.cloud, null) == null || contains(["gcp", "aws", "azure"], workload.cloud)
+    ])
+    error_message = "Each workload cloud must be one of: gcp, azure, aws."
+  }
 }
 
 variable "role_definitions" {
