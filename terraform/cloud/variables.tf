@@ -107,14 +107,6 @@ variable "secrets" {
   default = {}
 }
 
-variable "secret_access" {
-  type = map(object({
-    identity = optional(string)
-    secrets  = list(string)
-  }))
-  default = {}
-}
-
 
 # database
 

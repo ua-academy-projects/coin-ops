@@ -90,7 +90,6 @@ module "gcp_instances" {
   ssh_public_key_path = pathexpand(var.ssh_public_key_path)
   network_name        = module.gcp_network[0].network_name
   subnetworks         = module.gcp_network[0].subnetwork_names
-  service_accounts    = local.normalized_workload_identities
 
   workloads = var.workloads
 }
@@ -109,7 +108,7 @@ module "gcp_secrets" {
   count  = var.cloud == "gcp" ? 1 : 0
 
   secrets          = local.normalized_secrets
-  secret_access    = var.secret_access
+  workloads        = var.workloads
   service_accounts = module.gcp_instances[0].service_accounts
 }
 

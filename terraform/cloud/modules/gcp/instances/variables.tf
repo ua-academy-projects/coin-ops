@@ -22,27 +22,21 @@ variable "subnetworks" {
   type = map(string)
 }
 
-variable "service_accounts" {
-  type = map(object({
-    name         = string
-    display_name = string
-  }))
-}
-
 
 # instances
 
 variable "workloads" {
   type = map(object({
-    instance_type   = string
-    image_family    = string
-    placement       = string
-    subnet          = string
-    tags            = list(string)
-    disk_size_gb    = number
-    public_ip       = bool
-    can_ip_forward  = bool
-    identity        = optional(string)
-    service_account = optional(string)
+    roles          = list(string)
+    instance_type  = string
+    image_family   = string
+    placement      = string
+    subnet         = string
+    tags           = list(string)
+    disk_size_gb   = number
+    public_ip      = bool
+    can_ip_forward = bool
+    identity       = optional(string)
+    secrets        = optional(list(string))
   }))
 }

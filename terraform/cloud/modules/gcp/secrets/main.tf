@@ -11,13 +11,14 @@ resource "google_secret_manager_secret" "this" {
 locals {
   iam_bindings = {
     for binding in flatten([
-      for key, cfg in var.secret_access : [
-        for secret in cfg.secrets : {
-          key                = "${key}-${secret}"
+      for workload_name, cfg in var.workloads : [
+        for secret in try(cfg.secrets, []) : {
+          key                = "${cfg.identity}-${secret}"
           secret_resource_id = google_secret_manager_secret.this[secret].id
-          service_account    = var.service_accounts[try(cfg.identity, cfg.service_account)].email
+          service_account    = var.service_accounts[cfg.identity].email
         }
       ]
+      if try(cfg.identity, null) != null
     ]) : binding.key => binding
   }
 }

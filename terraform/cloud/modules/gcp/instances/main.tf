@@ -1,5 +1,5 @@
 resource "google_service_account" "this" {
-  for_each = var.service_accounts
+  for_each = local.workload_identities
 
   account_id   = each.value.name
   display_name = each.value.display_name

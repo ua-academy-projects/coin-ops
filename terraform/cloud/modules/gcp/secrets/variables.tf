@@ -4,13 +4,11 @@ variable "secrets" {
   }))
 }
 
-variable "secret_access" {
+variable "workloads" {
   type = map(object({
-    identity        = optional(string)
-    service_account = optional(string)
-    secrets         = list(string)
+    identity = optional(string)
+    secrets  = optional(list(string))
   }))
-  default = {}
 }
 
 variable "service_accounts" {

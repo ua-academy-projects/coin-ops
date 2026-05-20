@@ -3,6 +3,16 @@
 locals {
   mappings = jsondecode(file("${path.module}/mappings.json"))
 
+  workload_identities = {
+    for identity in distinct([
+      for _, cfg in var.workloads : cfg.identity
+      if try(cfg.identity, null) != null
+      ]) : identity => {
+      name         = "coinops-${identity}"
+      display_name = "Coin Ops ${title(replace(identity, "-", " "))}"
+    }
+  }
+
   workload_selectors = {
     for name, _ in var.workloads : name => ["workload-${name}"]
   }
@@ -18,7 +28,7 @@ locals {
       ssh_public_key_path   = var.ssh_public_key_path
       assign_public_ip      = cfg.public_ip
       can_ip_forward        = cfg.can_ip_forward
-      service_account_email = try(google_service_account.this[try(cfg.identity, cfg.service_account)].email, null)
+      service_account_email = try(google_service_account.this[cfg.identity].email, null)
     }
   }
 }

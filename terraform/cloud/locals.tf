@@ -5,8 +5,7 @@ locals {
     location            = var.azure_location
   }
 
-  normalized_secrets             = var.secrets
-  normalized_workload_identities = {}
+  normalized_secrets = var.secrets
 
   private_ips = var.cloud == "gcp" ? try(module.gcp_instances[0].private_ips, {}) : (
     var.cloud == "azure" ? try(module.azure_instances[0].private_ips, {}) : try(module.aws_instances[0].private_ips, {})
