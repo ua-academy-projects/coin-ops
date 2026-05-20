@@ -10,6 +10,7 @@ locals {
   normalized_secrets = var.secrets
   supported_clouds   = ["gcp", "azure", "aws"]
 
+  # networks keep their own cloud, workloads use top-level cloud by default
   normalized_networks = {
     for name, network in var.networks : name => network
   }
@@ -20,6 +21,7 @@ locals {
     })
   }
 
+  # for now we support only one network per cloud
   network_names_by_cloud = {
     for cloud in local.supported_clouds : cloud => [
       for name, network in local.normalized_networks : name
@@ -27,6 +29,7 @@ locals {
     ]
   }
 
+  # quick lookup: azure network, gcp network, aws network
   networks_by_cloud = {
     for cloud in local.supported_clouds : cloud => (
       length(local.network_names_by_cloud[cloud]) == 1
@@ -35,6 +38,7 @@ locals {
     )
   }
 
+  # split workloads by cloud before sending them to cloud modules
   workloads_by_cloud = {
     for cloud in local.supported_clouds : cloud => {
       for name, workload in local.normalized_workloads : name => workload
@@ -42,6 +46,7 @@ locals {
     }
   }
 
+  # validation helpers used by inventory.tf preconditions
   network_clouds_with_multiple_networks = [
     for cloud in local.supported_clouds : cloud
     if length(local.network_names_by_cloud[cloud]) > 1
@@ -60,6 +65,7 @@ locals {
   active_workload_clouds = distinct([for _, workload in local.normalized_workloads : workload.cloud])
   mixed_cloud_enabled    = length(local.active_workload_clouds) > 1
 
+  # top-level cloud owns shared resources like sql, nat, and security rules
   default_cloud = var.cloud
 
   default_cloud_network   = local.networks_by_cloud[local.default_cloud]
@@ -69,7 +75,7 @@ locals {
   default_cloud_sql            = var.sql
   default_cloud_nat_route      = var.nat_route
 
-  # shared instance outputs
+  # shared instance outputs from all enabled clouds
   private_ips = merge(
     try(module.gcp_instances[0].private_ips, {}),
     try(module.azure_instances[0].private_ips, {}),
@@ -84,6 +90,7 @@ locals {
   # inventory roles
   inventory_role_names = sort(keys(var.role_definitions))
 
+  # private hosts connect through the public bastion when it exists
   inventory_bastion_host = try(one([
     for name, workload in local.normalized_workloads : name
     if contains(workload.roles, "bastion")
@@ -116,7 +123,7 @@ locals {
     ]
   }
 
-  # rendered inventory file
+  # rendered inventory file for ansible
   inventory_content = join("\n\n", concat(
     [
       join("\n", concat(

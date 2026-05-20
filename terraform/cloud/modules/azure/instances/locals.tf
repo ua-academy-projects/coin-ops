@@ -25,7 +25,7 @@ locals {
 
   access_bindings = {
     for name, cfg in local.instances : name => cfg
-    if cfg.managed_identity &&                                                           # managed Identity is enabled in config
-    length(try(cfg.secrets, [])) > 0                                                     # instance has at least one secret to access
+    if cfg.managed_identity &&       # managed Identity is enabled in config
+    length(try(cfg.secrets, [])) > 0 # instance has at least one secret to access
   }
 }
