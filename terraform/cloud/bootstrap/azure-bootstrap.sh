@@ -1,15 +1,15 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Azure Bootstrap Script
 # Purpose: Prepare a project for infrastructure provisioning
 # Steps:
 #   1) Create a resource group
 #   2) Create a key vault
 #   3) Create a service principal
-#   4) Assign Key Vault access to the service principal
+#   4) Assign Key Vault access to the active Azure CLI caller
 #   5) Create required secret entries with placeholder values
 #   6) Register the storage resource provider
 #   7) Create backend storage for Terraform state
-#   8) Assign 
+#   8) Assign storage blob access to the service principal
 #   9) Create a credentials file
 #
 # Usage:
@@ -235,7 +235,7 @@ fi
 # 8) Assign storage blob role to service principal 
 # ------------------------------------------------------------
 echo ""
-echo "==> Step 8: Assigning Storage Blob Data Contributor role..."
+echo "==> Step 8: Storage Blob Role"
 AZ_STORAGE_ID=$(az storage account show \
   --name $AZ_STORAGE_ACCOUNT_NAME \
   --resource-group $AZ_GROUP_NAME \
@@ -267,7 +267,14 @@ AZ_KEYVAULT_NAME=$AZ_KEYVAULT_NAME
 EOF
 
 echo "Credentials file created: $CREDENTIALS_FILE"
-echo ""
-echo "IMPORTANT: Add .env to your .gitignore — it contains secrets!"
-echo ""
-echo "==> Bootstrap complete!"
+printf "\nDone!\n"
+printf "  %-20s %s\n" "Resource group:" "$AZ_GROUP_NAME"
+printf "  %-20s %s\n" "Key Vault:"      "$AZ_KEYVAULT_NAME"
+printf "  %-20s %s\n" "Service principal:" "$AZ_SP_NAME"
+printf "  %-20s %s\n" "State storage:"  "$AZ_STORAGE_ACCOUNT_NAME/$AZ_CONTAINER_NAME"
+printf "  %-20s %s\n" "Env file:"       "$CREDENTIALS_FILE"
+printf "\nNext steps:\n"
+printf "  update placeholder secrets in Azure Key Vault\n"
+printf "  source %s\n" "$CREDENTIALS_FILE"
+printf "  terraform init\n"
+printf "\nIMPORTANT: Add %s to your .gitignore because it contains secrets.\n" "$CREDENTIALS_FILE"
