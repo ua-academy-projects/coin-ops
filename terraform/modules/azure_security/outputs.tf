@@ -17,3 +17,4 @@ output "db_nsg_id" {
   description = "NSG ID for database"
   value       = try(azurerm_network_security_group.db[0].id, null)
 }
+

@@ -1,5 +1,5 @@
 resource "aws_vpc" "main" {
-  count = var.config.general.cloud == "aws" ? 1 : 0
+  count = contains(["aws", "hybrid"], var.config.general.cloud) ? 1 : 0
 
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
@@ -11,7 +11,7 @@ resource "aws_vpc" "main" {
 }
 
 resource "aws_subnet" "public" {
-  count = var.config.general.cloud == "aws" ? 1 : 0
+  count = contains(["aws", "hybrid"], var.config.general.cloud) ? 1 : 0
 
   vpc_id                  = aws_vpc.main[0].id
   cidr_block              = "10.0.1.0/24"
@@ -24,7 +24,7 @@ resource "aws_subnet" "public" {
 }
 
 resource "aws_subnet" "public_b" {
-  count = var.config.general.cloud == "aws" ? 1 : 0
+  count = contains(["aws", "hybrid"], var.config.general.cloud) ? 1 : 0
 
   vpc_id                  = aws_vpc.main[0].id
   cidr_block              = "10.0.5.0/24"
@@ -37,7 +37,7 @@ resource "aws_subnet" "public_b" {
 }
 
 resource "aws_subnet" "private" {
-  count = var.config.general.cloud == "aws" ? 1 : 0
+  count = contains(["aws", "hybrid"], var.config.general.cloud) ? 1 : 0
 
   vpc_id            = aws_vpc.main[0].id
   cidr_block        = "10.0.2.0/24"
@@ -49,7 +49,7 @@ resource "aws_subnet" "private" {
 }
 
 resource "aws_subnet" "private_b" {
-  count = var.config.general.cloud == "aws" ? 1 : 0
+  count = contains(["aws", "hybrid"], var.config.general.cloud) ? 1 : 0
 
   vpc_id            = aws_vpc.main[0].id
   cidr_block        = "10.0.4.0/24"
@@ -61,7 +61,7 @@ resource "aws_subnet" "private_b" {
 }
 
 resource "aws_internet_gateway" "main" {
-  count = var.config.general.cloud == "aws" ? 1 : 0
+  count = contains(["aws", "hybrid"], var.config.general.cloud) ? 1 : 0
 
   vpc_id = aws_vpc.main[0].id
 
@@ -71,7 +71,7 @@ resource "aws_internet_gateway" "main" {
 }
 
 resource "aws_route_table" "public" {
-  count = var.config.general.cloud == "aws" ? 1 : 0
+  count = contains(["aws", "hybrid"], var.config.general.cloud) ? 1 : 0
 
   vpc_id = aws_vpc.main[0].id
 
@@ -86,21 +86,21 @@ resource "aws_route_table" "public" {
 }
 
 resource "aws_route_table_association" "public" {
-  count = var.config.general.cloud == "aws" ? 1 : 0
+  count = contains(["aws", "hybrid"], var.config.general.cloud) ? 1 : 0
 
   subnet_id      = aws_subnet.public[0].id
   route_table_id = aws_route_table.public[0].id
 }
 
 resource "aws_route_table_association" "public_b" {
-  count = var.config.general.cloud == "aws" ? 1 : 0
+  count = contains(["aws", "hybrid"], var.config.general.cloud) ? 1 : 0
 
   subnet_id      = aws_subnet.public_b[0].id
   route_table_id = aws_route_table.public[0].id
 }
 
 resource "aws_eip" "nat" {
-  count  = var.config.general.cloud == "aws" ? 1 : 0
+  count  = contains(["aws", "hybrid"], var.config.general.cloud) ? 1 : 0
   domain = "vpc"
 
   tags = {
@@ -109,7 +109,7 @@ resource "aws_eip" "nat" {
 }
 
 resource "aws_nat_gateway" "main" {
-  count = var.config.general.cloud == "aws" ? 1 : 0
+  count = contains(["aws", "hybrid"], var.config.general.cloud) ? 1 : 0
 
   allocation_id = aws_eip.nat[0].id
   subnet_id     = aws_subnet.public[0].id
@@ -120,7 +120,7 @@ resource "aws_nat_gateway" "main" {
 }
 
 resource "aws_route_table" "private" {
-  count = var.config.general.cloud == "aws" ? 1 : 0
+  count = contains(["aws", "hybrid"], var.config.general.cloud) ? 1 : 0
 
   vpc_id = aws_vpc.main[0].id
 
@@ -135,14 +135,14 @@ resource "aws_route_table" "private" {
 }
 
 resource "aws_route_table_association" "private" {
-  count = var.config.general.cloud == "aws" ? 1 : 0
+  count = contains(["aws", "hybrid"], var.config.general.cloud) ? 1 : 0
 
   subnet_id      = aws_subnet.private[0].id
   route_table_id = aws_route_table.private[0].id
 }
 
 resource "aws_route_table_association" "private_b" {
-  count = var.config.general.cloud == "aws" ? 1 : 0
+  count = contains(["aws", "hybrid"], var.config.general.cloud) ? 1 : 0
 
   subnet_id      = aws_subnet.private_b[0].id
   route_table_id = aws_route_table.private[0].id

@@ -1,9 +1,9 @@
 output "resource_group_name" {
-  value = try(data.azurerm_resource_group.main[0].name, null)
+  value = try(azurerm_resource_group.main[0].name, null)
 }
 
 output "resource_group_location" {
-  value = try(data.azurerm_resource_group.main[0].location, null)
+  value = try(azurerm_resource_group.main[0].location, null)
 }
 
 output "vnet_id" {

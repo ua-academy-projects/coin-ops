@@ -1,15 +1,10 @@
-data "azurerm_resource_group" "main" {
-  count = var.config.general.cloud == "azure" ? 1 : 0
-  name  = "coinops-rg"
-}
-
 locals {
-  rg_name     = try(data.azurerm_resource_group.main[0].name, "")
-  rg_location = try(data.azurerm_resource_group.main[0].location, "")
+  rg_name     = contains(["azure", "hybrid"], var.config.general.cloud) ? "coinops-rg" : ""
+  rg_location = contains(["azure", "hybrid"], var.config.general.cloud) ? var.config.locations[var.config.general.location].azure.region : ""
 }
 
 resource "azurerm_public_ip" "lb" {
-  count               = var.config.general.cloud == "azure" ? 1 : 0
+  count               = contains(["azure", "hybrid"], var.config.general.cloud) ? 1 : 0
   name                = "coinops-lb-pip"
   location            = local.rg_location
   resource_group_name = local.rg_name
@@ -18,7 +13,7 @@ resource "azurerm_public_ip" "lb" {
 }
 
 resource "azurerm_lb" "main" {
-  count               = var.config.general.cloud == "azure" ? 1 : 0
+  count               = contains(["azure", "hybrid"], var.config.general.cloud) ? 1 : 0
   name                = "coinops-lb"
   location            = local.rg_location
   resource_group_name = local.rg_name
@@ -31,13 +26,13 @@ resource "azurerm_lb" "main" {
 }
 
 resource "azurerm_lb_backend_address_pool" "main" {
-  count           = var.config.general.cloud == "azure" ? 1 : 0
+  count           = contains(["azure", "hybrid"], var.config.general.cloud) ? 1 : 0
   name            = "coinops-backend-pool"
   loadbalancer_id = azurerm_lb.main[0].id
 }
 
 resource "azurerm_lb_probe" "http" {
-  count               = var.config.general.cloud == "azure" ? 1 : 0
+  count               = contains(["azure", "hybrid"], var.config.general.cloud) ? 1 : 0
   name                = "coinops-http-probe"
   loadbalancer_id     = azurerm_lb.main[0].id
   protocol            = "Http"
@@ -48,7 +43,7 @@ resource "azurerm_lb_probe" "http" {
 }
 
 resource "azurerm_lb_rule" "http" {
-  count                          = var.config.general.cloud == "azure" ? 1 : 0
+  count                          = contains(["azure", "hybrid"], var.config.general.cloud) ? 1 : 0
   name                           = "coinops-http-rule"
   loadbalancer_id                = azurerm_lb.main[0].id
   protocol                       = "Tcp"
@@ -60,7 +55,7 @@ resource "azurerm_lb_rule" "http" {
 }
 
 resource "azurerm_network_interface_backend_address_pool_association" "ui" {
-  count                   = var.config.general.cloud == "azure" ? 1 : 0
+  count                   = contains(["azure", "hybrid"], var.config.general.cloud) ? 1 : 0
   network_interface_id    = var.ui_nic_id
   ip_configuration_name   = "internal"
   backend_address_pool_id = azurerm_lb_backend_address_pool.main[0].id

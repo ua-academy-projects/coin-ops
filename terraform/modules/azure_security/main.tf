@@ -1,15 +1,10 @@
-data "azurerm_resource_group" "main" {
-  count = var.config.general.cloud == "azure" ? 1 : 0
-  name  = "coinops-rg"
-}
-
 locals {
-  rg_name     = try(data.azurerm_resource_group.main[0].name, "")
-  rg_location = try(data.azurerm_resource_group.main[0].location, "")
+  rg_name     = contains(["azure", "hybrid"], var.config.general.cloud) ? "coinops-rg" : ""
+  rg_location = contains(["azure", "hybrid"], var.config.general.cloud) ? var.config.locations[var.config.general.location].azure.region : ""
 }
 
 resource "azurerm_network_security_group" "jump_host" {
-  count               = var.config.general.cloud == "azure" ? 1 : 0
+  count               = contains(["azure", "hybrid"], var.config.general.cloud) ? 1 : 0
   name                = "jump-host-nsg"
   location            = local.rg_location
   resource_group_name = local.rg_name
@@ -28,7 +23,7 @@ resource "azurerm_network_security_group" "jump_host" {
 }
 
 resource "azurerm_network_security_group" "internal" {
-  count               = var.config.general.cloud == "azure" ? 1 : 0
+  count               = contains(["azure", "hybrid"], var.config.general.cloud) ? 1 : 0
   name                = "internal-nsg"
   location            = local.rg_location
   resource_group_name = local.rg_name
@@ -59,7 +54,7 @@ resource "azurerm_network_security_group" "internal" {
 }
 
 resource "azurerm_network_security_group" "web" {
-  count               = var.config.general.cloud == "azure" ? 1 : 0
+  count               = contains(["azure", "hybrid"], var.config.general.cloud) ? 1 : 0
   name                = "web-nsg"
   location            = local.rg_location
   resource_group_name = local.rg_name
@@ -90,7 +85,7 @@ resource "azurerm_network_security_group" "web" {
 }
 
 resource "azurerm_network_security_group" "db" {
-  count               = var.config.general.cloud == "azure" ? 1 : 0
+  count               = contains(["azure", "hybrid"], var.config.general.cloud) ? 1 : 0
   name                = "db-nsg"
   location            = local.rg_location
   resource_group_name = local.rg_name

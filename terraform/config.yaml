@@ -1,8 +1,8 @@
 general:
-  cloud: "aws"
+  cloud: "hybrid"
   project_id: "devops-intern-penina"
   location: "europe"
-  disk_size: 10
+  disk_size: 30
   ssh_port: "9922"
   ops_user: "marta_ops"
 
@@ -19,7 +19,7 @@ locations:
         primary: "eu-central-1a"
         secondary: "eu-central-1b"
     azure:
-      region: "germanywestcentral"
+      region: "swedencentral"
       zones:
         primary: "1"
         secondary: "2"
@@ -35,7 +35,7 @@ locations:
         primary: "us-east-1a"
         secondary: "us-east-1b"
     azure:
-      region: "eastus2"
+      region: "eastus"
       zones:
         primary: "1"
         secondary: "2"
@@ -50,32 +50,36 @@ sizes:
   small:
     gcp: "e2-micro"
     aws: "t3.micro"
-    azure: "Standard_B1s"
+    azure: "Standard_B2s_v2"
   medium:
     gcp: "e2-small"
     aws: "t3.small"
-    azure: "Standard_B2s"
+    azure: "Standard_B2s_v2"
 
 vms:
   jump-host:
+    cloud: "azure"
     size: small
     zone: primary
     tags: ["jump-host"]
     public_ip: true
-    
+
   node-01:
+    cloud: "aws"
     size: small
     zone: primary
     tags: ["internal", "history", "queue"]
-    public_ip: false
+    public_ip: true
 
   node-02:
+    cloud: "aws"
     size: small
     zone: primary
     tags: ["internal", "proxy"]
-    public_ip: false
+    public_ip: true
 
   node-03:
+    cloud: "azure"
     size: small
     zone: secondary
     tags: ["internal", "ui", "web"]

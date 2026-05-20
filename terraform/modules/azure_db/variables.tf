@@ -11,3 +11,4 @@ variable "vnet_name" {
   type        = string
   description = "Virtual network name"
 }
+

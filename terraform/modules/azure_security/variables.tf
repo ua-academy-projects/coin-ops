@@ -7,3 +7,4 @@ variable "vnet_name" {
   description = "VNet name"
   default     = ""
 }
+

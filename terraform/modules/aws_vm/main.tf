@@ -1,12 +1,19 @@
-resource "aws_key_pair" "main" {
-  count = var.config.general.cloud == "aws" ? 1 : 0
+locals {
+  # Filter only VMs assigned to AWS
+  aws_vms = {
+    for name, vm in var.config.vms : name => vm
+    if lookup(vm, "cloud", var.config.general.cloud) == "aws"
+  }
+}
 
+resource "aws_key_pair" "main" {
+  count      = length(local.aws_vms) > 0 ? 1 : 0
   key_name   = "marta-ops-key"
   public_key = var.ssh_public_key
 }
 
 resource "aws_instance" "vm" {
-  for_each = var.config.general.cloud == "aws" ? var.config.vms : {}
+  for_each = local.aws_vms
 
   ami           = var.config.images.ubuntu_2404.aws
   instance_type = var.config.sizes[each.value.size].aws

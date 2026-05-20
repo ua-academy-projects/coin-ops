@@ -41,3 +41,4 @@ variable "web_nsg_id" {
   type        = string
   description = "NSG ID for web node"
 }
+

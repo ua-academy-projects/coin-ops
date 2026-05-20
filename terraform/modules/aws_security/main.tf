@@ -1,5 +1,5 @@
 resource "aws_security_group" "jump_host" {
-  count       = var.config.general.cloud == "aws" ? 1 : 0
+  count       = contains(["aws", "hybrid"], var.config.general.cloud) ? 1 : 0
   name        = "jump-host-sg"
   description = "Allow SSH from internet on custom port"
   vpc_id      = var.vpc_id
@@ -24,7 +24,7 @@ resource "aws_security_group" "jump_host" {
 }
 
 resource "aws_security_group" "internal" {
-  count       = var.config.general.cloud == "aws" ? 1 : 0
+  count       = contains(["aws", "hybrid"], var.config.general.cloud) ? 1 : 0
   name        = "internal-sg"
   description = "Allow SSH from jump host and internal communication"
   vpc_id      = var.vpc_id
@@ -56,7 +56,7 @@ resource "aws_security_group" "internal" {
 }
 
 resource "aws_security_group" "web" {
-  count       = var.config.general.cloud == "aws" ? 1 : 0
+  count       = contains(["aws", "hybrid"], var.config.general.cloud) ? 1 : 0
   name        = "web-sg"
   description = "Allow HTTP/HTTPS from internet"
   vpc_id      = var.vpc_id
@@ -88,7 +88,7 @@ resource "aws_security_group" "web" {
 }
 
 resource "aws_security_group" "rds" {
-  count       = var.config.general.cloud == "aws" ? 1 : 0
+  count       = contains(["aws", "hybrid"], var.config.general.cloud) ? 1 : 0
   name        = "rds-sg"
   description = "Allow PostgreSQL from internal VMs"
   vpc_id      = var.vpc_id

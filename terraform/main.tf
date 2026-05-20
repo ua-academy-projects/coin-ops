@@ -11,7 +11,7 @@ locals {
   cloud    = local.general.cloud
   location = local.general.location
 
-  active_location = local.config.locations[local.location][local.cloud]
+  active_location = local.cloud == "hybrid" ? local.config.locations[local.location]["azure"] : local.config.locations[local.location][local.cloud]
 }
 
 module "gcp_network" {
@@ -52,28 +52,31 @@ module "azure_network" {
 }
 
 module "azure_security" {
-  source   = "./modules/azure_security"
-  config   = local.config
+  source    = "./modules/azure_security"
+  config    = local.config
   vnet_name = module.azure_network.vnet_name
+  depends_on = [module.azure_network]
 }
 
 module "azure_vm" {
-  source             = "./modules/azure_vm"
-  config             = local.config
-  ssh_public_key     = file("${pathexpand("~")}/.ssh/id_ed25519.pub")
-  public_subnet_id   = module.azure_network.public_subnet_id
-  public_subnet_b_id = module.azure_network.public_subnet_b_id
-  private_subnet_id  = module.azure_network.private_subnet_id
+  source              = "./modules/azure_vm"
+  config              = local.config
+  ssh_public_key      = file("${pathexpand("~")}/.ssh/id_ed25519.pub")
+  public_subnet_id    = module.azure_network.public_subnet_id
+  public_subnet_b_id  = module.azure_network.public_subnet_b_id
+  private_subnet_id   = module.azure_network.private_subnet_id
   private_subnet_b_id = module.azure_network.private_subnet_b_id
-  jump_host_nsg_id   = module.azure_security.jump_host_nsg_id
-  internal_nsg_id    = module.azure_security.internal_nsg_id
-  web_nsg_id         = module.azure_security.web_nsg_id
+  jump_host_nsg_id    = module.azure_security.jump_host_nsg_id
+  internal_nsg_id     = module.azure_security.internal_nsg_id
+  web_nsg_id          = module.azure_security.web_nsg_id
+  depends_on = [module.azure_network, module.azure_security]
 }
 
 module "azure_lb" {
   source    = "./modules/azure_lb"
   config    = local.config
   ui_nic_id = module.azure_vm.ui_nic_id
+  depends_on = [module.azure_network, module.azure_vm]
 }
 
 module "azure_db" {
@@ -81,6 +84,7 @@ module "azure_db" {
   config    = local.config
   vnet_id   = module.azure_network.vnet_id
   vnet_name = module.azure_network.vnet_name
+  depends_on = [module.azure_network]
 }
 
 module "aws_network" {

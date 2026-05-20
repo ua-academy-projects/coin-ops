@@ -1,17 +1,18 @@
-data "azurerm_resource_group" "main" {
-  count = var.config.general.cloud == "azure" ? 1 : 0
-  name  = "coinops-rg"
-}
-
 locals {
-  rg_name     = try(data.azurerm_resource_group.main[0].name, "")
-  rg_location = try(data.azurerm_resource_group.main[0].location, "")
+  rg_name     = contains(["azure", "hybrid"], var.config.general.cloud) ? "coinops-rg" : ""
+  rg_location = contains(["azure", "hybrid"], var.config.general.cloud) ? var.config.locations[var.config.general.location].azure.region : ""
+
+  # Filter only VMs assigned to Azure
+  azure_vms = {
+    for name, vm in var.config.vms : name => vm
+    if lookup(vm, "cloud", var.config.general.cloud) == "azure"
+  }
 }
 
 resource "azurerm_public_ip" "vm" {
-  for_each = var.config.general.cloud == "azure" ? {
-    for name, vm in var.config.vms : name => vm if vm.public_ip
-  } : {}
+  for_each = {
+    for name, vm in local.azure_vms : name => vm if vm.public_ip
+  }
 
   name                = "${each.key}-pip"
   location            = local.rg_location
@@ -22,7 +23,7 @@ resource "azurerm_public_ip" "vm" {
 }
 
 resource "azurerm_network_interface" "vm" {
-  for_each = var.config.general.cloud == "azure" ? var.config.vms : {}
+  for_each = local.azure_vms
 
   name                = "${each.key}-nic"
   location            = local.rg_location
@@ -41,34 +42,34 @@ resource "azurerm_network_interface" "vm" {
 }
 
 resource "azurerm_network_interface_security_group_association" "jump_host" {
-  for_each = var.config.general.cloud == "azure" ? {
-    for name, vm in var.config.vms : name => vm if contains(vm.tags, "jump-host")
-  } : {}
+  for_each = {
+    for name, vm in local.azure_vms : name => vm if contains(vm.tags, "jump-host")
+  }
 
   network_interface_id      = azurerm_network_interface.vm[each.key].id
   network_security_group_id = var.jump_host_nsg_id
 }
 
 resource "azurerm_network_interface_security_group_association" "internal" {
-  for_each = var.config.general.cloud == "azure" ? {
-    for name, vm in var.config.vms : name => vm if contains(vm.tags, "internal")
-  } : {}
+  for_each = {
+    for name, vm in local.azure_vms : name => vm if contains(vm.tags, "internal")
+  }
 
   network_interface_id      = azurerm_network_interface.vm[each.key].id
   network_security_group_id = var.internal_nsg_id
 }
 
 resource "azurerm_network_interface_security_group_association" "web" {
-  for_each = var.config.general.cloud == "azure" ? {
-    for name, vm in var.config.vms : name => vm if contains(vm.tags, "web")
-  } : {}
+  for_each = {
+    for name, vm in local.azure_vms : name => vm if contains(vm.tags, "web")
+  }
 
   network_interface_id      = azurerm_network_interface.vm[each.key].id
   network_security_group_id = var.web_nsg_id
 }
 
 resource "azurerm_linux_virtual_machine" "vm" {
-  for_each = var.config.general.cloud == "azure" ? var.config.vms : {}
+  for_each = local.azure_vms
 
   name                            = each.key
   location                        = local.rg_location
