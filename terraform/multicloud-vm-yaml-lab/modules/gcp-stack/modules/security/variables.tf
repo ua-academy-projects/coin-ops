@@ -26,6 +26,16 @@ variable "db_target_tags" {
   type = list(string)
 }
 
+variable "k3s_target_tags" {
+  type    = list(string)
+  default = []
+}
+
+variable "network_cidr" {
+  type    = string
+  default = ""
+}
+
 variable "allow_icmp_from_bastion" {
   type = bool
 }

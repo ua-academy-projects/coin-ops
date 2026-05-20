@@ -26,6 +26,11 @@ variable "bastion_name" {
   type = string
 }
 
+variable "k3s_names" {
+  type    = list(string)
+  default = []
+}
+
 variable "network_self_link" {
   type = string
 }

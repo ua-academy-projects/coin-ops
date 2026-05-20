@@ -115,6 +115,9 @@ roles:
   db:
     public_ip: false
     tags: [db]
+  k3s:
+    public_ip: false
+    tags: [k3s]
 
 app:
   port: 80
@@ -124,6 +127,13 @@ app:
     app:
       - app-2
     db: db
+    # k3s learning cluster — provisioned only when `cloud: gcp` (the plan
+    # places the k3s sandbox on GCP, separate from the AWS production demo).
+    # Leave empty under `cloud: aws` to skip cluster provisioning entirely.
+    k3s:
+      - k3s-1
+      - k3s-2
+      - k3s-3
 
 catalog:
   locations:
@@ -205,3 +215,18 @@ instances:
   db:
     role: db
     private_ip: 10.10.10.20
+  # k3s learning cluster — three nodes, each a server+worker (HA k3s with
+  # embedded etcd). Sized `small` to leave headroom for control-plane +
+  # hello-world workloads. Only realized when `cloud: gcp`.
+  k3s-1:
+    role: k3s
+    size: small
+    private_ip: 10.10.10.40
+  k3s-2:
+    role: k3s
+    size: small
+    private_ip: 10.10.10.41
+  k3s-3:
+    role: k3s
+    size: small
+    private_ip: 10.10.11.40

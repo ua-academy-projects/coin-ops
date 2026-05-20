@@ -26,6 +26,11 @@ variable "db_name" {
   type = string
 }
 
+variable "k3s_names" {
+  type    = list(string)
+  default = []
+}
+
 variable "app_url" {
   type = string
 }

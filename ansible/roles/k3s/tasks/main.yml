@@ -1,0 +1,173 @@
+---
+# Bring up an HA k3s cluster where every node is both server and worker
+# (embedded etcd, no agent/server split). The first node in the `k3s`
+# inventory group runs `--cluster-init`; the rest join with `--server`.
+#
+# Idempotent: re-running with the same release/token is a no-op. The role
+# detects an already-running k3s install via `k3s -v` and the kubeconfig
+# file, and skips install steps in that case.
+#
+# Reads tailscale_auth_key indirectly (the tailscale role must run before
+# this one so coinops_tailnet_ipv4 is populated for the TLS SAN list).
+
+- name: Determine if this host is the cluster-init node
+  set_fact:
+    k3s_is_first: "{{ inventory_hostname == k3s_first_node }}"
+
+- name: Look for existing k3s binary
+  stat:
+    path: /usr/local/bin/k3s
+  register: k3s_binary
+
+- name: Read installed k3s version
+  command: /usr/local/bin/k3s --version
+  register: k3s_installed_version_raw
+  changed_when: false
+  failed_when: false
+  when: k3s_binary.stat.exists
+
+- name: Decide whether to (re)install k3s
+  set_fact:
+    k3s_needs_install: "{{ (not k3s_binary.stat.exists) or (k3s_release_version not in (k3s_installed_version_raw.stdout | default(''))) }}"
+
+# ---------------------------------------------------------------------
+# First node: cluster-init
+# ---------------------------------------------------------------------
+
+- name: Ensure rancher state directory exists (first node)
+  file:
+    path: /var/lib/rancher/k3s/server
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+  when: k3s_is_first
+
+- name: Generate persistent cluster token (first node, once)
+  shell: |
+    set -e
+    if [ ! -s {{ k3s_token_path }} ]; then
+      head -c 32 /dev/urandom | base64 | tr -d '/+=\n' > {{ k3s_token_path }}
+      chmod 0600 {{ k3s_token_path }}
+    fi
+    cat {{ k3s_token_path }}
+  args:
+    creates: "{{ k3s_token_path }}"
+  register: k3s_token_first_gen
+  when: k3s_is_first
+  no_log: true
+
+- name: Read persisted cluster token (first node)
+  slurp:
+    src: "{{ k3s_token_path }}"
+  register: k3s_token_slurp
+  when: k3s_is_first
+  no_log: true
+
+- name: Record cluster token as host fact (first node)
+  set_fact:
+    k3s_cluster_token: "{{ k3s_token_slurp.content | b64decode | trim }}"
+  when: k3s_is_first
+  no_log: true
+
+- name: Compute TLS SAN list for the API server (first node)
+  set_fact:
+    k3s_first_tls_sans: >-
+      {{
+        ([ansible_default_ipv4.address] +
+         ([coinops_tailnet_ipv4] if (coinops_tailnet_ipv4 is defined and coinops_tailnet_ipv4 | length > 0) else []) +
+         k3s_extra_tls_sans) | unique
+      }}
+  when: k3s_is_first
+
+- name: Install/upgrade k3s on the cluster-init node
+  shell: |
+    curl -sfL https://get.k3s.io | \
+      INSTALL_K3S_VERSION={{ k3s_release_version }} \
+      K3S_TOKEN={{ k3s_cluster_token }} \
+      INSTALL_K3S_EXEC="server --cluster-init {{ k3s_first_tls_sans | map('regex_replace', '^(.*)$', '--tls-san=\\1') | join(' ') }} --write-kubeconfig-mode=644 {{ k3s_extra_server_args }}" \
+      sh -
+  when:
+    - k3s_is_first
+    - k3s_needs_install
+  no_log: true
+
+- name: Wait for kubeconfig to appear (first node)
+  wait_for:
+    path: /etc/rancher/k3s/k3s.yaml
+    state: present
+    timeout: 120
+  when: k3s_is_first
+
+- name: Wait for k3s API server to respond (first node)
+  command: /usr/local/bin/k3s kubectl get --raw /readyz
+  register: k3s_api_ready
+  retries: 30
+  delay: 5
+  until: k3s_api_ready.rc == 0
+  changed_when: false
+  when: k3s_is_first
+
+# ---------------------------------------------------------------------
+# Joiners: pull token from first node, join with --server
+# ---------------------------------------------------------------------
+
+- name: Pull cluster token from first node (joiners)
+  slurp:
+    src: "{{ k3s_token_path }}"
+  delegate_to: "{{ k3s_first_node }}"
+  register: k3s_joiner_token_slurp
+  when: not k3s_is_first
+  no_log: true
+
+- name: Record cluster token on joiner
+  set_fact:
+    k3s_cluster_token: "{{ k3s_joiner_token_slurp.content | b64decode | trim }}"
+  when: not k3s_is_first
+  no_log: true
+
+- name: Resolve first node's reachable address (joiners)
+  set_fact:
+    k3s_server_url: "https://{{ hostvars[k3s_first_node].ansible_default_ipv4.address }}:6443"
+  when: not k3s_is_first
+
+- name: Install/upgrade k3s on joiner
+  shell: |
+    curl -sfL https://get.k3s.io | \
+      INSTALL_K3S_VERSION={{ k3s_release_version }} \
+      K3S_TOKEN={{ k3s_cluster_token }} \
+      INSTALL_K3S_EXEC="server --server {{ k3s_server_url }} --write-kubeconfig-mode=644 {{ k3s_extra_server_args }}" \
+      sh -
+  when:
+    - not k3s_is_first
+    - k3s_needs_install
+  no_log: true
+
+- name: Wait for k3s API server to respond (joiner)
+  command: /usr/local/bin/k3s kubectl get --raw /readyz
+  register: k3s_api_ready_joiner
+  retries: 30
+  delay: 5
+  until: k3s_api_ready_joiner.rc == 0
+  changed_when: false
+  when: not k3s_is_first
+
+# ---------------------------------------------------------------------
+# Kubeconfig fetch + tailnet-rewrite (controller side)
+# ---------------------------------------------------------------------
+
+- name: Fetch kubeconfig from first node to controller
+  fetch:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: "{{ k3s_local_kubeconfig | expanduser }}"
+    flat: yes
+  when: k3s_is_first
+
+- name: Rewrite kubeconfig server URL to first node's tailnet IP
+  delegate_to: localhost
+  become: false
+  replace:
+    path: "{{ k3s_local_kubeconfig | expanduser }}"
+    regexp: 'server: https://127\.0\.0\.1:6443'
+    replace: "server: https://{{ hostvars[k3s_first_node].coinops_tailnet_ipv4 | default(hostvars[k3s_first_node].ansible_default_ipv4.address) }}:6443"
+  when: k3s_is_first

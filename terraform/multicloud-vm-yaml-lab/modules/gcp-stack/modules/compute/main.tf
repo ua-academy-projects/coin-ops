@@ -6,6 +6,13 @@ locals {
     }
   }
 
+  k3s_instance_networks = {
+    for idx, name in var.k3s_names : name => {
+      zone       = var.zones[idx % length(var.zones)]
+      subnetwork = var.private_subnet_self_links[tostring(idx % length(var.private_subnet_self_links))]
+    }
+  }
+
   instance_networks = merge(
     {
       (var.bastion_name) = {
@@ -14,6 +21,7 @@ locals {
       }
     },
     local.app_instance_networks,
+    local.k3s_instance_networks,
     {
       (var.db_name) = {
         zone       = var.zones[0]

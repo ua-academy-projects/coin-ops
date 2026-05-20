@@ -54,6 +54,7 @@ locals {
         bastion = "bastion"
         app     = ["app-1", "app-2"]
         db      = "db"
+        k3s     = []
       }
     }
     runtime = {
@@ -156,6 +157,7 @@ locals {
   app_names    = local.config.app.nodes.app
   db_name      = local.config.app.nodes.db
   bastion_name = local.config.app.nodes.bastion
+  k3s_names    = try(local.config.app.nodes.k3s, [])
 
   database_size_key = try(local.config.runtime.database.size, "small")
   database_size = try(local.config.catalog.database_sizes[local.database_size_key], {
@@ -308,6 +310,7 @@ locals {
     bastion_name   = local.bastion_name
     app_names      = local.app_names
     db_name        = local.db_name
+    k3s_names      = local.k3s_names
     ssh_public_key = trimspace(file(pathexpand(local.config.ssh.public_key_path)))
   }
 }

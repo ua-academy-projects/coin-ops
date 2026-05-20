@@ -1,0 +1,38 @@
+---
+# k3s-up.yml — bring up the HA k3s learning cluster on GCP.
+# Idempotent. Safe to re-run.
+#
+#   source .env
+#   ansible-playbook -i <generated-cloud-inventory> ansible/k3s-up.yml
+#
+# This playbook is intentionally separate from cloud-deploy.yml. The
+# AWS production-shaped compose stack and the GCP k3s sandbox are
+# independent deployments — each cloud's stack runs only against its
+# own generated inventory.
+
+- name: Validate required environment variables
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Check .env vars are exported
+      assert:
+        that:
+          - lookup('env', 'SSH_KEY_PATH') != ''
+        fail_msg: |
+          Required environment variables are not set.
+          Run: source .env
+
+- name: Resolve runtime secrets from cloud secret manager
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles: [cloud-secrets]
+
+- hosts: bastion
+  become: yes
+  roles: [cloud-bastion-stack]
+
+- hosts: k3s
+  become: yes
+  roles: [k3s-cluster]

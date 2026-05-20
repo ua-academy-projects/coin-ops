@@ -1,0 +1,31 @@
+---
+# Pin a specific k3s release so installs are reproducible across nodes.
+# Bump together with kubectl on the controller; keep all three cluster
+# nodes on the same version.
+k3s_release_version: "v1.30.4+k3s1"
+
+# First node in the cluster — the one that runs `k3s server --cluster-init`
+# and seeds the embedded etcd. All other k3s_*_stack hosts join via this
+# node's API URL. Defaults to the first host in the play's k3s group.
+k3s_first_node: "{{ ansible_play_hosts_all[0] }}"
+
+# Generated/persisted cluster join token. The role writes this on the
+# first node at /var/lib/rancher/k3s/server/coinops-token; joiners pull
+# it via delegate_to + slurp.
+k3s_token_path: /var/lib/rancher/k3s/server/coinops-token
+
+# Extra `--tls-san` entries for the API server certificate. The role
+# always adds the host's private IP and (when known) tailnet IP. Add
+# additional public/private endpoints here if you want kubectl to reach
+# the cluster through them.
+k3s_extra_tls_sans: []
+
+# Extra flags passed to `k3s server`. Useful for `--node-label`,
+# `--disable=traefik`, etc. without touching role tasks. Applied to BOTH
+# the cluster-init node and the joiners.
+k3s_extra_server_args: ""
+
+# Local controller path to drop the fetched kubeconfig at. The role
+# rewrites the server URL to the tailnet IP of the first node so kubectl
+# works from anywhere in the tailnet.
+k3s_local_kubeconfig: "~/.kube/coinops-k3s.yaml"

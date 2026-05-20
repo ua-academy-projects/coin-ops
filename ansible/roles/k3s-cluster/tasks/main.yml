@@ -1,0 +1,19 @@
+---
+# Meta-role: bring up the HA k3s learning cluster on GCP and deploy the
+# hello-world workload. Applied to `hosts: k3s` by k3s-up.yml.
+#
+# Order matters here: common installs base packages, tailscale joins the
+# tailnet (k3s uses the tailnet IP as a TLS SAN and as the kubeconfig
+# server URL), then k3s itself, then the hello workload on the first node.
+
+- import_role:
+    name: common
+
+- import_role:
+    name: tailscale
+
+- import_role:
+    name: k3s
+
+- import_role:
+    name: k3s-hello

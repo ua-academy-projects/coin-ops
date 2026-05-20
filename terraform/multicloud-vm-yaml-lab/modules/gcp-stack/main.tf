@@ -7,6 +7,7 @@ locals {
   bastion_target_tags = local.stack.instances[local.stack.bastion_name].tags
   app_target_tags     = distinct(flatten([for name in local.stack.app_names : local.stack.instances[name].tags]))
   db_target_tags      = local.stack.instances[local.stack.db_name].tags
+  k3s_target_tags     = length(local.stack.k3s_names) > 0 ? distinct(flatten([for name in local.stack.k3s_names : local.stack.instances[name].tags])) : []
   cloud_native        = try(local.stack.runtime.mode, "external") == "cloud_native"
   compute_instances   = local.cloud_native ? { for name, instance in local.stack.instances : name => instance if name != local.stack.db_name } : local.stack.instances
   runtime_base = merge(local.stack.runtime, {
@@ -79,6 +80,8 @@ module "security" {
   bastion_target_tags     = local.bastion_target_tags
   app_target_tags         = local.app_target_tags
   db_target_tags          = local.db_target_tags
+  k3s_target_tags         = local.k3s_target_tags
+  network_cidr            = local.stack.network.cidr
   allow_icmp_from_bastion = local.stack.firewall.allow_icmp_from_bastion
 }
 
@@ -92,6 +95,7 @@ module "compute" {
   app_names                 = local.stack.app_names
   db_name                   = local.stack.db_name
   bastion_name              = local.stack.bastion_name
+  k3s_names                 = local.stack.k3s_names
   network_self_link         = module.network.network_self_link
   public_subnet_self_links  = module.network.public_subnet_self_links
   private_subnet_self_links = module.network.private_subnet_self_links
@@ -153,6 +157,7 @@ module "access_outputs" {
   bastion_name     = local.stack.bastion_name
   app_names        = local.stack.app_names
   db_name          = local.stack.db_name
+  k3s_names        = local.stack.k3s_names
   app_url          = local.app_url
   app_domain       = local.app_domain
   known_hosts_file = "~/.ssh/known_hosts_gcp_lab"
