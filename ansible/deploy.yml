@@ -25,7 +25,17 @@
   hosts: history:proxy:ui
   roles:
     - role: gsm_secrets
-      when: google_project | length > 0
+      when:
+        - cloud == 'gcp'
+        - google_project | length > 0
+
+- name: Fetch deploy secrets from Azure Key Vault
+  hosts: history:proxy:ui
+  roles:
+    - role: azure_secrets
+      when:
+        - cloud == 'azure'
+        - azure_key_vault_name | length > 0
 
 - name: Authenticate Docker registry on target nodes
   hosts: history:proxy:ui
