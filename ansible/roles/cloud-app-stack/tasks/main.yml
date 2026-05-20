@@ -12,6 +12,11 @@
 - import_role:
     name: registry-login
 
+# Join the host into the coinops-lab tailnet. No-op when tailscale_auth_key
+# is empty, so deploys still succeed before Tailscale is provisioned.
+- import_role:
+    name: tailscale
+
 # Bootstrap the managed cloud-native DB schema. The role's tasks are gated
 # by `run_once` + `when: runtime_backend == "cloud_native"`, so it's a no-op
 # under other runtime backends and runs exactly once when cloud-native.

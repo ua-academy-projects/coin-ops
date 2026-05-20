@@ -25,6 +25,10 @@
   gather_facts: false
   roles: [cloud-secrets]
 
+- hosts: bastion
+  become: yes
+  roles: [cloud-bastion-stack]
+
 - hosts: db
   become: yes
   roles: [cloud-db-stack]

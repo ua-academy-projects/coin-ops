@@ -11,6 +11,7 @@ ansible_ssh_common_args: "{{ coinops_ssh_common_args | default('-o StrictHostKey
 # Env fallback is kept only for old local/non-cloud runs.
 rabbitmq_password: "{{ coinops_rabbitmq_password | default(lookup('env', 'RABBITMQ_PASSWORD'), true) }}"
 db_password: "{{ coinops_db_password | default(lookup('env', 'DB_PASSWORD'), true) }}"
+tailscale_auth_key: "{{ coinops_tailscale_auth_key | default(lookup('env', 'TAILSCALE_AUTH_KEY') | default('', true), true) }}"
 
 # Service accounts
 rabbitmq_user: cognitor

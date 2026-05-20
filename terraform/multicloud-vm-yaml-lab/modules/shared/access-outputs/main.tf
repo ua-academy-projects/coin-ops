@@ -28,14 +28,15 @@ locals {
   cache_host                   = try(local.runtime.cache.host, "")
   cache_port                   = try(local.runtime.cache.port, 6379)
   redis_url                    = try(local.runtime.cache.redis_url, local.cache_host != "" ? "redis://${local.cache_host}:${local.cache_port}/0" : "")
-  azure_redis_name             = try(local.runtime.cache.azure_resource_name, "")
-  db_password_secret_ref       = try(var.secret_refs.db_password.secret_id, try(var.secret_refs.db_password.name, ""))
-  rabbitmq_password_secret_ref = try(var.secret_refs.rabbitmq_password.secret_id, try(var.secret_refs.rabbitmq_password.name, ""))
-  ghcr_token_secret_ref        = try(var.secret_refs.ghcr_token.secret_id, try(var.secret_refs.ghcr_token.name, ""))
-  api_url                      = var.api_url != "" ? var.api_url : var.app_url
-  ui_proxy_url                 = var.ui_proxy_url != "" ? var.ui_proxy_url : "${local.api_url}/api"
-  ui_history_url               = var.ui_history_url != "" ? var.ui_history_url : "${local.api_url}/history-api"
-  cors_origin                  = var.cors_origin != "" ? var.cors_origin : var.app_url
+  azure_redis_name              = try(local.runtime.cache.azure_resource_name, "")
+  db_password_secret_ref        = try(var.secret_refs.db_password.secret_id, try(var.secret_refs.db_password.name, ""))
+  rabbitmq_password_secret_ref  = try(var.secret_refs.rabbitmq_password.secret_id, try(var.secret_refs.rabbitmq_password.name, ""))
+  ghcr_token_secret_ref         = try(var.secret_refs.ghcr_token.secret_id, try(var.secret_refs.ghcr_token.name, ""))
+  tailscale_auth_key_secret_ref = try(var.secret_refs.tailscale_auth_key.secret_id, try(var.secret_refs.tailscale_auth_key.name, ""))
+  api_url                       = var.api_url != "" ? var.api_url : var.app_url
+  ui_proxy_url                  = var.ui_proxy_url != "" ? var.ui_proxy_url : "${local.api_url}/api"
+  ui_history_url                = var.ui_history_url != "" ? var.ui_history_url : "${local.api_url}/history-api"
+  cors_origin                   = var.cors_origin != "" ? var.cors_origin : var.app_url
 
   ssh_config = join("\n\n", concat(
     [<<-EOT
@@ -136,6 +137,7 @@ locals {
   coinops_db_password_secret_ref=${local.db_password_secret_ref}
   coinops_rabbitmq_password_secret_ref=${local.rabbitmq_password_secret_ref}
   coinops_ghcr_token_secret_ref=${local.ghcr_token_secret_ref}
+  coinops_tailscale_auth_key_secret_ref=${local.tailscale_auth_key_secret_ref}
   coinops_cloud_provider=${var.cloud}
   coinops_ssh_known_hosts_file=${var.known_hosts_file}
 

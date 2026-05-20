@@ -35,6 +35,7 @@ secrets:
     rabbitmq_password: rabbitmq-password
     ghcr_token: ghcr-token
     cloudflare_token: cloudflare-token
+    tailscale_auth_key: tailscale-auth-key
 # Replace these before the HTTPS/DNS apply.
 domain:
   enabled: true

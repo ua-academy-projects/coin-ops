@@ -14,5 +14,10 @@
 - import_role:
     name: registry-login
 
+# Join the host into the coinops-lab tailnet. No-op when tailscale_auth_key
+# is empty, so deploys still succeed before Tailscale is provisioned.
+- import_role:
+    name: tailscale
+
 - import_role:
     name: cloud-db

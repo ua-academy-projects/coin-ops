@@ -1,0 +1,84 @@
+---
+# Install tailscaled, register the host in the coinops-lab tailnet, and
+# verify a 100.x address is assigned. Idempotent: re-running with the same
+# hostname/tags is a no-op.
+#
+# Skipped entirely when tailscale_auth_key is empty — the stack still
+# deploys cleanly without Tailscale configured.
+
+- name: Skip Tailscale (no auth key configured)
+  debug:
+    msg: "tailscale_auth_key is empty; skipping Tailscale install/join on {{ inventory_hostname }}."
+  when: tailscale_auth_key | length == 0
+
+- block:
+    - name: Inspect existing tailscale state
+      command: tailscale status --json
+      register: tailscale_status_pre
+      changed_when: false
+      failed_when: false
+
+    - name: Decide whether to install/join
+      set_fact:
+        tailscale_needs_join: "{{ tailscale_status_pre.rc != 0 or (tailscale_status_pre.stdout | from_json).BackendState | default('NoState') != 'Running' }}"
+
+    - name: Install Tailscale apt repo signing key
+      get_url:
+        url: "https://pkgs.tailscale.com/stable/ubuntu/{{ ansible_distribution_release }}.noarmor.gpg"
+        dest: /usr/share/keyrings/tailscale-archive-keyring.gpg
+        mode: '0644'
+        force: false
+      when: tailscale_needs_join
+
+    - name: Install Tailscale apt source
+      get_url:
+        url: "https://pkgs.tailscale.com/stable/ubuntu/{{ ansible_distribution_release }}.tailscale-keyring.list"
+        dest: /etc/apt/sources.list.d/tailscale.list
+        mode: '0644'
+        force: false
+      when: tailscale_needs_join
+
+    - name: Install tailscale package
+      apt:
+        name: "tailscale{{ '=' ~ tailscale_pkg_version if tailscale_pkg_version != 'latest' else '' }}"
+        state: present
+        update_cache: yes
+      when: tailscale_needs_join
+
+    - name: Ensure tailscaled is enabled and running
+      systemd:
+        name: tailscaled
+        enabled: yes
+        state: started
+
+    - name: Build tailscale up argument list
+      set_fact:
+        tailscale_up_args: >-
+          --authkey={{ tailscale_auth_key }}
+          --hostname={{ tailscale_hostname }}
+          --advertise-tags={{ tailscale_tags | join(',') }}
+          {% if tailscale_advertise_routes | length > 0 %}--advertise-routes={{ tailscale_advertise_routes | join(',') }}{% endif %}
+          {% if tailscale_accept_routes %}--accept-routes{% endif %}
+          {% if tailscale_ssh %}--ssh{% endif %}
+          {{ tailscale_extra_args }}
+      when: tailscale_needs_join
+      no_log: true
+
+    - name: Register host in tailnet
+      command: "tailscale up {{ tailscale_up_args }}"
+      when: tailscale_needs_join
+      no_log: true
+      register: tailscale_up_result
+
+    - name: Verify tailnet IPv4 is assigned (100.x)
+      command: tailscale ip -4
+      register: tailscale_ipv4
+      changed_when: false
+      failed_when:
+        - tailscale_ipv4.rc != 0
+        - tailscale_ipv4.stdout | trim is not match('^100\\.')
+
+    - name: Record tailnet address as host fact
+      set_fact:
+        coinops_tailnet_ipv4: "{{ tailscale_ipv4.stdout | trim }}"
+  when: tailscale_auth_key | length > 0

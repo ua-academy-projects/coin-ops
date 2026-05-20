@@ -40,10 +40,11 @@ locals {
     secrets = {
       prefix = "coinops-lab"
       items = {
-        db_password       = "db-password"
-        rabbitmq_password = "rabbitmq-password"
-        ghcr_token        = "ghcr-token"
-        cloudflare_token  = "cloudflare-token"
+        db_password        = "db-password"
+        rabbitmq_password  = "rabbitmq-password"
+        ghcr_token         = "ghcr-token"
+        cloudflare_token   = "cloudflare-token"
+        tailscale_auth_key = "tailscale-auth-key"
       }
     }
     app = {

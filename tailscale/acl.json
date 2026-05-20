@@ -1,0 +1,30 @@
+// Tailnet ACL for coinops-lab.
+//
+// Apply via the Tailscale admin console → Access controls → Edit.
+// This file is the readable copy checked into the repo so the policy is
+// reviewable in PRs. The admin console is the source of truth at runtime.
+//
+// Policy: every host tagged `tag:coinops-lab` may reach every other host
+// tagged `tag:coinops-lab` on any port. Nothing else is allowed.
+{
+  "tagOwners": {
+    "tag:coinops-lab": ["autogroup:admin"]
+  },
+
+  "acls": [
+    {
+      "action": "accept",
+      "src":    ["tag:coinops-lab"],
+      "dst":    ["tag:coinops-lab:*"]
+    }
+  ],
+
+  "ssh": [
+    {
+      "action": "check",
+      "src":    ["autogroup:admin"],
+      "dst":    ["tag:coinops-lab"],
+      "users":  ["autogroup:nonroot", "root"]
+    }
+  ]
+}
