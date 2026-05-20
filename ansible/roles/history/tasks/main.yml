@@ -1,4 +1,20 @@
 ---
+- name: Create PostgreSQL data directory
+  file:
+    path: /var/lib/coin-ops/postgres
+    state: directory
+    owner: 70
+    group: 70
+    mode: '0700'
+
+- name: Create RabbitMQ data directory
+  file:
+    path: /var/lib/coin-ops/rabbitmq
+    state: directory
+    owner: 999
+    group: 999
+    mode: '0755'
+
 - name: Check for existing containerized PostgreSQL data
   stat:
     path: /var/lib/coin-ops/postgres/PG_VERSION

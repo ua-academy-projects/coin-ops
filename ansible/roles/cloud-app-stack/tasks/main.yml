@@ -1,0 +1,22 @@
+---
+# Meta-role: provision + deploy a cloud app VM.
+# Applied to `hosts: app` by cloud-deploy.yml after the cloud-secrets play
+# has published resolved secrets onto the cloud hosts.
+
+- import_role:
+    name: common
+
+- import_role:
+    name: docker
+
+- import_role:
+    name: registry-login
+
+# Bootstrap the managed cloud-native DB schema. The role's tasks are gated
+# by `run_once` + `when: runtime_backend == "cloud_native"`, so it's a no-op
+# under other runtime backends and runs exactly once when cloud-native.
+- import_role:
+    name: cloud-db-bootstrap
+
+- import_role:
+    name: cloud-app

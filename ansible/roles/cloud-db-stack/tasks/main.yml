@@ -1,0 +1,18 @@
+---
+# Meta-role: provision + deploy the cloud private DB/runtime node.
+# Applied to `hosts: db` by cloud-deploy.yml. The `cloud-db` child role's
+# tasks are gated by `when: runtime_backend != "cloud_native"`, so this
+# whole stack is effectively a no-op in cloud-native mode (where managed
+# RDS / Cloud SQL replaces this VM).
+
+- import_role:
+    name: common
+
+- import_role:
+    name: docker
+
+- import_role:
+    name: registry-login
+
+- import_role:
+    name: cloud-db

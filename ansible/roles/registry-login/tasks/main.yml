@@ -1,0 +1,16 @@
+---
+- name: Log in to configured container registry
+  community.docker.docker_login:
+    registry_url: "{{ image_registry_host }}"
+    username: "{{ registry_username }}"
+    password: "{{ registry_token }}"
+    reauthorize: true
+  no_log: true
+  when:
+    - registry_username | length > 0
+    - registry_token | length > 0
+
+- name: Explain skipped registry login
+  debug:
+    msg: "GHCR_USERNAME/GHCR_TOKEN not set; assuming registry images are public."
+  when: registry_username | length == 0 or registry_token | length == 0

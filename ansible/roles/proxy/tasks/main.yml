@@ -1,4 +1,12 @@
 ---
+- name: Create Redis data directory
+  file:
+    path: /var/lib/coin-ops/redis
+    state: directory
+    owner: 999
+    group: 999
+    mode: '0755'
+
 - name: Stop and disable legacy host services
   service:
     name: "{{ item }}"

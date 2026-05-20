@@ -1,0 +1,58 @@
+---
+# Bootstrap the managed cloud-native database (RDS / Cloud SQL): apply the
+# history schema, then the session schema when sessions are backed by
+# managed Postgres. Idempotent — psql `IF NOT EXISTS` / `CREATE OR REPLACE`
+# patterns in the SQL files handle re-runs.
+
+- block:
+    - name: Create managed DB bootstrap directory
+      file:
+        path: /opt/cognitor/managed-db
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Copy history schema for managed DB
+      copy:
+        src: "{{ playbook_dir }}/../history/schema.sql"
+        dest: /opt/cognitor/managed-db/history-schema.sql
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Copy cloud-native session schema
+      copy:
+        src: cloud-native-session-schema.sql
+        dest: /opt/cognitor/managed-db/session-schema.sql
+        owner: root
+        group: root
+        mode: '0644'
+      when: session_backend == "postgres"
+
+    - name: Apply history schema to managed DB
+      command: >-
+        psql -v ON_ERROR_STOP=1
+        -h {{ cloud_db_host }}
+        -p {{ db_port }}
+        -U {{ db_user }}
+        -d {{ db_name }}
+        -f /opt/cognitor/managed-db/history-schema.sql
+      environment:
+        PGPASSWORD: "{{ db_password }}"
+      changed_when: false
+
+    - name: Apply cloud-native session schema to managed DB
+      command: >-
+        psql -v ON_ERROR_STOP=1
+        -h {{ cloud_db_host }}
+        -p {{ db_port }}
+        -U {{ db_user }}
+        -d {{ db_name }}
+        -f /opt/cognitor/managed-db/session-schema.sql
+      environment:
+        PGPASSWORD: "{{ db_password }}"
+      changed_when: false
+      when: session_backend == "postgres"
+  run_once: true
+  when: runtime_backend == "cloud_native"

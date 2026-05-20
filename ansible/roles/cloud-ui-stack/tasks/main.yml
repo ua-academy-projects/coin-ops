@@ -1,0 +1,15 @@
+---
+# Meta-role: provision + deploy the cloud UI-only VM. Applied to
+# `hosts: ui` by cloud-deploy.yml when the deploy is split across clouds.
+
+- import_role:
+    name: common
+
+- import_role:
+    name: docker
+
+- import_role:
+    name: registry-login
+
+- import_role:
+    name: cloud-ui

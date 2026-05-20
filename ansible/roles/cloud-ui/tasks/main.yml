@@ -1,0 +1,47 @@
+---
+# Deploy the UI-only stack on a cloud VM that lives separately from the
+# backend nodes. Used when the deploy is split across clouds (e.g. UI on
+# one cloud, backend on another). When the UI shares the cloud-app VMs
+# the cloud-app role handles it instead.
+
+- name: Create deploy directory
+  file:
+    path: /opt/cognitor/cloud-ui
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Render UI compose file
+  template:
+    src: cloud-ui.compose.yaml.j2
+    dest: /opt/cognitor/cloud-ui/compose.yaml
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Validate UI compose config
+  command: docker compose -f /opt/cognitor/cloud-ui/compose.yaml config -q
+  args:
+    chdir: /opt/cognitor/cloud-ui
+  changed_when: false
+
+- name: Pull UI image
+  command: docker compose -f /opt/cognitor/cloud-ui/compose.yaml pull
+  args:
+    chdir: /opt/cognitor/cloud-ui
+
+- name: Run UI compose
+  command: docker compose -f /opt/cognitor/cloud-ui/compose.yaml up -d --remove-orphans
+  args:
+    chdir: /opt/cognitor/cloud-ui
+
+- name: Wait for local UI health endpoint
+  uri:
+    url: http://localhost/health
+    method: GET
+    status_code: 200
+  retries: 12
+  delay: 5
+  register: split_ui_health
+  until: split_ui_health.status == 200
