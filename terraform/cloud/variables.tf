@@ -70,6 +70,7 @@ variable "nat_route" {
 
 variable "workloads" {
   type = map(object({
+    roles          = list(string)
     instance_type  = string
     image_family   = string
     placement      = string

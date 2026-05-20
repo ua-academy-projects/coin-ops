@@ -7,7 +7,7 @@ resource "azurerm_public_ip" "this" {
   name                = "pip-${each.key}"
   location            = var.location
   resource_group_name = var.resource_group_name
-  allocation_method   = "Dynamic"
+  allocation_method   = "Static"
   sku                 = "Standard"
   zones               = [each.value.zone]
 
