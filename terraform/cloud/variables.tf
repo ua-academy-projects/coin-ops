@@ -84,6 +84,12 @@ variable "workloads" {
   }))
 }
 
+variable "role_definitions" {
+  type = map(object({
+    allowed_ports = list(number)
+  }))
+}
+
 
 # security 
 

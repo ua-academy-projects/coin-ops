@@ -1,12 +1,15 @@
 locals {
+  # cloud-specific settings
   azure = {
     resource_group_name = var.azure_resource_group_name
     key_vault_name      = var.azure_key_vault_name
     location            = var.azure_location
   }
 
+  # normalized input
   normalized_secrets = var.secrets
 
+  # shared instance outputs
   private_ips = var.cloud == "gcp" ? try(module.gcp_instances[0].private_ips, {}) : (
     var.cloud == "azure" ? try(module.azure_instances[0].private_ips, {}) : try(module.aws_instances[0].private_ips, {})
   )
@@ -14,23 +17,8 @@ locals {
     var.cloud == "azure" ? try(module.azure_instances[0].public_ips, {}) : try(module.aws_instances[0].public_ips, {})
   )
 
-  inventory_role_names = ["history", "proxy", "ui", "bastion", "nat"]
-
-  role_allowed_ports = {
-    bastion = [22]
-    nat     = [22]
-    ui      = [22, 80, 443]
-    proxy   = [22, 8080]
-    history = [22, 5432, 5672, 15672, 8000]
-  }
-
-  role_required_secrets = {
-    bastion = []
-    nat     = []
-    ui      = ["ghcr_username", "ghcr_token"]
-    proxy   = ["ghcr_username", "ghcr_token", "rabbitmq_password", "db_password"]
-    history = ["ghcr_username", "ghcr_token", "rabbitmq_password", "db_password"]
-  }
+  # inventory roles
+  inventory_role_names = sort(keys(var.role_definitions))
 
   inventory_bastion_host = try(one([
     for name, workload in var.workloads : name
@@ -39,6 +27,7 @@ locals {
 
   inventory_bastion_host_public_ip = local.inventory_bastion_host != null ? try(local.public_ips[local.inventory_bastion_host], null) : null
 
+  # inventory hosts
   inventory_hosts = {
     for name, workload in var.workloads : name => {
       roles        = workload.roles
@@ -46,15 +35,14 @@ locals {
       public_ip    = try(local.public_ips[name], null)
       ansible_host = try(local.public_ips[name], null) != null ? local.public_ips[name] : local.private_ips[name]
       allowed_ports = distinct(flatten([
-        for role in workload.roles : lookup(local.role_allowed_ports, role, [])
+        for role in workload.roles : try(var.role_definitions[role].allowed_ports, [])
       ]))
-      required_secrets = distinct(flatten([
-        for role in workload.roles : lookup(local.role_required_secrets, role, [])
-      ]))
+      required_secrets        = distinct(try(workload.secrets, []))
       ansible_ssh_common_args = try(local.public_ips[name], null) == null && local.inventory_bastion_host_public_ip != null ? "-o StrictHostKeyChecking=no -o ForwardAgent=yes -o ProxyJump=deployer@${local.inventory_bastion_host_public_ip}" : null
     }
   }
 
+  # inventory groups
   inventory_role_members = {
     for role in local.inventory_role_names :
     role => [
@@ -63,6 +51,7 @@ locals {
     ]
   }
 
+  # rendered inventory file
   inventory_content = join("\n\n", concat(
     [
       join("\n", concat(

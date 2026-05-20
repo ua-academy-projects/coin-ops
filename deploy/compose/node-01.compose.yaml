@@ -1,5 +1,5 @@
 services:
-{% if not cloud_sql_enabled %}
+{% if not external_db_enabled %}
   postgres:
     image: "{{ postgres_image }}"
     restart: unless-stopped
@@ -46,9 +46,9 @@ services:
     restart: unless-stopped
     env_file:
       - /etc/cognitor/history.env
-{% if not cloud_sql_enabled or runtime_backend == "external" %}
+{% if not external_db_enabled or runtime_backend == "external" %}
     depends_on:
-{% if not cloud_sql_enabled %}
+{% if not external_db_enabled %}
       postgres:
         condition: service_healthy
 {% endif %}
@@ -65,7 +65,7 @@ services:
       - "{{ history_port }}:{{ history_port }}"
     env_file:
       - /etc/cognitor/history.env
-{% if not cloud_sql_enabled %}
+{% if not external_db_enabled %}
     depends_on:
       postgres:
         condition: service_healthy
