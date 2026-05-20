@@ -1,3 +1,2 @@
 ---
-common_allowed_ports: [22]
 nat_private_cidr: 10.10.1.0/24

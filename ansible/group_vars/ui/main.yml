@@ -1,5 +1,1 @@
 ---
-common_allowed_ports: [22, 80, 443]
-required_gsm_secrets:
-  - ghcr_username
-  - ghcr_token

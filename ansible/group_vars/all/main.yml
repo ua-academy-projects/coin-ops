@@ -4,15 +4,14 @@
 
 # ── SSH ───────────────────────────────────────────────────────
 ansible_user: deployer 
-# ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
 ansible_ssh_private_key_file: "{{ lookup('env', 'SSH_KEY_PATH') | expanduser }}"
 ansible_ssh_common_args: >-
   -o StrictHostKeyChecking=no
   -o ForwardAgent=yes
-  -o ProxyJump={{ ansible_user }}@{{ hostvars['coinops-bastion'].ansible_host }}
 
 # ── GCP / Secret Manager ───────────────────────────────────────
 google_project: "{{ lookup('env', 'GOOGLE_PROJECT') | default('', true) }}"
+azure_key_vault_name: "{{ lookup('env', 'AZ_KEYVAULT_NAME') | default('', true) }}"
 gsm_secret_ids:
   ghcr_username: ghcr-username
   ghcr_token: ghcr-token

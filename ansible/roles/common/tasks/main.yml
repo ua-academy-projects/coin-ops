@@ -54,7 +54,7 @@
     rule: allow
     port: "{{ item }}"
     proto: tcp
-  loop: "{{ common_allowed_ports }}"
+  loop: "{{ allowed_ports | default([]) }}"
   notify: Reload UFW
 
 - name: Enable UFW
