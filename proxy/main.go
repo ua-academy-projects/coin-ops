@@ -11,6 +11,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -484,10 +485,28 @@ func setNoStoreHeaders(w http.ResponseWriter) {
 	w.Header().Set("Expires", "0")
 }
 
+
+func allowedCORSOrigin(r *http.Request) string {
+	configured := strings.TrimSpace(os.Getenv("CORS_ALLOWED_ORIGINS"))
+	if configured == "" || configured == "*" {
+		return "*"
+	}
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return configured
+	}
+	for _, allowed := range strings.Split(configured, ",") {
+		if strings.TrimSpace(allowed) == origin {
+			return origin
+		}
+	}
+	return configured
+}
+
 func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		setNoStoreHeaders(w)
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Origin", allowedCORSOrigin(r))
 		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		if r.Method == http.MethodOptions {
@@ -501,7 +520,7 @@ func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 func corsMiddlewareWithPost(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		setNoStoreHeaders(w)
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Origin", allowedCORSOrigin(r))
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		if r.Method == http.MethodOptions {

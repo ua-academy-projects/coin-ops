@@ -27,8 +27,8 @@ services:
     ports:
       - "80:80"
     environment:
-      PROXY_URL: /api
-      HISTORY_URL: /history-api
+      PROXY_URL: "{{ ui_proxy_url }}"
+      HISTORY_URL: "{{ ui_history_url }}"
     volumes:
       - /opt/cognitor/cloud-app/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:

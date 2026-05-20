@@ -2,7 +2,7 @@ locals {
   app_instance_networks = {
     for idx, name in var.app_names : name => {
       zone       = var.zones[idx % length(var.zones)]
-      subnetwork = var.private_subnet_self_links[tostring(idx % length(var.private_subnet_self_links))]
+      subnetwork = var.private_subnet_self_links[coalesce(try(var.instances[name].subnet_key, null), tostring(idx % length(var.private_subnet_self_links)))]
     }
   }
 

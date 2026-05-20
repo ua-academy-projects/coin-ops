@@ -249,3 +249,58 @@ def test_build_pubsub_subscription_path_accepts_full_path(history_consumer_modul
         history_consumer_module.build_pubsub_subscription_path(None, "", "projects/p/subscriptions/s")
         == "projects/p/subscriptions/s"
     )
+
+
+
+def test_servicebus_message_body_decodes_bytes_iterable(history_consumer_module):
+    class Message:
+        body = [b'{"type":"price",', b'"coin":"bitcoin"}']
+
+    assert history_consumer_module.servicebus_message_body(Message()) == '{"type":"price","coin":"bitcoin"}'
+
+
+def test_servicebus_process_completes_on_success(history_consumer_module, monkeypatch):
+    monkeypatch.setattr(history_consumer_module, "process_cloud_message_body", lambda db_ref, body: None)
+
+    class Receiver:
+        completed = []
+        abandoned = []
+
+        def complete_message(self, message):
+            self.completed.append(message)
+
+        def abandon_message(self, message):
+            self.abandoned.append(message)
+
+    message = object()
+    receiver = Receiver()
+    history_consumer_module.process_servicebus_message(receiver, message, {"conn": ConnectionSpy()})
+
+    assert receiver.completed == [message]
+    assert receiver.abandoned == []
+
+
+def test_servicebus_process_abandons_on_failure(history_consumer_module, monkeypatch):
+    def fail(*args, **kwargs):
+        raise RuntimeError("bad payload")
+
+    monkeypatch.setattr(history_consumer_module, "process_cloud_message_body", fail)
+
+    class Receiver:
+        completed = []
+        abandoned = []
+
+        def complete_message(self, message):
+            self.completed.append(message)
+
+        def abandon_message(self, message):
+            self.abandoned.append(message)
+
+    message = object()
+    receiver = Receiver()
+    conn = ConnectionSpy()
+    history_consumer_module.process_servicebus_message(receiver, message, {"conn": conn})
+
+    assert receiver.completed == []
+    assert receiver.abandoned == [message]
+    assert conn.rollback_calls == 1

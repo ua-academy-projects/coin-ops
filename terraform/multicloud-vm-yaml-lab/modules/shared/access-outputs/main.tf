@@ -15,17 +15,27 @@ locals {
   queue_url                    = try(local.runtime.queue.url, "")
   pubsub_topic                 = try(local.runtime.queue.topic, "")
   pubsub_sub                   = try(local.runtime.queue.subscription, "")
+  servicebus_namespace         = try(local.runtime.queue.servicebus_namespace, try(local.runtime.queue.namespace, ""))
+  servicebus_queue_name        = try(local.runtime.queue.queue_name, local.queue_name)
   aws_region                   = try(local.runtime.aws_region, "")
   aws_profile                  = try(local.runtime.aws_profile, "")
   gcp_project_id               = try(local.runtime.gcp_project_id, "")
+  azure_resource_group         = try(local.runtime.azure_resource_group, "")
+  azure_key_vault_name         = try(local.runtime.azure_key_vault_name, "")
+  azure_subscription_id        = try(local.runtime.azure_subscription_id, "")
   session_backend              = try(local.runtime.sessions.backend, "")
   cache_backend                = try(local.runtime.cache.backend, "")
   cache_host                   = try(local.runtime.cache.host, "")
   cache_port                   = try(local.runtime.cache.port, 6379)
   redis_url                    = try(local.runtime.cache.redis_url, local.cache_host != "" ? "redis://${local.cache_host}:${local.cache_port}/0" : "")
+  azure_redis_name             = try(local.runtime.cache.azure_resource_name, "")
   db_password_secret_ref       = try(var.secret_refs.db_password.secret_id, try(var.secret_refs.db_password.name, ""))
   rabbitmq_password_secret_ref = try(var.secret_refs.rabbitmq_password.secret_id, try(var.secret_refs.rabbitmq_password.name, ""))
   ghcr_token_secret_ref        = try(var.secret_refs.ghcr_token.secret_id, try(var.secret_refs.ghcr_token.name, ""))
+  api_url                      = var.api_url != "" ? var.api_url : var.app_url
+  ui_proxy_url                 = var.ui_proxy_url != "" ? var.ui_proxy_url : "${local.api_url}/api"
+  ui_history_url               = var.ui_history_url != "" ? var.ui_history_url : "${local.api_url}/history-api"
+  cors_origin                  = var.cors_origin != "" ? var.cors_origin : var.app_url
 
   ssh_config = join("\n\n", concat(
     [<<-EOT
@@ -79,8 +89,11 @@ locals {
   [bastion]
   ${var.name_prefix}-${var.bastion_name} ansible_host=${local.bastion.public_ip}
 
-  [app]
+  [backend]
   ${join("\n", local.app_inventory_lines)}${local.db_inventory_block}
+
+  [app:children]
+  backend
 
   [cloud:children]
   ${join("\n", local.cloud_children)}
@@ -91,6 +104,10 @@ locals {
   coinops_app_domain=${var.app_domain}
   coinops_tls_mode=off
   coinops_runtime_backend=${local.runtime_mode}
+  coinops_api_url=${local.api_url}
+  coinops_ui_proxy_url=${local.ui_proxy_url}
+  coinops_ui_history_url=${local.ui_history_url}
+  coinops_allowed_cors_origin=${local.cors_origin}
   coinops_db_host=${local.db_host}
   coinops_db_port=${local.db_port}
   coinops_db_name=${local.db_name}
@@ -105,11 +122,17 @@ locals {
   coinops_gcp_project_id=${local.gcp_project_id}
   coinops_pubsub_topic=${local.pubsub_topic}
   coinops_pubsub_subscription=${local.pubsub_sub}
+  coinops_azure_subscription_id=${local.azure_subscription_id}
+  coinops_azure_resource_group=${local.azure_resource_group}
+  coinops_azure_key_vault_name=${local.azure_key_vault_name}
+  coinops_azure_servicebus_namespace=${local.servicebus_namespace}
+  coinops_azure_servicebus_queue_name=${local.servicebus_queue_name}
   coinops_session_backend=${local.session_backend}
   coinops_cache_backend=${local.cache_backend}
   coinops_cache_host=${local.cache_host}
   coinops_cache_port=${local.cache_port}
   coinops_redis_url=${local.redis_url}
+  coinops_azure_redis_name=${local.azure_redis_name}
   coinops_db_password_secret_ref=${local.db_password_secret_ref}
   coinops_rabbitmq_password_secret_ref=${local.rabbitmq_password_secret_ref}
   coinops_ghcr_token_secret_ref=${local.ghcr_token_secret_ref}

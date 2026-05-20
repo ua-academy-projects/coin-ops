@@ -13,8 +13,18 @@ locals {
     domain = {
       enabled            = false
       name               = ""
+      root               = ""
       cloudflare_zone_id = ""
       create_records     = false
+      cloudflare_proxy   = false
+      ui = {
+        name  = ""
+        cloud = ""
+      }
+      api = {
+        name  = ""
+        cloud = ""
+      }
     }
     firewall = {
       ssh_source_ranges       = []
@@ -80,8 +90,11 @@ locals {
   }
 
   config = merge(local.base_config, local.raw, {
-    ssh      = merge(local.base_config.ssh, try(local.raw.ssh, {}))
-    domain   = merge(local.base_config.domain, try(local.raw.domain, {}))
+    ssh = merge(local.base_config.ssh, try(local.raw.ssh, {}))
+    domain = merge(local.base_config.domain, try(local.raw.domain, {}), {
+      ui  = merge(local.base_config.domain.ui, try(local.raw.domain.ui, {}))
+      api = merge(local.base_config.domain.api, try(local.raw.domain.api, {}))
+    })
     firewall = merge(local.base_config.firewall, try(local.raw.firewall, {}))
     defaults = merge(local.base_config.defaults, try(local.raw.defaults, {}))
     secrets = merge(local.base_config.secrets, try(local.raw.secrets, {}), {
@@ -98,35 +111,44 @@ locals {
     })
   })
 
-  cloud  = lower(local.config.cloud)
-  is_aws = local.cloud == "aws"
-  is_gcp = local.cloud == "gcp"
+  cloud            = lower(local.config.cloud)
+  backend_cloud    = lower(try(local.config.domain.api.cloud, local.cloud) != "" ? local.config.domain.api.cloud : local.cloud)
+  ui_cloud         = lower(try(local.config.domain.ui.cloud, local.backend_cloud) != "" ? local.config.domain.ui.cloud : local.backend_cloud)
+  is_aws           = local.backend_cloud == "aws"
+  is_gcp           = local.backend_cloud == "gcp"
+  is_azure         = local.backend_cloud == "azure"
+  split_ui_backend = local.ui_cloud != local.backend_cloud
 
-  aws_location = local.config.catalog.locations[local.config.location].aws
-  gcp_location = local.config.catalog.locations[local.config.location].gcp
-  gcp_zones    = try(local.gcp_location.zones, [local.gcp_location.zone])
-  aws_region   = local.aws_location.region
-  gcp_region   = local.gcp_location.region
-  gcp_zone     = local.gcp_zones[0]
+  aws_location   = local.config.catalog.locations[local.config.location].aws
+  gcp_location   = local.config.catalog.locations[local.config.location].gcp
+  azure_location = try(local.config.catalog.locations[local.config.location].azure, { location = "germanywestcentral", zones = ["1"] })
+  gcp_zones      = try(local.gcp_location.zones, [local.gcp_location.zone])
+  azure_zones    = try(local.azure_location.zones, ["1"])
+  aws_region     = local.aws_location.region
+  gcp_region     = local.gcp_location.region
+  gcp_zone       = local.gcp_zones[0]
+  azure_region   = local.azure_location.location
 
   network_key = local.config.defaults.network
   network_raw = local.config.networks[local.network_key]
 
   public_subnets = {
     for idx, cidr in local.network_raw.public_subnet_cidrs : tostring(idx) => {
-      name     = "${local.config.name_prefix}-public-${idx}"
-      cidr     = cidr
-      aws_az   = local.aws_location.availability_zones[idx % length(local.aws_location.availability_zones)]
-      gcp_zone = local.gcp_zones[idx % length(local.gcp_zones)]
+      name       = "${local.config.name_prefix}-public-${idx}"
+      cidr       = cidr
+      aws_az     = local.aws_location.availability_zones[idx % length(local.aws_location.availability_zones)]
+      gcp_zone   = local.gcp_zones[idx % length(local.gcp_zones)]
+      azure_zone = local.azure_zones[idx % length(local.azure_zones)]
     }
   }
 
   private_subnets = {
     for idx, cidr in local.network_raw.private_subnet_cidrs : tostring(idx) => {
-      name     = "${local.config.name_prefix}-private-${idx}"
-      cidr     = cidr
-      aws_az   = local.aws_location.availability_zones[idx % length(local.aws_location.availability_zones)]
-      gcp_zone = local.gcp_zones[idx % length(local.gcp_zones)]
+      name       = "${local.config.name_prefix}-private-${idx}"
+      cidr       = cidr
+      aws_az     = local.aws_location.availability_zones[idx % length(local.aws_location.availability_zones)]
+      gcp_zone   = local.gcp_zones[idx % length(local.gcp_zones)]
+      azure_zone = local.azure_zones[idx % length(local.azure_zones)]
     }
   }
 
@@ -136,8 +158,9 @@ locals {
 
   database_size_key = try(local.config.runtime.database.size, "small")
   database_size = try(local.config.catalog.database_sizes[local.database_size_key], {
-    aws = "db.t4g.micro"
-    gcp = "db-f1-micro"
+    aws   = "db.t4g.micro"
+    gcp   = "db-f1-micro"
+    azure = "B_Standard_B1ms"
   })
   cache_size_key = try(local.config.runtime.cache.size, "micro")
   cache_size = try(local.config.catalog.cache_sizes[local.cache_size_key], {
@@ -151,6 +174,11 @@ locals {
       engine_version = "VALKEY_8_0"
       shard_count    = 1
       replica_count  = 0
+    }
+    azure = {
+      sku_name = "Basic"
+      family   = "C"
+      capacity = 0
     }
   })
   runtime_mode     = replace(lower(try(local.config.runtime.mode, "external")), "-", "_")
@@ -167,6 +195,7 @@ locals {
       aws_instance_class   = try(local.database_size.aws, "db.t4g.micro")
       gcp_tier             = try(local.database_size.gcp, "db-f1-micro")
       gcp_database_version = "POSTGRES_${replace(tostring(local.config.runtime.database.version), ".", "_")}"
+      azure_sku_name       = try(local.database_size.azure, "B_Standard_B1ms")
     })
     queue = merge(local.config.runtime.queue, {
       managed = local.queue_managed
@@ -183,13 +212,17 @@ locals {
       gcp_engine_version = try(local.cache_size.gcp.engine_version, "VALKEY_8_0")
       gcp_shard_count    = try(local.cache_size.gcp.shard_count, 1)
       gcp_replica_count  = try(local.cache_size.gcp.replica_count, 0)
+      azure_sku_name     = try(local.cache_size.azure.sku_name, "Basic")
+      azure_family       = try(local.cache_size.azure.family, "C")
+      azure_capacity     = try(local.cache_size.azure.capacity, 0)
     })
   }
 
   image_catalog = {
     for image_key, image_config in local.config.catalog.images : image_key => {
-      aws = image_config.aws
-      gcp = image_config.gcp
+      aws   = image_config.aws
+      gcp   = image_config.gcp
+      azure = try(image_config.azure, null)
     }
   }
 
@@ -204,14 +237,17 @@ locals {
       size_key          = lookup(instance, "size", local.config.defaults.size)
       image_key         = lookup(instance, "image", local.config.defaults.image)
       disk_size_gb      = lookup(instance, "disk_size_gb", local.config.defaults.disk_size_gb)
+      subnet_key        = lookup(instance, "subnet_key", null)
       aws_instance_type = local.config.catalog.sizes[lookup(instance, "size", local.config.defaults.size)].aws
       gcp_machine_type  = local.config.catalog.sizes[lookup(instance, "size", local.config.defaults.size)].gcp
       gcp_image         = local.config.catalog.images[lookup(instance, "image", local.config.defaults.image)].gcp
+      azure_vm_size     = local.config.catalog.sizes[lookup(instance, "size", local.config.defaults.size)].azure
+      azure_image       = local.config.catalog.images[lookup(instance, "image", local.config.defaults.image)].azure
     }
   }
 
   stack = {
-    cloud       = local.cloud
+    cloud       = local.backend_cloud
     name_prefix = local.config.name_prefix
     ssh         = local.config.ssh
     domain      = local.config.domain
@@ -243,6 +279,27 @@ locals {
       region     = local.gcp_region
       zone       = local.gcp_zone
       zones      = local.gcp_zones
+    }
+
+    azure = {
+      subscription_id     = try(local.config.clouds.azure.subscription_id, null)
+      tenant_id           = try(local.config.clouds.azure.tenant_id, null)
+      resource_group_name = try(local.config.clouds.azure.resource_group_name, "${local.config.name_prefix}-rg")
+      key_vault_name      = try(local.config.clouds.azure.key_vault_name, substr("${replace(local.config.name_prefix, "-", "")}kv", 0, 24))
+      region              = local.azure_region
+      zones               = local.azure_zones
+    }
+
+    ui = {
+      cloud  = local.ui_cloud
+      name   = try(local.config.domain.ui.name, "") != "" ? local.config.domain.ui.name : try(local.config.domain.root, local.config.domain.name)
+      domain = try(local.config.domain.ui.name, "") != "" ? local.config.domain.ui.name : try(local.config.domain.root, local.config.domain.name)
+    }
+
+    api = {
+      cloud  = local.backend_cloud
+      name   = try(local.config.domain.api.name, "") != "" ? local.config.domain.api.name : local.config.domain.name
+      domain = try(local.config.domain.api.name, "") != "" ? local.config.domain.api.name : local.config.domain.name
     }
 
     image_catalog  = local.image_catalog

@@ -1,0 +1,9 @@
+services:
+  ui:
+    image: "{{ ui_image }}"
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    environment:
+      PROXY_URL: "{{ ui_proxy_url }}"
+      HISTORY_URL: "{{ ui_history_url }}"

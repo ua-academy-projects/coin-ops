@@ -68,7 +68,7 @@ resource "aws_instance" "app" {
 
   ami                         = data.aws_ami.selected[each.value.image_key].id
   instance_type               = each.value.aws_instance_type
-  subnet_id                   = var.private_subnet_ids[tostring(index(var.app_names, each.key) % length(var.private_subnet_ids))]
+  subnet_id                   = var.private_subnet_ids[coalesce(try(each.value.subnet_key, null), tostring(index(var.app_names, each.key) % length(var.private_subnet_ids)))]
   private_ip                  = each.value.private_ip
   associate_public_ip_address = false
   vpc_security_group_ids      = [var.security_groups.app]

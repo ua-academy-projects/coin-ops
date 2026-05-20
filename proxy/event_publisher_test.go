@@ -49,9 +49,33 @@ func TestCloudNativePublisherRequiresBackend(t *testing.T) {
 	t.Setenv("QUEUE_BACKEND", "")
 	t.Setenv("SQS_QUEUE_URL", "")
 	t.Setenv("PUBSUB_TOPIC_ID", "")
+	t.Setenv("AZURE_SERVICEBUS_NAMESPACE", "")
+	t.Setenv("AZURE_SERVICEBUS_QUEUE_NAME", "")
 
 	_, err := newCloudNativeEventPublisher(context.Background())
 	if err == nil {
 		t.Fatal("expected error for missing cloud-native queue backend")
+	}
+}
+
+
+func TestDetectCloudNativeQueueBackendDetectsServiceBus(t *testing.T) {
+	t.Setenv("QUEUE_BACKEND", "")
+	t.Setenv("SQS_QUEUE_URL", "")
+	t.Setenv("PUBSUB_TOPIC_ID", "")
+	t.Setenv("AZURE_SERVICEBUS_NAMESPACE", "coinops.servicebus.windows.net")
+	t.Setenv("AZURE_SERVICEBUS_QUEUE_NAME", "market-events")
+
+	if got := detectCloudNativeQueueBackend(); got != "servicebus" {
+		t.Fatalf("backend = %q, want servicebus", got)
+	}
+}
+
+func TestDetectCloudNativeQueueBackendHonorsExplicitBackend(t *testing.T) {
+	t.Setenv("QUEUE_BACKEND", "servicebus")
+	t.Setenv("SQS_QUEUE_URL", "https://sqs.example/queue")
+
+	if got := detectCloudNativeQueueBackend(); got != "servicebus" {
+		t.Fatalf("backend = %q, want explicit servicebus", got)
 	}
 }

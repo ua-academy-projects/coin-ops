@@ -80,3 +80,7 @@ ansible/inventory.cloud
 !terraform/multicloud-vm-yaml-lab/scripts/
 !terraform/multicloud-vm-yaml-lab/scripts/*.sh
 *Zone.Identifier
+terraform/**/.env.azure
+terraform/**/.env.azure.*
+terraform/**/backend.generated.tf
+terraform/**/backend.azurerm.generated.hcl

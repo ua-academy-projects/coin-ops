@@ -10,6 +10,10 @@ terraform {
       source  = "hashicorp/google"
       version = "~> 6.0"
     }
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 4.0"
+    }
     cloudflare = {
       source  = "cloudflare/cloudflare"
       version = "~> 5.0"

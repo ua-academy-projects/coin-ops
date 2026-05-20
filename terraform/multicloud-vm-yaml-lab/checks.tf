@@ -1,14 +1,14 @@
 check "supported_cloud" {
   assert {
-    condition     = contains(["aws", "gcp"], local.cloud)
-    error_message = "config/lab.yaml cloud must be either aws or gcp."
+    condition     = contains(["aws", "gcp", "azure"], local.cloud)
+    error_message = "config/lab.yaml cloud must be aws, gcp, or azure."
   }
 }
 
 check "workspace_matches_cloud" {
   assert {
-    condition     = terraform.workspace == "default" || terraform.workspace == local.cloud || terraform.workspace == "${local.cloud}-cloud-native"
-    error_message = "Terraform workspace must match config/lab.yaml cloud. Use: terraform workspace select ${local.cloud}, or ${local.cloud}-cloud-native for runtime.mode=cloud-native."
+    condition     = terraform.workspace == "default" || terraform.workspace == local.backend_cloud || terraform.workspace == "${local.backend_cloud}-cloud-native"
+    error_message = "Terraform workspace must match the backend cloud. Use: terraform workspace select ${local.backend_cloud}, or ${local.backend_cloud}-cloud-native for runtime.mode=cloud-native."
   }
 }
 
@@ -37,6 +37,20 @@ check "cloudflare_zone_present_when_domain_enabled" {
 check "managed_db_password_set" {
   assert {
     condition     = local.runtime_mode != "cloud_native" || nonsensitive(var.db_password) != null
-    error_message = "runtime.mode=cloud-native requires DB_PASSWORD exported as TF_VAR_db_password. scripts/lab.sh does this automatically after loading .env."
+    error_message = "runtime.mode=cloud-native requires DB_PASSWORD exported as TF_VAR_db_password while managed PostgreSQL is provisioned."
+  }
+}
+
+check "api_domain_matches_backend_cloud" {
+  assert {
+    condition     = !try(local.config.domain.enabled, false) || local.backend_cloud == local.cloud
+    error_message = "domain.api.cloud must match the root cloud/backend cloud in config/lab.yaml."
+  }
+}
+
+check "ui_cloud_supported" {
+  assert {
+    condition     = contains(["aws", "gcp", "azure"], local.ui_cloud)
+    error_message = "domain.ui.cloud must be aws, gcp, or azure."
   }
 }

@@ -36,6 +36,8 @@ SQS_QUEUE_URL = os.environ.get("SQS_QUEUE_URL", "")
 AWS_REGION = os.environ.get("AWS_REGION", "")
 GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID") or os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 PUBSUB_SUBSCRIPTION_ID = os.environ.get("PUBSUB_SUBSCRIPTION_ID", "")
+AZURE_SERVICEBUS_NAMESPACE = os.environ.get("AZURE_SERVICEBUS_NAMESPACE", "")
+AZURE_SERVICEBUS_QUEUE_NAME = os.environ.get("AZURE_SERVICEBUS_QUEUE_NAME", "")
 
 INSERT_SQL = """
     INSERT INTO market_snapshots
@@ -371,6 +373,64 @@ def run_pubsub_worker(db_ref: dict) -> None:
             time.sleep(5)
 
 
+def servicebus_message_body(message) -> str:
+    body = getattr(message, "body", message)
+    if isinstance(body, str):
+        return body
+    if isinstance(body, bytes):
+        return body.decode("utf-8")
+    try:
+        return b"".join(bytes(chunk) for chunk in body).decode("utf-8")
+    except TypeError:
+        return str(message)
+
+
+def process_servicebus_message(receiver, message, db_ref: dict) -> None:
+    try:
+        process_cloud_message_body(db_ref, servicebus_message_body(message))
+        receiver.complete_message(message)
+        log.info("Processed and completed Service Bus message %s", getattr(message, "message_id", ""))
+    except (psycopg2.OperationalError, psycopg2.InterfaceError):
+        receiver.abandon_message(message)
+        raise
+    except Exception as exc:
+        try:
+            db_ref["conn"].rollback()
+        except Exception:
+            pass
+        log.error("Failed Service Bus message; abandoning for retry/DLQ: %s", exc)
+        receiver.abandon_message(message)
+
+
+def run_servicebus_worker(db_ref: dict) -> None:
+    if not AZURE_SERVICEBUS_NAMESPACE:
+        raise ValueError("AZURE_SERVICEBUS_NAMESPACE is required when QUEUE_BACKEND=servicebus")
+    if not AZURE_SERVICEBUS_QUEUE_NAME:
+        raise ValueError("AZURE_SERVICEBUS_QUEUE_NAME is required when QUEUE_BACKEND=servicebus")
+    from azure.identity import DefaultAzureCredential
+    from azure.servicebus import ServiceBusClient
+
+    credential = DefaultAzureCredential()
+    log.info("Consuming from Azure Service Bus queue %s/%s", AZURE_SERVICEBUS_NAMESPACE, AZURE_SERVICEBUS_QUEUE_NAME)
+
+    while True:
+        try:
+            with ServiceBusClient(AZURE_SERVICEBUS_NAMESPACE, credential) as client:
+                with client.get_queue_receiver(
+                    queue_name=AZURE_SERVICEBUS_QUEUE_NAME,
+                    max_wait_time=20,
+                ) as receiver:
+                    for message in receiver:
+                        process_servicebus_message(receiver, message, db_ref)
+        except (psycopg2.OperationalError, psycopg2.InterfaceError) as exc:
+            log.error("Service Bus worker database error: %s - reconnecting", exc)
+            time.sleep(5)
+            db_ref["conn"] = reconnect_postgres(db_ref.get("conn"))
+        except Exception as exc:
+            log.error("Service Bus worker loop error: %s - retrying in 5s", exc)
+            time.sleep(5)
+
+
 def run_cloud_native_worker(db_ref: dict) -> None:
     backend = QUEUE_BACKEND
     if backend == "":
@@ -378,11 +438,15 @@ def run_cloud_native_worker(db_ref: dict) -> None:
             backend = "sqs"
         elif PUBSUB_SUBSCRIPTION_ID:
             backend = "pubsub"
+        elif AZURE_SERVICEBUS_NAMESPACE or AZURE_SERVICEBUS_QUEUE_NAME:
+            backend = "servicebus"
 
     if backend == "sqs":
         run_sqs_worker(db_ref)
     elif backend == "pubsub":
         run_pubsub_worker(db_ref)
+    elif backend in ("servicebus", "azure_servicebus"):
+        run_servicebus_worker(db_ref)
     else:
         raise ValueError(f"Unsupported or missing QUEUE_BACKEND for cloud_native runtime: {backend!r}")
 

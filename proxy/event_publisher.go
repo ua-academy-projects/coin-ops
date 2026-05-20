@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"cloud.google.com/go/pubsub"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	azservicebus "github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
@@ -154,16 +156,72 @@ func (p *pubsubEventPublisher) Close() error {
 	return nil
 }
 
-func newCloudNativeEventPublisher(ctx context.Context) (EventPublisher, error) {
-	backend := os.Getenv("QUEUE_BACKEND")
-	if backend == "" {
-		switch {
-		case os.Getenv("SQS_QUEUE_URL") != "":
-			backend = "sqs"
-		case os.Getenv("PUBSUB_TOPIC_ID") != "":
-			backend = "pubsub"
+type serviceBusEventPublisher struct {
+	client *azservicebus.Client
+	sender *azservicebus.Sender
+}
+
+func newServiceBusEventPublisher(ctx context.Context, namespace, queueName string) (*serviceBusEventPublisher, error) {
+	if namespace == "" {
+		return nil, errors.New("AZURE_SERVICEBUS_NAMESPACE is required when QUEUE_BACKEND=servicebus")
+	}
+	if queueName == "" {
+		return nil, errors.New("AZURE_SERVICEBUS_QUEUE_NAME is required when QUEUE_BACKEND=servicebus")
+	}
+	cred, err := azidentity.NewDefaultAzureCredential(nil)
+	if err != nil {
+		return nil, fmt.Errorf("create azure credential: %w", err)
+	}
+	client, err := azservicebus.NewClient(namespace, cred, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create service bus client: %w", err)
+	}
+	sender, err := client.NewSender(queueName, nil)
+	if err != nil {
+		_ = client.Close(ctx)
+		return nil, fmt.Errorf("create service bus sender: %w", err)
+	}
+	return &serviceBusEventPublisher{client: client, sender: sender}, nil
+}
+
+func (p *serviceBusEventPublisher) Publish(ctx context.Context, body []byte) error {
+	return p.sender.SendMessage(ctx, &azservicebus.Message{Body: body}, nil)
+}
+
+func (p *serviceBusEventPublisher) Close() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var err error
+	if p.sender != nil {
+		err = p.sender.Close(ctx)
+	}
+	if p.client != nil {
+		if closeErr := p.client.Close(ctx); err == nil {
+			err = closeErr
 		}
 	}
+	return err
+}
+
+func detectCloudNativeQueueBackend() string {
+	backend := os.Getenv("QUEUE_BACKEND")
+	if backend != "" {
+		return backend
+	}
+	switch {
+	case os.Getenv("SQS_QUEUE_URL") != "":
+		return "sqs"
+	case os.Getenv("PUBSUB_TOPIC_ID") != "":
+		return "pubsub"
+	case os.Getenv("AZURE_SERVICEBUS_NAMESPACE") != "" || os.Getenv("AZURE_SERVICEBUS_QUEUE_NAME") != "":
+		return "servicebus"
+	default:
+		return ""
+	}
+}
+
+func newCloudNativeEventPublisher(ctx context.Context) (EventPublisher, error) {
+	backend := detectCloudNativeQueueBackend()
 
 	switch backend {
 	case "sqs":
@@ -174,6 +232,8 @@ func newCloudNativeEventPublisher(ctx context.Context) (EventPublisher, error) {
 			projectID = os.Getenv("GOOGLE_CLOUD_PROJECT")
 		}
 		return newPubSubEventPublisher(ctx, projectID, os.Getenv("PUBSUB_TOPIC_ID"))
+	case "servicebus", "azure_servicebus":
+		return newServiceBusEventPublisher(ctx, os.Getenv("AZURE_SERVICEBUS_NAMESPACE"), os.Getenv("AZURE_SERVICEBUS_QUEUE_NAME"))
 	default:
 		return nil, fmt.Errorf("unsupported or missing QUEUE_BACKEND %q", backend)
 	}

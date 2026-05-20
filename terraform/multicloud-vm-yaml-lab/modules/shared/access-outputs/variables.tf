@@ -34,6 +34,26 @@ variable "app_domain" {
   type = string
 }
 
+variable "api_url" {
+  type    = string
+  default = ""
+}
+
+variable "ui_proxy_url" {
+  type    = string
+  default = ""
+}
+
+variable "ui_history_url" {
+  type    = string
+  default = ""
+}
+
+variable "cors_origin" {
+  type    = string
+  default = ""
+}
+
 variable "known_hosts_file" {
   type = string
 }
