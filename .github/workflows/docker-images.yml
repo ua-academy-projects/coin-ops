@@ -9,10 +9,10 @@ on:
       - "v*.*.*"
     paths:
       - ".github/workflows/docker-images.yml"
-      - "proxy/**"
-      - "history/**"
-      - "ui-react/**"
-      - "deploy/postgres-runtime/**"
+      - "services/proxy/**"
+      - "services/history/**"
+      - "services/ui/**"
+      - "services/postgres-runtime/**"
   workflow_dispatch:
 
 permissions:
@@ -33,24 +33,24 @@ jobs:
         include:
           - service: proxy
             image: coin-ops-proxy
-            context: ./proxy
-            dockerfile: ./proxy/Dockerfile
+            context: ./services/proxy
+            dockerfile: ./services/proxy/Dockerfile
           - service: history-api
             image: coin-ops-history-api
-            context: ./history
-            dockerfile: ./history/Dockerfile.api
+            context: ./services/history
+            dockerfile: ./services/history/Dockerfile.api
           - service: history-consumer
             image: coin-ops-history-consumer
-            context: ./history
-            dockerfile: ./history/Dockerfile.consumer
+            context: ./services/history
+            dockerfile: ./services/history/Dockerfile.consumer
           - service: ui
             image: coin-ops-ui
-            context: ./ui-react
-            dockerfile: ./ui-react/Dockerfile
+            context: ./services/ui
+            dockerfile: ./services/ui/Dockerfile
           - service: postgres-runtime
             image: coin-ops-postgres-runtime
-            context: ./deploy/postgres-runtime
-            dockerfile: ./deploy/postgres-runtime/Dockerfile
+            context: ./services/postgres-runtime
+            dockerfile: ./services/postgres-runtime/Dockerfile
 
     steps:
       - name: Checkout

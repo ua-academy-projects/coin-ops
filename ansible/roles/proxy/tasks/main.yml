@@ -29,7 +29,7 @@
 
 - name: Render compose file
   template:
-    src: "{{ playbook_dir }}/../deploy/compose/node-02.compose.yaml"
+    src: "{{ playbook_dir }}/../../deployments/gcp-vm/proxy.compose.yaml"
     dest: /opt/cognitor/proxy/compose.yaml
     owner: root
     group: root

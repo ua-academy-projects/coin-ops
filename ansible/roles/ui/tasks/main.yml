@@ -114,7 +114,7 @@
 
 - name: Render compose file
   template:
-    src: "{{ playbook_dir }}/../deploy/compose/node-03.compose.yaml"
+    src: "{{ playbook_dir }}/../../deployments/gcp-vm/ui.compose.yaml"
     dest: /opt/cognitor/ui/compose.yaml
 
 - name: Pull ui container images

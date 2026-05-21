@@ -19,7 +19,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: ui-react
+        working-directory: services/ui
 
     steps:
       - name: Checkout code
@@ -30,7 +30,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: ui-react/package-lock.json
+          cache-dependency-path: services/ui/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -50,7 +50,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: proxy
+        working-directory: services/proxy
 
     steps:
       - name: Checkout code
@@ -59,7 +59,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: proxy/go.mod
+          go-version-file: services/proxy/go.mod
 
       - name: Run tests
         run: go test ./...
@@ -73,7 +73,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: history
+        working-directory: services/history
 
     steps:
       - name: Checkout code
@@ -81,7 +81,7 @@ jobs:
 
       - name: Build custom Postgres image
         working-directory: .
-        run: docker build -t coinops-postgres-runtime:latest -f tests/python/integration/Dockerfile.pg_sql .
+        run: docker build -t coinops-postgres-runtime:latest -f tests/integration/Dockerfile.pg_sql .
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -101,11 +101,11 @@ jobs:
 
       - name: Run unit tests
         working-directory: .
-        run: python -m pytest tests/python/unit -v
+        run: python -m pytest tests/unit -v
 
       - name: Run integration tests
         working-directory: .
-        run: python -m pytest tests/python/integration -v
+        run: python -m pytest tests/integration -v
 
   docker:
     name: Docker
@@ -115,20 +115,20 @@ jobs:
       matrix:
         include:
           - service: proxy
-            context: ./proxy
-            dockerfile: ./proxy/Dockerfile
+            context: ./services/proxy
+            dockerfile: ./services/proxy/Dockerfile
           - service: history-api
-            context: ./history
-            dockerfile: ./history/Dockerfile.api
+            context: ./services/history
+            dockerfile: ./services/history/Dockerfile.api
           - service: history-consumer
-            context: ./history
-            dockerfile: ./history/Dockerfile.consumer
+            context: ./services/history
+            dockerfile: ./services/history/Dockerfile.consumer
           - service: ui
-            context: ./ui-react
-            dockerfile: ./ui-react/Dockerfile
+            context: ./services/ui
+            dockerfile: ./services/ui/Dockerfile
           - service: postgres-runtime
-            context: ./deploy/postgres-runtime
-            dockerfile: ./deploy/postgres-runtime/Dockerfile
+            context: ./services/postgres-runtime
+            dockerfile: ./services/postgres-runtime/Dockerfile
 
     steps:
       - name: Checkout code

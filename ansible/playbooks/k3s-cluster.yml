@@ -1,0 +1,67 @@
+---
+# k3s-cluster.yml — bootstrap a 3-node HA k3s cluster on GCP VMs.
+#
+#   ansible-playbook -i ansible/inventories/gcp-k3s ansible/playbooks/k3s-cluster.yml
+
+- name: Prepare k3s API entrypoint on jump host
+  hosts: k3s_jump
+  become: yes
+  roles:
+    - common
+    - haproxy_k3s_api
+
+- name: Prepare k3s server nodes
+  hosts: k3s_servers
+  become: yes
+  roles:
+    - common
+    - k3s_node_prep
+
+- name: Bootstrap the first k3s server node
+  hosts: k3s_first_server
+  become: yes
+  roles:
+    - k3s_server
+
+- name: Read the k3s cluster join token
+  hosts: k3s_first_server
+  become: yes
+  tasks:
+    - name: Read node token from the first server
+      slurp:
+        src: /var/lib/rancher/k3s/server/node-token
+      register: k3s_node_token_raw
+      no_log: true
+
+    - name: Store decoded node token for join nodes
+      set_fact:
+        k3s_node_token: "{{ k3s_node_token_raw.content | b64decode | trim }}"
+      no_log: true
+
+- name: Join the remaining k3s server nodes
+  hosts: k3s_join_servers
+  become: yes
+  roles:
+    - k3s_server
+
+- name: Verify k3s cluster nodes
+  hosts: k3s_first_server
+  become: yes
+  tasks:
+    - name: Wait until all k3s nodes are visible
+      command: k3s kubectl get nodes --no-headers
+      register: k3s_nodes_raw
+      changed_when: false
+      retries: 20
+      delay: 10
+      until: k3s_nodes_raw.stdout_lines | length == groups['k3s_servers'] | length
+
+    - name: Show cluster nodes
+      command: k3s kubectl get nodes -o wide
+      register: k3s_nodes
+      changed_when: false
+
+    - name: Print cluster nodes
+      debug:
+        var: k3s_nodes.stdout_lines
+
