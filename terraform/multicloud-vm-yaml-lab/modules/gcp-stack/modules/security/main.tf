@@ -99,14 +99,16 @@ resource "google_compute_firewall" "k3s_intra_cluster" {
   }
 }
 
-# Operator access to the k3s API server. SSH still goes via the bastion;
-# kubectl uses port 6443. Open from the bastion tag (so operator can run
-# kubectl from inside the VPC) and from the Tailscale CGNAT range so any
-# tailnet client can reach the API directly.
-resource "google_compute_firewall" "k3s_api_from_bastion" {
+# Operator access to the k3s API server (6443) and the hello-world NodePort
+# (30080), both through the bastion. The bastion is the tailnet subnet
+# router and SNATs forwarded traffic to its own IP, so tailnet clients
+# reaching k3s appear to come from the bastion tag here. No tailnet-CIDR
+# rule is needed: k3s nodes run no Tailscale, all tailnet access arrives
+# via the bastion route.
+resource "google_compute_firewall" "k3s_from_bastion" {
   count = length(var.k3s_target_tags) > 0 ? 1 : 0
 
-  name      = "${var.name_prefix}-allow-k3s-api-from-bastion"
+  name      = "${var.name_prefix}-allow-k3s-from-bastion"
   network   = var.network_self_link
   direction = "INGRESS"
 
@@ -115,41 +117,6 @@ resource "google_compute_firewall" "k3s_api_from_bastion" {
 
   allow {
     protocol = "tcp"
-    ports    = ["6443"]
-  }
-}
-
-resource "google_compute_firewall" "k3s_api_from_tailnet" {
-  count = length(var.k3s_target_tags) > 0 ? 1 : 0
-
-  name      = "${var.name_prefix}-allow-k3s-api-from-tailnet"
-  network   = var.network_self_link
-  direction = "INGRESS"
-
-  source_ranges = ["100.64.0.0/10"]
-  target_tags   = var.k3s_target_tags
-
-  allow {
-    protocol = "tcp"
-    ports    = ["6443"]
-  }
-}
-
-# Hello-world NodePort access from the tailnet. The plan exposes the
-# learning workload on :30080 — limit the NodePort range to just that
-# port rather than opening the full 30000-32767 range.
-resource "google_compute_firewall" "k3s_nodeport_from_tailnet" {
-  count = length(var.k3s_target_tags) > 0 ? 1 : 0
-
-  name      = "${var.name_prefix}-allow-k3s-nodeport-from-tailnet"
-  network   = var.network_self_link
-  direction = "INGRESS"
-
-  source_ranges = ["100.64.0.0/10"]
-  target_tags   = var.k3s_target_tags
-
-  allow {
-    protocol = "tcp"
-    ports    = ["30080"]
+    ports    = ["6443", "30080"]
   }
 }

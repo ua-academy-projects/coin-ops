@@ -167,6 +167,7 @@ locals {
 
   [bastion:vars]
   coinops_ssh_common_args='-o UserKnownHostsFile=${var.known_hosts_file} -o StrictHostKeyChecking=accept-new'
+  coinops_bastion_advertise_routes=${join(",", var.bastion_advertise_routes)}
 
   [app:vars]
   coinops_ssh_common_args='-o ProxyJump=${local.ssh_bastion_alias} -o UserKnownHostsFile=${var.known_hosts_file} -o StrictHostKeyChecking=accept-new'

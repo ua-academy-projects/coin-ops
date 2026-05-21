@@ -4,18 +4,42 @@
 // This file is the readable copy checked into the repo so the policy is
 // reviewable in PRs. The admin console is the source of truth at runtime.
 //
-// Policy: every host tagged `tag:coinops-lab` may reach every other host
-// tagged `tag:coinops-lab` on any port. Nothing else is allowed.
+// Model: only the two bastions (AWS + GCP) are tailnet members, tagged
+// tag:coinops-lab. Each bastion is a subnet router advertising its cloud's
+// private subnets. The private app/db/k3s VMs run no Tailscale — they're
+// reached through the bastion routes. AWS uses 10.10.10/11; GCP uses
+// 10.10.20/21 (distinct so the two routers don't collide).
 {
   "tagOwners": {
     "tag:coinops-lab": ["autogroup:admin"]
   },
 
+  // Auto-approve the bastions' advertised subnet routes so `tailscale up
+  // --advertise-routes=...` is accepted without a manual click in the
+  // admin console. Each route may be approved by anything wearing the
+  // coinops-lab tag (i.e. the bastions themselves).
+  "autoApprovers": {
+    "routes": {
+      "10.10.10.0/24": ["tag:coinops-lab"],
+      "10.10.11.0/24": ["tag:coinops-lab"],
+      "10.10.20.0/24": ["tag:coinops-lab"],
+      "10.10.21.0/24": ["tag:coinops-lab"]
+    }
+  },
+
+  // Your own devices (tailnet members) and the bastions may reach the
+  // bastions and every advertised private subnet on any port.
   "acls": [
     {
       "action": "accept",
-      "src":    ["tag:coinops-lab"],
-      "dst":    ["tag:coinops-lab:*"]
+      "src":    ["autogroup:member", "tag:coinops-lab"],
+      "dst": [
+        "tag:coinops-lab:*",
+        "10.10.10.0/24:*",
+        "10.10.11.0/24:*",
+        "10.10.20.0/24:*",
+        "10.10.21.0/24:*"
+      ]
     }
   ],
 

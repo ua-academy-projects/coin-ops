@@ -36,9 +36,14 @@ specifically as a learning/demo objective."*
 
 | Node   | Cloud | Subnet           | Private IP   | Role                       |
 |--------|-------|------------------|--------------|----------------------------|
-| k3s-1  | GCP   | private-subnet-0 | 10.10.10.40  | server + worker, `--cluster-init` |
-| k3s-2  | GCP   | private-subnet-0 | 10.10.10.41  | server + worker, joins via k3s-1  |
-| k3s-3  | GCP   | private-subnet-1 | 10.10.11.40  | server + worker, joins via k3s-1  |
+| k3s-1  | GCP   | private-subnet-0 | 10.10.20.40  | server + worker, `--cluster-init` |
+| k3s-2  | GCP   | private-subnet-0 | 10.10.20.41  | server + worker, joins via k3s-1  |
+| k3s-3  | GCP   | private-subnet-1 | 10.10.21.40  | server + worker, joins via k3s-1  |
+
+GCP uses the `10.10.20/24` + `10.10.21/24` private subnets (AWS keeps
+`10.10.10/24` + `10.10.11/24`) so the two bastions advertise non-overlapping
+routes into the tailnet. The k3s nodes run **no Tailscale** — you reach them
+on these private IPs through the GCP bastion's advertised route.
 
 Three nodes is the minimum for HA etcd quorum (tolerates one node down).
 All three nodes also schedule workloads — no control-plane taint — which
@@ -69,31 +74,33 @@ ansible-playbook -i <generated-gcp-inventory> ansible/k3s-up.yml
 The play does, in order:
 
 1. Validates required env vars on the controller.
-2. Fetches the Tailscale auth key from the GCP Secret Manager.
-3. Joins the bastion to the tailnet (`cloud-bastion-stack`).
-4. Joins all three k3s nodes to the tailnet (the `tailscale` role
-   imported by `k3s-cluster`).
-5. Installs k3s, cluster-init on `k3s-1`, joins `k3s-2` and `k3s-3`
+2. Fetches the Tailscale auth key from the GCP Secret Manager (used by the
+   bastion only).
+3. Joins the **bastion** to the tailnet and advertises the GCP private
+   subnets (`cloud-bastion-stack`). The k3s nodes run no Tailscale.
+4. Installs k3s, cluster-init on `k3s-1`, joins `k3s-2` and `k3s-3`
    via `--server https://k3s-1:6443`.
-6. Fetches `/etc/rancher/k3s/k3s.yaml` to `~/.kube/coinops-k3s.yaml` and
-   rewrites the server URL to `k3s-1`'s tailnet IP.
-7. Applies `roles/k3s-hello/files/k3s-hello.yaml` — namespace, deployment,
+5. Fetches `/etc/rancher/k3s/k3s.yaml` to `~/.kube/coinops-k3s.yaml` and
+   rewrites the server URL to `k3s-1`'s **private IP** (`10.10.20.40`),
+   reachable from the tailnet through the bastion route.
+6. Applies `roles/k3s-hello/files/k3s-hello.yaml` — namespace, deployment,
    NodePort.
 
 ## Verification
 
-After a clean run, from a tailnet-joined laptop:
+After a clean run, from a laptop joined to the tailnet with
+`sudo tailscale up --accept-routes`:
 
 ```bash
-# Cluster healthy?
+# Cluster healthy? (reaches 10.10.20.40:6443 via the GCP bastion route)
 kubectl --kubeconfig=~/.kube/coinops-k3s.yaml get nodes
 # Expect: 3 nodes, all "Ready", roles "control-plane,etcd,master".
 
 kubectl --kubeconfig=~/.kube/coinops-k3s.yaml get pods -A
 # Expect: kube-system pods Running; coinops-hello/hello-* Running ×2.
 
-# Hello-world reachable on every node, over the tailnet:
-for ip in $(tailscale status | awk '/coinops-lab-k3s/ {print $1}'); do
+# Hello-world reachable on every node's private IP, through the bastion route:
+for ip in 10.10.20.40 10.10.20.41 10.10.21.40; do
   echo "$ip:"; curl -s "http://${ip}:30080" | head -3
 done
 ```
@@ -111,10 +118,11 @@ node is tainted or otherwise unschedulable.
   isn't true with the default agent topology.
 - Where firewall rules sit in this architecture
   (`gcp-stack/modules/security/main.tf`): which ports are intra-cluster
-  only, which are bastion-only, which are tailnet-open. Worth tracing by
-  hand.
-- How the kubeconfig's `server:` URL changes the operator experience
-  (raw private IP from inside the VPC vs tailnet IP from anywhere).
+  only and which the bastion is allowed to reach. Worth tracing by hand.
+- How a Tailscale **subnet router** lets a whole private subnet be
+  reachable over the tailnet without installing the agent on every node —
+  and how the bastion SNATs that traffic, so to k3s it looks like it came
+  from the bastion.
 
 ## What to leave alone (for now)
 

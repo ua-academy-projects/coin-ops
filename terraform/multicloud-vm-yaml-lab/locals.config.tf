@@ -144,8 +144,13 @@ locals {
     }
   }
 
+  # GCP advertises distinct private subnets so its bastion's tailnet routes
+  # don't collide with AWS's. Falls back to the shared list when no GCP
+  # override is present.
+  private_subnet_cidrs = local.is_gcp ? try(local.network_raw.gcp_private_subnet_cidrs, local.network_raw.private_subnet_cidrs) : local.network_raw.private_subnet_cidrs
+
   private_subnets = {
-    for idx, cidr in local.network_raw.private_subnet_cidrs : tostring(idx) => {
+    for idx, cidr in local.private_subnet_cidrs : tostring(idx) => {
       name       = "${local.config.name_prefix}-private-${idx}"
       cidr       = cidr
       aws_az     = local.aws_location.availability_zones[idx % length(local.aws_location.availability_zones)]

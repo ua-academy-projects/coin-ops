@@ -1,34 +1,56 @@
 # Tailscale — coinops-lab tailnet
 
-This directory documents the Tailscale layer that connects AWS and GCP VMs
-into one private overlay network. The Ansible role lives at
+This directory documents the Tailscale layer that connects AWS and GCP into
+one private overlay network. The Ansible role lives at
 `ansible/roles/tailscale/`; this README covers everything that happens
 outside Ansible: the auth-key lifecycle, the ACL, and how to bring up the
 cross-cloud demo.
 
+## Access model — bastion as subnet router
+
+**Only the two bastions run Tailscale.** Each bastion is a *subnet router*:
+it advertises its cloud's private subnets into the tailnet, so any tailnet
+client reaches the private app/db/k3s VMs through it. Those private VMs run
+no Tailscale themselves.
+
+```
+   YOUR PC ──tailnet──┬── AWS bastion ──advertises 10.10.10/24,10.10.11/24──► app-1, app-2, db
+                      └── GCP bastion ──advertises 10.10.20/24,10.10.21/24──► k3s-1, k3s-2, k3s-3
+```
+
+The two VPCs keep the same `10.10.0.0/16` and never peer — they only meet
+on the tailnet. The one rule that matters: **the advertised routes must not
+overlap.** So AWS keeps private subnets `10.10.10/24` + `10.10.11/24` and
+GCP uses `10.10.20/24` + `10.10.21/24` (set via `gcp_private_subnet_cidrs`
+in `lab.yaml`). Distinct routes → each `100.x` client routes to the correct
+bastion with no ambiguity.
+
 ## Why Tailscale, not VPC peering
 
-Both AWS and GCP VPCs share the exact same CIDR (`10.10.0.0/16` from
-`terraform/multicloud-vm-yaml-lab/config/lab.yaml`). Cross-cloud peering
-would require splitting CIDR space AND an IPsec HA VPN or paid
-Direct-Connect / Cloud-Interconnect (AWS↔GCP has no native peering).
-Tailscale's overlay (`100.64.0.0/10`) is independent of the underlying VPC
-CIDRs, so it ships in a sprint and the free tier covers this lab.
+AWS↔GCP has no native peering; the alternatives are paid Direct-Connect /
+Cloud-Interconnect or an IPsec HA VPN. Tailscale's overlay ships in a
+sprint, the free tier covers this lab, and the subnet-router model means
+only two VMs ever need the agent installed.
 
 ## ACL — `acl.json`
 
 The readable copy is checked in here. The runtime source of truth is the
 Tailscale admin console (Access controls → Edit). Keep them in sync.
 
-Policy in one line: every host tagged `tag:coinops-lab` may reach every
-other host tagged `tag:coinops-lab` on any port; nothing else is allowed.
+It does three things:
+1. **`autoApprovers.routes`** — the four private-subnet routes are
+   auto-approved when a bastion advertises them, so no manual click in the
+   admin console after `tailscale up --advertise-routes=...`.
+2. **`acls`** — your tailnet devices (and the bastions) may reach the
+   bastions and all four advertised private subnets on any port.
+3. **`ssh`** — admins may `tailscale ssh` into the bastions.
 
 ## Auth-key lifecycle
 
-The Ansible `tailscale` role registers each VM with a single auth key.
-For a learning lab we use **pre-auth keys** (reusable, pre-approved,
-tagged `tag:coinops-lab`, ephemeral=false). Future hardening — see the
-final section.
+The Ansible `tailscale` role registers the **bastion** with a single auth
+key (the role is wired only into `cloud-bastion-stack`). For a learning lab
+we use **pre-auth keys** (reusable, pre-approved, tagged `tag:coinops-lab`,
+ephemeral=false). Future hardening — see the final section.
 
 Generating + pushing the key:
 
@@ -61,9 +83,12 @@ Generating + pushing the key:
 
    The line should read `coinops_tailscale_auth_key_secret_ref=coinops-lab/tailscale-auth-key`.
 
-4. **Deploy** with `ansible-playbook ansible/cloud-deploy.yml`. The
-   `tailscale` role is wired into every cloud meta-role and will pull the
-   key via `cloud-secrets`, install `tailscaled`, and join the tailnet.
+4. **Deploy** with `ansible-playbook ansible/cloud-deploy.yml` (or
+   `ansible/k3s-up.yml` for the GCP cluster). The `tailscale` role runs
+   only on the bastion (via `cloud-bastion-stack`); it pulls the key via
+   `cloud-secrets`, installs `tailscaled`, joins the tailnet, and advertises
+   the cloud's private subnets (`coinops_bastion_advertise_routes` from the
+   generated inventory). The app/db/k3s VMs install nothing.
 
 ## Cross-cloud bring-up runbook
 
@@ -87,15 +112,19 @@ terraform apply
 ```
 
 Then run Ansible against each generated inventory (the Terraform output
-writes one per state). Each VM joins the tailnet on first apply. After
-both legs are up:
+writes one per state). Only the bastions join the tailnet; they advertise
+their private subnets so the rest is reachable through them. After both
+legs are up, from your laptop (joined to the tailnet, `--accept-routes`):
 
 ```bash
-# From your laptop, joined to the tailnet:
-tailscale status                # shows AWS + GCP peers
-tailscale ping coinops-lab-app-1        # AWS host
-tailscale ping coinops-lab-bastion-gcp  # GCP host (after second apply)
+tailscale status                       # shows the AWS + GCP bastions as peers
+ssh coinops-lab-app-1                  # AWS app VM, via its private IP route
+curl http://10.10.20.40:30080          # GCP k3s NodePort, via the GCP bastion route
+kubectl --kubeconfig=~/.kube/coinops-k3s.yaml get nodes
 ```
+
+Make sure your laptop accepts advertised routes: `sudo tailscale up
+--accept-routes` (or toggle "Use Tailscale subnets" in the GUI).
 
 ## Firewall / SG note
 

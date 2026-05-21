@@ -5,7 +5,12 @@ HA k3s server install + hello-world workload.
 
 Applied to `hosts: k3s` by `ansible/k3s-up.yml`.
 
-Imports: [[common]], [[tailscale]], [[k3s]], [[k3s-hello]].
+Imports: [[common]], [[k3s]], [[k3s-hello]].
+
+No `tailscale` import — k3s nodes are private and run no Tailscale. kubectl
+reaches them on their private IPs through the GCP bastion's advertised
+tailnet route (see [[cloud-bastion-stack]] and `tailscale_advertise_routes`
+in `group_vars/bastion`).
 
 No `docker` or `registry-login` imports — the cluster nodes don't run
 docker-compose (k3s ships its own containerd). They also don't pull from

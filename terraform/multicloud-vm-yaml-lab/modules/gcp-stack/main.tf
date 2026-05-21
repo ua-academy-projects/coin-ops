@@ -154,13 +154,14 @@ module "access_outputs" {
       redis_url = "redis://${module.compute.instances[local.stack.db_name].private_ip}:6379/0"
     })
   })
-  bastion_name     = local.stack.bastion_name
-  app_names        = local.stack.app_names
-  db_name          = local.stack.db_name
-  k3s_names        = local.stack.k3s_names
-  app_url          = local.app_url
-  app_domain       = local.app_domain
-  known_hosts_file = "~/.ssh/known_hosts_gcp_lab"
-  secret_refs      = module.secrets.refs
-  load_balancer    = module.load_balancer.load_balancer
+  bastion_name             = local.stack.bastion_name
+  app_names                = local.stack.app_names
+  db_name                  = local.stack.db_name
+  k3s_names                = local.stack.k3s_names
+  bastion_advertise_routes = [for k, v in local.stack.network.private_subnets : v.cidr]
+  app_url                  = local.app_url
+  app_domain               = local.app_domain
+  known_hosts_file         = "~/.ssh/known_hosts_gcp_lab"
+  secret_refs              = module.secrets.refs
+  load_balancer            = module.load_balancer.load_balancer
 }

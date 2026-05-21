@@ -138,13 +138,14 @@ module "access_outputs" {
       redis_url = "redis://${module.compute.instances[local.stack.db_name].private_ip}:6379/0"
     })
   })
-  bastion_name     = local.stack.bastion_name
-  app_names        = local.stack.app_names
-  db_name          = local.stack.db_name
-  app_url          = local.app_url
-  app_domain       = local.domain_enabled ? local.stack.domain.name : module.load_balancer.dns_name
-  known_hosts_file = "~/.ssh/known_hosts_aws_lab"
-  secret_refs      = module.secrets.refs
+  bastion_name             = local.stack.bastion_name
+  app_names                = local.stack.app_names
+  db_name                  = local.stack.db_name
+  bastion_advertise_routes = [for k, v in local.stack.network.private_subnets : v.cidr]
+  app_url                  = local.app_url
+  app_domain               = local.domain_enabled ? local.stack.domain.name : module.load_balancer.dns_name
+  known_hosts_file         = "~/.ssh/known_hosts_aws_lab"
+  secret_refs              = module.secrets.refs
   load_balancer = {
     dns_name         = module.load_balancer.dns_name
     zone_id          = module.load_balancer.zone_id

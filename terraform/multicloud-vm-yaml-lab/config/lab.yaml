@@ -63,6 +63,13 @@ networks:
     private_subnet_cidrs:
       - 10.10.10.0/24
       - 10.10.11.0/24
+    # GCP uses distinct private subnets so the two bastions advertise
+    # non-overlapping routes into the tailnet (the VPCs never peer, only
+    # the advertised routes must not collide). AWS keeps .10/.11, GCP
+    # gets .20/.21.
+    gcp_private_subnet_cidrs:
+      - 10.10.20.0/24
+      - 10.10.21.0/24
 
 firewall:
   ssh_source_ranges:
@@ -221,12 +228,12 @@ instances:
   k3s-1:
     role: k3s
     size: small
-    private_ip: 10.10.10.40
+    private_ip: 10.10.20.40
   k3s-2:
     role: k3s
     size: small
-    private_ip: 10.10.10.41
+    private_ip: 10.10.20.41
   k3s-3:
     role: k3s
     size: small
-    private_ip: 10.10.11.40
+    private_ip: 10.10.21.40

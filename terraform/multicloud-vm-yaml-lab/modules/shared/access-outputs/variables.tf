@@ -31,6 +31,11 @@ variable "k3s_names" {
   default = []
 }
 
+variable "bastion_advertise_routes" {
+  type    = list(string)
+  default = []
+}
+
 variable "app_url" {
   type = string
 }
