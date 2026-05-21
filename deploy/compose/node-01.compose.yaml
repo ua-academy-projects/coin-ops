@@ -38,9 +38,10 @@ services:
       - /var/lib/coin-ops/rabbitmq:/var/lib/rabbitmq
     healthcheck:
       test: rabbitmq-diagnostics -q ping
+      start_period: 180s
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 12
 {% endif %}
 
   history-consumer:

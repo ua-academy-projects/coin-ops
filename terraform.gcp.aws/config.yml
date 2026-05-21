@@ -8,6 +8,14 @@ project:
     zones:
       - eu-central-1a
       - eu-central-1b
+  azure:
+    subscription_id: "8cf38392-348c-4b76-9350-a7682650064e"
+    tenant_id: "f1c67d06-63a0-4c95-b956-9166fb0eaf9d"
+    location: "West Europe"
+    key_vault_name: "coinops-kv-valentyn"
+    resource_group_name: "adv_resource_group"
+    use_existing_resource_group: true
+    use_managed_postgres: true
 
 ssh:
   user: valentyn
@@ -18,6 +26,16 @@ network:
   name: coinops-vpc
   subnet_name: coinops-subnet
   cidr: 10.10.0.0/24
+
+  azure_subnets:
+    bastion:
+      cidr: 10.10.0.0/28
+    web:
+      cidr: 10.10.0.16/28
+    app:
+      cidr: 10.10.0.32/28
+    db:
+      cidr: 10.10.0.48/28
 
   aws_subnets:
     public-a:
@@ -50,6 +68,7 @@ vms:
     machine_type:
       gcp: e2-micro
       aws: t3.micro
+      azure: Standard_D2s_v4
     image:
       gcp: debian-cloud/debian-12
       aws: ami-051eaec1417c5d4ae
@@ -62,6 +81,7 @@ vms:
     machine_type:
       gcp: e2-micro
       aws: t3.micro
+      azure: Standard_D2s_v4
     image:
       gcp: debian-cloud/debian-12
       aws: ami-051eaec1417c5d4ae
@@ -76,6 +96,7 @@ vms:
     machine_type:
       gcp: e2-micro
       aws: t3.micro
+      azure: Standard_D2s_v4
     image:
       gcp: debian-cloud/debian-12
       aws: ami-051eaec1417c5d4ae

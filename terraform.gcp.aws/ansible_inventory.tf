@@ -1,6 +1,6 @@
 locals {
   inventory_ssh_user = local.config.cloud == "aws" ? try(local.config.project.aws.ansible_user, "ubuntu") : local.config.ssh.user
-  active_infra       = local.config.cloud == "aws" ? module.aws_infra[0] : module.gcp_infra[0]
+  active_infra       = local.config.cloud == "aws" ? module.aws_infra[0] : local.config.cloud == "gcp" ? module.gcp_infra[0] : module.azure_infra[0]
   proxy_command      = "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -W %h:%p ${local.inventory_ssh_user}@${local.active_infra.bastion_external_ip}"
   ssh_common_args    = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyCommand=\"${local.proxy_command}\""
 

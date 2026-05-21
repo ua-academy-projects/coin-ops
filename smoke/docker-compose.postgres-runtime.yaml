@@ -1,0 +1,88 @@
+# Self-contained PostgreSQL-runtime stack for the smoke suite.
+#
+# This target is intentionally close to the #11 deployment goal: proxy and
+# history-consumer run with RUNTIME_BACKEND=postgres, while RabbitMQ and Redis
+# are absent. PostgreSQL is bootstrapped with the runtime SQL before app
+# containers start.
+
+name: coin-ops-postgres-smoke
+
+services:
+  postgres:
+    image: ${COINOPS_RUNTIME_POSTGRES_IMAGE:-quay.io/tembo/pg16-pgmq@sha256:7f80d046257d585d1af9d19cf28bd355a4b854b0a7d643c02ebbe6b84457868a}
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_cron,pgmq
+      - -c
+      - cron.database_name=cognitor
+    env_file:
+      - env/postgres.env
+    volumes:
+      - ..:/repo:ro
+      - ./postgres-runtime-bootstrap.sh:/docker-entrypoint-initdb.d/10-coinops-bootstrap.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  proxy:
+    build:
+      context: ../proxy
+      dockerfile: Dockerfile
+    env_file:
+      - env/proxy.postgres.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  history-api:
+    build:
+      context: ../history
+      dockerfile: Dockerfile.api
+    env_file:
+      - env/history.postgres.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python -c "import urllib.request,sys;
+          sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health',timeout=2).status==200 else 1)"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  history-consumer:
+    build:
+      context: ../history
+      dockerfile: Dockerfile.consumer
+    env_file:
+      - env/history.postgres.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Consumer has no HTTP endpoint; runtime queue checks prove it is working.
+
+  gateway:
+    image: nginx:alpine
+    ports:
+      - "18081:80"
+    volumes:
+      - ./nginx.smoke.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      proxy:
+        condition: service_started
+      history-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health >/dev/null || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 5s

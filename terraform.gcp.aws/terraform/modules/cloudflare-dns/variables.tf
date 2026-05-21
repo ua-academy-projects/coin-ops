@@ -36,3 +36,15 @@ variable "gcp_lb_ip_address" {
   description = "GCP load balancer IP address."
   default     = null
 }
+
+variable "azure_lb_ip_address" {
+  type        = string
+  description = "Azure load balancer IP address."
+  default     = null
+}
+
+variable "enable_azure_record" {
+  type        = bool
+  description = "Whether to create the Azure Cloudflare record."
+  default     = false
+}

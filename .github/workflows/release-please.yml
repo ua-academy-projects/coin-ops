@@ -1,0 +1,40 @@
+name: Release Please
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  release:
+    name: Calculate and tag release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Run release-please
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          target-branch: main
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      - name: Dispatch Docker image workflow for release tag
+        if: ${{ steps.release.outputs.release_created == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag_name }}
+        run: gh workflow run docker-images.yml --ref "${RELEASE_TAG}"
+
+      - name: Show release result
+        run: |
+          echo "release_created=${{ steps.release.outputs.release_created }}"
+          echo "tag_name=${{ steps.release.outputs.tag_name }}"
+          echo "version=${{ steps.release.outputs.version }}"

@@ -198,6 +198,13 @@ Pending full PostgreSQL runtime mode still adds:
 
 ## Deployment Commands
 
+Prepare environment variables first:
+
+```bash
+cp .env.example .env
+source .env
+```
+
 For the local root `docker compose` flow, use a plain Compose `.env` file and the root `Makefile` convenience targets:
 
 ```bash
@@ -232,19 +239,20 @@ Recommended entrypoint:
 
 `deploy.sh` does the following:
 
-- loads deployment secrets from AWS Secrets Manager
+- loads `.env`
+- selects the Terraform backend for the target cloud
 - runs `terraform init`
 - applies infrastructure for the selected cloud
 - generates `ansible/inventory.generated`
 - runs `ansible/provision.yml`
 - runs `ansible/deploy.yml`
 
-Before running it, export the local machine context that cannot live in Secrets Manager:
+Recommended preflight scripts:
 
 ```bash
-export SSH_KEY_PATH=/home/valentyn/.ssh/coinops
-export AWS_SECRETS_ID=coinops/app
-export AWS_REGION=eu-central-1
+./scripts/bootstrap-aws.sh
+./scripts/bootstrap-gcp.sh
+./scripts/bootstrap-azure.sh
 ```
 
 ### Select the cloud
@@ -255,6 +263,7 @@ Cloud selection is controlled by Terraform variable `cloud` in
 ```bash
 CLOUD_PROVIDER=aws ./deploy.sh
 CLOUD_PROVIDER=gcp ./deploy.sh
+CLOUD_PROVIDER=azure ./deploy.sh
 ```
 
 If `CLOUD_PROVIDER` is not set, `deploy.sh` uses the default from
@@ -262,16 +271,13 @@ If `CLOUD_PROVIDER` is not set, `deploy.sh` uses the default from
 
 ### Run in GCP
 
-For GCP, the default path uses the historical local-database flow on the app
-VM and does not use AWS RDS.
-
-If you use local Docker images, build the tar archives first:
+Run the preflight:
 
 ```bash
-./scripts/build-local-images.sh
+./scripts/bootstrap-gcp.sh
 ```
 
-Then run:
+Then deploy:
 
 ```bash
 CLOUD_PROVIDER=gcp ./deploy.sh
@@ -293,16 +299,13 @@ For Cloudflare on GCP, use an **A record** pointing to the load balancer IP.
 
 ### Run in AWS
 
-For AWS, the deployment can use either local Docker images or registry images.
+Run the preflight:
 
-If you use the RDS-based flow, keep:
-
-```text
-RUNTIME_BACKEND=external
-EXTERNAL_DB_HOST=<rds-endpoint>
+```bash
+./scripts/bootstrap-aws.sh
 ```
 
-Then run:
+Then deploy:
 
 ```bash
 CLOUD_PROVIDER=aws ./deploy.sh
@@ -321,6 +324,38 @@ http://<load_balancer_dns_name>
 ```
 
 or your public domain if Cloudflare is configured.
+
+### Run in Azure
+
+Run the preflight:
+
+```bash
+./scripts/bootstrap-azure.sh
+```
+
+Then deploy:
+
+```bash
+CLOUD_PROVIDER=azure ./deploy.sh
+```
+
+After deployment, get the public IP:
+
+```bash
+terraform -chdir=terraform.gcp.aws output
+```
+
+Open:
+
+```text
+http://<load_balancer_ip_address>
+```
+
+Open:
+
+```text
+http://<load_balancer_ip_address>
+```
 
 For Cloudflare on AWS, use a **CNAME** pointing to the ELB DNS name.
 

@@ -7,79 +7,58 @@ INVENTORY_PATH="${ROOT_DIR}/ansible/inventory.generated"
 PROVISION_PLAYBOOK="${ROOT_DIR}/ansible/provision.yml"
 DEPLOY_PLAYBOOK="${ROOT_DIR}/ansible/deploy.yml"
 CLOUD_PROVIDER="${CLOUD_PROVIDER:-}"
-AWS_SECRETS_ID="${AWS_SECRETS_ID:-coinops/app}"
-AWS_SECRETS_REGION="${AWS_SECRETS_REGION:-${AWS_REGION:-eu-central-1}}"
+IMAGE_SOURCE_OVERRIDE="${IMAGE_SOURCE:-}"
+LOCAL_IMAGE_TAG_OVERRIDE="${LOCAL_IMAGE_TAG:-}"
+LOCAL_IMAGE_ARTIFACT_DIR_OVERRIDE="${LOCAL_IMAGE_ARTIFACT_DIR:-}"
+RUNTIME_BACKEND_OVERRIDE="${RUNTIME_BACKEND:-}"
+SSH_KEY_PATH_OVERRIDE="${SSH_KEY_PATH:-}"
+SSH_ALLOWED_SOURCE_CIDR_OVERRIDE="${SSH_ALLOWED_SOURCE_CIDR:-}"
+AWS_REGION_FROM_CONFIG=""
+GCP_PROJECT_ID_FROM_CONFIG=""
+AZURE_KEY_VAULT_NAME_FROM_CONFIG=""
+
+if [[ ! -f "${ROOT_DIR}/.env" ]]; then
+  echo "Missing .env in ${ROOT_DIR}" >&2
+  exit 1
+fi
+
+set -a
+. "${ROOT_DIR}/.env"
+set +a
+
+if [[ -n "${IMAGE_SOURCE_OVERRIDE}" ]]; then
+  export IMAGE_SOURCE="${IMAGE_SOURCE_OVERRIDE}"
+fi
+
+if [[ -n "${LOCAL_IMAGE_TAG_OVERRIDE}" ]]; then
+  export LOCAL_IMAGE_TAG="${LOCAL_IMAGE_TAG_OVERRIDE}"
+fi
+
+if [[ -n "${LOCAL_IMAGE_ARTIFACT_DIR_OVERRIDE}" ]]; then
+  export LOCAL_IMAGE_ARTIFACT_DIR="${LOCAL_IMAGE_ARTIFACT_DIR_OVERRIDE}"
+fi
+
+if [[ -n "${RUNTIME_BACKEND_OVERRIDE}" ]]; then
+  export RUNTIME_BACKEND="${RUNTIME_BACKEND_OVERRIDE}"
+fi
+
+if [[ -n "${SSH_KEY_PATH_OVERRIDE}" ]]; then
+  export SSH_KEY_PATH="${SSH_KEY_PATH_OVERRIDE}"
+fi
+
+if [[ -n "${SSH_ALLOWED_SOURCE_CIDR_OVERRIDE}" ]]; then
+  export SSH_ALLOWED_SOURCE_CIDR="${SSH_ALLOWED_SOURCE_CIDR_OVERRIDE}"
+fi
 
 export ANSIBLE_LOCAL_TEMP="${ANSIBLE_LOCAL_TEMP:-/tmp/ansible-local}"
 export ANSIBLE_REMOTE_TEMP="${ANSIBLE_REMOTE_TEMP:-/tmp/ansible-remote}"
-
-require_command() {
-  local cmd="$1"
-  if ! command -v "${cmd}" >/dev/null 2>&1; then
-    echo "Missing required command: ${cmd}" >&2
-    exit 1
-  fi
-}
-
-load_aws_secrets() {
-  local secret_json
-
-  require_command aws
-  require_command jq
-
-  secret_json="$(
-    aws secretsmanager get-secret-value \
-      --secret-id "${AWS_SECRETS_ID}" \
-      --region "${AWS_SECRETS_REGION}" \
-      --query SecretString \
-      --output text
-  )"
-
-  if [[ -z "${secret_json}" || "${secret_json}" == "None" ]]; then
-    echo "AWS Secrets Manager returned an empty secret for ${AWS_SECRETS_ID}" >&2
-    exit 1
-  fi
-
-  export DB_PASSWORD="${DB_PASSWORD:-$(jq -r '.DB_PASSWORD // empty' <<<"${secret_json}")}"
-  export RABBITMQ_PASSWORD="${RABBITMQ_PASSWORD:-$(jq -r '.RABBITMQ_PASSWORD // empty' <<<"${secret_json}")}"
-  export GHCR_USERNAME="${GHCR_USERNAME:-$(jq -r '.GHCR_USERNAME // empty' <<<"${secret_json}")}"
-  export GHCR_TOKEN="${GHCR_TOKEN:-$(jq -r '.GHCR_TOKEN // empty' <<<"${secret_json}")}"
-  export APP_DOMAIN="${APP_DOMAIN:-$(jq -r '.APP_DOMAIN // empty' <<<"${secret_json}")}"
-  export TLS_MODE="${TLS_MODE:-$(jq -r '.TLS_MODE // empty' <<<"${secret_json}")}"
-  export EXTERNAL_DB_HOST="${EXTERNAL_DB_HOST:-$(jq -r '.EXTERNAL_DB_HOST // empty' <<<"${secret_json}")}"
-  export RUNTIME_BACKEND="${RUNTIME_BACKEND:-$(jq -r '.RUNTIME_BACKEND // empty' <<<"${secret_json}")}"
-  export IMAGE_REGISTRY="${IMAGE_REGISTRY:-$(jq -r '.IMAGE_REGISTRY // empty' <<<"${secret_json}")}"
-  export IMAGE_TAG="${IMAGE_TAG:-$(jq -r '.IMAGE_TAG // empty' <<<"${secret_json}")}"
-  export IMAGE_SOURCE="${IMAGE_SOURCE:-$(jq -r '.IMAGE_SOURCE // empty' <<<"${secret_json}")}"
-  export LOCAL_IMAGE_TAG="${LOCAL_IMAGE_TAG:-$(jq -r '.LOCAL_IMAGE_TAG // empty' <<<"${secret_json}")}"
-  export LOCAL_IMAGE_ARTIFACT_DIR="${LOCAL_IMAGE_ARTIFACT_DIR:-$(jq -r '.LOCAL_IMAGE_ARTIFACT_DIR // empty' <<<"${secret_json}")}"
-  export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN:-$(jq -r '.CLOUDFLARE_API_TOKEN // empty' <<<"${secret_json}")}"
-  export TF_VAR_cloudflare_zone_name="${TF_VAR_cloudflare_zone_name:-$(jq -r '.TF_VAR_cloudflare_zone_name // empty' <<<"${secret_json}")}"
-  export TF_VAR_cloudflare_account_id="${TF_VAR_cloudflare_account_id:-$(jq -r '.TF_VAR_cloudflare_account_id // empty' <<<"${secret_json}")}"
-  export TF_VAR_cloudflare_record_name="${TF_VAR_cloudflare_record_name:-$(jq -r '.TF_VAR_cloudflare_record_name // empty' <<<"${secret_json}")}"
-  export TF_VAR_cloudflare_proxied="${TF_VAR_cloudflare_proxied:-$(jq -r '.TF_VAR_cloudflare_proxied // empty' <<<"${secret_json}")}"
-}
-
-validate_local_context() {
-  if [[ -z "${SSH_KEY_PATH:-}" ]]; then
-    echo "SSH_KEY_PATH is required. Export it in the shell before running deploy.sh" >&2
-    exit 1
-  fi
-
-  if [[ ! -f "${SSH_KEY_PATH}.pub" ]]; then
-    echo "Missing public key: ${SSH_KEY_PATH}.pub" >&2
-    exit 1
-  fi
-
-  export TF_VAR_ssh_public_key="${TF_VAR_ssh_public_key:-$(cat "${SSH_KEY_PATH}.pub")}"
-}
 
 resolve_cloud_provider() {
   if [[ -n "${CLOUD_PROVIDER}" ]]; then
     return
   fi
 
-  CLOUD_PROVIDER="$(
+  CLOUD_PROVIDER="$({
     awk '
       $0 ~ /^variable "cloud"/ { in_block=1; next }
       in_block && $1 == "default" {
@@ -89,7 +68,7 @@ resolve_cloud_provider() {
       }
       in_block && $0 ~ /^}/ { exit }
     ' "${TERRAFORM_DIR}/variables.tf"
-  )"
+  })"
 
   if [[ -z "${CLOUD_PROVIDER}" ]]; then
     echo "Unable to resolve cloud provider from ${TERRAFORM_DIR}/variables.tf" >&2
@@ -97,18 +76,200 @@ resolve_cloud_provider() {
   fi
 }
 
+resolve_aws_region() {
+  if [[ -n "${AWS_REGION:-}" ]]; then
+    AWS_REGION_FROM_CONFIG="${AWS_REGION}"
+    export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-${AWS_REGION}}"
+    return
+  fi
+
+  AWS_REGION_FROM_CONFIG="$(
+    awk '
+      $1 == "aws:" { in_aws=1; next }
+      in_aws && $1 == "region:" { gsub(/"/, "", $2); print $2; exit }
+      in_aws && /^[^[:space:]]/ { exit }
+    ' "${TERRAFORM_DIR}/config.yml"
+  )"
+
+  if [[ -n "${AWS_REGION_FROM_CONFIG}" ]]; then
+    export AWS_REGION="${AWS_REGION_FROM_CONFIG}"
+    export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-${AWS_REGION_FROM_CONFIG}}"
+  fi
+}
+
+resolve_gcp_project_id() {
+  if [[ -n "${GOOGLE_CLOUD_PROJECT:-}" ]]; then
+    GCP_PROJECT_ID_FROM_CONFIG="${GOOGLE_CLOUD_PROJECT}"
+    return
+  fi
+
+  GCP_PROJECT_ID_FROM_CONFIG="$(
+    awk '
+      $1 == "gcp:" { in_gcp=1; next }
+      in_gcp && $1 == "id:" { gsub(/"/, "", $2); print $2; exit }
+      in_gcp && /^[^[:space:]]/ { exit }
+    ' "${TERRAFORM_DIR}/config.yml"
+  )"
+
+  if [[ -n "${GCP_PROJECT_ID_FROM_CONFIG}" ]]; then
+    export GOOGLE_CLOUD_PROJECT="${GCP_PROJECT_ID_FROM_CONFIG}"
+  fi
+}
+
+resolve_azure_key_vault_name() {
+  if [[ -n "${AZURE_KEY_VAULT_NAME:-}" ]]; then
+    AZURE_KEY_VAULT_NAME_FROM_CONFIG="${AZURE_KEY_VAULT_NAME}"
+    return
+  fi
+
+  AZURE_KEY_VAULT_NAME_FROM_CONFIG="$(
+    awk '
+      $1 == "azure:" { in_azure=1; next }
+      in_azure && $1 == "key_vault_name:" { gsub(/"/, "", $2); print $2; exit }
+      in_azure && /^[^[:space:]]/ { exit }
+    ' "${TERRAFORM_DIR}/config.yml"
+  )"
+
+  if [[ -n "${AZURE_KEY_VAULT_NAME_FROM_CONFIG}" ]]; then
+    export AZURE_KEY_VAULT_NAME="${AZURE_KEY_VAULT_NAME_FROM_CONFIG}"
+  fi
+}
+
+read_aws_secret() {
+  local secret_id="$1"
+
+  aws secretsmanager get-secret-value \
+    --secret-id "${secret_id}" \
+    --region "${AWS_REGION_FROM_CONFIG}" \
+    --query SecretString \
+    --output text
+}
+
+read_gcp_secret() {
+  local secret_id="$1"
+
+  gcloud secrets versions access latest \
+    --secret="${secret_id}" \
+    --project="${GCP_PROJECT_ID_FROM_CONFIG}"
+}
+
+read_azure_secret() {
+  local secret_id="$1"
+
+  az keyvault secret show \
+    --vault-name "${AZURE_KEY_VAULT_NAME_FROM_CONFIG}" \
+    --name "${secret_id}" \
+    --query value \
+    -o tsv
+}
+
+load_aws_secrets() {
+  resolve_aws_region
+
+  if [[ -z "${AWS_REGION_FROM_CONFIG}" ]]; then
+    echo "Unable to resolve AWS region for Secrets Manager access" >&2
+    exit 1
+  fi
+
+  export DB_PASSWORD="${DB_PASSWORD:-$(read_aws_secret "${AWS_SECRET_DB_PASSWORD_ID:-coinops/db-password}")}"
+  export RABBITMQ_PASSWORD="${RABBITMQ_PASSWORD:-$(read_aws_secret "${AWS_SECRET_RABBITMQ_PASSWORD_ID:-coinops/rabbitmq-password}")}"
+  export GHCR_TOKEN="${GHCR_TOKEN:-$(read_aws_secret "${AWS_SECRET_GHCR_TOKEN_ID:-coinops/ghcr-token}")}"
+  export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN:-$(read_aws_secret "${AWS_SECRET_CLOUDFLARE_TOKEN_ID:-coinops/cloudflare-api-token}")}"
+}
+
+load_gcp_secrets() {
+  resolve_gcp_project_id
+
+  if [[ -z "${GCP_PROJECT_ID_FROM_CONFIG}" ]]; then
+    echo "Unable to resolve GCP project id for Secret Manager access" >&2
+    exit 1
+  fi
+
+  export DB_PASSWORD="${DB_PASSWORD:-$(read_gcp_secret "${GCP_SECRET_DB_PASSWORD_ID:-coinops-db-password}")}"
+  export RABBITMQ_PASSWORD="${RABBITMQ_PASSWORD:-$(read_gcp_secret "${GCP_SECRET_RABBITMQ_PASSWORD_ID:-coinops-rabbitmq-password}")}"
+  export GHCR_TOKEN="${GHCR_TOKEN:-$(read_gcp_secret "${GCP_SECRET_GHCR_TOKEN_ID:-coinops-ghcr-token}")}"
+  export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN:-$(read_gcp_secret "${GCP_SECRET_CLOUDFLARE_TOKEN_ID:-coinops-cloudflare-api-token}")}"
+}
+
+load_azure_secrets() {
+  resolve_azure_key_vault_name
+
+  if [[ -z "${AZURE_KEY_VAULT_NAME_FROM_CONFIG}" ]]; then
+    echo "Unable to resolve Azure Key Vault name for secret access" >&2
+    exit 1
+  fi
+
+  export DB_PASSWORD="${DB_PASSWORD:-$(read_azure_secret "${AZURE_SECRET_DB_PASSWORD_ID:-coinops-db-password}")}"
+  export RABBITMQ_PASSWORD="${RABBITMQ_PASSWORD:-$(read_azure_secret "${AZURE_SECRET_RABBITMQ_PASSWORD_ID:-coinops-rabbitmq-password}")}"
+  export GHCR_TOKEN="${GHCR_TOKEN:-$(read_azure_secret "${AZURE_SECRET_GHCR_TOKEN_ID:-coinops-ghcr-token}")}"
+  export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN:-$(read_azure_secret "${AZURE_SECRET_CLOUDFLARE_TOKEN_ID:-coinops-cloudflare-api-token}")}"
+}
+
+resolve_external_db_host() {
+  local db_host
+
+  db_host="$(terraform -chdir="${TERRAFORM_DIR}" output -raw external_db_host 2>/dev/null || true)"
+
+  if [[ -z "${db_host}" || "${db_host}" == "null" ]]; then
+    if [[ "${RUNTIME_BACKEND:-}" == "postgres" ]]; then
+      unset EXTERNAL_DB_HOST || true
+      return
+    fi
+
+    echo "Unable to resolve external_db_host from Terraform outputs" >&2
+    exit 1
+  fi
+
+  export EXTERNAL_DB_HOST="${db_host}"
+}
+
+resolve_ssh_allowed_source_cidr() {
+  if [[ -n "${SSH_ALLOWED_SOURCE_CIDR:-}" ]]; then
+    export TF_VAR_ssh_allowed_source_cidr="${SSH_ALLOWED_SOURCE_CIDR}"
+    return
+  fi
+
+  local public_ip
+  public_ip="$(curl -fsS -4 https://ifconfig.me 2>/dev/null || true)"
+
+  if [[ -n "${public_ip}" ]]; then
+    export TF_VAR_ssh_allowed_source_cidr="${public_ip}/32"
+  fi
+}
+
 prepare_cloud_env() {
-  load_aws_secrets
-  validate_local_context
   resolve_cloud_provider
 
   case "${CLOUD_PROVIDER}" in
     aws)
-      export TF_VAR_db_password="${TF_VAR_db_password:-${DB_PASSWORD:-}}"
+      load_aws_secrets
       ;;
     gcp)
-      unset EXTERNAL_DB_HOST
-      unset TF_VAR_db_password
+      load_gcp_secrets
+      ;;
+    azure)
+      load_azure_secrets
+      ;;
+    *)
+      echo "Unsupported CLOUD_PROVIDER: ${CLOUD_PROVIDER}" >&2
+      exit 1
+      ;;
+  esac
+
+  export TF_VAR_db_password="${TF_VAR_db_password:-${DB_PASSWORD:-}}"
+  resolve_ssh_allowed_source_cidr
+}
+
+resolve_backend_config() {
+  case "${CLOUD_PROVIDER}" in
+    aws)
+      echo "${TERRAFORM_DIR}/backend.aws.hcl"
+      ;;
+    gcp)
+      echo "${TERRAFORM_DIR}/backend.gcp.hcl"
+      ;;
+    azure)
+      echo "${TERRAFORM_DIR}/backend.azure.hcl"
       ;;
     *)
       echo "Unsupported CLOUD_PROVIDER: ${CLOUD_PROVIDER}" >&2
@@ -118,18 +279,27 @@ prepare_cloud_env() {
 }
 
 run_terraform_init() {
-  terraform -chdir="${TERRAFORM_DIR}" init
+  local backend_config
+  backend_config="$(resolve_backend_config)"
+
+  terraform -chdir="${TERRAFORM_DIR}" init -reconfigure -backend-config="${backend_config}"
+}
+
+terraform_apply() {
+  terraform -chdir="${TERRAFORM_DIR}" apply -var="cloud=${CLOUD_PROVIDER}" -auto-approve "$@"
 }
 
 run_infra() {
-  terraform -chdir="${TERRAFORM_DIR}" apply -var="cloud=${CLOUD_PROVIDER}" -auto-approve
+  terraform_apply
 }
 
 run_provision() {
+  resolve_external_db_host
   ansible-playbook -i "${INVENTORY_PATH}" "${PROVISION_PLAYBOOK}"
 }
 
 run_deploy() {
+  resolve_external_db_host
   ansible-playbook -i "${INVENTORY_PATH}" "${DEPLOY_PLAYBOOK}"
 }
 
@@ -149,7 +319,7 @@ print_status_link() {
 
   echo
   echo "Your Application has deployed succesfully. To check status follow the link:"
-  echo "https://app.smolyakov-devops.pp.ua"
+  echo "app.smolyakov-devops.pp.ua"
 }
 
 case "${1:-all}" in
@@ -160,11 +330,13 @@ case "${1:-all}" in
     ;;
   provision)
     prepare_cloud_env
+    run_terraform_init
     run_provision
     print_status_link
     ;;
   deploy)
     prepare_cloud_env
+    run_terraform_init
     run_deploy
     print_status_link
     ;;

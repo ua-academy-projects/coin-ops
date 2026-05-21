@@ -1,5 +1,11 @@
-
 DASHBOARD_PROJECT.md
+# Codex local artifacts
+.codex
+
+# Terraform multi-cloud working dir
+terraform.gcp.aws/.terraform/
+terraform.gcp.aws/*.tfstate
+terraform.gcp.aws/*.tfstate.*
 
 # Environment file — passwords and local paths, never commit
 .env
@@ -20,16 +26,13 @@ tournament/
 .artifacts/
 
 # Terraform
-.terraform
-.terraform.lock.hcl
-terraform.tfstate
-terraform.tfstate.backup
 terraform/.terraform/
 terraform/.terraform.lock.hcl
 terraform/*.tfstate
 terraform/*.tfstate.backup
 terraform/terraform.tfstate.*.backup
 terraform/terraform.tfvars
+terraform/keys/
 terraform/keys/
 
 # React build output

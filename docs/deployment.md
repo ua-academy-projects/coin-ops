@@ -22,42 +22,56 @@ The recommended entrypoint is:
 
 `deploy.sh` performs the full deployment pipeline:
 
-1. loads deployment secrets from AWS Secrets Manager
+1. loads `.env`
 2. resolves the target cloud
-3. runs `terraform init`
-4. runs `terraform apply`
-5. generates `ansible/inventory.generated`
-6. runs `ansible/provision.yml`
-7. runs `ansible/deploy.yml`
+3. selects the Terraform backend for that cloud
+4. runs `terraform init`
+5. runs `terraform apply`
+6. generates `ansible/inventory.generated`
+7. runs `ansible/provision.yml`
+8. runs `ansible/deploy.yml`
 
 ## Prerequisites
 
 - Python 3 and Ansible installed locally
 - Terraform installed locally
-- AWS CLI configured locally
-- `jq` installed locally
-- SSH private key available on the local machine
+- SSH key configured in `.env`
+- `.env` created and loaded from `.env.example`
 
 Initial setup:
 
 ```bash
-export SSH_KEY_PATH=/home/valentyn/.ssh/coinops
-export AWS_SECRETS_ID=coinops/app
-export AWS_REGION=eu-central-1
+cp .env.example .env
+source .env
 ansible-galaxy collection install -r ansible/requirements.yml
+```
+
+By default, secrets are expected from cloud-native stores instead of `.env`:
+
+- AWS -> Secrets Manager
+- GCP -> Secret Manager
+- Azure -> Key Vault
+
+Recommended preflight scripts:
+
+```bash
+./scripts/bootstrap-aws.sh
+./scripts/bootstrap-gcp.sh
+./scripts/bootstrap-azure.sh
 ```
 
 ## Cloud Selection
 
 Cloud selection is controlled by Terraform variable `cloud` in:
 
-[terraform.gcp.aws/variables.tf](/home/valentyn/Devops/git.repo/coin-ops/coin-ops/terraform.gcp.aws/variables.tf)
+[terraform.gcp.aws/variables.tf](../terraform.gcp.aws/variables.tf)
 
 You can also override it at runtime:
 
 ```bash
 CLOUD_PROVIDER=aws ./deploy.sh
 CLOUD_PROVIDER=gcp ./deploy.sh
+CLOUD_PROVIDER=azure ./deploy.sh
 ```
 
 If `CLOUD_PROVIDER` is not set, `deploy.sh` uses the default from
@@ -65,13 +79,10 @@ If `CLOUD_PROVIDER` is not set, `deploy.sh` uses the default from
 
 ## Deploy to GCP
 
-GCP uses the historical local-database flow on the app VM. It does not use AWS
-RDS.
-
-If you deploy with local Docker images:
+Run preflight:
 
 ```bash
-./scripts/build-local-images.sh
+./scripts/bootstrap-gcp.sh
 ```
 
 Then run:
@@ -99,17 +110,10 @@ Cloudflare for GCP:
 
 ## Deploy to AWS
 
-AWS supports:
+Run preflight:
 
-- local Docker images
-- registry images
-- external PostgreSQL via AWS RDS
-
-If you use the RDS flow, keep:
-
-```text
-RUNTIME_BACKEND=external
-EXTERNAL_DB_HOST=<rds-endpoint>
+```bash
+./scripts/bootstrap-aws.sh
 ```
 
 Then run:
@@ -136,6 +140,32 @@ Cloudflare for AWS:
 
 - use a **CNAME**
 - point it to the ELB DNS name
+
+## Deploy to Azure
+
+Run preflight:
+
+```bash
+./scripts/bootstrap-azure.sh
+```
+
+Then run:
+
+```bash
+CLOUD_PROVIDER=azure ./deploy.sh
+```
+
+After deployment, get the public IP:
+
+```bash
+terraform -chdir=terraform.gcp.aws output
+```
+
+Open:
+
+```text
+http://<load_balancer_ip_address>
+```
 
 ## Local Images vs Registry Images
 
@@ -168,8 +198,9 @@ If the images are private, set:
 
 ```bash
 export GHCR_USERNAME=...
-export GHCR_TOKEN=...
 ```
+
+`GHCR_TOKEN` is expected from the cloud secret store for the selected provider.
 
 ## Manual Flow
 
@@ -178,7 +209,7 @@ If you do not want to use `deploy.sh`, run the steps manually.
 Provision infrastructure:
 
 ```bash
-terraform -chdir=terraform.gcp.aws apply -var="cloud=<aws|gcp>"
+terraform -chdir=terraform.gcp.aws apply -var="cloud=<aws|gcp|azure>"
 ```
 
 Terraform writes inventory automatically to:
@@ -205,7 +236,7 @@ There is still a supported inventory mode with a separate `[db]` group.
 
 See:
 
-[ansible/inventory.aws.example](/home/valentyn/codex/coin-ops/ansible/inventory.aws.example)
+[ansible/inventory.aws.example](../ansible/inventory.aws.example)
 
 This layout is useful for the older AWS-style flow where PostgreSQL runs on a
 dedicated VM.

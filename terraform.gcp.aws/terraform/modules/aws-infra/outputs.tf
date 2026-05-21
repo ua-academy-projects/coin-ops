@@ -24,3 +24,7 @@ output "load_balancer_dns_name" {
 output "load_balancer_ip_address" {
   value = module.load_balancer.ip_address
 }
+
+output "external_db_host" {
+  value = module.rds.endpoint
+}

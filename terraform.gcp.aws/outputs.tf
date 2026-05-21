@@ -1,5 +1,5 @@
 locals {
-  root_active_infra = local.config.cloud == "aws" ? module.aws_infra[0] : module.gcp_infra[0]
+  root_active_infra = local.config.cloud == "aws" ? module.aws_infra[0] : local.config.cloud == "gcp" ? module.gcp_infra[0] : module.azure_infra[0]
 }
 
 output "bastion_external_ip" {
@@ -20,6 +20,10 @@ output "load_balancer_dns_name" {
 
 output "load_balancer_ip_address" {
   value = local.root_active_infra.load_balancer_ip_address
+}
+
+output "external_db_host" {
+  value = local.root_active_infra.external_db_host
 }
 
 output "cloudflare_record_hostname" {

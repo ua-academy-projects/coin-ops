@@ -12,7 +12,11 @@
     local_image_archives: >-
       {{
         []
-        + (['postgres-runtime.tar'] if 'db' in group_names and runtime_backend == 'postgres' else [])
+        + (
+            ['postgres-runtime.tar']
+            if runtime_backend == 'postgres' and ('db' in group_names or ('history' in group_names and using_local_db))
+            else []
+          )
         + (['history-api.tar', 'history-consumer.tar'] if 'history' in group_names else [])
         + (['proxy.tar'] if 'proxy' in group_names else [])
         + (['ui.tar'] if 'ui' in group_names else [])

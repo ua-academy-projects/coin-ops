@@ -177,7 +177,7 @@
     | grep -q '"Status": "healthy"'
   args:
     chdir: /opt/cognitor/history
-  retries: 24
+  retries: 60
   delay: 5
   register: rabbitmq_ready
   until: rabbitmq_ready.rc == 0

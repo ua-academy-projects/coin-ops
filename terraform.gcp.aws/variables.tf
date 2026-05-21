@@ -1,11 +1,10 @@
 variable "cloud" {
   type        = string
-  description = "Target cloud provider: gcp or aws"
-  default     = "aws"
+  description = "Target cloud provider: gcp, aws, or azure"
 
   validation {
-    condition     = contains(["gcp", "aws"], lower(var.cloud))
-    error_message = "cloud must be either gcp or aws."
+    condition     = contains(["gcp", "aws", "azure"], lower(var.cloud))
+    error_message = "cloud must be one of: gcp, aws, azure."
   }
 }
 
@@ -14,8 +13,9 @@ variable "inventory_output_path" {
   description = "Where Terraform should write the generated Ansible inventory."
   default     = "../ansible/inventory.generated"
 }
+
 variable "db_password" {
-  description = "Password for AWS RDS PostgreSQL."
+  description = "Password for managed PostgreSQL (AWS RDS or GCP Cloud SQL)."
   type        = string
   sensitive   = true
 }
@@ -42,4 +42,16 @@ variable "cloudflare_proxied" {
   type        = bool
   description = "Whether the Cloudflare record should be proxied."
   default     = true
+}
+
+variable "cloudflare_enable_azure_record" {
+  type        = bool
+  description = "Create the Azure Cloudflare record only after the public IP strategy is stable."
+  default     = false
+}
+
+variable "ssh_allowed_source_cidr" {
+  type        = string
+  description = "Optional override for ssh.allowed_source_cidr from config.yml."
+  default     = ""
 }

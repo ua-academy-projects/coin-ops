@@ -58,3 +58,13 @@ module "load_balancer" {
   aws_security_group_id  = null
   aws_target_instance_id = null
 }
+
+module "cloudsql" {
+  source      = "../cloudsql"
+  name        = var.config.network.name
+  region      = var.config.project.gcp.region
+  network_id  = module.vpc.network_id
+  db_name     = "cognitor"
+  db_user     = "cognitor"
+  db_password = var.db_password
+}
