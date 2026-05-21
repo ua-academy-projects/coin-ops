@@ -1,4 +1,4 @@
-cloud: azure
+cloud: aws
 location: eu_central
 
 name_prefix: coinops-lab
@@ -43,10 +43,14 @@ domain:
   root: coinops.pp.ua
   ui:
     name: coinops.pp.ua
-    cloud: aws
+    # cloud override cleared: falls back to the top-level `cloud:` so the
+    # whole stack lands on one cloud. Set to a cloud name only to split
+    # the UI onto a different cloud than the backend.
+    cloud: ""
   api:
     name: api.coinops.pp.ua
-    cloud: azure
+    # cloud override cleared: backend follows the top-level `cloud:`.
+    cloud: ""
   cloudflare_zone_id: 48a16dd57c128fb6b341e10dfe8eef6b
   create_records: true
   cloudflare_proxy: true

@@ -86,19 +86,17 @@ locals {
     "${var.name_prefix}-${name} ansible_host=${var.instances[name].private_ip}"
   ]
 
-  k3s_inventory_block = length(var.k3s_names) > 0 ? <<-EOT
+  k3s_inventory_block = length(var.k3s_names) == 0 ? "" : <<-EOT
 
   [k3s]
   ${join("\n", local.k3s_inventory_lines)}
   EOT
-  : ""
 
-  k3s_vars_block = length(var.k3s_names) > 0 ? <<-EOT
+  k3s_vars_block = length(var.k3s_names) == 0 ? "" : <<-EOT
 
   [k3s:vars]
   coinops_ssh_common_args='-o ProxyJump=${local.ssh_bastion_alias} -o UserKnownHostsFile=${var.known_hosts_file} -o StrictHostKeyChecking=accept-new'
   EOT
-  : ""
 
   cloud_children = compact([
     "bastion",
