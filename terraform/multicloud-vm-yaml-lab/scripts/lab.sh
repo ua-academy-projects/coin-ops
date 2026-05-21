@@ -121,6 +121,7 @@ Commands:
   outputs    regenerate SSH config + Ansible inventory from current Terraform outputs
   ping       ansible ping all cloud hosts through generated inventory
   deploy     run Ansible provision + deploy using generated inventory
+  k3s        run the k3s learning-cluster playbook (GCP only; apply first)
   full       apply, regenerate outputs, then deploy
 
 Useful env vars:
@@ -522,8 +523,22 @@ ansible_deploy() {
   : "${SSH_KEY_PATH:?Set SSH_KEY_PATH or put it in .env}"
   export RUNTIME_BACKEND="$RUNTIME_MODE"
   cd "$REPO_ROOT"
-  ansible-playbook -i "$ANSIBLE_INVENTORY_OUT" ansible/cloud-provision.yml
+  # cloud-deploy.yml is now a single full-lifecycle playbook (provision +
+  # deploy via meta-roles); the old cloud-provision.yml was folded in.
   ansible-playbook -i "$ANSIBLE_INVENTORY_OUT" ansible/cloud-deploy.yml
+}
+
+ansible_k3s() {
+  load_env_file
+  : "${SSH_KEY_PATH:?Set SSH_KEY_PATH or put it in .env}"
+  if [ "$CLOUD" != "gcp" ]; then
+    echo "k3s is a GCP-only learning cluster; config/lab.yaml has cloud=$CLOUD." >&2
+    echo "Set 'cloud: gcp' in config/lab.yaml, apply, then re-run." >&2
+    exit 2
+  fi
+  export RUNTIME_BACKEND="$RUNTIME_MODE"
+  cd "$REPO_ROOT"
+  ansible-playbook -i "$ANSIBLE_INVENTORY_OUT" ansible/k3s-up.yml
 }
 
 cmd="${1:-}"
@@ -570,6 +585,10 @@ case "$cmd" in
   deploy)
     write_outputs
     ansible_deploy
+    ;;
+  k3s)
+    write_outputs
+    ansible_k3s
     ;;
   full)
     terraform_init
