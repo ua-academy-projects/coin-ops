@@ -1,0 +1,8 @@
+---
+# Headlamp container image. Defaults to the upstream :latest; pin a tag
+# (e.g. ghcr.io/headlamp-k8s/headlamp:v0.30.0) for reproducible rollouts.
+k3s_headlamp_image: "ghcr.io/headlamp-k8s/headlamp:latest"
+
+# NodePort the Headlamp UI is exposed on (must match the port opened to the
+# bastion in gcp-stack/modules/security/main.tf). hello-world uses 30080.
+k3s_headlamp_nodeport: 30081

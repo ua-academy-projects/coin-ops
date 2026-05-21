@@ -1,0 +1,32 @@
+---
+# Deploy the Headlamp dashboard into the k3s cluster. Runs once on the
+# first node, then exits on all joiner hosts.
+
+- name: Skip k3s-headlamp (not the first node)
+  meta: end_host
+  when: inventory_hostname != k3s_first_node
+
+- name: Render Headlamp manifest on first node
+  template:
+    src: k3s-headlamp.yaml.j2
+    dest: /opt/k3s/k3s-headlamp.yaml
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Apply Headlamp manifest
+  command: /usr/local/bin/k3s kubectl apply -f /opt/k3s/k3s-headlamp.yaml
+  register: k3s_headlamp_apply
+  changed_when: "'created' in k3s_headlamp_apply.stdout or 'configured' in k3s_headlamp_apply.stdout"
+
+- name: Wait for Headlamp rollout
+  command: /usr/local/bin/k3s kubectl -n headlamp rollout status deployment/headlamp --timeout=120s
+  changed_when: false
+
+- name: Show how to reach Headlamp and mint a login token
+  debug:
+    msg:
+      - "Headlamp is up on NodePort {{ k3s_headlamp_nodeport }}."
+      - "From a tailnet client (accept-routes on): http://{{ ansible_default_ipv4.address }}:{{ k3s_headlamp_nodeport }}"
+      - "Mint a 24h login token with:"
+      - "  kubectl --kubeconfig=~/.kube/coinops-k3s.yaml -n headlamp create token headlamp-admin --duration=24h"

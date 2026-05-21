@@ -84,7 +84,9 @@ The play does, in order:
    rewrites the server URL to `k3s-1`'s **private IP** (`10.10.20.40`),
    reachable from the tailnet through the bastion route.
 6. Applies `roles/k3s-hello/files/k3s-hello.yaml` — namespace, deployment,
-   NodePort.
+   NodePort `:30080`.
+7. Deploys Headlamp (`roles/k3s-headlamp`) — an in-cluster Kubernetes web
+   dashboard on NodePort `:30081`, reached through the bastion route.
 
 ## Verification
 
@@ -103,6 +105,9 @@ kubectl --kubeconfig=~/.kube/coinops-k3s.yaml get pods -A
 for ip in 10.10.20.40 10.10.20.41 10.10.21.40; do
   echo "$ip:"; curl -s "http://${ip}:30080" | head -3
 done
+
+# Headlamp dashboard: browse to http://10.10.20.40:30081 and log in with:
+kubectl --kubeconfig=~/.kube/coinops-k3s.yaml -n headlamp create token headlamp-admin --duration=24h
 ```
 
 The two hello pods should be distributed across at least two of the
