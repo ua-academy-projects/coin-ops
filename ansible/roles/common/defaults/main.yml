@@ -3,3 +3,11 @@
 # via host_vars or group_vars. SSH (22) is always included.
 common_allowed_ports:
   - 22
+
+# Full OS upgrades are useful during explicit provisioning, but should not run
+# on every Ansible pass for a live cluster.
+common_upgrade_packages: true
+
+# UFW is useful for simple VM application nodes. Kubernetes nodes manage their
+# own iptables chains, so k3s groups can disable this.
+common_manage_ufw: true

@@ -1,0 +1,25 @@
+---
+- name: Install the first k3s server
+  command: >-
+    {{ k3s_install_script_path }}
+    server
+    --cluster-init
+    --tls-san {{ k3s_tls_san }}
+    --node-ip {{ ansible_host }}
+    --advertise-address {{ ansible_host }}
+  environment:
+    INSTALL_K3S_CHANNEL: "{{ k3s_channel }}"
+  when: not k3s_service.stat.exists
+
+- name: Ensure k3s service is started and enabled
+  systemd:
+    name: k3s
+    state: started
+    enabled: yes
+
+- name: Wait for the first k3s API server
+  wait_for:
+    host: "{{ ansible_host }}"
+    port: "{{ k3s_api_port }}"
+    timeout: 180
+

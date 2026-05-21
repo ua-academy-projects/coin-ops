@@ -1,0 +1,21 @@
+---
+- name: Check whether k3s is already installed
+  stat:
+    path: "{{ k3s_service_path }}"
+  register: k3s_service
+
+- name: Download official k3s install script
+  get_url:
+    url: "{{ k3s_install_script_url }}"
+    dest: "{{ k3s_install_script_path }}"
+    mode: '0755'
+  when: not k3s_service.stat.exists
+
+- name: Bootstrap first server node
+  include_tasks: install_first.yml
+  when: inventory_hostname in groups['k3s_first_server']
+
+- name: Join additional server nodes
+  include_tasks: install_join.yml
+  when: inventory_hostname in groups['k3s_join_servers']
+

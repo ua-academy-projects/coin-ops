@@ -1,0 +1,26 @@
+[k3s_jump]
+k3s-jump ansible_host=35.226.172.86
+
+[k3s_servers]
+k3s-node-1 ansible_host=10.0.0.3
+k3s-node-2 ansible_host=10.0.0.2
+k3s-node-3 ansible_host=10.0.0.4
+
+[k3s_first_server]
+k3s-node-1
+
+[k3s_join_servers]
+k3s-node-2
+k3s-node-3
+
+[k3s_cluster:children]
+k3s_servers
+
+[k3s_servers:vars]
+ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyCommand="ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=yes -i ~/.ssh/gcp_jump -p 47832 -W %h:%p terraform@35.226.172.86"'
+
+[all:vars]
+ansible_user=terraform
+ansible_port=47832
+ansible_ssh_private_key_file=~/.ssh/gcp_jump
+ansible_python_interpreter=/usr/bin/python3

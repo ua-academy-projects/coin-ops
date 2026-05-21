@@ -7,6 +7,7 @@
 - name: Upgrade all packages
   apt:
     upgrade: safe
+  when: common_upgrade_packages | bool
 
 - name: Install base packages
   apt:
@@ -32,18 +33,21 @@
   apt:
     name: ufw
     state: present
+  when: common_manage_ufw | bool
 
 - name: Set UFW default deny incoming
   community.general.ufw:
     direction: incoming
     policy: deny
   notify: Reload UFW
+  when: common_manage_ufw | bool
 
 - name: Set UFW default allow outgoing
   community.general.ufw:
     direction: outgoing
     policy: allow
   notify: Reload UFW
+  when: common_manage_ufw | bool
 
 - name: Allow configured ports through UFW
   community.general.ufw:
@@ -52,7 +56,9 @@
     proto: tcp
   loop: "{{ common_allowed_ports }}"
   notify: Reload UFW
+  when: common_manage_ufw | bool
 
 - name: Enable UFW
   community.general.ufw:
     state: enabled
+  when: common_manage_ufw | bool

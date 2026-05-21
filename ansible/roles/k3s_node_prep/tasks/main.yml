@@ -1,0 +1,78 @@
+---
+- name: Install k3s node prerequisites
+  apt:
+    name:
+      - curl
+      - iptables
+      - ca-certificates
+    state: present
+    update_cache: yes
+
+- name: Disable swap for the current boot
+  command: swapoff -a
+  changed_when: false
+  when: ansible_swaptotal_mb | int > 0
+
+- name: Disable swap permanently in fstab
+  replace:
+    path: /etc/fstab
+    regexp: '^([^#].*\sswap\s.*)$'
+    replace: '# \1'
+
+- name: Load required kernel modules on boot
+  copy:
+    dest: /etc/modules-load.d/k3s.conf
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      overlay
+      br_netfilter
+
+- name: Load overlay kernel module now
+  modprobe:
+    name: overlay
+    state: present
+
+- name: Load br_netfilter kernel module now
+  modprobe:
+    name: br_netfilter
+    state: present
+
+- name: Configure kernel networking for Kubernetes
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  loop:
+    - { name: net.bridge.bridge-nf-call-iptables, value: '1' }
+    - { name: net.bridge.bridge-nf-call-ip6tables, value: '1' }
+    - { name: net.ipv4.ip_forward, value: '1' }
+
+- name: Check whether UFW is installed
+  stat:
+    path: /usr/sbin/ufw
+  register: k3s_ufw_binary
+
+- name: Disable UFW on k3s nodes
+  community.general.ufw:
+    state: disabled
+  when:
+    - not common_manage_ufw | bool
+    - k3s_ufw_binary.stat.exists
+
+- name: Allow private subnet traffic between k3s nodes
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ k3s_private_subnet_cidr }}"
+  notify: Reload UFW
+  when: common_manage_ufw | bool
+
+- name: Allow Flannel VXLAN traffic between k3s nodes
+  community.general.ufw:
+    rule: allow
+    port: '8472'
+    proto: udp
+  notify: Reload UFW
+  when: common_manage_ufw | bool

@@ -256,6 +256,38 @@ ansible-playbook -i ansible/inventory.gcp ansible/deploy.yml
 See [docs/gcp-deployment.md](docs/gcp-deployment.md) for the GCP node mapping,
 verification commands, and domain/HTTPS plan.
 
+### GCP k3s cluster lab
+
+The repository also contains an Ansible extension for the Kubernetes learning
+lab. The VM infrastructure is created by the separate `gcp-terraform-bootstrap`
+repository, while this repository owns the Ansible automation that installs and
+verifies k3s.
+
+Current lab shape:
+
+```text
+local kubectl
+  -> k3s-jump public IP :6443
+  -> HAProxy on k3s-jump
+  -> k3s-node-1/2/3 private IP :6443
+```
+
+The three k3s nodes are private GCP VMs. All three run as k3s server nodes, so
+each node participates in the control plane, embedded etcd, and workload
+scheduling.
+
+```bash
+ansible-playbook -i ansible/inventory.k3s.gcp ansible/k3s-cluster.yml
+kubectl get nodes -o wide
+kubectl get pods -A
+kubectl -n kube-system port-forward service/headlamp 8080:80
+```
+
+Headlamp is installed in the cluster and can be opened locally at
+`http://localhost:8080` while the port-forward command is running. See
+[docs/k3s-cluster.md](docs/k3s-cluster.md) for the full runbook, verification
+commands, and beginner notes.
+
 Current moving-tag deploys:
 
 ```bash
