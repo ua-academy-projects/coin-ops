@@ -16,6 +16,7 @@
           - lookup('env', 'DB_PASSWORD') != ''
           - lookup('env', 'SSH_KEY_PATH') != ''
           - lookup('env', 'RUNTIME_BACKEND') in ['', 'external', 'postgres']
+          - lookup('env', 'TAILSCALE_AUTH_KEY') != ''
         fail_msg: |
           Required environment variables are not set or RUNTIME_BACKEND is invalid.
           Run:  source .env
@@ -29,6 +30,9 @@
   roles:
     - common
     - docker
+    - tailscale  
+  vars:
+    tailscale_auth_key: "{{ lookup('env', 'TAILSCALE_AUTH_KEY') }}"
 
 - name: Provision history node — Data directories
   hosts: history
