@@ -287,6 +287,7 @@ locals {
       region     = local.gcp_region
       zone       = local.gcp_zone
       zones      = local.gcp_zones
+      k3s_only   = try(local.config.clouds.gcp.k3s_only, false)
     }
 
     azure = {

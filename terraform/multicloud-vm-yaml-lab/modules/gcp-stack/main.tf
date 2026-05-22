@@ -1,15 +1,33 @@
 locals {
   stack          = var.stack
   domain_enabled = try(local.stack.domain.enabled, false)
-  app_url        = local.domain_enabled ? "https://${local.stack.domain.name}" : "http://${module.certificate_dns.ip_address}"
-  app_domain     = local.domain_enabled ? local.stack.domain.name : module.certificate_dns.ip_address
+
+  # k3s_only: GCP builds only network + bastion + k3s nodes — no managed
+  # app stack (Cloud SQL / Pub-Sub / Memorystore / app VMs / LB / cert).
+  k3s_only      = try(local.stack.gcp.k3s_only, false)
+  cloud_native  = try(local.stack.runtime.mode, "external") == "cloud_native"
+  build_managed = local.cloud_native && !local.k3s_only
+
+  # No app nodes in k3s-only mode, so no app firewall tags / LB targets.
+  effective_app_names = local.k3s_only ? [] : local.stack.app_names
+
+  app_url    = local.k3s_only ? "" : (local.domain_enabled ? "https://${local.stack.domain.name}" : "http://${one(module.certificate_dns[*].ip_address)}")
+  app_domain = local.k3s_only ? "" : (local.domain_enabled ? local.stack.domain.name : one(module.certificate_dns[*].ip_address))
 
   bastion_target_tags = local.stack.instances[local.stack.bastion_name].tags
-  app_target_tags     = distinct(flatten([for name in local.stack.app_names : local.stack.instances[name].tags]))
+  app_target_tags     = length(local.effective_app_names) > 0 ? distinct(flatten([for name in local.effective_app_names : local.stack.instances[name].tags])) : []
   db_target_tags      = local.stack.instances[local.stack.db_name].tags
   k3s_target_tags     = length(local.stack.k3s_names) > 0 ? distinct(flatten([for name in local.stack.k3s_names : local.stack.instances[name].tags])) : []
-  cloud_native        = try(local.stack.runtime.mode, "external") == "cloud_native"
-  compute_instances   = local.cloud_native ? { for name, instance in local.stack.instances : name => instance if name != local.stack.db_name } : local.stack.instances
+
+  # k3s-only: bastion + k3s nodes. Otherwise the usual set (drop the
+  # in-VM db node under cloud-native, where managed Postgres replaces it).
+  compute_instances = local.k3s_only ? {
+    for name, instance in local.stack.instances : name => instance
+    if name == local.stack.bastion_name || contains(local.stack.k3s_names, name)
+    } : (local.cloud_native ? {
+      for name, instance in local.stack.instances : name => instance if name != local.stack.db_name
+  } : local.stack.instances)
+
   runtime_base = merge(local.stack.runtime, {
     gcp_project_id = local.stack.gcp.project_id
   })
@@ -22,14 +40,14 @@ module "secrets" {
   secrets     = local.stack.secrets
 }
 resource "google_service_account" "app" {
-  count = local.cloud_native ? 1 : 0
+  count = local.build_managed ? 1 : 0
 
   account_id   = "${replace(local.stack.name_prefix, "-", "")}-app"
   display_name = "${local.stack.name_prefix} app runtime"
 }
 
 module "queue" {
-  count  = local.cloud_native ? 1 : 0
+  count  = local.build_managed ? 1 : 0
   source = "./modules/queue"
 
   name_prefix               = local.stack.name_prefix
@@ -39,7 +57,7 @@ module "queue" {
 }
 
 module "database" {
-  count  = local.cloud_native ? 1 : 0
+  count  = local.build_managed ? 1 : 0
   source = "./modules/database"
 
   name_prefix       = local.stack.name_prefix
@@ -51,7 +69,7 @@ module "database" {
 }
 
 module "cache" {
-  count  = local.cloud_native ? 1 : 0
+  count  = local.build_managed ? 1 : 0
   source = "./modules/cache"
 
   name_prefix               = local.stack.name_prefix
@@ -92,17 +110,18 @@ module "compute" {
   ssh                       = local.stack.ssh
   ssh_public_key            = local.stack.ssh_public_key
   zones                     = local.stack.gcp.zones
-  app_names                 = local.stack.app_names
+  app_names                 = local.effective_app_names
   db_name                   = local.stack.db_name
   bastion_name              = local.stack.bastion_name
   k3s_names                 = local.stack.k3s_names
   network_self_link         = module.network.network_self_link
   public_subnet_self_links  = module.network.public_subnet_self_links
   private_subnet_self_links = module.network.private_subnet_self_links
-  app_service_account_email = local.cloud_native ? google_service_account.app[0].email : null
+  app_service_account_email = local.build_managed ? google_service_account.app[0].email : null
 }
 
 module "certificate_dns" {
+  count  = local.k3s_only ? 0 : 1
   source = "./modules/certificate-dns"
 
   name_prefix = local.stack.name_prefix
@@ -110,6 +129,7 @@ module "certificate_dns" {
 }
 
 module "load_balancer" {
+  count  = local.k3s_only ? 0 : 1
   source = "./modules/load-balancer"
 
   name_prefix           = local.stack.name_prefix
@@ -117,8 +137,8 @@ module "load_balancer" {
   app_port              = local.stack.app.port
   health_path           = local.stack.app.health_path
   domain_enabled        = local.domain_enabled
-  ip_address            = module.certificate_dns.ip_address
-  certificate_self_link = module.certificate_dns.certificate_self_link
+  ip_address            = one(module.certificate_dns[*].ip_address)
+  certificate_self_link = one(module.certificate_dns[*].certificate_self_link)
 }
 
 module "access_outputs" {
@@ -128,7 +148,7 @@ module "access_outputs" {
   name_prefix = local.stack.name_prefix
   ssh         = local.stack.ssh
   instances   = module.compute.instances
-  runtime = local.cloud_native ? merge(local.runtime_base, {
+  runtime = local.k3s_only ? local.runtime_base : (local.cloud_native ? merge(local.runtime_base, {
     database = merge(local.stack.runtime.database, module.database[0].database)
     queue    = merge(local.stack.runtime.queue, module.queue[0].queue)
     cache    = merge(local.stack.runtime.cache, module.cache[0].cache)
@@ -153,9 +173,9 @@ module "access_outputs" {
       port      = 6379
       redis_url = "redis://${module.compute.instances[local.stack.db_name].private_ip}:6379/0"
     })
-  })
+  }))
   bastion_name             = local.stack.bastion_name
-  app_names                = local.stack.app_names
+  app_names                = local.effective_app_names
   db_name                  = local.stack.db_name
   k3s_names                = local.stack.k3s_names
   bastion_advertise_routes = [for k, v in local.stack.network.private_subnets : v.cidr]
@@ -163,5 +183,5 @@ module "access_outputs" {
   app_domain               = local.app_domain
   known_hosts_file         = "~/.ssh/known_hosts_gcp_lab"
   secret_refs              = module.secrets.refs
-  load_balancer            = module.load_balancer.load_balancer
+  load_balancer            = local.k3s_only ? null : one(module.load_balancer[*].load_balancer)
 }
