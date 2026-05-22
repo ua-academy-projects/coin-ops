@@ -8,7 +8,9 @@ locals {
   backend_runtime           = local.is_aws ? module.aws[0].runtime : local.is_gcp ? module.gcp[0].runtime : module.azure[0].runtime
   backend_secret_refs       = local.is_aws ? module.aws[0].secret_refs : local.is_gcp ? module.gcp[0].secret_refs : module.azure[0].secret_refs
 
-  backend_endpoint      = local.is_azure ? module.azure[0].api_endpoint : local.backend_load_balancer.dns_name
+  # backend_load_balancer is null in k3s-only mode (no LB built), so guard
+  # the dereference.
+  backend_endpoint      = local.is_azure ? module.azure[0].api_endpoint : try(local.backend_load_balancer.dns_name, "")
   backend_endpoint_type = local.is_aws ? "CNAME" : "A"
 
   split_aws_ui = local.split_ui_backend && local.ui_cloud == "aws"
@@ -65,7 +67,7 @@ output "ansible_inventory" {
 }
 
 output "load_balancer" {
-  value = merge(local.backend_load_balancer, {
+  value = merge(local.backend_load_balancer == null ? {} : local.backend_load_balancer, {
     ui_endpoint  = local.ui_endpoint
     api_endpoint = local.backend_endpoint
   })
