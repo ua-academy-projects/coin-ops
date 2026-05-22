@@ -6,6 +6,14 @@
   meta: end_host
   when: inventory_hostname != k3s_first_node
 
+- name: Ensure manifest directory exists
+  file:
+    path: /opt/k3s
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
 - name: Render Headlamp manifest on first node
   template:
     src: k3s-headlamp.yaml.j2
