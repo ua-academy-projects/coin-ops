@@ -37,8 +37,8 @@ specifically as a learning/demo objective."*
 | Node   | Cloud | Subnet           | Private IP   | Role                       |
 |--------|-------|------------------|--------------|----------------------------|
 | k3s-1  | GCP   | private-subnet-0 | 10.10.20.40  | server + worker, `--cluster-init` |
-| k3s-2  | GCP   | private-subnet-0 | 10.10.20.41  | server + worker, joins via k3s-1  |
-| k3s-3  | GCP   | private-subnet-1 | 10.10.21.40  | server + worker, joins via k3s-1  |
+| k3s-2  | GCP   | private-subnet-1 | 10.10.21.40  | server + worker, joins via k3s-1  |
+| k3s-3  | GCP   | private-subnet-0 | 10.10.20.41  | server + worker, joins via k3s-1  |
 
 GCP uses the `10.10.20/24` + `10.10.21/24` private subnets (AWS keeps
 `10.10.10/24` + `10.10.11/24`) so the two bastions advertise non-overlapping
@@ -102,7 +102,7 @@ kubectl --kubeconfig=~/.kube/coinops-k3s.yaml get pods -A
 # Expect: kube-system pods Running; coinops-hello/hello-* Running ×2.
 
 # Hello-world reachable on every node's private IP, through the bastion route:
-for ip in 10.10.20.40 10.10.20.41 10.10.21.40; do
+for ip in 10.10.20.40 10.10.21.40 10.10.20.41; do
   echo "$ip:"; curl -s "http://${ip}:30080" | head -3
 done
 

@@ -233,15 +233,18 @@ instances:
   # k3s learning cluster — three nodes, each a server+worker (HA k3s with
   # embedded etcd). Sized `small` to leave headroom for control-plane +
   # hello-world workloads. Only realized when `cloud: gcp`.
+  # IPs must match the compute module's round-robin subnet assignment
+  # (instance index % number-of-private-subnets): even index → subnet-0
+  # (10.10.20.0/24), odd index → subnet-1 (10.10.21.0/24).
   k3s-1:
     role: k3s
     size: small
-    private_ip: 10.10.20.40
+    private_ip: 10.10.20.40   # idx 0 → subnet-0
   k3s-2:
     role: k3s
     size: small
-    private_ip: 10.10.20.41
+    private_ip: 10.10.21.40   # idx 1 → subnet-1
   k3s-3:
     role: k3s
     size: small
-    private_ip: 10.10.21.40
+    private_ip: 10.10.20.41   # idx 2 → subnet-0
