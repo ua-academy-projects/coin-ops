@@ -1,8 +1,8 @@
 [history]
-node-01 ansible_host=18.153.206.187
+node-01 ansible_host=63.180.239.59
 
 [proxy]
-node-02 ansible_host=51.102.181.204
+node-02 ansible_host=35.157.25.116
 
 [ui]
 node-03 ansible_host=10.0.5.4
