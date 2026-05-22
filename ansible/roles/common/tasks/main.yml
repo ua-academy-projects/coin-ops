@@ -1,15 +1,15 @@
 ---
 - name: Update apt cache
-  apt:
-    update_cache: yes
+  ansible.builtin.apt:
+    update_cache: true
     cache_valid_time: 3600
 
 - name: Upgrade all packages
-  apt:
+  ansible.builtin.apt:
     upgrade: safe
 
 - name: Install base packages
-  apt:
+  ansible.builtin.apt:
     name:
       - curl
       - htop
@@ -21,20 +21,20 @@
     state: present
 
 - name: Set timezone to UTC
-  timezone:
+  community.general.timezone:
     name: UTC
 
 - name: Ensure systemd-timesyncd is running
-  systemd:
+  ansible.builtin.systemd:
     name: systemd-timesyncd
-    enabled: yes
+    enabled: true
     state: started
 
 - name: Install and configure UFW
   when: common_manage_ufw | default(true) | bool
   block:
     - name: Install UFW
-      apt:
+      ansible.builtin.apt:
         name: ufw
         state: present
 
@@ -59,19 +59,18 @@
       notify: Reload UFW
 
     - name: Check UFW status
-      command: ufw status
+      ansible.builtin.command: ufw status
       register: ufw_status
       changed_when: false
 
     - name: Enable UFW without waiting on the SSH control connection
-      command: ufw --force enable
+      ansible.builtin.command: ufw --force enable
       async: 30
       poll: 0
       when: "'Status: active' not in ufw_status.stdout"
 
     - name: Reset SSH connection after UFW changes
-      meta: reset_connection
-
+      ansible.builtin.meta: reset_connection
     - name: Wait for SSH after UFW changes
-      wait_for_connection:
+      ansible.builtin.wait_for_connection:
         timeout: 60

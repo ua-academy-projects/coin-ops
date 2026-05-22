@@ -18,7 +18,6 @@ tailscale_tags:
 # no subnet-routing through bastions). Override per-host or per-group when
 # you want a bastion to act as a subnet router.
 tailscale_advertise_routes: []
-
 # Accept routes advertised by other tailnet members. Safe default on; turn
 # off only on bastions that should not see foreign subnets.
 tailscale_accept_routes: true

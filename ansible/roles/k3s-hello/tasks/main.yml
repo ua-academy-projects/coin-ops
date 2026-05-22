@@ -1,33 +1,20 @@
 ---
-# Deploy the hello-world learning workload. Runs once on the first node
-# of the k3s group; the manifest lands in the cluster via `k3s kubectl
-# apply` and the result is reachable on :30080 on any node.
+# Deploy the hello-world learning workload with the native kubernetes.core
+# module — no `k3s kubectl` shell. Runs once on the first node; joiners exit.
+# The template renders Namespace + Deployment + ClusterIP Service + Ingress(TLS);
+# we split the documents and apply each in order. `wait: true` blocks until the
+# Deployment is Available, which replaces the old explicit rollout-status task.
 
 - name: Skip k3s-hello (not the first node)
-  meta: end_host
+  ansible.builtin.meta: end_host
   when: inventory_hostname != k3s_first_node
 
-- name: Ensure manifest directory exists
-  file:
-    path: /opt/k3s
-    state: directory
-    owner: root
-    group: root
-    mode: '0755'
-
-- name: Stage hello manifest on first node
-  copy:
-    src: k3s-hello.yaml
-    dest: /opt/k3s/k3s-hello.yaml
-    owner: root
-    group: root
-    mode: '0644'
-
-- name: Apply hello manifest
-  command: /usr/local/bin/k3s kubectl apply -f /opt/k3s/k3s-hello.yaml
-  register: k3s_hello_apply
-  changed_when: "'created' in k3s_hello_apply.stdout or 'configured' in k3s_hello_apply.stdout"
-
-- name: Wait for hello deployment rollout
-  command: /usr/local/bin/k3s kubectl -n coinops-hello rollout status deployment/hello --timeout=120s
-  changed_when: false
+- name: Apply hello-world manifests
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ item }}"
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    wait: true
+  loop: "{{ lookup('template', 'k3s-hello.yaml.j2') | from_yaml_all | list }}"
+  loop_control:
+    label: "{{ item.kind }}/{{ item.metadata.name }}"

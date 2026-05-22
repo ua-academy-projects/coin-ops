@@ -1,0 +1,36 @@
+---
+# k3s-coinops-data — backing services for the real Coin-Ops app on k3s:
+# PostgreSQL, RabbitMQ, Redis as StatefulSets (external runtime mode; GCP is
+# k3s_only so there are no managed services), plus a one-shot schema-bootstrap
+# Job. Self-contained: every input is declared here. Passwords arrive at
+# runtime via cloud-secrets (add_host -> coinops_db_password / coinops_rabbitmq_password).
+
+k3s_first_node: "{{ ansible_play_hosts_all[0] }}"
+k3s_kubeconfig: /etc/rancher/k3s/k3s.yaml
+
+coinops_data_namespace: coinops
+
+# Identities. coinops_db_* / coinops_rabbitmq_* come from the inventory /
+# add_host (config); read here as defaults under distinct names to avoid
+# self-reference.
+coinops_data_db_name: "{{ coinops_db_name | default('cognitor', true) }}"
+coinops_data_db_user: "{{ coinops_db_user | default('cognitor', true) }}"
+coinops_data_db_password: "{{ coinops_db_password | default('') }}"
+coinops_data_rabbitmq_user: "{{ coinops_rabbitmq_user | default('cognitor', true) }}"
+coinops_data_rabbitmq_password: "{{ coinops_rabbitmq_password | default('') }}"
+
+# Images.
+coinops_postgres_image: "postgres:16-alpine"
+coinops_rabbitmq_image: "rabbitmq:3-alpine"
+coinops_redis_image: "redis:7-alpine"
+
+# Persistent storage (k3s ships the local-path provisioner as the default SC).
+coinops_data_storage_class: local-path
+coinops_postgres_storage: 2Gi
+coinops_rabbitmq_storage: 1Gi
+coinops_redis_storage: 1Gi
+
+# Schema bootstrap. The canonical schema lives in the repo; we read it at
+# render time (controller-side lookup) so there's no duplicated copy.
+coinops_schema_sql_path: "{{ playbook_dir }}/../history/schema.sql"
+coinops_schema_job_image: "postgres:16-alpine"

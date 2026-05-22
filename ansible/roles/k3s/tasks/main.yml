@@ -12,23 +12,23 @@
 # tailnet client through the GCP bastion's advertised subnet route.
 
 - name: Determine if this host is the cluster-init node
-  set_fact:
+  ansible.builtin.set_fact:
     k3s_is_first: "{{ inventory_hostname == k3s_first_node }}"
 
 - name: Look for existing k3s binary
-  stat:
+  ansible.builtin.stat:
     path: /usr/local/bin/k3s
   register: k3s_binary
 
 - name: Read installed k3s version
-  command: /usr/local/bin/k3s --version
+  ansible.builtin.command: /usr/local/bin/k3s --version
   register: k3s_installed_version_raw
   changed_when: false
   failed_when: false
   when: k3s_binary.stat.exists
 
 - name: Decide whether to (re)install k3s
-  set_fact:
+  ansible.builtin.set_fact:
     k3s_needs_install: "{{ (not k3s_binary.stat.exists) or (k3s_release_version not in (k3s_installed_version_raw.stdout | default(''))) }}"
 
 # ---------------------------------------------------------------------
@@ -36,16 +36,16 @@
 # ---------------------------------------------------------------------
 
 - name: Ensure rancher state directory exists (first node)
-  file:
+  ansible.builtin.file:
     path: /var/lib/rancher/k3s/server
     state: directory
     owner: root
     group: root
-    mode: '0700'
+    mode: "0700"
   when: k3s_is_first
 
 - name: Generate persistent cluster token (first node, once)
-  shell: |
+  ansible.builtin.shell: |
     set -e
     if [ ! -s {{ k3s_token_path }} ]; then
       head -c 32 /dev/urandom | base64 | tr -d '/+=\n' > {{ k3s_token_path }}
@@ -59,26 +59,26 @@
   no_log: true
 
 - name: Read persisted cluster token (first node)
-  slurp:
+  ansible.builtin.slurp:
     src: "{{ k3s_token_path }}"
   register: k3s_token_slurp
   when: k3s_is_first
   no_log: true
 
 - name: Record cluster token as host fact (first node)
-  set_fact:
+  ansible.builtin.set_fact:
     k3s_cluster_token: "{{ k3s_token_slurp.content | b64decode | trim }}"
   when: k3s_is_first
   no_log: true
 
 - name: Compute TLS SAN list for the API server (first node)
-  set_fact:
+  ansible.builtin.set_fact:
     k3s_first_tls_sans: >-
       {{ ([ansible_default_ipv4.address] + k3s_extra_tls_sans) | unique }}
   when: k3s_is_first
 
 - name: Install/upgrade k3s on the cluster-init node
-  shell: |
+  ansible.builtin.shell: |
     curl -sfL https://get.k3s.io | \
       INSTALL_K3S_VERSION={{ k3s_release_version }} \
       K3S_TOKEN={{ k3s_cluster_token }} \
@@ -90,14 +90,14 @@
   no_log: true
 
 - name: Wait for kubeconfig to appear (first node)
-  wait_for:
+  ansible.builtin.wait_for:
     path: /etc/rancher/k3s/k3s.yaml
     state: present
     timeout: 120
   when: k3s_is_first
 
 - name: Wait for k3s API server to respond (first node)
-  command: /usr/local/bin/k3s kubectl get --raw /readyz
+  ansible.builtin.command: /usr/local/bin/k3s kubectl get --raw /readyz
   register: k3s_api_ready
   retries: 30
   delay: 5
@@ -110,7 +110,7 @@
 # ---------------------------------------------------------------------
 
 - name: Pull cluster token from first node (joiners)
-  slurp:
+  ansible.builtin.slurp:
     src: "{{ k3s_token_path }}"
   delegate_to: "{{ k3s_first_node }}"
   register: k3s_joiner_token_slurp
@@ -118,18 +118,18 @@
   no_log: true
 
 - name: Record cluster token on joiner
-  set_fact:
+  ansible.builtin.set_fact:
     k3s_cluster_token: "{{ k3s_joiner_token_slurp.content | b64decode | trim }}"
   when: not k3s_is_first
   no_log: true
 
 - name: Resolve first node's reachable address (joiners)
-  set_fact:
+  ansible.builtin.set_fact:
     k3s_server_url: "https://{{ hostvars[k3s_first_node].ansible_default_ipv4.address }}:6443"
   when: not k3s_is_first
 
 - name: Install/upgrade k3s on joiner
-  shell: |
+  ansible.builtin.shell: |
     curl -sfL https://get.k3s.io | \
       INSTALL_K3S_VERSION={{ k3s_release_version }} \
       K3S_TOKEN={{ k3s_cluster_token }} \
@@ -141,7 +141,7 @@
   no_log: true
 
 - name: Wait for k3s API server to respond (joiner)
-  command: /usr/local/bin/k3s kubectl get --raw /readyz
+  ansible.builtin.command: /usr/local/bin/k3s kubectl get --raw /readyz
   register: k3s_api_ready_joiner
   retries: 30
   delay: 5
@@ -154,17 +154,17 @@
 # ---------------------------------------------------------------------
 
 - name: Fetch kubeconfig from first node to controller
-  fetch:
+  ansible.builtin.fetch:
     src: /etc/rancher/k3s/k3s.yaml
     dest: "{{ k3s_local_kubeconfig | expanduser }}"
-    flat: yes
+    flat: true
   when: k3s_is_first
 
 - name: Rewrite kubeconfig server URL to first node's private IP
   delegate_to: localhost
   become: false
-  replace:
+  ansible.builtin.replace:
     path: "{{ k3s_local_kubeconfig | expanduser }}"
-    regexp: 'server: https://127\.0\.0\.1:6443'
+    regexp: "server: https://127\\.0\\.0\\.1:6443"
     replace: "server: https://{{ hostvars[k3s_first_node].ansible_default_ipv4.address }}:6443"
   when: k3s_is_first

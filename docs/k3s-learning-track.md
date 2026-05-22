@@ -88,6 +88,37 @@ The play does, in order:
 7. Deploys Headlamp (`roles/k3s-headlamp`) — an in-cluster Kubernetes web
    dashboard on NodePort `:30081`, reached through the bastion route.
 
+## Ingress, TLS, and the app (Sprint 4)
+
+Workloads are no longer exposed on raw NodePorts. k3s's built-in **Traefik** is
+the ingress controller; **cert-manager** (installed via Helm by the
+`k3s-cert-manager` role) issues real Let's Encrypt certs through a **DNS-01
+ClusterIssuer backed by Cloudflare** — valid even though the cluster is private,
+because DNS-01 validates over DNS, not HTTP. Every app gets a host
+`<app>.lab.coinops.pp.ua` and an `Ingress` annotated with
+`cert-manager.io/cluster-issuer: letsencrypt-cloudflare`.
+
+Hosts today: `hello.`, `headlamp.`, `homepage.` (the deploy-and-expose example,
+role `k3s-homepage`), and `app.` (the real Coin-Ops app, role `k3s-coinops`).
+TLS terminates **on the k3s nodes** (the bastion only routes); the firewall
+opens 80/443 from the bastion to the k3s tag.
+
+**Operator prerequisites:**
+
+1. Cloudflare-managed zone; an API token with DNS:Edit, pushed to the cloud
+   secret manager as `cloudflare_token` (`./scripts/lab.sh secrets push`).
+2. A wildcard DNS record `*.lab.coinops.pp.ua` → a k3s node private IP
+   (e.g. `10.10.20.40`), so tailnet clients resolve the app hosts. `/etc/hosts`
+   is the no-DNS fallback.
+3. `terraform apply` (firewall 80/443) → `./scripts/lab.sh k3s` (cluster +
+   cert-manager + hello/headlamp/homepage) → `ansible-playbook -i <gcp-inventory>
+   ansible/k3s-app.yml` (the real app: postgres/rabbitmq/redis pods +
+   proxy/history/ui behind the ingress).
+
+The deploy-and-expose pattern (one role = Namespace + ConfigMap + Deployment +
+Service + Ingress-TLS, applied with `kubernetes.core.k8s`) is reusable — copy
+`roles/k3s-homepage` to stand up any other app.
+
 ## Verification
 
 After a clean run, from a laptop joined to the tailnet with
@@ -101,12 +132,12 @@ kubectl --kubeconfig=~/.kube/coinops-k3s.yaml get nodes
 kubectl --kubeconfig=~/.kube/coinops-k3s.yaml get pods -A
 # Expect: kube-system pods Running; coinops-hello/hello-* Running ×2.
 
-# Hello-world reachable on every node's private IP, through the bastion route:
-for ip in 10.10.20.40 10.10.21.40 10.10.20.41; do
-  echo "$ip:"; curl -s "http://${ip}:30080" | head -3
-done
+# Workloads are behind the Traefik ingress with TLS now (no NodePorts).
+# With *.lab.coinops.pp.ua pointed at a k3s node IP (see Ingress section):
+curl -s https://hello.lab.coinops.pp.ua | head -3
+curl -s https://homepage.lab.coinops.pp.ua | head -3
 
-# Headlamp dashboard: browse to http://10.10.20.40:30081 and log in with:
+# Headlamp dashboard: browse to https://headlamp.lab.coinops.pp.ua and log in with:
 kubectl --kubeconfig=~/.kube/coinops-k3s.yaml -n headlamp create token headlamp-admin --duration=24h
 ```
 
@@ -131,11 +162,12 @@ node is tainted or otherwise unschedulable.
 
 ## What to leave alone (for now)
 
-- **Don't deploy real workloads here.** This cluster doesn't have
-  ingress (no ALB/cert-manager), no persistent storage backend beyond
-  local disk, and no observability. Production-shaped work belongs on
-  the AWS compose stack until/unless the next sprint promotes k3s to a
-  production target.
+- **The app here is a learning copy, not production.** Sprint 4 added
+  ingress (Traefik + cert-manager) and a copy of the Coin-Ops app
+  (`ansible/k3s-app.yml`) with postgres/rabbitmq/redis as in-cluster pods on
+  local-path storage. There's still no managed-DB durability, no backups, and
+  no observability — the customer-facing site stays on the AWS compose stack
+  (`coinops.pp.ua`).
 - **Don't replace `--cluster-init` with an external etcd.** The single
   embedded-etcd shape is the simplest mental model for a learning lab.
 - **Don't add agent-only nodes.** Keep the symmetry — every node runs

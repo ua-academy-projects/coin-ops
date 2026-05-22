@@ -3,6 +3,13 @@
 # (e.g. ghcr.io/headlamp-k8s/headlamp:v0.30.0) for reproducible rollouts.
 k3s_headlamp_image: "ghcr.io/headlamp-k8s/headlamp:latest"
 
-# NodePort the Headlamp UI is exposed on (must match the port opened to the
-# bastion in gcp-stack/modules/security/main.tf). hello-world uses 30080.
-k3s_headlamp_nodeport: 30081
+# kubeconfig the kubernetes.core modules use on the first node.
+k3s_kubeconfig: /etc/rancher/k3s/k3s.yaml
+
+# First-node guard — mirrors roles/k3s so this role stands alone.
+k3s_first_node: "{{ ansible_play_hosts_all[0] }}"
+
+# Ingress / TLS — shared with k3s-cert-manager. Exposed at headlamp.<domain>.
+k3s_ingress_domain: "lab.coinops.pp.ua"
+cert_manager_cluster_issuer: letsencrypt-cloudflare
+headlamp_host: "headlamp.{{ k3s_ingress_domain }}"

@@ -2,14 +2,14 @@
 # Meta-role: provision + deploy the VM-mode history node.
 # Applied to `hosts: history` by deploy.yml.
 
-- import_role:
+- ansible.builtin.import_role:
     name: common
 
-- import_role:
+- ansible.builtin.import_role:
     name: docker
 
-- import_role:
+- ansible.builtin.import_role:
     name: registry-login
 
-- import_role:
+- ansible.builtin.import_role:
     name: history

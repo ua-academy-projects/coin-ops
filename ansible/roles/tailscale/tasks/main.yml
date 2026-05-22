@@ -7,48 +7,49 @@
 # deploys cleanly without Tailscale configured.
 
 - name: Skip Tailscale (no auth key configured)
-  debug:
+  ansible.builtin.debug:
     msg: "tailscale_auth_key is empty; skipping Tailscale install/join on {{ inventory_hostname }}."
   when: tailscale_auth_key | length == 0
 
-- block:
+- when: tailscale_auth_key | length > 0
+  block:
     - name: Inspect existing tailscale state
-      command: tailscale status --json
+      ansible.builtin.command: tailscale status --json
       register: tailscale_status_pre
       changed_when: false
       failed_when: false
 
     - name: Decide whether to install/join
-      set_fact:
+      ansible.builtin.set_fact:
         tailscale_needs_join: "{{ tailscale_status_pre.rc != 0 or (tailscale_status_pre.stdout | from_json).BackendState | default('NoState') != 'Running' }}"
 
     - name: Install Tailscale apt repo signing key
-      get_url:
+      ansible.builtin.get_url:
         url: "https://pkgs.tailscale.com/stable/ubuntu/{{ ansible_distribution_release }}.noarmor.gpg"
         dest: /usr/share/keyrings/tailscale-archive-keyring.gpg
-        mode: '0644'
+        mode: "0644"
         force: false
       when: tailscale_needs_join
 
     - name: Install Tailscale apt source
-      get_url:
+      ansible.builtin.get_url:
         url: "https://pkgs.tailscale.com/stable/ubuntu/{{ ansible_distribution_release }}.tailscale-keyring.list"
         dest: /etc/apt/sources.list.d/tailscale.list
-        mode: '0644'
+        mode: "0644"
         force: false
       when: tailscale_needs_join
 
     - name: Install tailscale package
-      apt:
+      ansible.builtin.apt:
         name: "tailscale{{ '=' ~ tailscale_pkg_version if tailscale_pkg_version != 'latest' else '' }}"
         state: present
-        update_cache: yes
+        update_cache: true
       when: tailscale_needs_join
 
     - name: Ensure tailscaled is enabled and running
-      systemd:
+      ansible.builtin.systemd:
         name: tailscaled
-        enabled: yes
+        enabled: true
         state: started
 
     # A subnet router must forward packets from the tailnet to its cloud's
@@ -56,23 +57,23 @@
     # --advertise-routes` only warns and traffic silently dies at the
     # bastion (routes show "approved" but ping/SSH/kubectl time out).
     - name: Enable IP forwarding for subnet routing (persistent)
-      copy:
+      ansible.builtin.copy:
         dest: /etc/sysctl.d/99-tailscale-forwarding.conf
         content: |
           net.ipv4.ip_forward = 1
           net.ipv6.conf.all.forwarding = 1
         owner: root
         group: root
-        mode: '0644'
+        mode: "0644"
       when: tailscale_advertise_routes | length > 0
       register: tailscale_forwarding_conf
 
     - name: Apply forwarding sysctl
-      command: sysctl --system
+      ansible.builtin.command: sysctl --system
       when: tailscale_forwarding_conf is changed
 
     - name: Build tailscale up argument list
-      set_fact:
+      ansible.builtin.set_fact:
         tailscale_up_args: >-
           --authkey={{ tailscale_auth_key }}
           --hostname={{ tailscale_hostname }}
@@ -85,13 +86,13 @@
       no_log: true
 
     - name: Register host in tailnet
-      command: "tailscale up {{ tailscale_up_args }}"
+      ansible.builtin.command: "tailscale up {{ tailscale_up_args }}"
       when: tailscale_needs_join
       no_log: true
       register: tailscale_up_result
 
     - name: Verify tailnet IPv4 is assigned (100.x)
-      command: tailscale ip -4
+      ansible.builtin.command: tailscale ip -4
       register: tailscale_ipv4
       changed_when: false
       failed_when:
@@ -99,6 +100,5 @@
         - tailscale_ipv4.stdout | trim is not match('^100\\.')
 
     - name: Record tailnet address as host fact
-      set_fact:
+      ansible.builtin.set_fact:
         coinops_tailnet_ipv4: "{{ tailscale_ipv4.stdout | trim }}"
-  when: tailscale_auth_key | length > 0

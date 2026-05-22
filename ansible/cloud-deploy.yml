@@ -11,7 +11,7 @@
   gather_facts: false
   tasks:
     - name: Check .env vars are exported
-      assert:
+      ansible.builtin.assert:
         that:
           - lookup('env', 'SSH_KEY_PATH') != ''
           - lookup('env', 'RUNTIME_BACKEND') in ['', 'external', 'postgres', 'cloud_native']
@@ -26,17 +26,17 @@
   roles: [cloud-secrets]
 
 - hosts: bastion
-  become: yes
+  become: true
   roles: [cloud-bastion-stack]
 
 - hosts: db
-  become: yes
+  become: true
   roles: [cloud-db-stack]
 
 - hosts: app
-  become: yes
+  become: true
   roles: [cloud-app-stack]
 
 - hosts: ui
-  become: yes
+  become: true
   roles: [cloud-ui-stack]

@@ -1,6 +1,6 @@
 ---
 # Headlamp — in-cluster Kubernetes dashboard for the k3s learning cluster.
-# Reached on NodePort {{ k3s_headlamp_nodeport }} through the GCP bastion route.
+# Exposed through Traefik with TLS at headlamp.{{ k3s_ingress_domain }}.
 # Log in with a token: kubectl -n headlamp create token headlamp-admin
 apiVersion: v1
 kind: Namespace
@@ -81,11 +81,35 @@ metadata:
   name: headlamp
   namespace: headlamp
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: headlamp
   ports:
     - port: 80
       targetPort: 4466
-      nodePort: {{ k3s_headlamp_nodeport }}
       protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: headlamp
+  namespace: headlamp
+  annotations:
+    cert-manager.io/cluster-issuer: {{ cert_manager_cluster_issuer }}
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - {{ headlamp_host }}
+      secretName: headlamp-tls
+  rules:
+    - host: {{ headlamp_host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: headlamp
+                port:
+                  number: 80

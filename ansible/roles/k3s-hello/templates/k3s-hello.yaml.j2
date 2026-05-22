@@ -1,7 +1,7 @@
 ---
-# Sample learning workload for the k3s POC: nginxdemos/hello.
-# 2 replicas + NodePort :30080 (matches the firewall rule
-# k3s_nodeport_from_tailnet in the GCP security module).
+# Sample learning workload: nginxdemos/hello. 2 replicas behind a ClusterIP
+# Service, exposed through Traefik with a Let's Encrypt cert at
+# hello.{{ k3s_ingress_domain }} (no NodePort — ingress only).
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -41,11 +41,35 @@ metadata:
   name: hello
   namespace: coinops-hello
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: hello
   ports:
     - port: 80
       targetPort: 80
-      nodePort: 30080
       protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hello
+  namespace: coinops-hello
+  annotations:
+    cert-manager.io/cluster-issuer: {{ cert_manager_cluster_issuer }}
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - {{ hello_host }}
+      secretName: hello-tls
+  rules:
+    - host: {{ hello_host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hello
+                port:
+                  number: 80

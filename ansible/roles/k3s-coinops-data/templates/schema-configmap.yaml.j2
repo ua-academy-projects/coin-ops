@@ -1,0 +1,11 @@
+---
+# The canonical history schema (history/schema.sql), read at render time so
+# there's no duplicated copy in the role.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coinops-schema
+  namespace: {{ coinops_data_namespace }}
+data:
+  schema.sql: |
+{{ lookup('file', coinops_schema_sql_path) | indent(4, True) }}

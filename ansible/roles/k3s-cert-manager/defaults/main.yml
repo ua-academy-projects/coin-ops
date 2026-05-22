@@ -1,0 +1,36 @@
+---
+# k3s-cert-manager — install cert-manager (Helm) and a Let's Encrypt DNS-01
+# ClusterIssuer backed by Cloudflare. Self-contained: every input is declared
+# here, config-sourced values read their coinops_* inventory var as a default.
+
+# First-node guard — runs once; joiner nodes exit.
+k3s_first_node: "{{ ansible_play_hosts_all[0] }}"
+
+# kubeconfig the kubernetes.core modules talk to on the first node.
+k3s_kubeconfig: /etc/rancher/k3s/k3s.yaml
+
+# cert-manager Helm chart.
+cert_manager_chart_version: "v1.16.2"
+cert_manager_namespace: cert-manager
+
+# ACME / Let's Encrypt. Use the staging directory while testing (high rate
+# limits, untrusted certs), then switch to prod for real browser-trusted certs:
+#   prod:    https://acme-v02.api.letsencrypt.org/directory
+#   staging: https://acme-staging-v02.api.letsencrypt.org/directory
+acme_server: "https://acme-v02.api.letsencrypt.org/directory"
+acme_email: "admin@coinops.pp.ua"
+
+# Base domain the lab ingress hosts live under. Apps build their hostname as
+# <app>.{{ k3s_ingress_domain }} (e.g. homepage.lab.coinops.pp.ua). The
+# matching Cloudflare zone must exist and the token below must edit its DNS.
+k3s_ingress_domain: "lab.coinops.pp.ua"
+
+# Name of the ClusterIssuer apps reference via the
+# cert-manager.io/cluster-issuer ingress annotation.
+cert_manager_cluster_issuer: letsencrypt-cloudflare
+
+# Cloudflare API token (DNS:Edit on the zone). Published by cloud-secrets via
+# add_host as coinops_cloudflare_token. The DNS-01 solver uses it to write the
+# _acme-challenge TXT records. Empty => the issuer is skipped (cert-manager
+# still installs, so you can wire the issuer up later).
+cloudflare_token: "{{ coinops_cloudflare_token | default('') }}"

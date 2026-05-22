@@ -1,3 +1,4 @@
+---
 # All variables are safe to commit.
 # Secrets and local paths come from environment variables.
 # Cloud generated inventory may set coinops_* variables.
@@ -64,7 +65,6 @@ history_database_url: "postgresql://{{ db_user }}:{{ db_password }}@postgres:543
 proxy_database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ cloud_db_host }}:{{ db_port }}/{{ db_name }}"
 container_redis_url: "redis://{{ cloud_db_host }}:6379/0"
 
-
 # Cloud-native runtime
 queue_backend: "{{ coinops_queue_backend | default(lookup('env', 'QUEUE_BACKEND') | default('', true), true) }}"
 queue_name: "{{ coinops_queue_name | default('market-events', true) }}"
@@ -86,4 +86,5 @@ cache_host: "{{ coinops_cache_host | default('', true) }}"
 cache_port: "{{ coinops_cache_port | default(6379, true) }}"
 managed_redis_url: "redis://{{ cache_host }}:{{ cache_port }}/0"
 azure_redis_url: "rediss://:{{ azure_redis_access_key | urlencode }}@{{ cache_host }}:{{ cache_port }}/0"
-redis_url: "{{ coinops_redis_url | default((azure_redis_url if (runtime_backend == 'cloud_native' and (azure_redis_access_key | length > 0)) else (managed_redis_url if (runtime_backend == 'cloud_native' and (cache_host | length > 0)) else container_redis_url)), true) }}"
+redis_url: "{{ coinops_redis_url | default((azure_redis_url if (runtime_backend == 'cloud_native' and (azure_redis_access_key | length > 0)) else (managed_redis_url
+  if (runtime_backend == 'cloud_native' and (cache_host | length > 0)) else container_redis_url)), true) }}"

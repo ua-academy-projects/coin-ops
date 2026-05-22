@@ -4,3 +4,7 @@ collections:
     version: 9.5.0
   - name: community.docker
     version: 3.13.0
+  # k8s-native manifest + Helm management for the k3s cluster (kubernetes.core.k8s,
+  # kubernetes.core.k8s_info, kubernetes.core.helm). Replaces `k3s kubectl` shell.
+  - name: kubernetes.core
+    version: 5.0.0

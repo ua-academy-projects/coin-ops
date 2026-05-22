@@ -1,64 +1,64 @@
 ---
 - name: Create config directory
-  file:
+  ansible.builtin.file:
     path: /etc/cognitor
     state: directory
     owner: root
     group: root
-    mode: '0750'
+    mode: "0750"
 
 - name: Create deploy directory
-  file:
+  ansible.builtin.file:
     path: /opt/cognitor/cloud-app
     state: directory
     owner: root
     group: root
-    mode: '0755'
+    mode: "0755"
 
 - name: Write app environment file
-  template:
+  ansible.builtin.template:
     src: cloud-app.env.j2
     dest: /etc/cognitor/cloud-app.env
     owner: root
     group: root
-    mode: '0640'
+    mode: "0640"
 
 - name: Render cloud nginx config
-  template:
+  ansible.builtin.template:
     src: cloud-nginx.conf.j2
     dest: /opt/cognitor/cloud-app/nginx.conf
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
 
 - name: Render app/backend compose file
-  template:
+  ansible.builtin.template:
     src: "{{ 'cloud-backend.compose.yaml.j2' if ('ui' in groups and (groups['ui'] | length > 0)) else 'cloud-app.compose.yaml.j2' }}"
     dest: /opt/cognitor/cloud-app/compose.yaml
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
 
 - name: Validate app compose config
-  command: docker compose -f /opt/cognitor/cloud-app/compose.yaml config -q
+  ansible.builtin.command: docker compose -f /opt/cognitor/cloud-app/compose.yaml config -q
   args:
     chdir: /opt/cognitor/cloud-app
   changed_when: false
 
 - name: Pull app images
-  command: docker compose -f /opt/cognitor/cloud-app/compose.yaml pull
+  ansible.builtin.command: docker compose -f /opt/cognitor/cloud-app/compose.yaml pull
   args:
     chdir: /opt/cognitor/cloud-app
 
 - name: Run app compose
-  command: docker compose -f /opt/cognitor/cloud-app/compose.yaml up -d --remove-orphans
+  ansible.builtin.command: docker compose -f /opt/cognitor/cloud-app/compose.yaml up -d --remove-orphans
   args:
     chdir: /opt/cognitor/cloud-app
 
 - name: Wait for local backend gateway health endpoint
   block:
     - name: Poll backend gateway health endpoint
-      uri:
+      ansible.builtin.uri:
         url: http://localhost/health
         method: GET
         status_code: 200
@@ -68,7 +68,7 @@
       until: backend_gateway_health.status == 200
   rescue:
     - name: Capture backend compose status after failed health check
-      command: docker compose -f /opt/cognitor/cloud-app/compose.yaml ps
+      ansible.builtin.command: docker compose -f /opt/cognitor/cloud-app/compose.yaml ps
       args:
         chdir: /opt/cognitor/cloud-app
       register: backend_compose_ps
@@ -76,7 +76,7 @@
       failed_when: false
 
     - name: Capture backend compose logs after failed health check
-      command: docker compose -f /opt/cognitor/cloud-app/compose.yaml logs --tail 120
+      ansible.builtin.command: docker compose -f /opt/cognitor/cloud-app/compose.yaml logs --tail 120
       args:
         chdir: /opt/cognitor/cloud-app
       register: backend_compose_logs
@@ -84,13 +84,13 @@
       failed_when: false
 
     - name: Show backend compose status
-      debug:
+      ansible.builtin.debug:
         var: backend_compose_ps.stdout_lines
 
     - name: Show backend compose logs
-      debug:
+      ansible.builtin.debug:
         var: backend_compose_logs.stdout_lines
 
     - name: Fail after backend gateway health check diagnostics
-      fail:
+      ansible.builtin.fail:
         msg: Backend gateway did not return HTTP 200 on http://localhost/health.

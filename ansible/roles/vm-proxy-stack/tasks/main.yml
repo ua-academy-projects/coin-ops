@@ -2,14 +2,14 @@
 # Meta-role: provision + deploy the VM-mode proxy node.
 # Applied to `hosts: proxy` by deploy.yml.
 
-- import_role:
+- ansible.builtin.import_role:
     name: common
 
-- import_role:
+- ansible.builtin.import_role:
     name: docker
 
-- import_role:
+- ansible.builtin.import_role:
     name: registry-login
 
-- import_role:
+- ansible.builtin.import_role:
     name: proxy

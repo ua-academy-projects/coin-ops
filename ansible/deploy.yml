@@ -11,7 +11,7 @@
   gather_facts: false
   tasks:
     - name: Check .env vars are exported
-      assert:
+      ansible.builtin.assert:
         that:
           - lookup('env', 'RABBITMQ_PASSWORD') != ''
           - lookup('env', 'DB_PASSWORD') != ''
@@ -24,13 +24,13 @@
           Supported explicit runtime backends: external, postgres.
 
 - hosts: history
-  become: yes
+  become: true
   roles: [vm-history-stack]
 
 - hosts: proxy
-  become: yes
+  become: true
   roles: [vm-proxy-stack]
 
 - hosts: ui
-  become: yes
+  become: true
   roles: [vm-ui-stack]

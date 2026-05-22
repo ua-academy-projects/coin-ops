@@ -3,11 +3,11 @@
 # Applied to `hosts: bastion` by cloud-deploy.yml. No docker/registry/app
 # deploy here — the bastion is intentionally minimal.
 
-- import_role:
+- ansible.builtin.import_role:
     name: common
 
 # Join the bastion into the coinops-lab tailnet. The bastion is the
 # natural subnet-router candidate; set `tailscale_advertise_routes` in
 # group_vars/bastion/main.yml when you want it to expose VPC subnets.
-- import_role:
+- ansible.builtin.import_role:
     name: tailscale

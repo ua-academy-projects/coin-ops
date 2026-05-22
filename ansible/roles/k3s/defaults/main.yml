@@ -19,7 +19,6 @@ k3s_token_path: /var/lib/rancher/k3s/server/coinops-token
 # additional public/private endpoints here if you want kubectl to reach
 # the cluster through them.
 k3s_extra_tls_sans: []
-
 # Extra flags passed to `k3s server`. Useful for `--node-label`,
 # `--disable=traefik`, etc. without touching role tasks. Applied to BOTH
 # the cluster-init node and the joiners.

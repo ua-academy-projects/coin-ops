@@ -1,0 +1,43 @@
+---
+# Install the cluster-management toolchain on the first k3s node so the
+# kubernetes.core.* modules can manage manifests and Helm releases WITHOUT
+# shelling out to `kubectl`/`helm`. Runs once on the first node; joiners exit.
+#
+# The hand-rolled k3s install (roles/k3s) is unchanged — this only adds the
+# operator tooling the native modules depend on:
+#   * the `kubernetes` Python client  -> kubernetes.core.k8s / k8s_info
+#   * the `helm` binary               -> kubernetes.core.helm
+#
+# Installing a Python lib and a binary is the one place shell/pip is right —
+# the "no shell" rule is about cluster *resource* operations, not bootstrap.
+
+- name: Skip k3s-tools (not the first node)
+  ansible.builtin.meta: end_host
+  when: inventory_hostname != k3s_first_node
+
+- name: Ensure pip is present for the Kubernetes client
+  ansible.builtin.apt:
+    name: python3-pip
+    state: present
+    update_cache: true
+
+- name: Install the Python Kubernetes client for kubernetes.core modules
+  ansible.builtin.pip:
+    name: "{{ k3s_python_deps }}"
+    state: present
+
+- name: Check for an existing helm binary
+  ansible.builtin.command: "{{ k3s_helm_bin }} version --short"
+  register: k3s_helm_installed
+  changed_when: false
+  failed_when: false
+
+- name: Install helm (pinned) via the official get-helm-3 script
+  ansible.builtin.shell: |
+    set -o pipefail
+    curl -sfL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 \
+      | DESIRED_VERSION={{ k3s_helm_version }} bash
+  args:
+    executable: /bin/bash
+  changed_when: true
+  when: k3s_helm_version not in (k3s_helm_installed.stdout | default(''))

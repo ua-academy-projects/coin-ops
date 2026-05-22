@@ -1,0 +1,16 @@
+---
+# k3s-tools — operator toolchain the kubernetes.core.* modules need on the
+# first node. Self-contained: every input the role reads is declared here.
+
+# First node in the k3s play — the one carrying the kubeconfig the modules
+# talk to. Mirrors roles/k3s so this role stands alone.
+k3s_first_node: "{{ ansible_play_hosts_all[0] }}"
+
+# Python client(s) imported by kubernetes.core.k8s / k8s_info on the first node.
+k3s_python_deps:
+  - kubernetes
+  - PyYAML
+
+# Pinned Helm release for kubernetes.core.helm. Bump deliberately.
+k3s_helm_version: "v3.16.2"
+k3s_helm_bin: /usr/local/bin/helm

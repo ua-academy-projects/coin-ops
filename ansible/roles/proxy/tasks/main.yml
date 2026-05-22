@@ -1,74 +1,74 @@
 ---
 - name: Create Redis data directory
-  file:
+  ansible.builtin.file:
     path: /var/lib/coin-ops/redis
     state: directory
     owner: 999
     group: 999
-    mode: '0755'
+    mode: "0755"
 
 - name: Stop and disable legacy host services
-  service:
+  ansible.builtin.service:
     name: "{{ item }}"
     state: stopped
-    enabled: no
+    enabled: false
   loop:
     - redis-server
     - cognitor-proxy
   failed_when: false
 
 - name: Create secrets directory
-  file:
+  ansible.builtin.file:
     path: /etc/cognitor
     state: directory
     owner: root
     group: root
-    mode: '0750'
+    mode: "0750"
 
 - name: Write proxy environment file
-  template:
+  ansible.builtin.template:
     src: proxy.env.j2
     dest: /etc/cognitor/proxy.env
     owner: root
     group: root
-    mode: '0640'
+    mode: "0640"
 
 - name: Create proxy deploy directory
-  file:
+  ansible.builtin.file:
     path: /opt/cognitor/proxy
     state: directory
     owner: root
     group: root
-    mode: '0755'
+    mode: "0755"
 
 - name: Remove legacy synced proxy source or binary
-  file:
+  ansible.builtin.file:
     path: /opt/cognitor/proxy/proxy
     state: absent
 
 - name: Render compose file
-  template:
+  ansible.builtin.template:
     src: "{{ playbook_dir }}/../deploy/compose/node-02.compose.yaml"
     dest: /opt/cognitor/proxy/compose.yaml
 
 - name: Validate proxy compose configuration
-  command: docker compose -f /opt/cognitor/proxy/compose.yaml config -q
+  ansible.builtin.command: docker compose -f /opt/cognitor/proxy/compose.yaml config -q
   args:
     chdir: /opt/cognitor/proxy
   changed_when: false
 
 - name: Pull proxy container images
-  command: docker compose -f /opt/cognitor/proxy/compose.yaml pull
+  ansible.builtin.command: docker compose -f /opt/cognitor/proxy/compose.yaml pull
   args:
     chdir: /opt/cognitor/proxy
 
 - name: Run Docker Compose
-  command: docker compose -f /opt/cognitor/proxy/compose.yaml up -d --remove-orphans
+  ansible.builtin.command: docker compose -f /opt/cognitor/proxy/compose.yaml up -d --remove-orphans
   args:
     chdir: /opt/cognitor/proxy
 
 - name: Wait for proxy health endpoint
-  uri:
+  ansible.builtin.uri:
     url: "http://localhost:{{ proxy_port }}/health"
     method: GET
     status_code: 200
@@ -78,5 +78,5 @@
   until: result.status == 200
 
 - name: Remove dangling Docker images
-  command: docker image prune -f
+  ansible.builtin.command: docker image prune -f
   changed_when: false

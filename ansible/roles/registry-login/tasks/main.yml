@@ -11,6 +11,6 @@
     - registry_token | length > 0
 
 - name: Explain skipped registry login
-  debug:
+  ansible.builtin.debug:
     msg: "GHCR_USERNAME/GHCR_TOKEN not set; assuming registry images are public."
   when: registry_username | length == 0 or registry_token | length == 0

@@ -1,0 +1,72 @@
+---
+# Deploy the real Coin-Ops app on k3s. Assumes the backing services
+# (k3s-coinops-data) and cert-manager/ingress (k3s-cert-manager) are present.
+# Native modules only. Runs once on the first node; joiner nodes exit.
+
+- name: Skip k3s-coinops (not the first node)
+  ansible.builtin.meta: end_host
+  when: inventory_hostname != k3s_first_node
+
+- name: Ensure the coinops namespace exists
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ coinops_app_namespace }}"
+
+# Build the dockerconfigjson in two steps. The registry is a *dict key*, and
+# Ansible does NOT template keys written as "{{ ... }}" in a mapping — only an
+# in-expression dict literal ({{ {var: ...} }}) evaluates the key. So assemble
+# it in a set_fact expression, then base64 the JSON.
+- name: Build the GHCR registry auth entry
+  ansible.builtin.set_fact:
+    coinops_ghcr_auth:
+      username: "{{ coinops_image_pull_username }}"
+      password: "{{ coinops_image_pull_token }}"
+      auth: "{{ (coinops_image_pull_username ~ ':' ~ coinops_image_pull_token) | b64encode }}"
+  no_log: true
+  when: coinops_image_pull_token | length > 0
+
+- name: Assemble the dockerconfigjson (registry as the templated key)
+  ansible.builtin.set_fact:
+    coinops_dockerconfig: "{{ {'auths': {coinops_image_pull_registry: coinops_ghcr_auth}} }}"
+  no_log: true
+  when: coinops_image_pull_token | length > 0
+
+- name: Create the GHCR image-pull secret
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: ghcr-pull
+        namespace: "{{ coinops_app_namespace }}"
+      type: kubernetes.io/dockerconfigjson
+      data:
+        .dockerconfigjson: "{{ coinops_dockerconfig | to_json | b64encode }}"
+  no_log: true
+  when: coinops_image_pull_token | length > 0
+
+- name: Apply Coin-Ops manifests (config, secrets, services, gateway, ingress)
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ item }}"
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    wait: true
+    wait_timeout: 240
+  loop: "{{ lookup('template', 'app.yaml.j2') | from_yaml_all | list }}"
+  loop_control:
+    label: "{{ item.kind }}/{{ item.metadata.name }}"
+  no_log: true  # the app Secret carries connection strings with credentials
+
+- name: Report Coin-Ops app URL
+  ansible.builtin.debug:
+    msg:
+      - "Coin-Ops app exposed at https://{{ coinops_app_host }} (cert via {{ cert_manager_cluster_issuer }})."
+      - "Reachable once *.{{ k3s_ingress_domain }} resolves to a k3s node IP from your tailnet client."
+      - "Health: https://{{ coinops_app_host }}/health | API: /api | History: /history-api"

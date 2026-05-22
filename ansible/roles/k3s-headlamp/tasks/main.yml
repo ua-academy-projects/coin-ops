@@ -1,40 +1,28 @@
 ---
-# Deploy the Headlamp dashboard into the k3s cluster. Runs once on the
-# first node, then exits on all joiner hosts.
+# Deploy the Headlamp dashboard with the native kubernetes.core module — no
+# `k3s kubectl` shell. Runs once on the first node; joiners exit. The manifest
+# is a Jinja template (image + NodePort are variables); we render it on the
+# controller, split the documents, and apply each. `wait: true` blocks until
+# the Deployment is Available.
 
 - name: Skip k3s-headlamp (not the first node)
-  meta: end_host
+  ansible.builtin.meta: end_host
   when: inventory_hostname != k3s_first_node
 
-- name: Ensure manifest directory exists
-  file:
-    path: /opt/k3s
-    state: directory
-    owner: root
-    group: root
-    mode: '0755'
-
-- name: Render Headlamp manifest on first node
-  template:
-    src: k3s-headlamp.yaml.j2
-    dest: /opt/k3s/k3s-headlamp.yaml
-    owner: root
-    group: root
-    mode: '0644'
-
-- name: Apply Headlamp manifest
-  command: /usr/local/bin/k3s kubectl apply -f /opt/k3s/k3s-headlamp.yaml
-  register: k3s_headlamp_apply
-  changed_when: "'created' in k3s_headlamp_apply.stdout or 'configured' in k3s_headlamp_apply.stdout"
-
-- name: Wait for Headlamp rollout
-  command: /usr/local/bin/k3s kubectl -n headlamp rollout status deployment/headlamp --timeout=120s
-  changed_when: false
+- name: Apply Headlamp manifests
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ item }}"
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    wait: true
+  loop: "{{ lookup('template', 'k3s-headlamp.yaml.j2') | from_yaml_all | list }}"
+  loop_control:
+    label: "{{ item.kind }}/{{ item.metadata.name }}"
 
 - name: Show how to reach Headlamp and mint a login token
-  debug:
+  ansible.builtin.debug:
     msg:
-      - "Headlamp is up on NodePort {{ k3s_headlamp_nodeport }}."
-      - "From a tailnet client (accept-routes on): http://{{ ansible_default_ipv4.address }}:{{ k3s_headlamp_nodeport }}"
+      - "Headlamp is up at https://{{ headlamp_host }} (cert via {{ cert_manager_cluster_issuer }})."
+      - "Reachable once *.{{ k3s_ingress_domain }} resolves to a k3s node IP from your tailnet client."
       - "Mint a 24h login token with:"
       - "  kubectl --kubeconfig=~/.kube/coinops-k3s.yaml -n headlamp create token headlamp-admin --duration=24h"

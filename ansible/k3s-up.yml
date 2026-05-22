@@ -16,7 +16,7 @@
   gather_facts: false
   tasks:
     - name: Check .env vars are exported
-      assert:
+      ansible.builtin.assert:
         that:
           - lookup('env', 'SSH_KEY_PATH') != ''
         fail_msg: |
@@ -29,10 +29,12 @@
   gather_facts: false
   roles: [cloud-secrets]
 
-- hosts: bastion
-  become: yes
+- name: Join the GCP bastion to the tailnet (subnet router)
+  hosts: bastion
+  become: true
   roles: [cloud-bastion-stack]
 
-- hosts: k3s
-  become: yes
+- name: Bring up the HA k3s cluster
+  hosts: k3s
+  become: true
   roles: [k3s-cluster]

@@ -1,0 +1,42 @@
+---
+# k3s-app.yml — deploy the real Coin-Ops app onto the k3s cluster.
+#
+# Kept separate from k3s-up.yml (cluster bring-up) so the learning cluster and
+# the application can be deployed independently. Run k3s-up.yml first (it brings
+# up the cluster, the toolchain, cert-manager and the ingress); then this.
+#
+#   source .env
+#   ansible-playbook -i <generated-gcp-inventory> ansible/k3s-app.yml
+#
+# External runtime mode: PostgreSQL / RabbitMQ / Redis run as in-cluster pods
+# (GCP is k3s_only — no managed services). The AWS coinops.pp.ua compose stack
+# is untouched.
+
+- name: Validate required environment variables
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Check .env vars are exported
+      ansible.builtin.assert:
+        that:
+          - lookup('env', 'SSH_KEY_PATH') != ''
+        fail_msg: |
+          Required environment variables are not set.
+          Run: source .env
+
+- name: Resolve runtime secrets from cloud secret manager
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles: [cloud-secrets]
+
+- name: Deploy Coin-Ops backing services and app on k3s
+  hosts: k3s
+  become: true
+  roles:
+    # k3s-tools is idempotent — ensures the kubernetes Python client is present
+    # if this play is run without a fresh k3s-up.yml.
+    - k3s-tools
+    - k3s-coinops-data
+    - k3s-coinops

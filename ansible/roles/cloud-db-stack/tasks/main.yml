@@ -5,17 +5,17 @@
 # whole stack is effectively a no-op in cloud-native mode (where managed
 # RDS / Cloud SQL replaces this VM).
 
-- import_role:
+- ansible.builtin.import_role:
     name: common
 
-- import_role:
+- ansible.builtin.import_role:
     name: docker
 
-- import_role:
+- ansible.builtin.import_role:
     name: registry-login
 
 # DB VM is private and does NOT run Tailscale — reached via the bastion's
 # advertised tailnet route. Only cloud-bastion-stack joins the tailnet.
 
-- import_role:
+- ansible.builtin.import_role:
     name: cloud-db
