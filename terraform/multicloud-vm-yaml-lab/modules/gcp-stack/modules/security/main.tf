@@ -1,5 +1,7 @@
 locals {
-  private_target_tags        = distinct(concat(var.app_target_tags, var.db_target_tags))
+  # k3s nodes are private too, so the bastion must be able to SSH (and ping)
+  # them — Ansible reaches them via ProxyJump through the bastion.
+  private_target_tags        = distinct(concat(var.app_target_tags, var.db_target_tags, var.k3s_target_tags))
   load_balancer_source_cidrs = ["35.191.0.0/16", "130.211.0.0/22"]
 }
 
