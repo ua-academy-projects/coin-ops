@@ -25,6 +25,7 @@ resource "aws_instance" "vm" {
   )
 
   associate_public_ip_address = each.value.public_ip
+  source_dest_check           = contains(each.value.tags, "gateway") ? false : true
 
 vpc_security_group_ids = concat(
   contains(each.value.tags, "jump-host") ? [var.jump_host_sg_id] : [],

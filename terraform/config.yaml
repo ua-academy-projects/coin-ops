@@ -61,7 +61,7 @@ sizes:
 # gateway is a separate VM
 vms:
   jump-host:
-    cloud: "azure"
+    cloud: "aws"
     size: small
     zone: primary
     tags: ["jump-host"]
@@ -100,4 +100,4 @@ vms:
     size: small
     zone: secondary
     tags: ["ui", "web"]
-    public_ip: true
+    public_ip: false
