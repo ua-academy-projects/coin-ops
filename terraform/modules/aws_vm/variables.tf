@@ -33,3 +33,7 @@ variable "internal_sg_id" {
 variable "web_sg_id" {
   type = string
 }
+
+variable "gateway_sg_id" {
+  type = string
+}

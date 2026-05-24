@@ -30,9 +30,15 @@
   roles:
     - common
     - docker
-    - tailscale  
+
+- name: Tailscale subnet router — gateway nodes only
+  hosts: gateway              
+  become: yes
+  roles:
+    - tailscale_gateway
   vars:
     tailscale_auth_key: "{{ lookup('env', 'TAILSCALE_AUTH_KEY') }}"
+    tailscale_advertise_routes: "{{ subnet_cidr }}"
 
 - name: Provision history node — Data directories
   hosts: history

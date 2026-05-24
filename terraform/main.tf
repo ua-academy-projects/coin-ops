@@ -29,7 +29,7 @@ module "gcp_vm" {
   source         = "./modules/gcp_vm"
   config         = local.config
   subnetwork     = module.gcp_network.subnet_id
-  ssh_public_key = file("${pathexpand("~")}/.ssh/id_ed25519.pub")
+  ssh_public_key = file(var.ssh_public_key_path)
 }
 
 module "gcp_lb" {
@@ -52,16 +52,16 @@ module "azure_network" {
 }
 
 module "azure_security" {
-  source    = "./modules/azure_security"
-  config    = local.config
-  vnet_name = module.azure_network.vnet_name
+  source     = "./modules/azure_security"
+  config     = local.config
+  vnet_name  = module.azure_network.vnet_name
   depends_on = [module.azure_network]
 }
 
 module "azure_vm" {
   source              = "./modules/azure_vm"
   config              = local.config
-  ssh_public_key      = file("${pathexpand("~")}/.ssh/id_ed25519.pub")
+  ssh_public_key      = file(var.ssh_public_key_path)
   public_subnet_id    = module.azure_network.public_subnet_id
   public_subnet_b_id  = module.azure_network.public_subnet_b_id
   private_subnet_id   = module.azure_network.private_subnet_id
@@ -69,21 +69,22 @@ module "azure_vm" {
   jump_host_nsg_id    = module.azure_security.jump_host_nsg_id
   internal_nsg_id     = module.azure_security.internal_nsg_id
   web_nsg_id          = module.azure_security.web_nsg_id
-  depends_on = [module.azure_network, module.azure_security]
+  gateway_nsg_id      = module.azure_security.gateway_nsg_id
+  depends_on          = [module.azure_network, module.azure_security]
 }
 
 module "azure_lb" {
-  source    = "./modules/azure_lb"
-  config    = local.config
-  ui_nic_id = module.azure_vm.ui_nic_id
+  source     = "./modules/azure_lb"
+  config     = local.config
+  ui_nic_id  = module.azure_vm.ui_nic_id
   depends_on = [module.azure_network, module.azure_vm]
 }
 
 module "azure_db" {
-  source    = "./modules/azure_db"
-  config    = local.config
-  vnet_id   = module.azure_network.vnet_id
-  vnet_name = module.azure_network.vnet_name
+  source     = "./modules/azure_db"
+  config     = local.config
+  vnet_id    = module.azure_network.vnet_id
+  vnet_name  = module.azure_network.vnet_name
   depends_on = [module.azure_network]
 }
 
@@ -101,7 +102,7 @@ module "aws_security" {
 module "aws_vm" {
   source              = "./modules/aws_vm"
   config              = local.config
-  ssh_public_key      = file("${pathexpand("~")}/.ssh/id_ed25519.pub")
+  ssh_public_key      = file(var.ssh_public_key_path)
   public_subnet_id    = module.aws_network.public_subnet_id
   private_subnet_id   = module.aws_network.private_subnet_id
   public_subnet_b_id  = module.aws_network.public_subnet_b_id
@@ -109,6 +110,7 @@ module "aws_vm" {
   jump_host_sg_id     = module.aws_security.jump_host_sg_id
   internal_sg_id      = module.aws_security.internal_sg_id
   web_sg_id           = module.aws_security.web_sg_id
+  gateway_sg_id       = module.aws_security.gateway_sg_id
 }
 
 module "aws_lb" {
@@ -130,4 +132,5 @@ module "aws_rds" {
   private_subnet_b_id = module.aws_network.private_subnet_b_id
   rds_sg_id           = module.aws_security.rds_sg_id
 }
+
 

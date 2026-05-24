@@ -26,11 +26,12 @@ resource "aws_instance" "vm" {
 
   associate_public_ip_address = each.value.public_ip
 
-  vpc_security_group_ids = concat(
-    contains(each.value.tags, "jump-host") ? [var.jump_host_sg_id] : [],
-    contains(each.value.tags, "internal") ? [var.internal_sg_id] : [],
-    contains(each.value.tags, "web") ? [var.web_sg_id] : []
-  )
+vpc_security_group_ids = concat(
+  contains(each.value.tags, "jump-host") ? [var.jump_host_sg_id] : [],
+  contains(each.value.tags, "internal")  ? [var.internal_sg_id]  : [],
+  contains(each.value.tags, "web")       ? [var.web_sg_id]       : [],
+  contains(each.value.tags, "gateway")   ? [var.gateway_sg_id]   : []
+)
 
   key_name = aws_key_pair.main[0].key_name
 

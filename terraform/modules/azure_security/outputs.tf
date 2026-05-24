@@ -18,3 +18,7 @@ output "db_nsg_id" {
   value       = try(azurerm_network_security_group.db[0].id, null)
 }
 
+output "gateway_nsg_id" {
+  description = "NSG ID for gateway node"
+  value       = try(azurerm_network_security_group.gateway[0].id, null)
+}

@@ -42,3 +42,7 @@ variable "web_nsg_id" {
   description = "NSG ID for web node"
 }
 
+variable "gateway_nsg_id" {
+  type        = string
+  description = "NSG ID for gateway node"
+}

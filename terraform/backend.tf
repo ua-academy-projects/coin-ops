@@ -14,19 +14,19 @@
 # }
 
 # --- GCP Backend (use when cloud = "gcp") ---
-# terraform {
-#   backend "gcs" {
-#     bucket = "devops-intern-penina-tf-state"
-#     prefix = "coinops-cloud/state"
-#   }
-# }
-
-# --- Azure Backend (use when cloud = "azure") ---
 terraform {
-  backend "azurerm" {
-    resource_group_name  = "coinops-tfstate-rg"
-    storage_account_name = "coinopsmpenina"
-    container_name       = "tfstate"
-    key                  = "coinops/terraform.tfstate"
+  backend "gcs" {
+    bucket = "devops-intern-penina-tf-state"
+    prefix = "coinops-cloud/state"
   }
 }
+
+# --- Azure Backend (use when cloud = "azure") ---
+# terraform {
+#   backend "azurerm" {
+#     resource_group_name  = "coinops-tfstate-rg"
+#     storage_account_name = "coinopsmpenina"
+#     container_name       = "tfstate"
+#     key                  = "coinops/terraform.tfstate"
+#   }
+# }

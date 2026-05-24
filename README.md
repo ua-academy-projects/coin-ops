@@ -8,10 +8,12 @@ Based on: `dev` branch of [ua-academy-projects/coin-ops](https://github.com/ua-a
 
 ## What This Branch Does
 
-Deploys the CoinOps application to AWS / Azure / GCP using:
-- **Terraform** — provisions cloud infrastructure
+Deploys the CoinOps application to AWS + Azure (hybrid multi-cloud) using:
+- **Terraform** — provisions cloud infrastructure across Azure + AWS
 - **Ansible** — configures VMs and deploys containers
 - **Docker Compose** — runs services on each VM
+- **Tailscale** — overlay VPN connecting VMs across clouds
+- **Cloudflare** — DNS + HTTPS proxy
 
 ## Application
 
@@ -19,7 +21,7 @@ Coin rates monitoring dashboard:
 - Live BTC, ETH prices from CoinGecko
 - USD/UAH rate from NBU
 - Historical data charts
-- Accessible at: `coinops-penina.pp.ua` (AWS, live)
+- Accessible at: `https://coinops-penina.pp.ua` (Hybrid Azure+AWS, live ✅)
 
 ---
 
@@ -29,22 +31,22 @@ Coin rates monitoring dashboard:
 Internet
   │
   ▼
-Load Balancer  (AWS ALB / Azure LB / GCP LB)
+Cloudflare (HTTPS, coinops-penina.pp.ua)
   │
   ▼
-node-03 — nginx + React UI          (public IP, secondary zone)
+node-03 — nginx + React UI     (Azure swedencentral, public IP 74.241.253.170)
   │
-  ├── /api/         → node-02 — Go proxy + Redis   (private, primary zone)
+  │  [Tailscale overlay 100.x.x.x — encrypted tunnel across clouds]
+  │
+  ├── /api/         → node-02 — Go proxy + Redis   (AWS eu-central-1, 100.82.194.81)
   │                     │
-  │                     └── publishes → node-01 — RabbitMQ   (private, primary zone)
+  │                     └── publishes → node-01 — RabbitMQ + History API (AWS, 100.91.119.121)
   │                                         │
-  │                                         └── consumer → Managed PostgreSQL
+  │                                         └── AWS RDS PostgreSQL (private subnet)
   │
-  └── /history-api/ → node-01 — History API        (private, primary zone)
-                          │
-                          └── reads → Managed PostgreSQL
+  └── /history-api/ → node-01 — History API (AWS eu-central-1, 100.91.119.121)
 
-SSH: Your machine → jump-host (public, port 9922) → node-01/02/03
+SSH: Your machine → jump-host (Azure, port 9922, 20.240.186.9) → all nodes via Tailscale
 ```
 
 ---
@@ -53,197 +55,234 @@ SSH: Your machine → jump-host (public, port 9922) → node-01/02/03
 
 | Cloud | Infrastructure | Ansible | App | URL |
 |-------|---------------|---------|-----|-----|
-| **AWS** | ✅ Complete | ✅ Complete | ✅ Live | coinops-penina.pp.ua |
-| **Azure+AWS Hybrid** | ✅ Complete | ⏳ Pending | ⏳ Pending | — |
+| **Azure+AWS Hybrid** | ✅ Complete | ✅ Complete | ✅ Live | coinops-penina.pp.ua |
+| **AWS only** | ✅ Complete | ✅ Complete | ✅ Previous | — |
 | **GCP** | 📝 Code ready | ⏳ Pending | ⏳ Pending | — |
 
 ---
 
-## AWS (Complete)
+## Hybrid Azure + AWS (Current)
 
-| Resource | Value |
-|----------|-------|
-| Region | eu-central-1 (Frankfurt) |
-| Jump host | 63.177.243.223 |
-| ALB DNS | coinops-alb-73161503.eu-central-1.elb.amazonaws.com |
-| RDS endpoint | coinops-db.cj8kme8e0kqa.eu-central-1.rds.amazonaws.com |
-| State storage | S3: `devops-intern-penina-tf-state` + DynamoDB lock |
+### VM Distribution
 
-## Azure + AWS Hybrid (Infrastructure Complete ✅)
+| VM | Cloud | Region | Role | Tailscale IP |
+|----|-------|--------|------|-------------|
+| jump-host | Azure | swedencentral | SSH entry point | 100.105.243.93 |
+| node-03 | Azure | swedencentral | nginx + React UI | 100.106.115.73 |
+| node-01 | AWS | eu-central-1 | RabbitMQ + History API | 100.91.119.121 |
+| node-02 | AWS | eu-central-1 | Go proxy + Redis | 100.82.194.81 |
+| PostgreSQL RDS | AWS | eu-central-1 | Managed database | private subnet |
+| Terraform state | GCP | europe-central2 | State storage | gs://devops-intern-penina-tf-state |
 
 ### Why Hybrid?
 
-Azure Free account has a quota of 4 vCPU per region. The minimum available VM size is `Standard_B2s_v2` (2 vCPU). Deploying all 4 VMs would require 8 vCPU which exceeds the quota. Solution: deploy 2 VMs in Azure and 2 VMs in AWS, with PostgreSQL in Azure.
+Azure for Students has a quota of 6 vCPU per region. Minimum VM size `Standard_B2s_v2` = 2 vCPU. 4 VMs × 2 vCPU = 8 vCPU exceeds quota. Solution: 2 VMs in Azure (jump-host + node-03) + 2 VMs in AWS (node-01 + node-02).
 
 ### How Hybrid Works
 
-The `config.yaml` now supports a `cloud` field per VM:
+`config.yaml` supports a `cloud` field per VM:
 
 ```yaml
 general:
-  cloud: "hybrid"   # ← new mode: mix of Azure + AWS
+  cloud: "hybrid"
 
 vms:
   jump-host:
-    cloud: "azure"  # ← Azure
+    cloud: "azure"
   node-01:
-    cloud: "aws"    # ← AWS
+    cloud: "aws"
   node-02:
-    cloud: "aws"    # ← AWS
+    cloud: "aws"
   node-03:
-    cloud: "azure"  # ← Azure
+    cloud: "azure"
 ```
 
-Each Terraform module filters VMs by their `cloud` field using `lookup(vm, "cloud", var.config.general.cloud)`. Azure modules create only Azure VMs, AWS modules create only AWS VMs.
-
-### Azure Resources (swedencentral)
-
-| Resource | Value |
-|----------|-------|
-| Account | Azure Free ($200 credit) |
-| Region | swedencentral |
-| Infra RG | coinops-rg (Terraform managed) |
-| State RG | coinops-tfstate-rg (bootstrap managed) |
-| Storage account | coinopsmpenina |
-| VM size | Standard_B2s_v2 (2 vCPU) |
-| jump-host public IP | 51.12.241.124 |
-| LB public IP | 135.225.91.188 |
-| PostgreSQL | coinops-db.coinops.postgres.database.azure.com (private) |
-
-### AWS Resources (eu-central-1)
-
-| Resource | Value |
-|----------|-------|
-| node-01 | RabbitMQ + History API (private subnet) |
-| node-02 | Go proxy + Redis (private subnet) |
-| VPC | 10.0.0.0/16 |
-
-### Terraform State
-
-State is stored in Azure Blob Storage:
-- Resource group: `coinops-tfstate-rg`
-- Storage account: `coinopsmpenina`
-- Container: `tfstate`
-- Both Azure and AWS resources are in the same state file
+Each Terraform module filters VMs by `cloud` field using `lookup(vm, "cloud", var.config.general.cloud)`.
 
 ---
 
-## Azure Deployment — Problems & Solutions
+## Tailscale — Cross-Cloud Networking
 
-### Problem 1 — AuthorizationFailed on providers/read
-**What:** Terraform failed on init with 403 on `Microsoft.DataLakeStore/register/action` and ~50 other providers.
-**Why:** By default `azurerm` provider tries to register all ~50 known Azure services. Student SP didn't have permission for most.
-**Fix:** Added `resource_provider_registrations = "none"` to provider block + upgraded azurerm to `~> 4.0`. We register only what we need manually in bootstrap.
+### Problem
 
-### Problem 2 — azurerm ~> 3.0 didn't support resource_provider_registrations
-**What:** `Unsupported argument` error on `resource_provider_registrations`.
-**Why:** The parameter was added in azurerm 3.111+.
-**Fix:** Changed `version = "~> 3.0"` to `version = "~> 4.0"` in provider.tf + ran `terraform init -upgrade`.
+Azure VNet and AWS VPC are isolated networks — they cannot communicate directly. Without a solution, the Azure jump-host cannot reach AWS nodes, and Ansible cannot provision them.
 
-### Problem 3 — Contributor role disappeared
-**What:** After some operations, `az role assignment list` showed only `Reader`, no `Contributor`.
-**Why:** Role got detached during credential operations.
-**Fix:** Manually re-assigned Contributor. Added explicit Reader assignment to bootstrap.
+### Solution: Tailscale Overlay Network
 
-### Problem 4 — Student subscription: strict regional policy
-**What:** `RequestDisallowedByAzure` for network resources in most regions.
-**Why:** Azure student subscription has `sys.regionrestriction` policy — only 5 EU regions allowed.
-**Fix:** Discovered policy using `az policy assignment list`. Created new Azure Free account with no policy restrictions.
+Tailscale creates an encrypted overlay network on top of existing cloud networks. Each VM gets a `100.x.x.x` IP and can communicate with all other VMs regardless of which cloud they are in.
 
-### Problem 5 — vCPU quota too low for 4 VMs
-**What:** Free account quota is 4 vCPU per region. Minimum VM size `Standard_B2s_v2` = 2 vCPU. 4 VMs × 2 vCPU = 8 vCPU > 4 quota.
-**Why:** Azure Free accounts have very limited vCPU quota.
-**Fix:** Hybrid deployment — 2 VMs in Azure (jump-host + node-03) + 2 VMs in AWS (node-01 + node-02). Added `cloud` field per VM in config.yaml. Each Terraform module filters VMs by their assigned cloud.
+```
+Azure VNet (10.0.x.x)              AWS VPC (10.0.x.x)
+  jump-host  ←——— Tailscale ———→  node-01
+  100.105.243.93   encrypted        100.91.119.121
+  
+  node-03    ←——— tunnel   ———→  node-02
+  100.106.115.73   over internet    100.82.194.81
+```
 
-### Problem 6 — Storage account name globally taken
-**What:** `StorageAccountAlreadyTaken` — `coinopspenina` already exists in student account.
-**Why:** Azure storage account names are globally unique across ALL subscriptions.
-**Fix:** Renamed to `coinopsmpenina`.
+### Current Setup (All Nodes)
 
-### Problem 7 — Resource Group chicken-and-egg
-**What:** Mentor requirement: RG must be created by Terraform. But Terraform needs storage account before it runs, and storage account needs a RG.
-**Fix:** Two separate RGs: `coinops-tfstate-rg` (bootstrap, storage only) and `coinops-rg` (Terraform, all infra).
+Tailscale is installed on all nodes via Ansible role. Each VM joins the tailnet with the same auth key.
 
-### Problem 8 — data "azurerm_resource_group" fails
-**What:** Modules used `data "azurerm_resource_group"` which fails because RG doesn't exist yet.
-**Fix:** Replaced with `resource "azurerm_resource_group"` in azure_network. Other modules take rg_name/location from config locals.
+> ⚠️ **TODO (mentor feedback):** The correct approach is to install Tailscale only on jump-host as a **subnet router** — it advertises the internal cloud subnets to the tailnet, so other VMs don't need Tailscale installed individually. This reduces attack surface and is closer to production practice.
+>
+> Current workaround: Tailscale installed on all nodes directly.
 
-### Problem 9 — disk_size 10GB too small
-**What:** Ubuntu 24.04 in Azure requires minimum 30GB OS disk.
-**Fix:** Changed `disk_size: 30` in config.yaml.
+### Tailscale Files
 
-### Problem 10 — PostgreSQL ConflictingPublicNetworkAccess
-**What:** Conflict between private networking and public access settings.
-**Fix:** Added `public_network_access_enabled = false`.
+| File | Purpose |
+|------|---------|
+| `ansible/roles/tailscale/tasks/main.yml` | Installs Tailscale, starts `tailscaled`, runs `tailscale up` |
+| `ansible/roles/tailscale/defaults/main.yml` | Default vars: `tailscale_auth_key`, `tailscale_hostname` |
+| `ansible/provision.yml` | Calls tailscale role on `hosts: all` |
+| `.env` on jump-host | Contains `TAILSCALE_AUTH_KEY=tskey-auth-xxxxx` |
 
-### Problem 11 — set -e stopped bootstrap on versioning failure
-**Fix:** Added `|| echo "skipping"` to versioning command.
+### Tailscale Dashboard
 
-### Problem 12 — Git Bash path conversion
-**What:** Paths `/subscriptions/...` became `C:/Program Files/Git/subscriptions/...`.
-**Fix:** Prefix commands with `MSYS_NO_PATHCONV=1`.
+Machines visible in tailnet (`login.tailscale.com/admin/machines`):
+- AWS nodes appear as `ip-10-0-1-xxx` — AWS auto-generates hostname from private IP
+- Azure nodes appear as `jump-host`, `node-03` — hostname taken from VM name in Terraform
 
-### Problem 13 — Azure API race condition (ResourceGroupNotFound / already exists)
-**What:** Resources created in Azure but not recorded in Terraform state. Next apply fails with `already exists`.
-**Why:** Azure eventual consistency — resource created but API not yet propagated across all datacenter nodes.
-**Fix:** Re-run `terraform apply` (idempotent). Import stuck resources with `MSYS_NO_PATHCONV=1 terraform import`.
+---
 
-### Problem 14 — germanywestcentral: Standard_B1s and PostgreSQL unavailable
-**What:** `SkuNotAvailable` for VMs and `LocationIsOfferRestricted` for PostgreSQL in germanywestcentral on Free account.
-**Why:** check-regions.sh had a bug — it tested NSG creation using `coinops-tfstate-rg` (swedencentral) which gave false positives for all regions.
-**Fix:** Moved to swedencentral which genuinely supports all required services.
+## Azure Resources (swedencentral)
 
-### Problem 15 — Hybrid cloud: active_location lookup fails for "hybrid"
-**What:** `local.config.locations["europe"]["hybrid"]` doesn't exist in config.yaml.
-**Why:** `active_location` was designed for single-cloud mode.
-**Fix:** Added fallback: `cloud == "hybrid" ? locations["europe"]["azure"] : locations["europe"][cloud]`.
+| Resource | Value |
+|----------|-------|
+| Account | Azure for Students |
+| Subscription | 387c88f6-124c-413f-936b-75b578dbabc9 |
+| Allowed regions | spaincentral, francecentral, germanywestcentral, swedencentral, italynorth |
+| Infra RG | coinops-rg (Terraform managed) |
+| VM size | Standard_B2s_v2 (2 vCPU) |
+| jump-host public IP | 20.240.186.9 |
+| node-03 public IP | 74.241.253.170 |
+| Azure LB | 172.160.228.124 (configured, not used — instance IP used instead) |
 
-### Problem 16 — aws_rds and aws_lb created in hybrid mode
-**What:** After sed replacement, aws_rds and aws_lb also got `contains(["aws","hybrid"])` condition and would create in hybrid mode.
-**Why:** We don't need AWS RDS (using Azure PostgreSQL) or AWS LB (using Azure LB) in hybrid mode.
-**Fix:** Reverted aws_rds and aws_lb conditions back to `cloud == "aws"` only.
+## AWS Resources (eu-central-1)
+
+| Resource | Value |
+|----------|-------|
+| node-01 | RabbitMQ + History API (public subnet, public IP — temp) |
+| node-02 | Go proxy + Redis (public subnet, public IP — temp) |
+| RDS PostgreSQL | private subnet, db.t3.micro, free tier |
+| VPC | 10.0.0.0/16 |
+
+> ⚠️ **TODO:** node-01/02 still have public IPs. Once Tailscale subnet router is configured on jump-host, public IPs can be removed and nodes moved to private subnet.
+
+## Terraform State (GCP)
+
+| Resource | Value |
+|----------|-------|
+| Bucket | `devops-intern-penina-tf-state` |
+| Prefix | `coinops-cloud/state` |
+| Backend | `gcs` in `backend.tf` |
 
 ---
 
 ## Quick Start
 
 ### Prerequisites
+
 - AWS CLI configured
-- Azure CLI (`az`) configured and logged in
+- Azure CLI (`az`) logged in as `marta.penina.pp.2022@lpnu.ua` (Students account)
+- GCP CLI (`gcloud`) configured as `marta.penina.academic@gmail.com`
 - Terraform installed
-- Ansible installed
-- SSH key at `~/.ssh/id_ed25519`
+- SSH key at `/d/.ssh/id_ed25519`
+- Tailscale account with reusable auth key
 
 ### Deploy Hybrid (Azure + AWS)
 
 ```bash
-# 1. Bootstrap Azure state storage (run once)
-cd bootstrap/azure && ./bootstrap.sh
+# 1. Bootstrap Azure SP (run once per Azure account)
+cd bootstrap/azure && bash bootstrap.sh
+# Save client_id, client_secret, tenant_id from output
 
-# 2. Set config
-# terraform/config.yaml → general.cloud: "hybrid"
-# Set cloud per VM: jump-host/node-03 → azure, node-01/node-02 → aws
-
-# 3. Add credentials to terraform/terraform.tfvars
+# 2. Set credentials in terraform/terraform.tfvars
 # azure_subscription_id, azure_client_id, azure_client_secret, azure_tenant_id
 # aws_access_key, aws_secret_key, db_password
 
-# 4. Set Azure backend in terraform/backend.tf
+# 3. GCP backend is active in terraform/backend.tf (gcs section uncommented)
 
-# 5. Deploy
+# 4. Init
 cd terraform
 terraform init -reconfigure
+
+# 5. ALWAYS check plan before apply — changing public_ip causes VM recreation
+terraform plan
+
+# 6. Apply
 terraform apply -auto-approve
 
-# If "already exists" errors — import stuck resources:
-# MSYS_NO_PATHCONV=1 terraform import "module.X.resource[0]" "/subscriptions/..."
+# 7. On jump-host: install Ansible and clone repo
+ssh -A -p 9922 marta_ops@<jump-host-ip>
+sudo apt install -y ansible git
+git clone https://github.com/ua-academy-projects/coin-ops.git
+cd coin-ops && git checkout dev-penina-cloud
+
+# 8. Set .env on jump-host (copy from local or create manually)
+# Required: RABBITMQ_PASSWORD, DB_PASSWORD, SSH_KEY_PATH, TAILSCALE_AUTH_KEY
+
+# 9. Update ansible/inventory with current IPs
+
+# 10. Provision (Docker + Tailscale on all nodes)
+source .env
+ansible-playbook -i ansible/inventory ansible/provision.yml
+
+# 11. If tailscale up was skipped — run manually on each node
+ssh -p 9922 marta_ops@<node-ip> "sudo tailscale up --authkey=$TAILSCALE_AUTH_KEY"
+
+# 12. Update inventory to Tailscale IPs (100.x.x.x)
+# Run: tailscale status on jump-host to get IPs
+
+# 13. Deploy app
+ansible-playbook -i ansible/inventory ansible/deploy.yml
+
+# 14. Destroy when done to save credits
+terraform destroy -auto-approve
 ```
 
-### Check Available Azure Regions
+---
 
-```bash
-bash bootstrap/azure/check-regions.sh
-```
+## Problems & Solutions
+
+### Problem 1 — Azure Free Trial expired in 2-3 days
+**What:** $200 credit gone, services paused.
+**Why:** 30-day time limit hit (not spending limit). Only $6.85 was actually spent.
+**Fix:** Switched to Azure for Students account — $100 credit, no 30-day limit, no card required.
+
+### Problem 2 — Azure for Students has regional policy restrictions
+**What:** Only 5 EU regions allowed: spaincentral, francecentral, germanywestcentral, swedencentral, italynorth.
+**Fix:** Used `az policy assignment list` to discover allowed regions. Deployed to swedencentral.
+
+### Problem 3 — AWS node-01/02 unreachable from Azure jump-host
+**What:** `internal-sg` only allowed SSH from `jump-host-sg` (AWS SG reference) — doesn't work cross-cloud.
+**Fix:** Added `dynamic "ingress"` block in `aws_security/main.tf` — in hybrid mode, port 9922 allowed from `0.0.0.0/0`.
+
+### Problem 4 — Tailscale `tailscale up` skipped on second provision
+**What:** Task used `creates: /var/lib/tailscale/tailscaled.state` — file existed, command skipped. VMs showed `Logged out`.
+**Fix:** Run `tailscale up` manually via SSH after provision.
+
+### Problem 5 — node-03 got internal-nsg instead of web-nsg
+**What:** node-03 had tags `["internal", "ui", "web"]`. Azure allows only one NSG per NIC. `internal-nsg` was applied last, blocking port 80.
+**Fix:** Removed `internal` tag from node-03. Only `web-nsg` now applied.
+
+### Problem 6 — NIC state drift after CLI changes
+**What:** Used `az network nic update` directly — created drift between Terraform state and Azure. Subsequent apply failed.
+**Lesson:** Never modify Terraform-managed resources via CLI.
+**Fix:** `terraform state rm` + `terraform import` to re-sync.
+
+### Problem 7 — Terraform state desync for AWS VMs
+**What:** After multiple destroy/recreate cycles, state held old terminated instance IDs.
+**Fix:** `terraform state rm` for affected VMs, then `terraform apply`.
+
+### Problem 8 — Changing public_ip causes VM recreation
+**What:** Changing `public_ip: true → false` moves VM to different subnet — AWS requires destroy + recreate.
+**Why:** Subnet cannot be changed on running EC2 instance.
+**Lesson:** Always run `terraform plan` first. Any subnet change = VM recreation = need for new provision + deploy.
+
+### Problem 9 — Git Bash path conversion
+**What:** Paths `/subscriptions/...` became `C:/Program Files/Git/subscriptions/...`.
+**Fix:** Prefix commands with `MSYS_NO_PATHCONV=1`.
 
 ---
 
@@ -252,36 +291,30 @@ bash bootstrap/azure/check-regions.sh
 ```
 coin-ops/
 ├── ansible/
-│   ├── group_vars/
 │   ├── roles/
+│   │   ├── common/       ← base packages, UFW firewall
+│   │   ├── docker/       ← Docker + Compose
+│   │   ├── tailscale/    ← Tailscale VPN overlay (tasks/, defaults/)
+│   │   ├── history/      ← History service deploy
+│   │   ├── proxy/        ← Proxy service deploy
+│   │   └── ui/           ← UI + nginx deploy
 │   ├── deploy.yml
-│   ├── inventory              ← update IPs after terraform apply
+│   ├── inventory         ← Tailscale IPs (100.x.x.x) after provision
 │   └── provision.yml
 ├── bootstrap/
 │   ├── aws/bootstrap.sh
-│   ├── azure/
-│   │   ├── bootstrap.sh       ← state RG + storage + SP + roles
-│   │   └── check-regions.sh  ← find working Azure regions
-│   └── gcp/bootstrap.sh
+│   └── azure/
+│       ├── bootstrap.sh       ← SP creation + role assignments
+│       └── check-regions.sh   ← find allowed Azure regions + quota
 ├── terraform/
 │   ├── modules/
-│   │   ├── aws_lb/
-│   │   ├── aws_network/
-│   │   ├── aws_rds/
-│   │   ├── aws_security/
-│   │   ├── aws_vm/            ← filters VMs by vm.cloud == "aws"
-│   │   ├── azure_db/
-│   │   ├── azure_lb/
-│   │   ├── azure_network/
-│   │   ├── azure_security/
-│   │   ├── azure_vm/          ← filters VMs by vm.cloud == "azure"
-│   │   ├── gcp_lb/
-│   │   ├── gcp_network/
-│   │   ├── gcp_security/
-│   │   ├── gcp_sql/
-│   │   └── gcp_vm/
-│   ├── backend.tf             ← Azure Blob Storage backend
-│   ├── config.yaml            ← cloud: "hybrid", vm-level cloud assignment
+│   │   ├── aws_network/   ├── aws_security/  ├── aws_vm/
+│   │   ├── aws_rds/       ├── aws_lb/
+│   │   ├── azure_network/ ├── azure_security/ ├── azure_vm/
+│   │   ├── azure_db/      ├── azure_lb/
+│   │   └── gcp_*/         ← GCP modules (code ready, not deployed yet)
+│   ├── backend.tf    ← GCP backend (gcs bucket)
+│   ├── config.yaml   ← hybrid mode, per-VM cloud field, database: "aws"
 │   ├── main.tf
 │   ├── outputs.tf
 │   ├── provider.tf
@@ -291,11 +324,10 @@ coin-ops/
 
 ---
 
-## Secrets — Never Commit These
+## Secrets — Never Commit
 
 | File | Contains | Gitignored |
 |------|---------|-----------|
-| `.env` | RABBITMQ_PASSWORD, DB_PASSWORD, SSH_KEY_PATH | ✓ |
+| `.env` | RABBITMQ_PASSWORD, DB_PASSWORD, TAILSCALE_AUTH_KEY | ✓ |
 | `terraform/terraform.tfvars` | cloud credentials, db_password | ✓ |
-| `bootstrap/gcp/key.json` | GCP service account key | ✓ |
 | `terraform/terraform.tfstate` | live infrastructure state | ✓ |

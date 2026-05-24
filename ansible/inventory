@@ -1,12 +1,32 @@
+# Gateway nodes — run Tailscale subnet router
+[gateway]
+gateway-azure ansible_host=<azure-gateway-public-ip> subnet_cidr=10.0.0.0/16
+gateway-aws   ansible_host=<aws-gateway-public-ip>   subnet_cidr=10.0.0.0/16
+
+# Jump host — SSH entry point only
+[jump_host]
+jump-host ansible_host=<jump-host-public-ip>
+
+# App nodes — private IPs, reachable via gateway subnet route
 [history]
-node-01 ansible_host=100.91.119.121
+node-01 ansible_host=10.0.x.x
 
 [proxy]
-node-02 ansible_host=100.82.194.81
+node-02 ansible_host=10.0.x.x
 
 [ui]
-node-03 ansible_host=100.106.115.73
+node-03 ansible_host=10.0.x.x
 
+# Group all internal nodes — one ProxyJump rule for all three
+[internal:children]
+history
+proxy
+ui
+
+[internal:vars]
+ansible_ssh_common_args=-o ProxyJump=marta_ops@<jump-host-ip>:9922 -o StrictHostKeyChecking=no
+
+# Global vars for all hosts
 [all:vars]
 ansible_user=marta_ops
 ansible_port=9922

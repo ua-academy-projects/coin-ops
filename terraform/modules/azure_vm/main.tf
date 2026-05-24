@@ -68,6 +68,15 @@ resource "azurerm_network_interface_security_group_association" "web" {
   network_security_group_id = var.web_nsg_id
 }
 
+resource "azurerm_network_interface_security_group_association" "gateway" {
+  for_each = {
+    for name, vm in local.azure_vms : name => vm if contains(vm.tags, "gateway")
+  }
+
+  network_interface_id      = azurerm_network_interface.vm[each.key].id
+  network_security_group_id = var.gateway_nsg_id
+}
+
 resource "azurerm_linux_virtual_machine" "vm" {
   for_each = local.azure_vms
 

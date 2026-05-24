@@ -1,5 +1,8 @@
 resource "google_compute_instance" "vm" {
-  for_each = var.config.general.cloud == "gcp" ? var.config.vms : {}
+  for_each = (var.config.general.cloud == "gcp" || var.config.general.cloud == "hybrid") ? {
+    for name, vm in var.config.vms : name => vm
+    if lookup(vm, "cloud", "gcp") == "gcp"
+  } : {}
 
   name         = each.key
   machine_type = var.config.sizes[each.value.size].gcp

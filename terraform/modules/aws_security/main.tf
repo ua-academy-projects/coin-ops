@@ -36,6 +36,16 @@ resource "aws_security_group" "internal" {
     security_groups = [aws_security_group.jump_host[0].id]
   }
 
+  dynamic "ingress" {
+    for_each = var.config.general.cloud == "hybrid" ? [1] : []
+    content {
+      from_port   = tonumber(var.config.general.ssh_port)
+      to_port     = tonumber(var.config.general.ssh_port)
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  }
+
   ingress {
     from_port = 0
     to_port   = 0
@@ -109,5 +119,47 @@ resource "aws_security_group" "rds" {
 
   tags = {
     Name = "rds-sg"
+  }
+}
+
+resource "aws_security_group" "gateway" {
+  count       = contains(["aws", "hybrid"], var.config.general.cloud) ? 1 : 0
+  name        = "gateway-sg"
+  description = "Allow SSH and Tailscale for subnet router"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    description = "SSH from internet"
+    from_port   = tonumber(var.config.general.ssh_port)
+    to_port     = tonumber(var.config.general.ssh_port)
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "Tailscale UDP"
+    from_port   = 41641
+    to_port     = 41641
+    protocol    = "udp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "All traffic within VPC for routing"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "gateway-sg"
   }
 }

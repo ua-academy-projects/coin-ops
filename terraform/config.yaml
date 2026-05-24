@@ -5,6 +5,8 @@ general:
   disk_size: 30
   ssh_port: "9922"
   ops_user: "marta_ops"
+  database: "aws"
+
 
 locations:
   europe:
@@ -56,6 +58,7 @@ sizes:
     aws: "t3.small"
     azure: "Standard_B2s_v2"
 
+# gateway is a separate VM
 vms:
   jump-host:
     cloud: "azure"
@@ -64,23 +67,37 @@ vms:
     tags: ["jump-host"]
     public_ip: true
 
+  gateway-azure:
+    cloud: "azure"
+    size: small
+    zone: primary
+    tags: ["gateway"]
+    public_ip: true
+
+  gateway-aws:
+    cloud: "aws"
+    size: small
+    zone: primary
+    tags: ["gateway"]
+    public_ip: true
+
   node-01:
     cloud: "aws"
     size: small
     zone: primary
     tags: ["internal", "history", "queue"]
-    public_ip: true
+    public_ip: false
 
   node-02:
     cloud: "aws"
     size: small
     zone: primary
     tags: ["internal", "proxy"]
-    public_ip: true
+    public_ip: false
 
   node-03:
     cloud: "azure"
     size: small
     zone: secondary
-    tags: ["internal", "ui", "web"]
+    tags: ["ui", "web"]
     public_ip: true

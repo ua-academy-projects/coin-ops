@@ -28,6 +28,6 @@
     --authkey={{ tailscale_auth_key }}
     --hostname={{ tailscale_hostname }}
     --accept-routes
-  args:
-    creates: /var/lib/tailscale/tailscaled.state
   become: yes
+  register: tailscale_up_result
+  changed_when: tailscale_up_result.rc != 0

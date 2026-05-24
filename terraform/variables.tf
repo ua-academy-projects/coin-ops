@@ -39,3 +39,15 @@ variable "azure_tenant_id" {
   sensitive = false
   default   = ""
 }
+
+variable "tailscale_auth_key" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "ssh_public_key_path" {
+  type        = string
+  description = "Path to SSH public key file"
+  default     = "/d/.ssh/id_ed25519_devops.pub"
+}

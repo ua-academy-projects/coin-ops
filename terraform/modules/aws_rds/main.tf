@@ -1,11 +1,11 @@
 resource "aws_db_subnet_group" "main" {
-  count = var.config.general.cloud == "aws" ? 1 : 0
+  count = try(var.config.general.database, var.config.general.cloud) == "aws" ? 1 : 0
   name  = "coinops-db-subnet-group"
 
   subnet_ids = [
-  var.private_subnet_id,
-  var.private_subnet_b_id,
-]
+    var.private_subnet_id,
+    var.private_subnet_b_id,
+  ]
 
   tags = {
     Name = "coinops-db-subnet-group"
@@ -13,7 +13,7 @@ resource "aws_db_subnet_group" "main" {
 }
 
 resource "aws_db_instance" "postgres" {
-  count = var.config.general.cloud == "aws" ? 1 : 0
+  count = try(var.config.general.database, var.config.general.cloud) == "aws" ? 1 : 0
 
   identifier     = "coinops-db"
   engine         = "postgres"

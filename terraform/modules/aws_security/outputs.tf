@@ -13,3 +13,7 @@ output "web_sg_id" {
 output "rds_sg_id" {
   value = try(aws_security_group.rds[0].id, null)
 }
+
+output "gateway_sg_id" {
+  value = try(aws_security_group.gateway[0].id, null)
+}

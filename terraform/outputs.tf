@@ -26,7 +26,7 @@ output "ssh_connection" {
   description = "Ready-to-use SSH command to connect to the jump host"
   value = "ssh -p ${local.general.ssh_port} ${local.general.ops_user}@${
     local.general.cloud == "gcp" ? module.gcp_vm.jump_host_external_ip : (
-    local.general.cloud == "aws" ? module.aws_vm.jump_host_external_ip :
+      local.general.cloud == "aws" ? module.aws_vm.jump_host_external_ip :
     module.azure_vm.jump_host_external_ip)
   }"
 }
