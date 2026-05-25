@@ -29,4 +29,4 @@
 - name: Set token and server IP as facts for other plays
   set_fact:
     k3s_token: "{{ k3s_token_raw.content | b64decode | trim }}"
-    k3s_server_ip: "{{ ansible_host }}"
+    k3s_server_ip: "{{ ansible_default_ipv4.address }}"
