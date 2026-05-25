@@ -38,3 +38,18 @@ ansible_user=marta_ops
 ansible_port=9922
 ansible_ssh_private_key_file=~/.ssh/id_ed25519
 ansible_ssh_common_args=-o StrictHostKeyChecking=no
+
+# k3s cluster — GCP
+[k3s_bootstrap]
+k3s-server-1  ansible_host=34.158.238.181
+
+[k3s_join]
+k3s-server-2  ansible_host=10.0.1.2
+k3s-server-3  ansible_host=10.0.1.4
+
+[k3s_server:children]
+k3s_bootstrap
+k3s_join
+
+[k3s_join:vars]
+ansible_ssh_common_args=-o ProxyJump=marta_ops@34.158.238.181:9922 -o StrictHostKeyChecking=no

@@ -54,7 +54,7 @@ sizes:
     aws: "t3.micro"
     azure: "Standard_B2s_v2"
   medium:
-    gcp: "e2-small"
+    gcp: "e2-medium" #(4GB)
     aws: "t3.small"
     azure: "Standard_B2s_v2"
 
@@ -100,4 +100,25 @@ vms:
     size: small
     zone: secondary
     tags: ["ui", "web"]
+    public_ip: false
+
+  k3s-server-1:
+    cloud: "gcp"
+    size: medium
+    zone: primary
+    tags: ["k3s-server"]
+    public_ip: true
+
+  k3s-server-2:
+    cloud: "gcp"
+    size: medium
+    zone: primary
+    tags: ["k3s-server"]
+    public_ip: false
+
+  k3s-server-3:
+    cloud: "gcp"
+    size: medium
+    zone: secondary
+    tags: ["k3s-server"]
     public_ip: false

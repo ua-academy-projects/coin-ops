@@ -1,6 +1,5 @@
 resource "google_compute_firewall" "allow_ssh_external" {
-  count = var.config.general.cloud == "gcp" ? 1 : 0
-
+  count   = contains(["gcp", "hybrid"], var.config.general.cloud) ? 1 : 0
   name    = "allow-ssh-external"
   network = var.vpc_name
 
@@ -14,8 +13,7 @@ resource "google_compute_firewall" "allow_ssh_external" {
 }
 
 resource "google_compute_firewall" "allow_ssh_internal" {
-  count = var.config.general.cloud == "gcp" ? 1 : 0
-
+  count   = contains(["gcp", "hybrid"], var.config.general.cloud) ? 1 : 0
   name    = "allow-ssh-internal"
   network = var.vpc_name
 
@@ -29,8 +27,7 @@ resource "google_compute_firewall" "allow_ssh_internal" {
 }
 
 resource "google_compute_firewall" "allow_internal" {
-  count = var.config.general.cloud == "gcp" ? 1 : 0
-
+  count   = contains(["gcp", "hybrid"], var.config.general.cloud) ? 1 : 0
   name    = "allow-internal"
   network = var.vpc_name
 
@@ -40,4 +37,38 @@ resource "google_compute_firewall" "allow_internal" {
 
   source_tags = ["internal"]
   target_tags = ["internal"]
+}
+
+resource "google_compute_firewall" "allow_k3s" {
+  count   = contains(["gcp", "hybrid"], var.config.general.cloud) ? 1 : 0
+  name    = "allow-k3s"
+  network = var.vpc_name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["6443"]
+  }
+
+  allow {
+    protocol = "tcp"
+    ports    = ["9345"]
+  }
+
+  allow {
+    protocol = "tcp"
+    ports    = ["2379-2380"]
+  }
+
+  allow {
+    protocol = "udp"
+    ports    = ["8472"]
+  }
+
+  allow {
+    protocol = "tcp"
+    ports    = ["10250"]
+  }
+
+  source_tags = ["k3s-server"]
+  target_tags = ["k3s-server"]
 }
