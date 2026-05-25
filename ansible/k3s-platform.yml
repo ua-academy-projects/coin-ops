@@ -1,0 +1,47 @@
+#   ansible-playbook -i ansible/inventory.k3s.gcp ansible/k3s-platform.yml --tags cert-manager
+#   ansible-playbook -i ansible/inventory.k3s.gcp ansible/k3s-platform.yml --tags issuer
+#   ansible-playbook -i ansible/inventory.k3s.gcp ansible/k3s-platform.yml --tags homepage
+#   ansible-playbook -i ansible/inventory.k3s.gcp ansible/k3s-platform.yml --tags ingress
+
+- name: Install k3s platform components
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  roles:
+    - role: cert_manager
+      tags:
+        - cert-manager
+        - tls
+
+    - role: cert_manager_issuer
+      tags:
+        - issuer
+        - tls
+
+    - role: homepage
+      tags:
+        - homepage
+
+    - role: homepage_ingress
+      tags:
+        - ingress
+        - homepage
+
+  post_tasks:
+    - name: Read homepage ingress
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ platform_kubeconfig }}"
+        api_version: networking.k8s.io/v1
+        kind: Ingress
+        namespace: "{{ homepage_namespace }}"
+        name: "{{ homepage_ingress_name }}"
+      register: platform_homepage_ingress
+      tags:
+        - verify
+
+    - name: Print homepage URL
+      debug:
+        msg: "Homepage ingress should be available at https://{{ homepage_domain }}"
+      tags:
+        - verify
+

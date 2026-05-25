@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ homepage_app_name }}
+  namespace: {{ homepage_namespace }}
+  labels:
+    app.kubernetes.io/name: {{ homepage_app_name }}
+data:
+  settings.yaml: |
+    title: {{ homepage_title }}
+    theme: dark
+    color: slate
+    target: _blank
+    headerStyle: boxed
+    layout:
+      Platform:
+        style: row
+        columns: 3
+      Kubernetes:
+        style: row
+        columns: 3
+      DevOps:
+        style: row
+        columns: 3
+
+  services.yaml: |
+    - Platform:
+        - k3s Ingress:
+            icon: kubernetes.png
+            href: https://{{ homepage_domain }}
+            description: {{ homepage_description }}
+        - Headlamp:
+            icon: kubernetes-dashboard.png
+            description: Private admin UI via kubectl port-forward
+        - Traefik:
+            icon: traefik.png
+            description: Default k3s ingress controller
+    - Kubernetes:
+        - cert-manager:
+            icon: lets-encrypt.png
+            description: Let's Encrypt certificates via Cloudflare DNS-01
+        - Cloudflare DNS:
+            icon: cloudflare.png
+            href: https://dash.cloudflare.com
+            description: app.{{ homepage_cluster_name }}.pp.ua DNS zone
+        - GCP Load Balancer:
+            icon: google-cloud-platform.png
+            href: https://console.cloud.google.com
+            description: External L4 entrypoint for ports 80 and 443
+    - DevOps:
+        - GitHub:
+            icon: github.png
+            href: https://github.com
+            description: Source control and pull requests
+        - Kubernetes Docs:
+            icon: kubernetes.png
+            href: https://kubernetes.io/docs/
+            description: Kubernetes reference
+        - cert-manager Docs:
+            icon: lets-encrypt.png
+            href: https://cert-manager.io/docs/
+            description: Certificate automation docs
+
+  bookmarks.yaml: |
+    - Links:
+        - Cloudflare:
+            - abbr: CF
+              href: https://dash.cloudflare.com
+        - Google Cloud:
+            - abbr: GCP
+              href: https://console.cloud.google.com
+        - Kubernetes:
+            - abbr: K8S
+              href: https://kubernetes.io/docs/
+
+  widgets.yaml: |
+    - search:
+        provider: google
+        target: _blank
+    - datetime:
+        text_size: xl
+        format:
+          dateStyle: short
+          timeStyle: short
+
+  kubernetes.yaml: |
+    mode: disabled
+
+  docker.yaml: |
+    disabled: true

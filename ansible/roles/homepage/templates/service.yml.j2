@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ homepage_service_name }}
+  namespace: {{ homepage_namespace }}
+  labels:
+    app.kubernetes.io/name: {{ homepage_app_name }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: {{ homepage_app_name }}
+  ports:
+    - name: http
+      port: {{ homepage_service_port }}
+      targetPort: http
+

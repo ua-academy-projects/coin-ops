@@ -1,0 +1,14 @@
+---
+platform_kubeconfig: "{{ lookup('env', 'KUBECONFIG') | default(lookup('env', 'HOME') ~ '/.kube/config', true) }}"
+
+homepage_namespace: homepage
+homepage_app_name: homepage
+homepage_replicas: 2
+homepage_image: ghcr.io/gethomepage/homepage:v1.5.0
+homepage_service_name: homepage
+homepage_service_port: 80
+homepage_container_port: 3000
+homepage_domain: app.kazachuk-k3s.pp.ua
+homepage_title: k3s ingress lab
+homepage_cluster_name: kazachuk-k3s
+homepage_description: "GCP Load Balancer -> Traefik -> Ingress -> Service -> Pod"

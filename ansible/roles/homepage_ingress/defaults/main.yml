@@ -1,0 +1,11 @@
+---
+platform_kubeconfig: "{{ lookup('env', 'KUBECONFIG') | default(lookup('env', 'HOME') ~ '/.kube/config', true) }}"
+
+homepage_namespace: homepage
+homepage_service_name: homepage
+homepage_service_port: 80
+homepage_domain: app.kazachuk-k3s.pp.ua
+homepage_ingress_name: homepage
+homepage_ingress_class_name: traefik
+homepage_ingress_tls_secret_name: homepage-tls
+homepage_ingress_cluster_issuer_name: letsencrypt-cloudflare-production

@@ -1,0 +1,57 @@
+---
+- name: Read Cloudflare API token from GCP Secret Manager
+  command: >-
+    gcloud secrets versions access latest
+    --project {{ cert_manager_gcp_project_id }}
+    --secret {{ cert_manager_cloudflare_secret_manager_name }}
+  register: cloudflare_api_token_raw
+  changed_when: false
+  no_log: true
+
+- name: Store Cloudflare API token in memory
+  set_fact:
+    cloudflare_api_token: "{{ cloudflare_api_token_raw.stdout | trim }}"
+  no_log: true
+
+- name: Ensure cert-manager namespace exists
+  kubernetes.core.k8s:
+    kubeconfig: "{{ platform_kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ cert_manager_namespace }}"
+
+- name: Create Cloudflare API token Kubernetes secret
+  kubernetes.core.k8s:
+    kubeconfig: "{{ platform_kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: "{{ cert_manager_cloudflare_k8s_secret_name }}"
+        namespace: "{{ cert_manager_namespace }}"
+      type: Opaque
+      stringData:
+        api-token: "{{ cloudflare_api_token }}"
+  no_log: true
+
+- name: Create Let's Encrypt Cloudflare ClusterIssuer
+  kubernetes.core.k8s:
+    kubeconfig: "{{ platform_kubeconfig }}"
+    state: present
+    definition: "{{ lookup('template', role_path ~ '/templates/clusterissuer.yml.j2') | from_yaml }}"
+
+- name: Read ClusterIssuer status
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ platform_kubeconfig }}"
+    api_version: cert-manager.io/v1
+    kind: ClusterIssuer
+    name: "{{ cert_manager_issuer_name }}"
+  register: cert_manager_clusterissuer
+
+- name: Show ClusterIssuer status
+  debug:
+    var: cert_manager_clusterissuer.resources[0].status.conditions | default([])

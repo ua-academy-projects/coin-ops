@@ -1,0 +1,28 @@
+---
+- name: Install cert-manager with Helm
+  kubernetes.core.helm:
+    kubeconfig: "{{ platform_kubeconfig }}"
+    name: "{{ cert_manager_release_name }}"
+    chart_ref: "{{ cert_manager_chart_ref }}"
+    chart_version: "{{ cert_manager_chart_version }}"
+    release_namespace: "{{ cert_manager_namespace }}"
+    create_namespace: true
+    release_values: "{{ cert_manager_values }}"
+    wait: "{{ cert_manager_wait }}"
+    wait_timeout: "{{ cert_manager_wait_timeout }}"
+    state: present
+
+- name: Read cert-manager pods
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ platform_kubeconfig }}"
+    api_version: v1
+    kind: Pod
+    namespace: "{{ cert_manager_namespace }}"
+    label_selectors:
+      - app.kubernetes.io/instance={{ cert_manager_release_name }}
+  register: cert_manager_pods
+
+- name: Show cert-manager pod names
+  debug:
+    msg: "{{ cert_manager_pods.resources | map(attribute='metadata.name') | list }}"
+
