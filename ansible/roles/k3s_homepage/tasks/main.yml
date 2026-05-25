@@ -22,8 +22,6 @@
       config:
         bookmarks:
           - CoinOps:
-              - Headlamp:
-                  - href: "https://headlamp.coinops-softserve-penina.pp.ua"
               - GitHub:
                   - href: "https://github.com/ua-academy-projects/coin-ops"
               - YouTube:
