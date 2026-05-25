@@ -1,6 +1,6 @@
 ---
 # Installs Homepage dashboard via Helm and creates Ingress with TLS.
-# Accessible at https://coinops-softserve-penina.pp.ua
+# Accessible at https://k3s.coinops-softserve-penina.pp.ua
 
 - name: Add Homepage Helm repo
   kubernetes.core.helm_repository:
@@ -16,6 +16,9 @@
     wait: true
     timeout: 5m
     values:
+      env:
+        - name: HOMEPAGE_ALLOWED_HOSTS
+          value: "{{ homepage_domain }}"
       config:
         bookmarks:
           - CoinOps:
