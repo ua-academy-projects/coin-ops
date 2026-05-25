@@ -1,0 +1,18 @@
+app:
+  runtime_backend: "{{ runtime_backend }}"
+  port: {{ proxy_port }}
+proxy:
+  url: "/api"
+  vite_url: "/api"
+history:
+  url: "/history-api"
+  vite_url: "/history-api"
+database:
+  user: "{{ db_user }}"
+  db_name: "{{ db_name }}"
+  app_role: "{{ db_user }}"
+rabbitmq:
+  default_user: "{{ rabbitmq_user | default('guest') }}"
+  erl_args: "-rabbit vm_memory_high_watermark 0.7"
+redis:
+  url: "redis://redis:6379/0"

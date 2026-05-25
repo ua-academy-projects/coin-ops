@@ -1,0 +1,42 @@
+# =============================================================================
+# .gitignore
+# CRITICAL: These files must NEVER be committed to Git
+# =============================================================================
+
+# ── Service Account / Credential Keys ────────────────────────────────────────
+# SA keys provide full programmatic access to GCP.
+# If leaked, an attacker can create resources, read data, delete infrastructure.
+*.json
+sa-key.json
+*-key.json
+*-credentials.json
+
+# ── Terraform Environment Files ───────────────────────────────────────────────
+# Contains GOOGLE_APPLICATION_CREDENTIALS path and project IDs
+.env.terraform
+.env.aws
+.env
+.env.*
+*.tfvars
+!*.tfvars.example   # Example tfvars (with no real values) are OK to commit
+
+# ── Terraform State ───────────────────────────────────────────────────────────
+# State files contain resource details and may include secrets in plaintext.
+# We use GCS/S3 remote state — local state files are only a side-effect of init.
+*.tfstate
+*.tfstate.*
+terraform.tfstate
+terraform.tfstate.backup
+
+# ── Terraform Working Files ───────────────────────────────────────────────────
+.terraform/
+.terraform.lock.hcl   # Can be committed, but often excluded in learning setups
+.terraform.tfstate
+
+# ── OS & Editor ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo

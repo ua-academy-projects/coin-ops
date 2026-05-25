@@ -1,0 +1,30 @@
+---
+- name: Install Squid
+  apt:
+    name: squid
+    state: present
+    update_cache: yes
+
+- name: Copy allowed domains list
+  template:
+    src: allowed_domains.txt.j2
+    dest: /etc/squid/allowed_domains.txt
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart squid
+
+- name: Configure Squid
+  template:
+    src: squid.conf.j2
+    dest: /etc/squid/squid.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart squid
+
+- name: Ensure Squid is enabled and started
+  service:
+    name: squid
+    state: started
+    enabled: yes

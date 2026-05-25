@@ -1,0 +1,13 @@
+# =============================================================================
+# deploy/local/namespace.yaml
+# =============================================================================
+# Logical isolation for local dev workloads.
+# Mirrors the production "coin-ops" namespace so manifests are portable.
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: coin-ops
+  labels:
+    environment: local
+    managed-by: k3d

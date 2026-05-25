@@ -1,0 +1,92 @@
+# =============================================================================
+# deploy/local/frontend.yaml
+# =============================================================================
+# Frontend Deployment + ClusterIP Service for local k3d development.
+#
+# Uses nginx:alpine as a stand-in so you can validate the entire routing
+# stack (Ingress → Service → Pod) without a real application image.
+# Swap the image for your actual frontend image when ready.
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: coin-ops
+  labels:
+    app: frontend
+    env: local
+spec:
+  replicas: 1           # Single replica is fine locally — no HA needed.
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          # Placeholder: replace with your real image once built.
+          # To use a local image: k3d image import my-frontend:dev -c coin-ops-local
+          image: nginx:alpine
+          imagePullPolicy: IfNotPresent  # Don't re-pull on every restart locally.
+          ports:
+            - name: http
+              containerPort: 80
+          # Minimal health checks — faster feedback loop locally.
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          # Override the default nginx page with a recognisable response.
+          env:
+            - name: SERVICE_NAME
+              value: "frontend"
+          # Simple nginx config served from a ConfigMap volume.
+          volumeMounts:
+            - name: html
+              mountPath: /usr/share/nginx/html
+      volumes:
+        - name: html
+          configMap:
+            name: frontend-html
+
+---
+# Tiny ConfigMap so the nginx placeholder page is identifiable.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-html
+  namespace: coin-ops
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html>
+      <head><title>Coin Ops — Frontend</title></head>
+      <body>
+        <h1>✅ Frontend Service</h1>
+        <p>Running in local k3d cluster.</p>
+        <p>Backend: <a href="/api/">/api/</a></p>
+      </body>
+    </html>
+
+---
+# ClusterIP — Traefik Ingress routes external traffic here.
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: coin-ops
+  labels:
+    app: frontend
+spec:
+  type: ClusterIP
+  selector:
+    app: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

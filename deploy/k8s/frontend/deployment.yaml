@@ -1,0 +1,139 @@
+# =============================================================================
+# deploy/k8s/frontend/deployment.yaml
+# =============================================================================
+# Frontend service Deployment.
+#
+# Production choices:
+#   replicas: 3         — minimum for HA (one per zone in a 3-zone regional cluster)
+#   RollingUpdate       — zero-downtime deploys
+#   readinessProbe      — prevents traffic until the container is healthy
+#   livenessProbe       — GKE restarts stuck containers automatically
+#   resource requests   — used by Cluster Autoscaler for bin-packing decisions
+#   resource limits     — prevents a single Pod from starving neighbours
+#   securityContext     — drop all capabilities, run as non-root, read-only rootfs
+#   topologySpreadConstraints — spread Pods across zones for resiliency
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: coin-ops
+  labels:
+    app: frontend
+    tier: frontend
+    app.kubernetes.io/name: frontend
+    app.kubernetes.io/part-of: coin-ops
+spec:
+  replicas: 3  # One replica per zone — ensures zone-level redundancy.
+  selector:
+    matchLabels:
+      app: frontend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1        # Create one extra Pod before removing old ones.
+      maxUnavailable: 0  # Never reduce capacity during a rollout.
+  template:
+    metadata:
+      labels:
+        app: frontend
+        tier: frontend
+      annotations:
+        # Prometheus scraping (if you run kube-prometheus-stack).
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "80"
+        prometheus.io/path: "/metrics"
+    spec:
+      # ── Workload Identity ────────────────────────────────────────────────────
+      # Map this K8s SA to a Google SA via:
+      #   gcloud iam service-accounts add-iam-policy-binding \
+      #     frontend-gsa@PROJECT.iam.gserviceaccount.com \
+      #     --role roles/iam.workloadIdentityUser \
+      #     --member "serviceAccount:PROJECT.svc.id.goog[coin-ops/frontend-ksa]"
+      serviceAccountName: frontend-ksa
+
+      # ── Spread across availability zones ─────────────────────────────────────
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: frontend
+
+      # ── Graceful shutdown ─────────────────────────────────────────────────────
+      # Give the app 30 s to drain in-flight requests before SIGKILL.
+      terminationGracePeriodSeconds: 30
+
+      containers:
+        - name: frontend
+          # ── Replace with your actual image from Artifact Registry ────────────
+          image: us-central1-docker.pkg.dev/coinops/coin-ops/frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+
+          # ── Health checks ──────────────────────────────────────────────────────
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+
+          # ── Resource quotas ────────────────────────────────────────────────────
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+          # ── Security context ───────────────────────────────────────────────────
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop:
+                - ALL  # Drop every Linux capability — the container needs none.
+
+          # ── Environment variables ──────────────────────────────────────────────
+          # Inject the backend URL so the frontend knows where to proxy API calls.
+          env:
+            - name: BACKEND_URL
+              value: "http://backend:8080"
+            - name: NODE_ENV
+              value: "production"
+
+          # ── Writable tmp dir (needed because rootfs is read-only) ─────────────
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+      # ── Prefer to schedule on separate nodes ───────────────────────────────────
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: frontend
+                topologyKey: kubernetes.io/hostname

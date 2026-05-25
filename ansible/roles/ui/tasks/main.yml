@@ -142,7 +142,7 @@
 
 - name: Wait for nginx availability
   uri:
-    url: "{{ 'https://localhost/health' if tls_enabled | bool else 'http://localhost:80/health' }}"
+    url: "http://localhost:80/health"
     method: GET
     status_code: 200
     validate_certs: no

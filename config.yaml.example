@@ -1,0 +1,18 @@
+app:
+  runtime_backend: "postgres"
+  port: 8080
+proxy:
+  url: "/api"
+  vite_url: "/api"
+history:
+  url: "/history-api"
+  vite_url: "/history-api"
+database:
+  user: "cognitor"
+  db_name: "cognitor"
+  app_role: "cognitor"
+rabbitmq:
+  default_user: "guest"
+  erl_args: "-rabbit vm_memory_high_watermark 0.7"
+redis:
+  url: "redis://redis:6379/0"

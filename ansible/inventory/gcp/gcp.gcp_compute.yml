@@ -1,0 +1,54 @@
+# ═══════════════════════════════════════════════════════════════
+# GCP Compute Dynamic Inventory
+# ═══════════════════════════════════════════════════════════════
+# Queries the GCP Compute API directly.
+# Groups are generated from instance labels (role=history, etc.)
+#
+# Requirements:
+#   pip install google-auth google-api-python-client
+#   ansible-galaxy collection install google.cloud
+#   export GCP_SERVICE_ACCOUNT_FILE=/path/to/sa-key.json
+#
+# Verify:
+#   ansible-inventory --list
+#   ansible-inventory --graph
+# ═══════════════════════════════════════════════════════════════
+plugin: google.cloud.gcp_compute
+
+projects:
+  - coinops
+
+# Auth via GCP_SERVICE_ACCOUNT_FILE env var (set in .env).
+# The plugin reads this environment variable automatically.
+auth_kind: serviceaccount
+
+# Only discover running instances
+filters:
+  - status = RUNNING
+
+# ── Grouping ──────────────────────────────────────────────────
+# Generate Ansible groups from GCP labels.
+# Terraform applies labels like { role = "history" }, which
+# produces groups: history, proxy, ui, bastion.
+keyed_groups:
+  - key: labels.role
+    separator: ""
+
+# ── Host identity ────────────────────────────────────────────
+# Use the instance name (e.g. "dev-history") as the inventory hostname.
+hostnames:
+  - name
+
+# ── Host variables ───────────────────────────────────────────
+# Map GCP instance attributes to Ansible variables.
+compose:
+  # Bastion: connect via public IP. All others: connect via private IP.
+  ansible_host: >-
+    networkInterfaces[0].accessConfigs[0].natIP
+    if (labels.role == "bastion" and networkInterfaces[0].accessConfigs is defined)
+    else networkInterfaces[0].networkIP
+  # Store the public IP for reference
+  public_ip: networkInterfaces[0].accessConfigs[0].natIP | default('')
+  # Private IP for cross-node references (connection strings, etc.)
+  private_ip: networkInterfaces[0].networkIP
+  zone: zone | regex_replace('^.*zones/(.*)$', '\\1')

@@ -11,19 +11,30 @@
 
 - name: Create secrets directory
   file:
-    path: /etc/cognitor
+    path: "{{ item }}"
     state: directory
     owner: root
     group: root
     mode: '0750'
+  loop:
+    - /etc/cognitor
+    - /opt/coinops
 
-- name: Write proxy environment file
+- name: Write proxy environment file (Bootstrap)
   template:
     src: proxy.env.j2
     dest: /etc/cognitor/proxy.env
     owner: root
     group: root
     mode: '0640'
+
+- name: Write application configuration file
+  template:
+    src: config.yaml.j2
+    dest: /opt/coinops/config.yaml
+    owner: root
+    group: root
+    mode: '0644'
 
 - name: Create proxy deploy directory
   file:
@@ -48,6 +59,15 @@
   args:
     chdir: /opt/cognitor/proxy
   changed_when: false
+
+- name: Repair Redis data directory ownership
+  file:
+    path: /var/lib/coin-ops/redis
+    state: directory
+    owner: "999"
+    group: "999"
+    recurse: yes
+  when: runtime_backend == 'external'
 
 - name: Pull proxy container images
   command: docker compose -f /opt/cognitor/proxy/compose.yaml pull

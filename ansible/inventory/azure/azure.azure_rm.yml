@@ -1,0 +1,41 @@
+# ═══════════════════════════════════════════════════════════════
+# Azure RM Dynamic Inventory
+# ═══════════════════════════════════════════════════════════════
+# Queries the Azure Resource Manager API.
+# Groups are generated from instance tags (role=history, etc.)
+#
+# Requirements:
+#   ansible-galaxy collection install azure.azcollection
+#   pip install -r ~/.ansible/collections/ansible_collections/azure/azcollection/requirements-azure.txt
+#
+# Verify:
+#   ansible-inventory -i ansible/inventory/azure/azure.azure_rm.yml --list
+# ═══════════════════════════════════════════════════════════════
+plugin: azure.azcollection.azure_rm
+
+# Auth via environment variables (AZURE_CLIENT_ID, AZURE_SECRET, AZURE_TENANT, AZURE_SUBSCRIPTION_ID)
+# or via Azure CLI (if logged in).
+auth_source: cli
+
+# Only include VMs from our specific resource group
+include_vm_resource_groups:
+  - dev-vpc-rg
+
+# ── Grouping ──────────────────────────────────────────────────
+# Generate Ansible groups from Azure tags.
+# Terraform applies tags like { role = "history" }, which
+# produces groups: history, proxy, ui, bastion.
+keyed_groups:
+  - prefix: ""
+    key: tags.role
+    separator: ""
+
+# ── Host variables ───────────────────────────────────────────
+compose:
+  # Bastion uses public IP, all others use private IP
+  ansible_host: >-
+    public_ipv4_addresses[0] if (tags.role == 'bastion' and public_ipv4_addresses | length > 0) else private_ipv4_addresses[0]
+  
+  # Reference IPs
+  public_ip: public_ipv4_addresses[0] if public_ipv4_addresses | length > 0 else ''
+  private_ip: private_ipv4_addresses[0] if private_ipv4_addresses | length > 0 else ''

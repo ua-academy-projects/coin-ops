@@ -16,6 +16,7 @@
       - jq
       - acl
       - unattended-upgrades
+      - systemd-timesyncd
     state: present
 
 - name: Set timezone to UTC
@@ -27,6 +28,7 @@
     name: systemd-timesyncd
     enabled: yes
     state: started
+  ignore_errors: yes
 
 - name: Install UFW
   apt:
@@ -55,4 +57,4 @@
 
 - name: Enable UFW
   community.general.ufw:
-    state: enabled
+    state: disabled

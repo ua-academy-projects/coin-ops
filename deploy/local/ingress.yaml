@@ -1,0 +1,88 @@
+# =============================================================================
+# deploy/local/ingress.yaml
+# =============================================================================
+# Traefik IngressRoute for local development.
+#
+# k3d ships Traefik as the default Ingress controller on ports 80/443.
+# This manifest routes myapp.local to the frontend, and myapp.local/api/*
+# to the backend — stripping the /api prefix before forwarding.
+#
+# Prerequisites:
+#   Add to /etc/hosts:  127.0.0.1  myapp.local
+# =============================================================================
+
+# ── Standard Kubernetes Ingress (works with any ingress controller) ────────────
+# This is the most portable option and works with Traefik's built-in
+# kubernetes.io/ingress class.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: coin-ops-local
+  namespace: coin-ops
+  annotations:
+    # Strip /api prefix before forwarding to the backend service.
+    traefik.ingress.kubernetes.io/router.middlewares: "coin-ops-strip-api-prefix@kubernetescrd"
+spec:
+  # ingressClassName replaces the deprecated kubernetes.io/ingress.class annotation (k8s 1.18+).
+  ingressClassName: traefik
+  rules:
+    # ── All traffic to myapp.local → frontend ──────────────────────────────────
+    - host: myapp.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
+
+          # ── /api/* → backend (prefix stripped by middleware below) ────────────
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 8080
+
+---
+# ── Traefik Middleware: strip /api prefix ─────────────────────────────────────
+# Without this, the backend would receive requests as /api/health instead of /health.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-api-prefix
+  namespace: coin-ops
+spec:
+  stripPrefix:
+    prefixes:
+      - /api
+
+---
+# ── Optional: Traefik IngressRoute (CRD, more powerful than standard Ingress) ─
+# Uncomment this block and delete the standard Ingress above if you want
+# fine-grained Traefik routing with TLS and advanced rules.
+#
+# apiVersion: traefik.io/v1alpha1
+# kind: IngressRoute
+# metadata:
+#   name: coin-ops-local-crd
+#   namespace: coin-ops
+# spec:
+#   entryPoints:
+#     - web       # HTTP on port 80
+#   routes:
+#     - match: Host(`myapp.local`) && PathPrefix(`/api`)
+#       kind: Rule
+#       services:
+#         - name: backend
+#           port: 8080
+#       middlewares:
+#         - name: strip-api-prefix
+#     - match: Host(`myapp.local`)
+#       kind: Rule
+#       services:
+#         - name: frontend
+#           port: 80

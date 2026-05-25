@@ -1,0 +1,108 @@
+# =============================================================================
+# deploy/k8s/network-policy.yaml
+# =============================================================================
+# Kubernetes NetworkPolicies — zero-trust micro-segmentation.
+#
+# Default stance: deny all ingress and egress, then explicitly allow only what
+# each service needs. This limits lateral movement if a Pod is compromised.
+# =============================================================================
+
+# ── Default deny all in the coin-ops namespace ────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: coin-ops
+spec:
+  podSelector: {}  # Applies to ALL Pods in the namespace.
+  policyTypes:
+    - Ingress
+    - Egress
+
+---
+# ── Frontend: allow ingress from the GCLB health checker & backend calls ──────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-ingress
+  namespace: coin-ops
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # GCLB health checks originate from 130.211.0.0/22 and 35.191.0.0/16.
+    - from:
+        - ipBlock:
+            cidr: 130.211.0.0/22
+        - ipBlock:
+            cidr: 35.191.0.0/16
+      ports:
+        - port: 80
+  egress:
+    # Frontend can call the backend API.
+    - to:
+        - podSelector:
+            matchLabels:
+              app: backend
+      ports:
+        - port: 8080
+    # Allow DNS resolution.
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+
+---
+# ── Backend: allow ingress from frontend and GCLB health checker ─────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-ingress
+  namespace: coin-ops
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Requests from frontend Pods.
+    - from:
+        - podSelector:
+            matchLabels:
+              app: frontend
+      ports:
+        - port: 8080
+    # GCLB health checks.
+    - from:
+        - ipBlock:
+            cidr: 130.211.0.0/22
+        - ipBlock:
+            cidr: 35.191.0.0/16
+      ports:
+        - port: 8080
+  egress:
+    # Allow DNS resolution.
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Allow egress to Google APIs (Cloud SQL, Secret Manager) via Private Google Access.
+    - to:
+        - ipBlock:
+            cidr: 199.36.153.8/30   # restricted.googleapis.com
+        - ipBlock:
+            cidr: 199.36.153.4/30   # private.googleapis.com
+      ports:
+        - port: 443

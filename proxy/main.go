@@ -17,6 +17,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/redis/go-redis/v9"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	"gopkg.in/yaml.v3"
+	secretmanager "cloud.google.com/go/secretmanager/apiv1"
+	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 )
 
 const (
@@ -649,19 +654,159 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ---- main ----
+// ---- Config types ----
+
+type Config struct {
+	App struct {
+		RuntimeBackend string `yaml:"runtime_backend"`
+		Port           int    `yaml:"port"`
+	} `yaml:"app"`
+	RabbitMQ struct {
+		DefaultUser string `yaml:"default_user"`
+	} `yaml:"rabbitmq"`
+	Redis struct {
+		URL string `yaml:"url"`
+	} `yaml:"redis"`
+}
+
+type Secrets struct {
+	DatabaseURL string `json:"DATABASE_URL"`
+	RabbitMQURL string `json:"RABBITMQ_URL"`
+}
+
+func loadConfig(path string) (*Config, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var cfg Config
+	decoder := yaml.NewDecoder(file)
+	if err := decoder.Decode(&cfg); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}
+
+func fetchSecretsAWS(ctx context.Context, secretName, region string) (*Secrets, error) {
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
+	if err != nil {
+		return nil, err
+	}
+
+	client := secretsmanager.NewFromConfig(cfg)
+	result, err := client.GetSecretValue(ctx, &secretsmanager.GetSecretValueInput{
+		SecretId: &secretName,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var secrets Secrets
+	if err := json.Unmarshal([]byte(*result.SecretString), &secrets); err != nil {
+		return nil, err
+	}
+
+	return &secrets, nil
+}
+
+func fetchSecretsGCP(ctx context.Context, projectID, secretID string) (*Secrets, error) {
+	client, err := secretmanager.NewClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	name := fmt.Sprintf("projects/%s/secrets/%s/versions/latest", projectID, secretID)
+	req := &secretmanagerpb.AccessSecretVersionRequest{
+		Name: name,
+	}
+
+	result, err := client.AccessSecretVersion(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	var secrets Secrets
+	if err := json.Unmarshal(result.Payload.Data, &secrets); err != nil {
+		return nil, err
+	}
+
+	return &secrets, nil
+}
 
 func main() {
-	backend := os.Getenv("RUNTIME_BACKEND")
-	if backend == "" {
-		backend = "external"
+	configPath := os.Getenv("CONFIG_PATH")
+	if configPath == "" {
+		configPath = "/opt/coinops/config.yaml"
 	}
-	dbURL := os.Getenv("DATABASE_URL")
-	log.Printf("Runtime backend: %s", backend)
+	cloudProvider := os.Getenv("CLOUD_PROVIDER")
+	if cloudProvider == "" {
+		cloudProvider = "aws"
+	}
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	// AWS
+	secretNameAWS := os.Getenv("AWS_SECRET_NAME")
+	if secretNameAWS == "" {
+		secretNameAWS = "coinops/production/app-secrets"
+	}
+	awsRegion := os.Getenv("AWS_REGION")
+	if awsRegion == "" {
+		awsRegion = "us-east-1"
+	}
+
+	// GCP
+	gcpProjectID := os.Getenv("GCP_PROJECT_ID")
+	gcpSecretID := os.Getenv("GCP_SECRET_ID")
+	if gcpSecretID == "" {
+		gcpSecretID = "coinops-app-secrets"
+	}
+
+	var backend, dbURL, port string
+	var rabbitURL, redisURL string
+
+	appConfig, err := loadConfig(configPath)
+	if err == nil {
+		backend = appConfig.App.RuntimeBackend
+		port = strconv.Itoa(appConfig.App.Port)
+		redisURL = appConfig.Redis.URL
+	} else {
+		log.Printf("Warning: failed to load config from %s: %v", configPath, err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var appSecrets *Secrets
+	if cloudProvider == "gcp" {
+		appSecrets, err = fetchSecretsGCP(ctx, gcpProjectID, gcpSecretID)
+	} else {
+		appSecrets, err = fetchSecretsAWS(ctx, secretNameAWS, awsRegion)
+	}
+
+	if err == nil {
+		dbURL = appSecrets.DatabaseURL
+		rabbitURL = appSecrets.RabbitMQURL
+	} else {
+		log.Printf("Warning: failed to fetch secrets from %s Secret Manager: %v", cloudProvider, err)
+	}
+
+	// Fallback to env vars if missing
+	if backend == "" {
+		backend = os.Getenv("RUNTIME_BACKEND")
+		if backend == "" {
+			backend = "external"
+		}
+	}
+	if dbURL == "" {
+		dbURL = os.Getenv("DATABASE_URL")
+	}
+	if port == "" || port == "0" {
+		port = os.Getenv("PORT")
+		if port == "" {
+			port = "8080"
+		}
 	}
 
 	srv := &Server{backend: backend}
@@ -681,9 +826,11 @@ func main() {
 		log.Println("Connected to PostgreSQL (postgres mode)")
 
 	default: // "external" — current RabbitMQ + Redis behavior
-		rabbitURL := os.Getenv("RABBITMQ_URL")
 		if rabbitURL == "" {
-			rabbitURL = "amqp://guest:guest@localhost:5672/"
+			rabbitURL = os.Getenv("RABBITMQ_URL")
+			if rabbitURL == "" {
+				rabbitURL = "amqp://guest:guest@localhost:5672/"
+			}
 		}
 		conn := connectRabbitMQ(rabbitURL)
 		defer conn.Close()
@@ -697,9 +844,11 @@ func main() {
 		}
 		srv.ch = ch
 
-		redisURL := os.Getenv("REDIS_URL")
 		if redisURL == "" {
-			redisURL = "redis://localhost:6379/0"
+			redisURL = os.Getenv("REDIS_URL")
+			if redisURL == "" {
+				redisURL = "redis://localhost:6379/0"
+			}
 		}
 		redisOpts, err := redis.ParseURL(redisURL)
 		if err != nil {

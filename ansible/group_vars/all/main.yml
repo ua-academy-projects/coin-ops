@@ -3,26 +3,73 @@
 # Run `source .env` before any ansible-playbook command.
 
 # ── SSH ───────────────────────────────────────────────────────
-ansible_user: vagrant
-ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
-ansible_ssh_private_key_file: "{{ lookup('env', 'SSH_KEY_PATH') | expanduser }}"
+ansible_user: ubuntu
+# Bastion IP — auto-detected from the 'bastion' inventory group,
+# falls back to BASTION_IP env var for Packer builds or manual use.
+bastion_ip: >-
+  {{
+    hostvars[groups['bastion'][0]].ansible_host
+    if groups.get('bastion', []) | length > 0
+    else lookup('env', 'BASTION_IP') | default('', true)
+  }}
 
-# ── Passwords (loaded from .env) ──────────────────────────────
-rabbitmq_password: "{{ lookup('env', 'RABBITMQ_PASSWORD') }}"
-db_password: "{{ lookup('env', 'DB_PASSWORD') }}"
+# ── Proxy (Egress) ────────────────────────────────────────────
+# Route internet-bound container traffic through Squid on the Bastion.
+bastion_private_ip: >-
+  {{
+    hostvars[groups['bastion'][0]].private_ip
+    if groups.get('bastion', []) | length > 0
+    else '127.0.0.1'
+  }}
+app_http_proxy: "http://{{ bastion_private_ip }}:3128"
+app_no_proxy: "localhost,127.0.0.1,postgres,rabbitmq,redis,10.20.0.0/16"
+
+# ── SSH Connection Logic ──────────────────────────────────────
+# During Packer builds, connect directly.
+# For GCP, use Identity-Aware Proxy (IAP) tunneling to all nodes.
+# For AWS, route through the Bastion using ProxyJump.
+ansible_ssh_common_args: >-
+  -o StrictHostKeyChecking=no
+  {% if packer_build_name is not defined %}
+  {% if lookup('env', 'CLOUD_PROVIDER') == 'gcp' %}
+  -o ProxyCommand="gcloud compute start-iap-tunnel {{ inventory_hostname }} %p --listen-on-stdin --project={{ lookup('env', 'GCP_PROJECT_ID') }} --zone={{ zone }}"
+  {% elif bastion_ip | length > 0 and inventory_hostname not in groups.get('bastion', []) %}
+  -o ProxyJump={{ ansible_user }}@{{ bastion_ip }}
+  {% endif %}
+  {% endif %}
+ansible_ssh_private_key_file: "~/.ssh/id_rsa"
+# ── Passwords (loaded from Cloud API or .env) ───────────────
+rabbitmq_password: "{% if use_cloud_db %}{{ (cloud_secret_json | from_json).get('RABBITMQ_PASSWORD', lookup('env', 'RABBITMQ_PASSWORD')) | trim }}{% else %}{{ lookup('env', 'RABBITMQ_PASSWORD') | trim }}{% endif %}"
+
+cloud_secret_json: >-
+  {% if use_cloud_db and cloud_provider | default('') == 'gcp' %}
+  {{ lookup('pipe', 'gcloud secrets versions access latest --secret=coinops-app-secrets --project=' ~ gcp_project_id) }}
+  {% elif use_cloud_db and cloud_provider | default('') == 'aws' %}
+  {{ lookup('pipe', 'aws secretsmanager get-secret-value --secret-id coinops/production/app-secrets --query SecretString --output text') }}
+  {% else %}
+  {}
+  {% endif %}
+
+db_password: "{% if use_cloud_db %}{{ (cloud_secret_json | from_json).get('DB_PASSWORD', tf_db_password | default(lookup('env', 'DB_PASSWORD'))) | trim }}{% else %}{{ lookup('env', 'DB_PASSWORD') | trim }}{% endif %}"
+
+
 
 # ── Service accounts ──────────────────────────────────────────
 rabbitmq_user: cognitor
 db_name: cognitor
-db_user: cognitor
+db_user: postgres
 runtime_backend: "{{ lookup('env', 'RUNTIME_BACKEND') | default('external', true) }}"
+
+# ── Cloud Provider Config ─────────────────────────────────────
+# Auto-detect cloud provider based on inventory directory name
+cloud_provider: "{{ 'gcp' if 'gcp' in inventory_dir else 'aws' if 'aws' in inventory_dir else lookup('env', 'CLOUD_PROVIDER') | default('aws', true) }}"
+gcp_project_id: "{{ 'coinops' if cloud_provider == 'gcp' else lookup('env', 'GCP_PROJECT_ID') | default('', true) }}"
+
 
 # ── Ports ────────────────────────────────────────────────────
 proxy_port: 8080
 history_port: 8000
-postgres_bind_ip: "{{ hostvars[groups['history'][0]].ansible_host }}"
-
-# Public entrypoint / TLS
+postgres_bind_ip: "{{ hostvars[groups['history'][0]].private_ip }}"
 # Browser-facing domain served by node-03. For local labs, add this to hosts:
 #   172.31.1.12 coinops.test
 app_domain: "{{ lookup('env', 'APP_DOMAIN') | default('coinops.test', true) }}"
@@ -54,9 +101,28 @@ registry_username: "{{ lookup('env', 'GHCR_USERNAME') | default('', true) }}"
 registry_token: "{{ lookup('env', 'GHCR_TOKEN') | default('', true) }}"
 
 # ── Derived connection strings ────────────────────────────────
-rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@172.31.1.10:5672/"
-database_url: "postgresql://{{ db_user }}:{{ db_password }}@localhost:5432/{{ db_name }}"
-history_database_url: "postgresql://{{ db_user }}:{{ db_password }}@postgres:5432/{{ db_name }}"
-proxy_database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ postgres_bind_ip }}:5432/{{ db_name }}"
-redis_url: "redis://127.0.0.1:6379/0"
+use_cloud_db: "{{ cloud_provider | default('') in ['gcp', 'aws', 'azure'] }}"
+db_host: >-
+  {{ 
+    (cloud_secret_json | from_json).get('DB_HOST', tf_db_host | default(lookup('env', 'DB_HOST') | default('localhost', true))) 
+    if use_cloud_db 
+    else lookup('env', 'DB_HOST') | default('localhost', true) 
+  }}
+
+
+rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@{{ hostvars[groups['history'][0]].private_ip }}:5672/"
+database_url: >-
+  {% if use_cloud_db %}
+  {{ (cloud_secret_json | from_json).get('DATABASE_URL', tf_database_url | default('')) }}
+  {% else %}
+  postgresql://{{ db_user }}:{{ db_password }}@{{ db_host }}:5432/{{ db_name }}
+  {% endif %}
+history_database_url: >-
+  {% if use_cloud_db %}
+  {{ (cloud_secret_json | from_json).get('DATABASE_URL', tf_database_url | default('')) }}
+  {% else %}
+  postgresql://{{ db_user }}:{{ db_password }}@{{ 'postgres' if db_host == 'localhost' else db_host }}:5432/{{ db_name }}
+  {% endif %}
+proxy_database_url: "{{ database_url }}"
+redis_url: "redis://{{ hostvars[groups['proxy'][0]].private_ip }}:6379/0"
 

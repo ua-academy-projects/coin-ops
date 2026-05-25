@@ -1,0 +1,14 @@
+# =============================================================================
+# deploy/k8s/namespace.yaml
+# =============================================================================
+# Logical isolation boundary for Coin Ops workloads.
+# All other manifests use the "coin-ops" namespace.
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: coin-ops
+  labels:
+    # GKE Network Policy applies per-namespace; the label helps with selectors.
+    app.kubernetes.io/managed-by: terraform
+    environment: prod

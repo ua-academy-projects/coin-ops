@@ -1,0 +1,124 @@
+# =============================================================================
+# deploy/k8s/ingress.yaml
+# =============================================================================
+# Google Cloud External HTTP(S) Load Balancer provisioned via GKE Ingress.
+#
+# How it works:
+#   1. The GKE HTTP add-on watches Ingress resources.
+#   2. It provisions a GCLB Forwarding Rule (80/443), URL Map, Target HTTP(S)
+#      Proxy, and Backend Services — one per ClusterIP Service referenced.
+#   3. A Google-managed SSL certificate handles TLS automatically.
+#   4. Health checks on backends come from the BackendConfig annotations on
+#      each Service (see frontend/service.yaml and backend/service.yaml).
+#
+# Prerequisites:
+#   • A static external IP reserved as "coin-ops-ip" (see FrontendConfig below).
+#   • DNS A record pointing your domain to that static IP.
+#   • The ManagedCertificate CR (see below) — GCP will provision TLS automatically
+#     once DNS propagates.
+# =============================================================================
+
+# ── Step 1: Reserve a static external IP (run once, or do via Terraform) ─────
+# gcloud compute addresses create coin-ops-ip --global --project=coinops
+
+# ─── Managed TLS Certificate ──────────────────────────────────────────────────
+# GCP automatically provisions and renews a Let's Encrypt-style certificate.
+# DNS must point to the static IP before the certificate becomes ACTIVE.
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: coin-ops-cert
+  namespace: coin-ops
+spec:
+  domains:
+    - coin-ops.example.com      # ← replace with your real domain
+    - api.coin-ops.example.com  # ← replace with your real API domain
+
+---
+# ─── FrontendConfig: HTTPS redirect ──────────────────────────────────────────
+# Automatically redirects HTTP → HTTPS at the GCLB level (before traffic
+# reaches Pods). This is more efficient than doing the redirect in Nginx/app.
+apiVersion: networking.gke.io/v1beta1
+kind: FrontendConfig
+metadata:
+  name: coin-ops-frontend-config
+  namespace: coin-ops
+spec:
+  redirectToHttps:
+    enabled: true
+    responseCodeName: MOVED_PERMANENTLY_DEFAULT  # 301 redirect
+
+---
+# ─── Ingress ──────────────────────────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: coin-ops-ingress
+  namespace: coin-ops
+  labels:
+    app.kubernetes.io/name: coin-ops-ingress
+    app.kubernetes.io/part-of: coin-ops
+  annotations:
+    # ── Ingress class: use the GKE built-in GCLB controller ──────────────────
+    kubernetes.io/ingress.class: "gce"
+
+    # ── Static IP ─────────────────────────────────────────────────────────────
+    # References the "coin-ops-ip" address reserved above.
+    kubernetes.io/ingress.global-static-ip-name: "coin-ops-ip"
+
+    # ── TLS certificate ───────────────────────────────────────────────────────
+    networking.gke.io/managed-certificates: "coin-ops-cert"
+
+    # ── HTTP → HTTPS redirect ─────────────────────────────────────────────────
+    networking.gke.io/v1beta1.FrontendConfig: "coin-ops-frontend-config"
+
+    # ── Allow HTTP (port 80) so the GCLB can serve the 301 redirect ──────────
+    kubernetes.io/ingress.allow-http: "true"
+
+spec:
+  # ── Default backend: return 404 for unmatched paths ──────────────────────────
+  # Remove or replace with a real catch-all service if preferred.
+  defaultBackend:
+    service:
+      name: frontend
+      port:
+        number: 80
+
+  rules:
+    # ── Frontend: serves the React SPA ────────────────────────────────────────
+    - host: coin-ops.example.com        # ← replace with your real domain
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
+
+    # ── Backend API: all /api/* requests go to the backend service ────────────
+    # The backend is served on the same domain under /api to avoid CORS issues.
+    - host: coin-ops.example.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 8080
+
+    # ── Dedicated API subdomain (alternative to path-based routing) ───────────
+    # Use this if your frontend and API are on separate subdomains.
+    - host: api.coin-ops.example.com    # ← replace with your real API domain
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 8080

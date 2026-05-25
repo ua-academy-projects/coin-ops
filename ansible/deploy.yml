@@ -3,28 +3,26 @@
 # Safe to re-run on every code push.
 #
 #   source .env
-#   ansible-playbook -i ansible/inventory ansible/deploy.yml
+#   ansible-playbook ansible/deploy.yml
 
 - name: Validate required environment variables
   hosts: localhost
   connection: local
   tasks:
-    - name: Check .env vars are exported
+    - name: Check required variables are set
       assert:
         that:
-          - lookup('env', 'RABBITMQ_PASSWORD') != ''
-          - lookup('env', 'DB_PASSWORD') != ''
-          - lookup('env', 'SSH_KEY_PATH') != ''
-          - lookup('env', 'RUNTIME_BACKEND') in ['', 'external', 'postgres']
+          - (rabbitmq_password | default('') | length > 0)
+          - (db_password | default('') | length > 0)
+          - (ansible_ssh_private_key_file | length > 0)
+          - (runtime_backend | default('external')) in ['external', 'postgres']
         fail_msg: |
-          Required environment variables are not set or RUNTIME_BACKEND is invalid.
-          Run:  source .env
-          RUNTIME_BACKEND may be empty and will default to external.
-          Supported explicit runtime backends: external, postgres.
-          Then retry: ansible-playbook -i ansible/inventory ansible/deploy.yml
+          Required secrets could not be resolved. 
+          If using Cloud DB, ensure 'cloud_provider' is set in inventory.
+          Otherwise, ensure RABBITMQ_PASSWORD and DB_PASSWORD are set in .env.
 
 - name: Authenticate Docker registry on target nodes
-  hosts: all
+  hosts: all:!localhost
   become: yes
   tasks:
     - name: Log in to configured container registry

@@ -1,0 +1,70 @@
+# =============================================================================
+# deploy/k8s/frontend/service.yaml
+# =============================================================================
+# ClusterIP Service for the frontend.
+#
+# Why ClusterIP?
+#   External traffic arrives via the Ingress → GCLB, which routes to a
+#   NodePort automatically. There is no need to expose a LoadBalancer
+#   Service per microservice — that would create one GCLB per service
+#   and multiply costs unnecessarily.
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: coin-ops
+  labels:
+    app: frontend
+    app.kubernetes.io/name: frontend
+    app.kubernetes.io/part-of: coin-ops
+  annotations:
+    # Enable the GCP backend service configuration for the Ingress controller.
+    cloud.google.com/backend-config: '{"default": "frontend-backend-config"}'
+spec:
+  type: ClusterIP
+  selector:
+    app: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+
+---
+# =============================================================================
+# BackendConfig: tells the GCP Ingress controller how to configure the GCLB
+# backend. This is a GKE-specific CRD.
+# =============================================================================
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: frontend-backend-config
+  namespace: coin-ops
+spec:
+  # ── Health check ───────────────────────────────────────────────────────────
+  # GCLB uses this to decide when a backend Pod is healthy.
+  healthCheck:
+    checkIntervalSec: 15
+    timeoutSec: 5
+    healthyThreshold: 1
+    unhealthyThreshold: 2
+    type: HTTP
+    requestPath: /healthz
+    port: 80
+
+  # ── Session affinity ────────────────────────────────────────────────────────
+  # CLIENT_IP keeps a user's requests on the same Pod (optional for SPAs).
+  sessionAffinity:
+    affinityType: "CLIENT_IP"
+    affinityCookieTtlSec: 3600
+
+  # ── Connection draining ─────────────────────────────────────────────────────
+  # Give in-flight requests 30 s to complete when a Pod is removed.
+  connectionDraining:
+    drainingTimeoutSec: 30
+
+  # ── Cloud Armor (optional) ─────────────────────────────────────────────────
+  # Uncomment to attach a Cloud Armor security policy (WAF).
+  # securityPolicy:
+  #   name: "coin-ops-waf-policy"

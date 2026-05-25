@@ -1,0 +1,22 @@
+# =============================================================================
+# deploy/k8s/backend/ksa.yaml
+# =============================================================================
+# Kubernetes ServiceAccount for the backend Pods.
+# The backend SA needs broader GCP permissions (Secret Manager, Cloud SQL, etc.)
+# via Workload Identity — which is why it has its own SA separate from frontend.
+# =============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backend-ksa
+  namespace: coin-ops
+  labels:
+    app: backend
+  annotations:
+    # Bind this KSA to the Google SA that has Secret Manager / Cloud SQL access.
+    # After applying, run:
+    #   gcloud iam service-accounts add-iam-policy-binding \
+    #     backend-gsa@coinops.iam.gserviceaccount.com \
+    #     --role roles/iam.workloadIdentityUser \
+    #     --member "serviceAccount:coinops.svc.id.goog[coin-ops/backend-ksa]"
+    iam.gke.io/gcp-service-account: backend-gsa@coinops.iam.gserviceaccount.com

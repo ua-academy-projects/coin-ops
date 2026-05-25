@@ -1,0 +1,3 @@
+# Bastion host overrides — direct connection, no ProxyJump.
+# ansible_host is already set to the public IP by compose in gcp.yml.
+ansible_ssh_common_args: "-o StrictHostKeyChecking=no"

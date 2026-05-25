@@ -24,3 +24,5 @@ services:
       redis:
         condition: service_healthy
 {% endif %}
+    volumes:
+      - /opt/coinops/config.yaml:/opt/coinops/config.yaml:ro

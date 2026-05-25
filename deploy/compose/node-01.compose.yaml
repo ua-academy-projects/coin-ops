@@ -1,4 +1,5 @@
 services:
+{% if not use_cloud_db %}
   postgres:
     image: "{{ postgres_image }}"
     restart: unless-stopped
@@ -21,6 +22,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+{% endif %}
 
 {% if runtime_backend == "external" %}
   rabbitmq:
@@ -34,9 +36,10 @@ services:
       - /var/lib/coin-ops/rabbitmq:/var/lib/rabbitmq
     healthcheck:
       test: rabbitmq-diagnostics -q ping
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      interval: 15s
+      timeout: 15s
+      retries: 10
+      start_period: 30s
 {% endif %}
 
   history-consumer:
@@ -44,13 +47,19 @@ services:
     restart: unless-stopped
     env_file:
       - /etc/cognitor/history.env
+{% if not use_cloud_db or runtime_backend == "external" %}
     depends_on:
+{% if not use_cloud_db %}
       postgres:
         condition: service_healthy
+{% endif %}
 {% if runtime_backend == "external" %}
       rabbitmq:
         condition: service_healthy
 {% endif %}
+{% endif %}
+    volumes:
+      - /opt/coinops/config.yaml:/opt/coinops/config.yaml:ro
 
   history-api:
     image: "{{ history_api_image }}"
@@ -59,6 +68,10 @@ services:
       - "{{ history_port }}:{{ history_port }}"
     env_file:
       - /etc/cognitor/history.env
+{% if not use_cloud_db %}
     depends_on:
       postgres:
         condition: service_healthy
+{% endif %}
+    volumes:
+      - /opt/coinops/config.yaml:/opt/coinops/config.yaml:ro

@@ -1,0 +1,26 @@
+# =============================================================================
+# deploy/k8s/frontend/ksa.yaml
+# =============================================================================
+# Kubernetes ServiceAccount for the frontend Pods.
+#
+# Why a dedicated KSA?
+#   • Each microservice should have its own identity so Workload Identity
+#     bindings are scoped to exactly the Google SA that service needs.
+#   • Using the default SA means every Pod in the namespace shares one identity
+#     — this violates the principle of least privilege.
+# =============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: frontend-ksa
+  namespace: coin-ops
+  labels:
+    app: frontend
+  annotations:
+    # Workload Identity binding: this KSA maps to the Google SA below.
+    # After applying, run:
+    #   gcloud iam service-accounts add-iam-policy-binding \
+    #     frontend-gsa@coinops.iam.gserviceaccount.com \
+    #     --role roles/iam.workloadIdentityUser \
+    #     --member "serviceAccount:coinops.svc.id.goog[coin-ops/frontend-ksa]"
+    iam.gke.io/gcp-service-account: frontend-gsa@coinops.iam.gserviceaccount.com

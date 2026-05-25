@@ -1,0 +1,56 @@
+# =============================================================================
+# deploy/k8s/backend/service.yaml
+# =============================================================================
+# ClusterIP Service + BackendConfig for the backend API.
+#
+# ClusterIP is used here because the backend is only reachable via the Ingress
+# path rule (or directly from the frontend Pod). It is never exposed publicly
+# on its own.
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: coin-ops
+  labels:
+    app: backend
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/part-of: coin-ops
+  annotations:
+    cloud.google.com/backend-config: '{"default": "backend-backend-config"}'
+spec:
+  type: ClusterIP
+  selector:
+    app: backend
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+
+---
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: backend-backend-config
+  namespace: coin-ops
+spec:
+  healthCheck:
+    checkIntervalSec: 15
+    timeoutSec: 5
+    healthyThreshold: 1
+    unhealthyThreshold: 2
+    type: HTTP
+    requestPath: /healthz
+    port: 8080
+
+  # No session affinity for the API — let GCLB load-balance each request.
+  sessionAffinity:
+    affinityType: "NONE"
+
+  connectionDraining:
+    drainingTimeoutSec: 60  # Longer drain for in-flight API transactions.
+
+  # ── Timeout ────────────────────────────────────────────────────────────────
+  # Increase if the backend has long-running requests (e.g. exports).
+  timeoutSec: 30
