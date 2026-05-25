@@ -1,0 +1,21 @@
+---
+# Installs all apps on k3s cluster: cert-manager, Headlamp, Homepage.
+# Run after k3s-cluster.yml — requires working cluster.
+
+- name: Install cert-manager
+  hosts: k3s_bootstrap
+  become: yes
+  roles:
+    - cert_manager
+
+- name: Install Headlamp
+  hosts: k3s_bootstrap
+  become: yes
+  roles:
+    - k3s_headlamp
+
+- name: Install Homepage
+  hosts: k3s_bootstrap
+  become: yes
+  roles:
+    - k3s_homepage

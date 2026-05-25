@@ -1,0 +1,54 @@
+---
+# Installs Homepage dashboard via Helm and creates Ingress with TLS.
+# Accessible at https://coinops-softserve-penina.pp.ua
+
+- name: Add Homepage Helm repo
+  kubernetes.core.helm_repository:
+    name: jameswynn
+    repo_url: https://jameswynn.github.io/helm-charts
+
+- name: Install Homepage via Helm
+  kubernetes.core.helm:
+    name: homepage
+    chart_ref: jameswynn/homepage
+    release_namespace: "{{ homepage_namespace }}"
+    create_namespace: true
+    wait: true
+    timeout: 5m
+    values:
+      config:
+        bookmarks:
+          - CoinOps:
+              - Headlamp:
+                  - href: "https://headlamp.coinops-softserve-penina.pp.ua"
+              - GitHub:
+                  - href: "https://github.com/ua-academy-projects/coin-ops"
+
+- name: Create Ingress for Homepage
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: homepage
+        namespace: "{{ homepage_namespace }}"
+        annotations:
+          cert-manager.io/cluster-issuer: letsencrypt-prod
+      spec:
+        ingressClassName: traefik
+        rules:
+          - host: "{{ homepage_domain }}"
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: homepage
+                      port:
+                        number: 3000
+        tls:
+          - hosts:
+              - "{{ homepage_domain }}"
+            secretName: homepage-tls

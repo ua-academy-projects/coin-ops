@@ -1,0 +1,4 @@
+---
+# Default variables for Headlamp Kubernetes UI dashboard.
+headlamp_namespace: "headlamp"
+headlamp_domain: "headlamp.coinops-softserve-penina.pp.ua"
