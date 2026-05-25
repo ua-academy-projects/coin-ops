@@ -12,6 +12,20 @@ resource "google_compute_firewall" "allow_ssh_external" {
   target_tags   = ["jump-host"]
 }
 
+resource "google_compute_firewall" "allow_ssh_k3s" {
+  count   = contains(["gcp", "hybrid"], var.config.general.cloud) ? 1 : 0
+  name    = "allow-ssh-k3s"
+  network = var.vpc_name
+
+  allow {
+    protocol = "tcp"
+    ports    = [var.config.general.ssh_port]
+  }
+
+  source_ranges = ["0.0.0.0/0"]
+  target_tags   = ["k3s-server"]
+}
+
 resource "google_compute_firewall" "allow_ssh_internal" {
   count   = contains(["gcp", "hybrid"], var.config.general.cloud) ? 1 : 0
   name    = "allow-ssh-internal"

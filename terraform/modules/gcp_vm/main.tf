@@ -1,3 +1,6 @@
+# GCP VM module — creates compute instances for all VMs with cloud: "gcp".
+# Uses templatefile() for startup script to guarantee LF line endings (Windows-safe).
+
 resource "google_compute_instance" "vm" {
   for_each = (var.config.general.cloud == "gcp" || var.config.general.cloud == "hybrid") ? {
     for name, vm in var.config.vms : name => vm
@@ -26,20 +29,12 @@ resource "google_compute_instance" "vm" {
   }
 
   metadata = {
-    ssh-keys = "${var.config.general.ops_user}:${var.ssh_public_key}"
+    ssh-keys       = "${var.config.general.ops_user}:${var.ssh_public_key}"
+    enable-oslogin = "false"
   }
 
-  metadata_startup_script = <<-EOT
-    #!/bin/bash
-    if [ -f /etc/ssh/sshd_config.d/custom-port.conf ]; then
-      exit 0
-    fi
-    cloud-init status --wait
-    # Give marta_ops passwordless sudo
-    echo "${var.config.general.ops_user} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${var.config.general.ops_user}
-    systemctl disable --now ssh.socket
-    echo "Port ${var.config.general.ssh_port}" > /etc/ssh/sshd_config.d/custom-port.conf
-    systemctl enable ssh.service
-    systemctl restart ssh.service
-  EOT
+  metadata_startup_script = templatefile("${path.module}/startup.sh", {
+    ops_user = var.config.general.ops_user
+    ssh_port = var.config.general.ssh_port
+  })
 }
