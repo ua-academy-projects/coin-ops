@@ -6,8 +6,9 @@ load balancer, which terminates TLS and forwards plain HTTP on `:80`.
 
 **Where it runs:** on every host in the `app` inventory group.
 
-**Reads:** all `group_vars/all/main.yml` defaults plus the secrets published by
-the [[cloud-secrets]] role (`coinops_db_password`, `coinops_ghcr_token`).
+**Reads:** its own `defaults/main.yml` (config from `config/lab.yaml` ->
+`coinops_*`, with env fallbacks) plus the secrets published by the
+[[cloud-secrets]] role (`coinops_db_password`, `coinops_ghcr_token`).
 
 **Produces:** `/etc/cognitor/cloud-app.env`, `/opt/cognitor/cloud-app/nginx.conf`,
 `/opt/cognitor/cloud-app/compose.yaml`, then a running compose stack listening

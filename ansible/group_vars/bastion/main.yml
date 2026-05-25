@@ -1,8 +1,0 @@
----
-common_allowed_ports: [22]
-# The bastion is the tailnet subnet router for its cloud: it advertises its
-# cloud's private subnet CIDRs so any tailnet client reaches the private
-# app/db/k3s VMs through it — and those VMs run no Tailscale themselves.
-# coinops_bastion_advertise_routes is a comma-joined string written into the
-# generated inventory by Terraform (the cloud's private subnet CIDRs).
-tailscale_advertise_routes: "{{ (coinops_bastion_advertise_routes | default('', true)).split(',') | reject('equalto', '') | list }}"

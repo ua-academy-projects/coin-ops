@@ -10,7 +10,8 @@ cloud-native session schema to the managed cloud-native database
 **Skipped entirely unless** `runtime_backend == "cloud_native"`.
 
 **Reads:** `cloud_db_host`, `db_port`, `db_user`, `db_password`, `db_name`,
-`session_backend` from [[cloud-secrets]] + `group_vars/all/main.yml`.
+`session_backend` from [[cloud-secrets]] + this role's `defaults/main.yml`
+(config from `config/lab.yaml` -> `coinops_*`).
 
 **Produces:** `/opt/cognitor/managed-db/` with the SQL files on disk, plus
 the applied schemas inside the managed DB instance.

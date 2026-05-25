@@ -1,0 +1,11 @@
+---
+# VM-mode history (FastAPI + consumer + PostgreSQL) inputs. Config flows from
+# config/lab.yaml -> coinops_*; passwords from cloud-secrets / env. No group_vars.
+db_name: "{{ coinops_db_name | default('cognitor', true) }}"
+db_user: "{{ coinops_db_user | default('cognitor', true) }}"
+db_password: "{{ coinops_db_password | default(lookup('env', 'DB_PASSWORD'), true) }}"
+rabbitmq_user: cognitor
+rabbitmq_password: "{{ coinops_rabbitmq_password | default(lookup('env', 'RABBITMQ_PASSWORD'), true) }}"
+runtime_backend: "{{ coinops_runtime_backend | default(lookup('env', 'RUNTIME_BACKEND') | default('external', true), true) }}"
+history_port: 8000
+history_database_url: "postgresql://{{ db_user }}:{{ db_password }}@postgres:5432/{{ db_name }}"

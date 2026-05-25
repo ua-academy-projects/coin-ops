@@ -1,0 +1,8 @@
+---
+# Container-registry login inputs. Registry comes from config/lab.yaml
+# (app.image_registry -> coinops_image_registry), env still overrides; the
+# token comes from cloud-secrets (coinops_ghcr_token). No group_vars.
+image_registry: "{{ lookup('env', 'IMAGE_REGISTRY') | default(coinops_image_registry | default('ghcr.io/ua-academy-projects', true), true) }}"
+image_registry_host: "{{ image_registry.split('/')[0] }}"
+registry_username: "{{ lookup('env', 'GHCR_USERNAME') | default('', true) }}"
+registry_token: "{{ coinops_ghcr_token | default(lookup('env', 'GHCR_TOKEN') | default('', true), true) }}"

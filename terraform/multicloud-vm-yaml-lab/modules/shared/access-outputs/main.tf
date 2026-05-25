@@ -79,7 +79,7 @@ locals {
   db_vars_block = local.database_managed ? "" : <<-EOT
 
   [db:vars]
-  coinops_ssh_common_args='-o ProxyJump=${local.ssh_bastion_alias} -o UserKnownHostsFile=${var.known_hosts_file} -o StrictHostKeyChecking=accept-new'
+  ansible_ssh_common_args='-o ProxyJump=${local.ssh_bastion_alias} -o UserKnownHostsFile=${var.known_hosts_file} -o StrictHostKeyChecking=accept-new'
   EOT
 
   k3s_inventory_lines = [
@@ -96,7 +96,7 @@ locals {
   k3s_vars_block = length(var.k3s_names) == 0 ? "" : <<-EOT
 
   [k3s:vars]
-  coinops_ssh_common_args='-o ProxyJump=${local.ssh_bastion_alias} -o UserKnownHostsFile=${var.known_hosts_file} -o StrictHostKeyChecking=accept-new'
+  ansible_ssh_common_args='-o ProxyJump=${local.ssh_bastion_alias} -o UserKnownHostsFile=${var.known_hosts_file} -o StrictHostKeyChecking=accept-new'
   EOT
 
   cloud_children = compact([
@@ -123,8 +123,8 @@ locals {
   ${join("\n", local.cloud_children)}
 
   [cloud:vars]
-  coinops_ansible_user=${var.ssh.user}
-  coinops_ssh_private_key_file=${var.ssh.private_key_path}
+  ansible_user=${var.ssh.user}
+  ansible_ssh_private_key_file={{ "${var.ssh.private_key_path}" | expanduser }}
   coinops_app_domain=${var.app_domain}
   coinops_tls_mode=off
   coinops_runtime_backend=${local.runtime_mode}
@@ -137,6 +137,8 @@ locals {
   coinops_db_name=${local.db_name}
   coinops_db_user=${local.db_user}
   coinops_app_url=${var.app_url}
+  coinops_image_registry=${var.image_registry}
+  coinops_image_tag=${var.image_tag}
   coinops_queue_backend=${local.queue_backend}
   coinops_queue_name=${local.queue_name}
   coinops_queue_url=${local.queue_url}
@@ -166,11 +168,11 @@ locals {
   coinops_ssh_known_hosts_file=${var.known_hosts_file}
 
   [bastion:vars]
-  coinops_ssh_common_args='-o UserKnownHostsFile=${var.known_hosts_file} -o StrictHostKeyChecking=accept-new'
+  ansible_ssh_common_args='-o UserKnownHostsFile=${var.known_hosts_file} -o StrictHostKeyChecking=accept-new'
   coinops_bastion_advertise_routes=${join(",", var.bastion_advertise_routes)}
 
   [app:vars]
-  coinops_ssh_common_args='-o ProxyJump=${local.ssh_bastion_alias} -o UserKnownHostsFile=${var.known_hosts_file} -o StrictHostKeyChecking=accept-new'
+  ansible_ssh_common_args='-o ProxyJump=${local.ssh_bastion_alias} -o UserKnownHostsFile=${var.known_hosts_file} -o StrictHostKeyChecking=accept-new'
   ${local.db_vars_block}${local.k3s_vars_block}
   EOT
 }

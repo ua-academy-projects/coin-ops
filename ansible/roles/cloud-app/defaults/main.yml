@@ -1,0 +1,73 @@
+---
+# cloud-app — the application tier (proxy + history-api + history-consumer + ui
+# gateway) behind the cloud load balancer. Reads the most config, so it carries
+# the fullest default set. Config flows from config/lab.yaml -> coinops_*;
+# passwords/tokens from cloud-secrets; the secret-bearing URLs are derived here
+# (they embed credentials, so they can't be precomputed in terraform/lab.yaml).
+# No group_vars.
+
+runtime_backend: "{{ coinops_runtime_backend | default(lookup('env', 'RUNTIME_BACKEND') | default('external', true), true) }}"
+proxy_port: 8080
+history_port: 8000
+
+# Public entrypoint
+app_domain: "{{ coinops_app_domain | default(lookup('env', 'APP_DOMAIN') | default('coinops.test', true), true) }}"
+app_url: "{{ coinops_app_url | default('', true) }}"
+api_url: "{{ coinops_api_url | default(app_url, true) }}"
+
+# Images (registry/tag from config/lab.yaml app.image_*, env overrides)
+image_registry: "{{ lookup('env', 'IMAGE_REGISTRY') | default(coinops_image_registry | default('ghcr.io/ua-academy-projects', true), true) }}"
+image_tag: "{{ lookup('env', 'IMAGE_TAG') | default(coinops_image_tag | default('dev-latest', true), true) }}"
+proxy_image: "{{ image_registry }}/coin-ops-proxy:{{ image_tag }}"
+history_api_image: "{{ image_registry }}/coin-ops-history-api:{{ image_tag }}"
+history_consumer_image: "{{ image_registry }}/coin-ops-history-consumer:{{ image_tag }}"
+ui_image: "{{ image_registry }}/coin-ops-ui:{{ image_tag }}"
+
+# Identities / passwords
+db_name: "{{ coinops_db_name | default('cognitor', true) }}"
+db_user: "{{ coinops_db_user | default('cognitor', true) }}"
+db_password: "{{ coinops_db_password | default(lookup('env', 'DB_PASSWORD'), true) }}"
+db_port: "{{ coinops_db_port | default(5432, true) }}"
+rabbitmq_user: cognitor
+rabbitmq_password: "{{ coinops_rabbitmq_password | default(lookup('env', 'RABBITMQ_PASSWORD'), true) }}"
+
+cloud_db_host: >-
+  {{
+    coinops_db_host
+    if (coinops_db_host is defined and (coinops_db_host | string | length > 0))
+    else (
+      hostvars[groups['db'][0]].ansible_host
+      if ('db' in groups and (groups['db'] | length > 0))
+      else hostvars[groups['history'][0]].ansible_host
+    )
+  }}
+
+# Connection strings (embed secrets -> derived in Ansible, not terraform)
+rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@{{ cloud_db_host }}:5672/"
+proxy_database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ cloud_db_host }}:{{ db_port }}/{{ db_name }}"
+
+# Cloud-native queue
+queue_backend: "{{ coinops_queue_backend | default(lookup('env', 'QUEUE_BACKEND') | default('', true), true) }}"
+sqs_queue_url: "{{ coinops_queue_url | default(lookup('env', 'SQS_QUEUE_URL') | default('', true), true) }}"
+aws_region: "{{ coinops_aws_region | default(lookup('env', 'AWS_REGION') | default('', true), true) }}"
+gcp_project_id: "{{ coinops_gcp_project_id | default(lookup('env', 'GCP_PROJECT_ID') | default('', true), true) }}"
+pubsub_topic_id: "{{ coinops_pubsub_topic | default(lookup('env', 'PUBSUB_TOPIC_ID') | default('', true), true) }}"
+pubsub_subscription_id: "{{ coinops_pubsub_subscription | default(lookup('env', 'PUBSUB_SUBSCRIPTION_ID') | default('', true), true) }}"
+azure_servicebus_namespace: "{{ coinops_azure_servicebus_namespace | default(lookup('env', 'AZURE_SERVICEBUS_NAMESPACE') | default('', true), true) }}"
+azure_servicebus_queue_name: "{{ coinops_azure_servicebus_queue_name | default(lookup('env', 'AZURE_SERVICEBUS_QUEUE_NAME') | default('', true), true) }}"
+
+# UI wiring + CORS
+ui_proxy_url: "{{ coinops_ui_proxy_url | default(api_url ~ '/api', true) }}"
+ui_history_url: "{{ coinops_ui_history_url | default(api_url ~ '/history-api', true) }}"
+allowed_cors_origin: "{{ coinops_allowed_cors_origin | default(app_url, true) }}"
+
+# Sessions + cache
+session_backend: "{{ coinops_session_backend | default('managed_valkey' if runtime_backend == 'cloud_native' else '', true) }}"
+azure_redis_access_key: "{{ coinops_azure_redis_access_key | default(lookup('env', 'AZURE_REDIS_ACCESS_KEY') | default('', true), true) }}"
+cache_host: "{{ coinops_cache_host | default('', true) }}"
+cache_port: "{{ coinops_cache_port | default(6379, true) }}"
+container_redis_url: "redis://{{ cloud_db_host }}:6379/0"
+managed_redis_url: "redis://{{ cache_host }}:{{ cache_port }}/0"
+azure_redis_url: "rediss://:{{ azure_redis_access_key | urlencode }}@{{ cache_host }}:{{ cache_port }}/0"
+redis_url: "{{ coinops_redis_url | default((azure_redis_url if (runtime_backend == 'cloud_native' and (azure_redis_access_key | length > 0)) else (managed_redis_url
+  if (runtime_backend == 'cloud_native' and (cache_host | length > 0)) else container_redis_url)), true) }}"

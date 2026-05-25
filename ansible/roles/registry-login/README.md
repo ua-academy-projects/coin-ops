@@ -8,4 +8,6 @@ Idempotent. No-op when either credential variable is empty (public-image
 runs). Used by both VM-mode (`vm-*-stack`) and cloud-mode (`cloud-*-stack`)
 meta-roles.
 
-Expected vars come from `group_vars/all/main.yml` — no role-local defaults.
+Inputs are declared in this role's `defaults/main.yml`: the registry from
+`config/lab.yaml` (`app.image_registry` -> `coinops_image_registry`, env
+overrides), the token from [[cloud-secrets]] (`coinops_ghcr_token`).

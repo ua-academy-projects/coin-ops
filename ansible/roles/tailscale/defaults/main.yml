@@ -1,8 +1,8 @@
 ---
-# Tailscale auth key — usually flowed in by [[cloud-secrets]]. When empty,
-# the role is a complete no-op so the stack still deploys without Tailscale
-# configured.
-tailscale_auth_key: ""
+# Tailscale auth key — flowed in by [[cloud-secrets]] as coinops_tailscale_auth_key
+# (add_host), with an env fallback for local runs. Empty -> the role is a no-op
+# so the stack still deploys without Tailscale configured.
+tailscale_auth_key: "{{ coinops_tailscale_auth_key | default(lookup('env', 'TAILSCALE_AUTH_KEY') | default('', true), true) }}"
 
 # Hostname registered in the tailnet. Defaults to the inventory name so
 # `tailscale status` and MagicDNS map back to Ansible's view of the host.
@@ -13,11 +13,10 @@ tailscale_hostname: "{{ inventory_hostname }}"
 tailscale_tags:
   - "tag:coinops-lab"
 
-# Subnet routes this host should advertise to the tailnet. Empty by default
-# (the plan's Moderate interpretation: every VM is its own tailnet member,
-# no subnet-routing through bastions). Override per-host or per-group when
-# you want a bastion to act as a subnet router.
-tailscale_advertise_routes: []
+# Subnet routes this host advertises. Derived from coinops_bastion_advertise_routes
+# (set only in the [bastion:vars] inventory block by terraform), so the bastion
+# advertises its cloud's private subnets and every other host advertises nothing.
+tailscale_advertise_routes: "{{ (coinops_bastion_advertise_routes | default('', true)).split(',') | reject('equalto', '') | list }}"
 # Accept routes advertised by other tailnet members. Safe default on; turn
 # off only on bastions that should not see foreign subnets.
 tailscale_accept_routes: true

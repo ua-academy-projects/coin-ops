@@ -144,6 +144,8 @@ module "access_outputs" {
   bastion_advertise_routes = [for k, v in local.stack.network.private_subnets : v.cidr]
   app_url                  = local.app_url
   app_domain               = local.domain_enabled ? local.stack.domain.name : module.load_balancer.dns_name
+  image_registry           = local.stack.app.image_registry
+  image_tag                = local.stack.app.image_tag
   known_hosts_file         = "~/.ssh/known_hosts_aws_lab"
   secret_refs              = module.secrets.refs
   load_balancer = {

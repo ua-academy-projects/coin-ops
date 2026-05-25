@@ -1,3 +1,12 @@
+# Static inventory for VM-mode (Hyper-V). Connection variables live here (not in
+# group_vars); cloud mode uses the terraform-generated inventory, which emits the
+# same ansible_* keys. Per-host firewall ports come from the common role's
+# defaults (derived from the inventory group) — no group_vars anywhere.
+[all:vars]
+ansible_user=vagrant
+ansible_ssh_private_key_file={{ lookup('env', 'SSH_KEY_PATH') | expanduser }}
+ansible_ssh_common_args=-o StrictHostKeyChecking=no
+
 [history]
 softserve-node-01 ansible_host=172.31.1.10
 

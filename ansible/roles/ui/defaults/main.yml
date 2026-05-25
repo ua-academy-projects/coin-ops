@@ -1,0 +1,13 @@
+---
+# VM-mode UI gateway (nginx) inputs. Config flows from config/lab.yaml ->
+# coinops_*; the rest are role-local defaults. No group_vars.
+proxy_port: 8080
+history_port: 8000
+app_domain: "{{ coinops_app_domain | default(lookup('env', 'APP_DOMAIN') | default('coinops.test', true), true) }}"
+
+# TLS: 'selfsigned' (default), 'provided', or 'off'.
+tls_mode: "{{ coinops_tls_mode | default(lookup('env', 'TLS_MODE') | default('selfsigned', true), true) }}"
+tls_enabled: "{{ tls_mode != 'off' }}"
+tls_cert_dir: /etc/cognitor/tls
+tls_cert_path: "{{ tls_cert_dir }}/coinops.crt"
+tls_key_path: "{{ tls_cert_dir }}/coinops.key"

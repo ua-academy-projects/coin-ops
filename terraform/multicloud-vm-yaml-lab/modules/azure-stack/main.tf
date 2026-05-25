@@ -149,6 +149,8 @@ module "access_outputs" {
   db_name          = local.stack.db_name
   app_url          = local.app_url
   app_domain       = local.app_domain
+  image_registry   = local.stack.app.image_registry
+  image_tag        = local.stack.app.image_tag
   api_url          = local.app_url
   ui_proxy_url     = "https://${try(local.stack.api.domain, local.app_domain)}/api"
   ui_history_url   = "https://${try(local.stack.api.domain, local.app_domain)}/history-api"

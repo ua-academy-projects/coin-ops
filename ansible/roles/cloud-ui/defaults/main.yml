@@ -1,0 +1,11 @@
+---
+# cloud-ui — split-UI container (coin-ops-ui) behind the cloud load balancer.
+# Config from config/lab.yaml -> coinops_*. No group_vars.
+image_registry: "{{ lookup('env', 'IMAGE_REGISTRY') | default(coinops_image_registry | default('ghcr.io/ua-academy-projects', true), true) }}"
+image_tag: "{{ lookup('env', 'IMAGE_TAG') | default(coinops_image_tag | default('dev-latest', true), true) }}"
+ui_image: "{{ image_registry }}/coin-ops-ui:{{ image_tag }}"
+
+app_url: "{{ coinops_app_url | default('', true) }}"
+api_url: "{{ coinops_api_url | default(app_url, true) }}"
+ui_proxy_url: "{{ coinops_ui_proxy_url | default(api_url ~ '/api', true) }}"
+ui_history_url: "{{ coinops_ui_history_url | default(api_url ~ '/history-api', true) }}"

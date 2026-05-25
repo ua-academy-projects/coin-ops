@@ -12,7 +12,8 @@ both extensions and cron jobs.
 managed RDS bootstrapped by the [[cloud-db-bootstrap]] role instead.
 
 **Reads:** `db_user` / `db_password` / `db_name` / `runtime_backend` from
-[[cloud-secrets]] + `group_vars/all/main.yml`.
+[[cloud-secrets]] + this role's `defaults/main.yml` (config from
+`config/lab.yaml` -> `coinops_*`).
 
 **Produces:** `/etc/cognitor/cloud-db.env`, `/opt/cognitor/cloud-db/compose.yaml`,
 running postgres (+ rabbitmq/redis in external mode) containers, applied

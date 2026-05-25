@@ -1,0 +1,26 @@
+---
+# VM-mode proxy (Go) inputs. Config from config/lab.yaml -> coinops_*; passwords
+# from cloud-secrets / env. No group_vars.
+runtime_backend: "{{ coinops_runtime_backend | default(lookup('env', 'RUNTIME_BACKEND') | default('external', true), true) }}"
+proxy_port: 8080
+
+db_name: "{{ coinops_db_name | default('cognitor', true) }}"
+db_user: "{{ coinops_db_user | default('cognitor', true) }}"
+db_password: "{{ coinops_db_password | default(lookup('env', 'DB_PASSWORD'), true) }}"
+db_port: "{{ coinops_db_port | default(5432, true) }}"
+rabbitmq_user: cognitor
+rabbitmq_password: "{{ coinops_rabbitmq_password | default(lookup('env', 'RABBITMQ_PASSWORD'), true) }}"
+
+cloud_db_host: >-
+  {{
+    coinops_db_host
+    if (coinops_db_host is defined and (coinops_db_host | string | length > 0))
+    else (
+      hostvars[groups['db'][0]].ansible_host
+      if ('db' in groups and (groups['db'] | length > 0))
+      else hostvars[groups['history'][0]].ansible_host
+    )
+  }}
+
+rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@{{ cloud_db_host }}:5672/"
+proxy_database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ cloud_db_host }}:{{ db_port }}/{{ db_name }}"

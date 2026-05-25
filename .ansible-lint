@@ -1,0 +1,17 @@
+# ansible-lint configuration.
+#
+# group_vars/ has been eliminated: every role declares its inputs in its own
+# defaults/main.yml, reading config (config/lab.yaml -> coinops_*) via
+# if-then-else `| default()` fallbacks. Two rules are relaxed to fit that
+# convention (everything else stays enforced):
+#
+#  - var-naming[no-role-prefix]: shared deployment config (db_name, db_user,
+#    runtime_backend, image_*, the credential-bearing connection URLs, ...) is
+#    declared in role defaults and referenced unprefixed across roles — it
+#    cannot carry a single role-name prefix without breaking the sharing.
+#
+#  - yaml[line-length]: the config defaults embed long
+#    `coinops_* | default(lookup('env', ...) | default(...))` expressions.
+skip_list:
+  - var-naming[no-role-prefix]
+  - yaml[line-length]

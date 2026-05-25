@@ -7,7 +7,8 @@
     name: common
 
 # Join the bastion into the coinops-lab tailnet. The bastion is the
-# natural subnet-router candidate; set `tailscale_advertise_routes` in
-# group_vars/bastion/main.yml when you want it to expose VPC subnets.
+# subnet router: the tailscale role's `tailscale_advertise_routes` default
+# reads `coinops_bastion_advertise_routes` (emitted by terraform into the
+# bastion's inventory vars), so it advertises its cloud's private subnets.
 - ansible.builtin.import_role:
     name: tailscale

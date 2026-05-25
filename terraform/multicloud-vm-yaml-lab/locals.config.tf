@@ -48,8 +48,10 @@ locals {
       }
     }
     app = {
-      port        = 80
-      health_path = "/health"
+      port           = 80
+      health_path    = "/health"
+      image_registry = "ghcr.io/ua-academy-projects"
+      image_tag      = "dev-latest"
       nodes = {
         bastion = "bastion"
         app     = ["app-1", "app-2"]

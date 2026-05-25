@@ -1,5 +1,17 @@
 ---
-# Ports to open in UFW. Each service role overrides this
-# via host_vars or group_vars. SSH (22) is always included.
-common_allowed_ports:
-  - 22
+# Host firewall (UFW), derived from the host's inventory group so this role is
+# self-contained (no group_vars). UFW is left OFF on cloud nodes — the cloud
+# provider's security groups own the perimeter — and ON for VM-mode hosts.
+common_manage_ufw: "{{ 'cloud' not in group_names }}"
+
+# Ports opened in UFW per service group; SSH (22) always included. Bare Jinja
+# expression -> Ansible preserves the native list type.
+common_allowed_ports: >-
+  {{
+    [22, 5432, 5672, 6379] if 'db' in group_names
+    else [22, 5432, 5672, 15672, 8000] if 'history' in group_names
+    else [22, 80, 443] if 'ui' in group_names
+    else [22, 8080] if 'proxy' in group_names
+    else [22, 80] if 'app' in group_names
+    else [22]
+  }}

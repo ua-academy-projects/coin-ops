@@ -8,7 +8,8 @@ Applied to `hosts: bastion` by `cloud-deploy.yml`.
 
 Imports: [[common]], [[tailscale]].
 
-When you want the bastion to act as a subnet router (advertising the
-VPC's private subnets to the tailnet so other peers can reach
-non-tailscale hosts behind it), set `tailscale_advertise_routes` in
-`group_vars/bastion/main.yml`.
+The bastion acts as a subnet router (advertising the VPC's private subnets to
+the tailnet so other peers can reach non-tailscale hosts behind it)
+automatically: the [[tailscale]] role's `tailscale_advertise_routes` default
+reads `coinops_bastion_advertise_routes`, which terraform emits into the
+bastion's inventory vars.

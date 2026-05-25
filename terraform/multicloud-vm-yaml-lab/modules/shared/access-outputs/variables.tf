@@ -40,6 +40,18 @@ variable "app_url" {
   type = string
 }
 
+# Shared app-tier config from config/lab.yaml (app.image_registry/app.image_tag),
+# emitted as coinops_* so Ansible reads them (with an env override).
+variable "image_registry" {
+  type    = string
+  default = ""
+}
+
+variable "image_tag" {
+  type    = string
+  default = ""
+}
+
 variable "app_domain" {
   type = string
 }

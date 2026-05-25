@@ -181,6 +181,8 @@ module "access_outputs" {
   bastion_advertise_routes = [for k, v in local.stack.network.private_subnets : v.cidr]
   app_url                  = local.app_url
   app_domain               = local.app_domain
+  image_registry           = local.stack.app.image_registry
+  image_tag                = local.stack.app.image_tag
   known_hosts_file         = "~/.ssh/known_hosts_gcp_lab"
   secret_refs              = module.secrets.refs
   load_balancer            = local.k3s_only ? null : one(module.load_balancer[*].load_balancer)
