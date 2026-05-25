@@ -5,17 +5,23 @@
 - name: Install cert-manager
   hosts: k3s_bootstrap
   become: yes
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   roles:
     - cert_manager
 
 - name: Install Headlamp
   hosts: k3s_bootstrap
   become: yes
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   roles:
     - k3s_headlamp
 
 - name: Install Homepage
   hosts: k3s_bootstrap
   become: yes
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   roles:
     - k3s_homepage
