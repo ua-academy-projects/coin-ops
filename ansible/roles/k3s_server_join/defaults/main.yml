@@ -1,0 +1,6 @@
+---
+# Default variables for k3s server join role.
+# k3s_token and k3s_server_ip are set dynamically by k3s_server_bootstrap role.
+k3s_version: "v1.31.0+k3s1"
+k3s_token: ""
+k3s_server_ip: ""

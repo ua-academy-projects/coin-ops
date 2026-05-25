@@ -1,0 +1,25 @@
+---
+# Joins additional server nodes to the existing k3s cluster.
+# Requires k3s_token and k3s_server_ip facts set by k3s_server_bootstrap role.
+
+- name: Download k3s install script
+  get_url:
+    url: https://get.k3s.io
+    dest: /tmp/k3s-install.sh
+    mode: '0755'
+
+- name: Join node to existing k3s cluster
+  shell: >
+    INSTALL_K3S_EXEC="server --server https://{{ k3s_server_ip }}:{{ k3s_api_port }}"
+    K3S_TOKEN="{{ k3s_token }}"
+    /tmp/k3s-install.sh
+  environment:
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
+  args:
+    creates: /usr/local/bin/k3s
+
+- name: Wait for k3s to start on this node
+  wait_for:
+    port: 6443
+    host: 127.0.0.1
+    timeout: 120

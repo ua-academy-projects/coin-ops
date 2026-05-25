@@ -1,0 +1,11 @@
+---
+# Installs system dependencies required for k3s on all nodes.
+# curl — to download k3s installer, open-iscsi/nfs-common — for persistent storage support.
+- name: Install k3s prerequisites
+  apt:
+    name:
+      - curl
+      - open-iscsi
+      - nfs-common
+    state: present
+    update_cache: yes

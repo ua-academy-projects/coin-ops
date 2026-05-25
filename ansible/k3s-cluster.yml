@@ -1,0 +1,31 @@
+---
+# Main playbook for k3s cluster setup on GCP.
+# Runs roles in order: prereqs → bootstrap → join → postcheck.
+
+- name: Prepare all k3s nodes
+  hosts: k3s_server
+  become: yes
+  roles:
+    - common
+    - k3s_prereqs
+
+- name: Bootstrap first k3s server node
+  hosts: k3s_bootstrap
+  become: yes
+  roles:
+    - k3s_server_bootstrap
+
+- name: Join remaining k3s server nodes
+  hosts: k3s_join
+  become: yes
+  vars:
+    k3s_token: "{{ hostvars[groups['k3s_bootstrap'][0]]['k3s_token'] }}"
+    k3s_server_ip: "{{ hostvars[groups['k3s_bootstrap'][0]]['k3s_server_ip'] }}"
+  roles:
+    - k3s_server_join
+
+- name: Validate cluster and fetch kubeconfig
+  hosts: k3s_bootstrap
+  become: yes
+  roles:
+    - k3s_postcheck

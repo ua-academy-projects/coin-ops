@@ -1,0 +1,28 @@
+---
+# Validates that all cluster nodes are Ready and fetches kubeconfig to local machine.
+# After this role runs, kubectl works from your local machine.
+
+- name: Wait for all nodes to be Ready
+  command: kubectl get nodes
+  register: nodes_output
+  retries: 12
+  delay: 10
+  until: nodes_output.stdout.count('Ready') >= 3
+  changed_when: false
+
+- name: Show cluster node status
+  debug:
+    msg: "{{ nodes_output.stdout_lines }}"
+
+- name: Fetch kubeconfig from cluster
+  fetch:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: /tmp/k3s-config.yaml
+    flat: yes
+
+- name: Replace localhost with public IP in kubeconfig
+  replace:
+    path: /tmp/k3s-config.yaml
+    regexp: '127\.0\.0\.1'
+    replace: "{{ ansible_host }}"
+  delegate_to: localhost
