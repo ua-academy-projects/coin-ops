@@ -5,7 +5,7 @@
 - name: Add Headlamp Helm repo
   kubernetes.core.helm_repository:
     name: headlamp
-    repo_url: https://headlamp-k8s.github.io/headlamp/
+    repo_url: https://kubernetes-sigs.github.io/headlamp/
 
 - name: Install Headlamp via Helm
   kubernetes.core.helm:
