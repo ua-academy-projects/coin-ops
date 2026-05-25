@@ -1,7 +1,7 @@
 # Gateway nodes — run Tailscale subnet router
 [gateway]
-gateway-azure ansible_host=135.225.57.231 subnet_cidr=10.0.0.0/16
-gateway-aws   ansible_host=10.0.1.145     subnet_cidr=10.0.0.0/16
+gateway-azure ansible_host=135.225.57.231 subnet_cidr=10.0.4.0/24
+gateway-aws   ansible_host=10.0.1.145     subnet_cidr=10.0.1.0/24,10.0.2.0/24
 
 # Jump host — SSH entry point only
 [jump_host]
@@ -17,18 +17,24 @@ node-02 ansible_host=10.0.2.78
 [ui]
 node-03 ansible_host=10.0.4.4
 
-# Group all internal nodes — one ProxyJump rule for all three
-[internal:children]
+# AWS internal nodes — ProxyJump through jump-host
+[aws_internal:children]
 history
 proxy
+
+[aws_internal:vars]
+ansible_ssh_common_args=-o ProxyJump=marta_ops@3.70.205.142:9922 -o StrictHostKeyChecking=no
+
+# Azure internal nodes — ProxyJump through gateway-aws (has Tailscale route to Azure)
+[azure_internal:children]
 ui
 
-[internal:vars]
-ansible_ssh_common_args=-o ProxyJump=marta_ops@3.70.205.142:9922 -o StrictHostKeyChecking=no
+[azure_internal:vars]
+ansible_ssh_common_args=-o ProxyJump=marta_ops@10.0.1.145:9922 -o StrictHostKeyChecking=no
 
 # Global vars for all hosts
 [all:vars]
 ansible_user=marta_ops
 ansible_port=9922
-ansible_ssh_private_key_file=/d/.ssh/id_ed25519
+ansible_ssh_private_key_file=~/.ssh/id_ed25519
 ansible_ssh_common_args=-o StrictHostKeyChecking=no
