@@ -21,3 +21,9 @@
   command: /tmp/get-helm.sh
   args:
     creates: /usr/local/bin/helm
+
+- name: Install Python kubernetes library
+  pip:
+    name: kubernetes
+    state: present
+    extra_args: --break-system-packages
