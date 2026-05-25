@@ -130,7 +130,7 @@ kubectl --kubeconfig=~/.kube/coinops-k3s.yaml get nodes
 # Expect: 3 nodes, all "Ready", roles "control-plane,etcd,master".
 
 kubectl --kubeconfig=~/.kube/coinops-k3s.yaml get pods -A
-# Expect: kube-system pods Running; coinops-hello/hello-* Running ×2.
+# Expect: kube-system pods Running; tooling/hello-* Running ×2.
 
 # Workloads are behind the Traefik ingress with TLS now (no NodePorts).
 # With *.lab.coinops.pp.ua pointed at a k3s node IP (see Ingress section):
@@ -138,11 +138,11 @@ curl -s https://hello.lab.coinops.pp.ua | head -3
 curl -s https://homepage.lab.coinops.pp.ua | head -3
 
 # Headlamp dashboard: browse to https://headlamp.lab.coinops.pp.ua and log in with:
-kubectl --kubeconfig=~/.kube/coinops-k3s.yaml -n headlamp create token headlamp-admin --duration=24h
+kubectl --kubeconfig=~/.kube/coinops-k3s.yaml -n tooling create token headlamp --duration=24h
 ```
 
 The two hello pods should be distributed across at least two of the
-three nodes (`kubectl -n coinops-hello get pods -o wide`) — proves no
+three nodes (`kubectl -n tooling get pods -o wide`) — proves no
 node is tainted or otherwise unschedulable.
 
 ## What to learn from this

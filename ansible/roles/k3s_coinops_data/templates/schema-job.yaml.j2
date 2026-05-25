@@ -1,0 +1,36 @@
+---
+# One-shot Job: wait for PostgreSQL, then apply the schema. Idempotent — the
+# schema uses CREATE TABLE IF NOT EXISTS, so re-running is safe.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: coinops-schema-init
+  namespace: {{ coinops_data_namespace }}
+spec:
+  backoffLimit: 20
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: schema
+          image: {{ coinops_schema_job_image }}
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              until pg_isready -h {{ coinops_cnpg_cluster_name }}-rw -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do
+                echo "waiting for postgres (CNPG cluster bootstrapping)..."; sleep 3
+              done
+              PGPASSWORD="$POSTGRES_PASSWORD" psql -h {{ coinops_cnpg_cluster_name }}-rw -U "$POSTGRES_USER" \
+                -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -f /schema/schema.sql
+          envFrom:
+            - secretRef:
+                name: coinops-data-creds
+          volumeMounts:
+            - name: schema
+              mountPath: /schema
+      volumes:
+        - name: schema
+          configMap:
+            name: coinops-schema

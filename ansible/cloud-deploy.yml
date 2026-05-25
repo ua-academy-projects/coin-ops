@@ -23,20 +23,20 @@
   hosts: localhost
   connection: local
   gather_facts: false
-  roles: [cloud-secrets]
+  roles: [cloud_secrets]
 
 - hosts: bastion
   become: true
-  roles: [cloud-bastion-stack]
+  roles: [cloud_bastion_stack]
 
 - hosts: db
   become: true
-  roles: [cloud-db-stack]
+  roles: [cloud_db_stack]
 
 - hosts: app
   become: true
-  roles: [cloud-app-stack]
+  roles: [cloud_app_stack]
 
 - hosts: ui
   become: true
-  roles: [cloud-ui-stack]
+  roles: [cloud_ui_stack]

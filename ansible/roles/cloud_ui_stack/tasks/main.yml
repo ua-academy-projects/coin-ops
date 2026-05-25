@@ -1,0 +1,15 @@
+---
+# Meta-role: provision + deploy the cloud UI-only VM. Applied to
+# `hosts: ui` by cloud-deploy.yml when the deploy is split across clouds.
+
+- ansible.builtin.import_role:
+    name: common
+
+- ansible.builtin.import_role:
+    name: docker
+
+- ansible.builtin.import_role:
+    name: registry_login
+
+- ansible.builtin.import_role:
+    name: cloud_ui

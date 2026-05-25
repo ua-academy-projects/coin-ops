@@ -1,0 +1,22 @@
+---
+# k3s_cloudflared — run cloudflared in-cluster as the connector for the "apps"
+# Cloudflare Tunnel. The tunnel itself, its routing (every app hostname ->
+# in-cluster Traefik), the proxied DNS, and the Access policies are all created
+# by terraform (cloudflare_zerotrust.tf); this role just runs the connector with
+# the tunnel token (resolved by cloud_secrets from Secret Manager). Token-based
+# / remotely-managed, so Cloudflare pushes the config — no ingress rules here.
+# This is the public edge that replaces tailnet ingress: no node ports, no
+# Tailscale. Native modules only.
+
+k3s_first_node: "{{ ansible_play_hosts_all[0] }}"
+k3s_kubeconfig: /etc/rancher/k3s/k3s.yaml
+
+# Edge tier: cloudflared lives in the `ingress` namespace (category taxonomy).
+k3s_cloudflared_namespace: ingress
+k3s_cloudflared_replicas: 2
+# Pin a release (e.g. cloudflare/cloudflared:2024.12.2) for reproducibility.
+k3s_cloudflared_image: "cloudflare/cloudflared:latest"
+
+# Apps-tunnel token: written to Secret Manager by terraform, published by
+# cloud_secrets. Empty == Zero Trust not enabled -> the role skips cleanly.
+k3s_cloudflared_tunnel_token: "{{ coinops_cloudflare_tunnel_token_apps | default('') }}"

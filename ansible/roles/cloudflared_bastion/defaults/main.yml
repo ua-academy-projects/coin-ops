@@ -1,0 +1,12 @@
+---
+# cloudflared_bastion — install cloudflared on the GCP bastion and run the
+# "admin" Cloudflare Tunnel as a systemd service. The tunnel exposes the
+# bastion's SSH (ansible ProxyJump) and the k3s API (kubectl) behind Cloudflare
+# Access; the routing + Access are created by terraform (cloudflare_zerotrust.tf),
+# so the connector just runs with the token. This is the operator access path
+# that replaces the bastion's Tailscale subnet-router. Skips cleanly when no
+# admin-tunnel token is present (Zero Trust not enabled).
+
+# Admin-tunnel token: written to Secret Manager by terraform, published by
+# cloud_secrets to the bastion. Empty == Zero Trust not enabled.
+cloudflared_bastion_token: "{{ coinops_cloudflare_tunnel_token_admin | default('') }}"

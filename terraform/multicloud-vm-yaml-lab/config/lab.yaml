@@ -62,6 +62,20 @@ domain:
   # truth: drives both the Cloudflare wildcard A record (terraform) and the
   # ansible ingress hostnames (via coinops_k3s_ingress_domain).
   k3s_ingress: lab.coinops.pp.ua
+  # Cloudflare Zero Trust (GCP k3s edge). Terraform creates two cloudflared
+  # tunnels (apps in-cluster, admin on the bastion), their routing, proxied
+  # DNS, Access policies, and writes the tunnel tokens into Secret Manager.
+  # Flip enabled:true ONLY AFTER the one-time setup:
+  #   1) Create a Cloudflare API token (Account>Cloudflare Tunnel:Edit,
+  #      Account>Access: Apps and Policies:Edit, Zone>DNS:Edit, Zone>Zone:Read)
+  #      and `export CLOUDFLARE_API_TOKEN=...`.
+  #   2) Turn on Zero Trust in the dashboard (pick a team name).
+  # account_id + access_emails below are consumed by terraform.
+  cloudflare_account_id: 5f9c49428f4150cf25eefe619dad508c
+  zero_trust:
+    enabled: false
+    access_emails:
+      - vshabat64@gmail.com
 
 networks:
   lab:

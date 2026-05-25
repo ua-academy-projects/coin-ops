@@ -1,0 +1,23 @@
+---
+# Meta-role: provision the cloud bastion host (jumphost + access ingress).
+# Applied to `hosts: bastion` by cloud-deploy.yml and k3s-up.yml. No
+# docker/registry/app deploy here — the bastion is intentionally minimal.
+
+- name: Base OS packages and hardening (common)
+  ansible.builtin.import_role:
+    name: common
+
+# Join the bastion into the coinops-lab tailnet. The bastion is the
+# subnet router: the tailscale role's `tailscale_advertise_routes` default
+# reads `coinops_bastion_advertise_routes` (emitted by terraform into the
+# bastion's inventory vars), so it advertises its cloud's private subnets.
+- name: Join the tailnet as subnet router (tailscale)
+  ansible.builtin.import_role:
+    name: tailscale
+
+# Run the cloudflared "admin" tunnel (zero-trust SSH + kube API). Additive
+# alongside Tailscale for now; once the Cloudflare admin path is proven, the
+# tailscale import above is removed. Skips cleanly without an admin token.
+- name: Run the cloudflared admin tunnel (cloudflared_bastion)
+  ansible.builtin.import_role:
+    name: cloudflared_bastion

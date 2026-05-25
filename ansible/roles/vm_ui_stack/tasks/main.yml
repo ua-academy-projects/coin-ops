@@ -1,0 +1,15 @@
+---
+# Meta-role: provision + deploy the VM-mode UI node.
+# Applied to `hosts: ui` by deploy.yml.
+
+- ansible.builtin.import_role:
+    name: common
+
+- ansible.builtin.import_role:
+    name: docker
+
+- ansible.builtin.import_role:
+    name: registry_login
+
+- ansible.builtin.import_role:
+    name: ui

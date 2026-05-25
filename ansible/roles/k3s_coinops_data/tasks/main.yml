@@ -1,0 +1,41 @@
+---
+# Stand up the Coin-Ops backing services and apply the database schema:
+# PostgreSQL as a CloudNativePG Cluster CR (operator from k3s-cnpg) plus RabbitMQ
+# + Redis StatefulSets. External runtime mode — GCP is k3s_only, so there are no
+# managed services to point at. Native modules only. Runs once on the first
+# node; joiner nodes exit.
+
+- name: Skip k3s-coinops-data (not the first node)
+  ansible.builtin.meta: end_host
+  when: inventory_hostname != k3s_first_node
+
+- name: Apply backing services (namespace, creds, statefulsets, services)
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ item }}"
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    wait: true
+    wait_timeout: 240
+  loop: "{{ lookup('template', 'data.yaml.j2') | from_yaml_all | list }}"
+  loop_control:
+    label: "{{ item.kind }}/{{ item.metadata.name }}"
+  no_log: true  # the creds Secret carries the DB / RabbitMQ passwords
+
+- name: Apply the schema ConfigMap
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition: "{{ lookup('template', 'schema-configmap.yaml.j2') | from_yaml }}"
+
+- name: Run the schema-bootstrap Job to completion
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition: "{{ lookup('template', 'schema-job.yaml.j2') | from_yaml }}"
+    wait: true
+    wait_condition:
+      type: Complete
+      status: "True"
+    # Generous: the Job's pg_isready loop blocks until the CNPG cluster has
+    # finished bootstrapping its primary, which can take a couple of minutes.
+    wait_timeout: 600

@@ -165,6 +165,8 @@ locals {
   coinops_ghcr_token_secret_ref=${local.ghcr_token_secret_ref}
   coinops_tailscale_auth_key_secret_ref=${local.tailscale_auth_key_secret_ref}
   coinops_cloudflare_token_secret_ref=${local.cloudflare_token_secret_ref}
+  coinops_cloudflare_tunnel_token_apps_secret_ref=${var.name_prefix}-cloudflare-tunnel-token-apps
+  coinops_cloudflare_tunnel_token_admin_secret_ref=${var.name_prefix}-cloudflare-tunnel-token-admin
   coinops_cloud_provider=${var.cloud}
   coinops_ssh_known_hosts_file=${var.known_hosts_file}
 

@@ -11,13 +11,18 @@ locals {
       private_key_path = "~/.ssh/coinops_gcp_jump"
     }
     domain = {
-      enabled            = false
-      name               = ""
-      root               = ""
-      cloudflare_zone_id = ""
-      create_records     = false
-      cloudflare_proxy   = false
-      k3s_ingress        = "lab.coinops.pp.ua"
+      enabled               = false
+      name                  = ""
+      root                  = ""
+      cloudflare_zone_id    = ""
+      cloudflare_account_id = ""
+      create_records        = false
+      cloudflare_proxy      = false
+      k3s_ingress           = "lab.coinops.pp.ua"
+      zero_trust = {
+        enabled       = false
+        access_emails = []
+      }
       ui = {
         name  = ""
         cloud = ""
@@ -97,8 +102,9 @@ locals {
   config = merge(local.base_config, local.raw, {
     ssh = merge(local.base_config.ssh, try(local.raw.ssh, {}))
     domain = merge(local.base_config.domain, try(local.raw.domain, {}), {
-      ui  = merge(local.base_config.domain.ui, try(local.raw.domain.ui, {}))
-      api = merge(local.base_config.domain.api, try(local.raw.domain.api, {}))
+      ui         = merge(local.base_config.domain.ui, try(local.raw.domain.ui, {}))
+      api        = merge(local.base_config.domain.api, try(local.raw.domain.api, {}))
+      zero_trust = merge(local.base_config.domain.zero_trust, try(local.raw.domain.zero_trust, {}))
     })
     firewall = merge(local.base_config.firewall, try(local.raw.firewall, {}))
     defaults = merge(local.base_config.defaults, try(local.raw.defaults, {}))

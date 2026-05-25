@@ -1,0 +1,425 @@
+---
+# Resolve runtime secrets from the active cloud's secret manager and publish
+# them onto every host in the `cloud` inventory group via `add_host`.
+#
+# Run this role from a `hosts: localhost` play before any play that needs
+# resolved secret values on cloud hosts.
+
+- name: Determine cloud target hosts and provider settings
+  ansible.builtin.set_fact:
+    target_cloud_hosts: "{{ groups['cloud'] | default([]) }}"
+    first_cloud_host: "{{ (groups['cloud'] | default([]))[0] | default('localhost') }}"
+
+- name: Read provider settings from the first cloud host
+  ansible.builtin.set_fact:
+    selected_cloud: "{{ hostvars[first_cloud_host].coinops_cloud_provider | default(lookup('env', 'CLOUD') | default('aws', true), true) }}"
+    cloud_region: "{{ hostvars[first_cloud_host].coinops_aws_region | default(hostvars[first_cloud_host].coinops_cloud_region | default(lookup('env', 'AWS_REGION')
+      | default('', true), true), true) }}"
+    cloud_profile: "{{ hostvars[first_cloud_host].coinops_cloud_profile | default(lookup('env', 'AWS_PROFILE') | default('', true), true) }}"
+    gcp_project_id: "{{ hostvars[first_cloud_host].coinops_gcp_project_id | default(lookup('env', 'GCP_PROJECT_ID') | default('', true), true) }}"
+    azure_key_vault_name: "{{ hostvars[first_cloud_host].coinops_azure_key_vault_name | default(lookup('env', 'AZURE_KEY_VAULT_NAME') | default('', true), true) }}"
+    azure_resource_group: "{{ hostvars[first_cloud_host].coinops_azure_resource_group | default(lookup('env', 'AZURE_RESOURCE_GROUP_NAME') | default('', true), true)
+      }}"
+    azure_redis_name: "{{ hostvars[first_cloud_host].coinops_azure_redis_name | default('', true) }}"
+    runtime_backend_from_inventory: "{{ (hostvars[first_cloud_host].coinops_runtime_backend | default('external', true)) | replace('-', '_') }}"
+    db_password_secret_ref: "{{ hostvars[first_cloud_host].coinops_db_password_secret_ref | default('', true) }}"
+    rabbitmq_password_secret_ref: "{{ hostvars[first_cloud_host].coinops_rabbitmq_password_secret_ref | default('', true) }}"
+    ghcr_token_secret_ref: "{{ hostvars[first_cloud_host].coinops_ghcr_token_secret_ref | default('', true) }}"
+    tailscale_auth_key_secret_ref: "{{ hostvars[first_cloud_host].coinops_tailscale_auth_key_secret_ref | default('', true) }}"
+    cloudflare_token_secret_ref: "{{ hostvars[first_cloud_host].coinops_cloudflare_token_secret_ref | default('', true) }}"
+    cloudflare_tunnel_token_apps_secret_ref: "{{ hostvars[first_cloud_host].coinops_cloudflare_tunnel_token_apps_secret_ref | default('', true) }}"
+    cloudflare_tunnel_token_admin_secret_ref: "{{ hostvars[first_cloud_host].coinops_cloudflare_tunnel_token_admin_secret_ref | default('', true) }}"
+
+- name: Fetch DB password from AWS Secrets Manager
+  ansible.builtin.command:
+    argv:
+      - aws
+      - secretsmanager
+      - get-secret-value
+      - --secret-id
+      - "{{ db_password_secret_ref }}"
+      - --query
+      - SecretString
+      - --output
+      - text
+      - --region
+      - "{{ cloud_region }}"
+      - --profile
+      - "{{ cloud_profile }}"
+  register: aws_db_password
+  changed_when: false
+  no_log: true
+  when:
+    - selected_cloud == 'aws'
+    - db_password_secret_ref | length > 0
+
+- name: Fetch RabbitMQ password from AWS Secrets Manager
+  ansible.builtin.command:
+    argv:
+      - aws
+      - secretsmanager
+      - get-secret-value
+      - --secret-id
+      - "{{ rabbitmq_password_secret_ref }}"
+      - --query
+      - SecretString
+      - --output
+      - text
+      - --region
+      - "{{ cloud_region }}"
+      - --profile
+      - "{{ cloud_profile }}"
+  register: aws_rabbitmq_password
+  changed_when: false
+  no_log: true
+  when:
+    - selected_cloud == 'aws'
+    - rabbitmq_password_secret_ref | length > 0
+    - runtime_backend_from_inventory != 'cloud_native'
+
+- name: Fetch GHCR token from AWS Secrets Manager
+  ansible.builtin.command:
+    argv:
+      - aws
+      - secretsmanager
+      - get-secret-value
+      - --secret-id
+      - "{{ ghcr_token_secret_ref }}"
+      - --query
+      - SecretString
+      - --output
+      - text
+      - --region
+      - "{{ cloud_region }}"
+      - --profile
+      - "{{ cloud_profile }}"
+  register: aws_ghcr_token
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when:
+    - selected_cloud == 'aws'
+    - ghcr_token_secret_ref | length > 0
+
+- name: Fetch DB password from GCP Secret Manager
+  ansible.builtin.command:
+    argv: [gcloud, secrets, versions, access, latest, --secret, "{{ db_password_secret_ref }}", --project, "{{ gcp_project_id }}"]
+  register: gcp_db_password
+  changed_when: false
+  no_log: true
+  when:
+    - selected_cloud == 'gcp'
+    - db_password_secret_ref | length > 0
+
+- name: Fetch RabbitMQ password from GCP Secret Manager
+  ansible.builtin.command:
+    argv: [gcloud, secrets, versions, access, latest, --secret, "{{ rabbitmq_password_secret_ref }}", --project, "{{ gcp_project_id }}"]
+  register: gcp_rabbitmq_password
+  changed_when: false
+  no_log: true
+  when:
+    - selected_cloud == 'gcp'
+    - rabbitmq_password_secret_ref | length > 0
+    - runtime_backend_from_inventory != 'cloud_native'
+
+- name: Fetch GHCR token from GCP Secret Manager
+  ansible.builtin.command:
+    argv: [gcloud, secrets, versions, access, latest, --secret, "{{ ghcr_token_secret_ref }}", --project, "{{ gcp_project_id }}"]
+  register: gcp_ghcr_token
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when:
+    - selected_cloud == 'gcp'
+    - ghcr_token_secret_ref | length > 0
+
+- name: Fetch DB password from Azure Key Vault
+  ansible.builtin.command:
+    argv:
+      - az
+      - keyvault
+      - secret
+      - show
+      - --vault-name
+      - "{{ azure_key_vault_name }}"
+      - --name
+      - "{{ db_password_secret_ref }}"
+      - --query
+      - value
+      - -o
+      - tsv
+      - --only-show-errors
+  register: azure_db_password
+  changed_when: false
+  no_log: true
+  when:
+    - selected_cloud == 'azure'
+    - azure_key_vault_name | length > 0
+    - db_password_secret_ref | length > 0
+
+- name: Fetch RabbitMQ password from Azure Key Vault
+  ansible.builtin.command:
+    argv:
+      - az
+      - keyvault
+      - secret
+      - show
+      - --vault-name
+      - "{{ azure_key_vault_name }}"
+      - --name
+      - "{{ rabbitmq_password_secret_ref }}"
+      - --query
+      - value
+      - -o
+      - tsv
+      - --only-show-errors
+  register: azure_rabbitmq_password
+  changed_when: false
+  no_log: true
+  when:
+    - selected_cloud == 'azure'
+    - azure_key_vault_name | length > 0
+    - rabbitmq_password_secret_ref | length > 0
+    - runtime_backend_from_inventory != 'cloud_native'
+
+- name: Fetch GHCR token from Azure Key Vault
+  ansible.builtin.command:
+    argv:
+      - az
+      - keyvault
+      - secret
+      - show
+      - --vault-name
+      - "{{ azure_key_vault_name }}"
+      - --name
+      - "{{ ghcr_token_secret_ref }}"
+      - --query
+      - value
+      - -o
+      - tsv
+      - --only-show-errors
+  register: azure_ghcr_token
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when:
+    - selected_cloud == 'azure'
+    - azure_key_vault_name | length > 0
+    - ghcr_token_secret_ref | length > 0
+
+- name: Fetch Azure Redis access key
+  ansible.builtin.command:
+    argv:
+      - az
+      - redis
+      - list-keys
+      - --name
+      - "{{ azure_redis_name }}"
+      - --resource-group
+      - "{{ azure_resource_group }}"
+      - --query
+      - primaryKey
+      - -o
+      - tsv
+      - --only-show-errors
+  register: azure_redis_access_key
+  changed_when: false
+  no_log: true
+  when:
+    - selected_cloud == 'azure'
+    - runtime_backend_from_inventory == 'cloud_native'
+    - azure_redis_name | length > 0
+    - azure_resource_group | length > 0
+
+- name: Fetch Tailscale auth key from AWS Secrets Manager
+  ansible.builtin.command:
+    argv:
+      - aws
+      - secretsmanager
+      - get-secret-value
+      - --secret-id
+      - "{{ tailscale_auth_key_secret_ref }}"
+      - --query
+      - SecretString
+      - --output
+      - text
+      - --region
+      - "{{ cloud_region }}"
+      - --profile
+      - "{{ cloud_profile }}"
+  register: aws_tailscale_auth_key
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when:
+    - selected_cloud == 'aws'
+    - tailscale_auth_key_secret_ref | length > 0
+
+- name: Fetch Tailscale auth key from GCP Secret Manager
+  ansible.builtin.command:
+    argv: [gcloud, secrets, versions, access, latest, --secret, "{{ tailscale_auth_key_secret_ref }}", --project, "{{ gcp_project_id }}"]
+  register: gcp_tailscale_auth_key
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when:
+    - selected_cloud == 'gcp'
+    - tailscale_auth_key_secret_ref | length > 0
+
+- name: Fetch Tailscale auth key from Azure Key Vault
+  ansible.builtin.command:
+    argv:
+      - az
+      - keyvault
+      - secret
+      - show
+      - --vault-name
+      - "{{ azure_key_vault_name }}"
+      - --name
+      - "{{ tailscale_auth_key_secret_ref }}"
+      - --query
+      - value
+      - -o
+      - tsv
+      - --only-show-errors
+  register: azure_tailscale_auth_key
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when:
+    - selected_cloud == 'azure'
+    - azure_key_vault_name | length > 0
+    - tailscale_auth_key_secret_ref | length > 0
+
+- name: Fetch Cloudflare API token from AWS Secrets Manager
+  ansible.builtin.command:
+    argv:
+      - aws
+      - secretsmanager
+      - get-secret-value
+      - --secret-id
+      - "{{ cloudflare_token_secret_ref }}"
+      - --query
+      - SecretString
+      - --output
+      - text
+      - --region
+      - "{{ cloud_region }}"
+      - --profile
+      - "{{ cloud_profile }}"
+  register: aws_cloudflare_token
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when:
+    - selected_cloud == 'aws'
+    - cloudflare_token_secret_ref | length > 0
+
+- name: Fetch Cloudflare API token from GCP Secret Manager
+  ansible.builtin.command:
+    argv: [gcloud, secrets, versions, access, latest, --secret, "{{ cloudflare_token_secret_ref }}", --project, "{{ gcp_project_id }}"]
+  register: gcp_cloudflare_token
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when:
+    - selected_cloud == 'gcp'
+    - cloudflare_token_secret_ref | length > 0
+
+- name: Fetch Cloudflare API token from Azure Key Vault
+  ansible.builtin.command:
+    argv:
+      - az
+      - keyvault
+      - secret
+      - show
+      - --vault-name
+      - "{{ azure_key_vault_name }}"
+      - --name
+      - "{{ cloudflare_token_secret_ref }}"
+      - --query
+      - value
+      - -o
+      - tsv
+      - --only-show-errors
+  register: azure_cloudflare_token
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when:
+    - selected_cloud == 'azure'
+    - azure_key_vault_name | length > 0
+    - cloudflare_token_secret_ref | length > 0
+
+# Cloudflare tunnel tokens are written to GCP Secret Manager by terraform
+# (cloudflare_zerotrust.tf), so they're GCP-only. cloudflared (in-cluster +
+# bastion) consumes them. Missing == Zero Trust not enabled; fail soft.
+- name: Fetch Cloudflare apps-tunnel token from GCP Secret Manager
+  ansible.builtin.command:
+    argv: [gcloud, secrets, versions, access, latest, --secret, "{{ cloudflare_tunnel_token_apps_secret_ref }}", --project, "{{ gcp_project_id }}"]
+  register: gcp_cf_tunnel_apps
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when:
+    - selected_cloud == 'gcp'
+    - cloudflare_tunnel_token_apps_secret_ref | length > 0
+
+- name: Fetch Cloudflare admin-tunnel token from GCP Secret Manager
+  ansible.builtin.command:
+    argv: [gcloud, secrets, versions, access, latest, --secret, "{{ cloudflare_tunnel_token_admin_secret_ref }}", --project, "{{ gcp_project_id }}"]
+  register: gcp_cf_tunnel_admin
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when:
+    - selected_cloud == 'gcp'
+    - cloudflare_tunnel_token_admin_secret_ref | length > 0
+
+- name: Resolve secret values
+  ansible.builtin.set_fact:
+    resolved_db_password: "{{ aws_db_password.stdout if (aws_db_password is defined and aws_db_password.stdout is defined) else (gcp_db_password.stdout if (gcp_db_password
+      is defined and gcp_db_password.stdout is defined) else (azure_db_password.stdout if (azure_db_password is defined and azure_db_password.stdout is defined) else
+      lookup('env', 'DB_PASSWORD'))) }}"
+    resolved_rabbitmq_password: "{{ aws_rabbitmq_password.stdout if (aws_rabbitmq_password is defined and aws_rabbitmq_password.stdout is defined) else (gcp_rabbitmq_password.stdout
+      if (gcp_rabbitmq_password is defined and gcp_rabbitmq_password.stdout is defined) else (azure_rabbitmq_password.stdout if (azure_rabbitmq_password is defined
+      and azure_rabbitmq_password.stdout is defined) else lookup('env', 'RABBITMQ_PASSWORD'))) }}"
+    resolved_ghcr_token: "{{ aws_ghcr_token.stdout if (aws_ghcr_token is defined and aws_ghcr_token.stdout is defined and aws_ghcr_token.rc == 0) else (gcp_ghcr_token.stdout
+      if (gcp_ghcr_token is defined and gcp_ghcr_token.stdout is defined and gcp_ghcr_token.rc == 0) else (azure_ghcr_token.stdout if (azure_ghcr_token is defined
+      and azure_ghcr_token.stdout is defined and azure_ghcr_token.rc == 0) else lookup('env', 'GHCR_TOKEN'))) }}"
+    resolved_azure_redis_access_key: "{{ azure_redis_access_key.stdout if (azure_redis_access_key is defined and azure_redis_access_key.stdout is defined) else ''
+      }}"
+    resolved_tailscale_auth_key: "{{ aws_tailscale_auth_key.stdout if (aws_tailscale_auth_key is defined and aws_tailscale_auth_key.stdout is defined and aws_tailscale_auth_key.rc
+      == 0) else (gcp_tailscale_auth_key.stdout if (gcp_tailscale_auth_key is defined and gcp_tailscale_auth_key.stdout is defined and gcp_tailscale_auth_key.rc ==
+      0) else (azure_tailscale_auth_key.stdout if (azure_tailscale_auth_key is defined and azure_tailscale_auth_key.stdout is defined and azure_tailscale_auth_key.rc
+      == 0) else lookup('env', 'TAILSCALE_AUTH_KEY'))) }}"
+    resolved_cloudflare_token: "{{ aws_cloudflare_token.stdout if (aws_cloudflare_token is defined and aws_cloudflare_token.stdout is defined and aws_cloudflare_token.rc == 0) else (gcp_cloudflare_token.stdout if (gcp_cloudflare_token is defined and gcp_cloudflare_token.stdout is defined and gcp_cloudflare_token.rc == 0) else (azure_cloudflare_token.stdout if (azure_cloudflare_token is defined and azure_cloudflare_token.stdout is defined and azure_cloudflare_token.rc == 0) else lookup('env', 'CLOUDFLARE_TOKEN'))) }}"
+    resolved_cloudflare_tunnel_token_apps: "{{ gcp_cf_tunnel_apps.stdout if (gcp_cf_tunnel_apps is defined and gcp_cf_tunnel_apps.stdout is defined and gcp_cf_tunnel_apps.rc == 0) else lookup('env', 'CLOUDFLARE_TUNNEL_TOKEN_APPS') }}"
+    resolved_cloudflare_tunnel_token_admin: "{{ gcp_cf_tunnel_admin.stdout if (gcp_cf_tunnel_admin is defined and gcp_cf_tunnel_admin.stdout is defined and gcp_cf_tunnel_admin.rc == 0) else lookup('env', 'CLOUDFLARE_TUNNEL_TOKEN_ADMIN') }}"
+  no_log: true
+
+- name: Validate required resolved secrets
+  ansible.builtin.assert:
+    that:
+      - resolved_db_password | length > 0
+      - resolved_rabbitmq_password | length > 0 or runtime_backend_from_inventory == 'cloud_native'
+    fail_msg: |
+      Required secrets were not found in cloud secret manager.
+      Run from terraform/multicloud-vm-yaml-lab:
+        ./scripts/lab.sh secrets push
+  no_log: true
+
+- name: Publish resolved secrets to cloud hosts
+  ansible.builtin.add_host:
+    name: "{{ item }}"
+    coinops_db_password: "{{ resolved_db_password }}"
+    coinops_rabbitmq_password: "{{ resolved_rabbitmq_password }}"
+    coinops_ghcr_token: "{{ resolved_ghcr_token }}"
+    coinops_azure_redis_access_key: "{{ resolved_azure_redis_access_key }}"
+    coinops_tailscale_auth_key: "{{ resolved_tailscale_auth_key }}"
+    coinops_cloudflare_token: "{{ resolved_cloudflare_token }}"
+    coinops_cloudflare_tunnel_token_apps: "{{ resolved_cloudflare_tunnel_token_apps }}"
+    coinops_cloudflare_tunnel_token_admin: "{{ resolved_cloudflare_tunnel_token_admin }}"
+    coinops_ghcr_username: "{{ lookup('env', 'GHCR_USERNAME') | default('', true) }}"
+  loop: "{{ target_cloud_hosts }}"
+  no_log: true

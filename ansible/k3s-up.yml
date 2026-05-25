@@ -27,14 +27,28 @@
   hosts: localhost
   connection: local
   gather_facts: false
-  roles: [cloud-secrets]
+  roles: [cloud_secrets]
 
 - name: Join the GCP bastion to the tailnet (subnet router)
   hosts: bastion
   become: true
-  roles: [cloud-bastion-stack]
+  roles: [cloud_bastion_stack]
 
 - name: Bring up the HA k3s cluster
   hosts: k3s
   become: true
-  roles: [k3s-cluster]
+  # Orchestration lives in the playbook, not in a meta-role: common base, then
+  # k3s itself, then the operator toolchain (helm + kubernetes client on the
+  # first node), then cert-manager, then the workloads. The workload roles are
+  # first-node-guarded internally (joiners hit `meta: end_host`). The k3s nodes
+  # run no Tailscale — operator access arrives over the tailnet through the GCP
+  # bastion's advertised route (cloud-bastion-stack, above).
+  roles:
+    - common            # base OS packages + hardening
+    - k3s               # the HA k3s install (embedded etcd, all nodes server)
+    - k3s_tools         # helm + python kubernetes client on the first node
+    - k3s_cert_manager  # cert-manager + Let's Encrypt DNS-01 issuer (Cloudflare)
+    - k3s_cloudflared   # in-cluster cloudflared (apps tunnel) — public edge, no Tailscale
+    - k3s_hello         # hello-world learning workload
+    - k3s_headlamp      # in-cluster Kubernetes dashboard
+    - k3s_homepage      # deploy-and-expose example (links dashboard)

@@ -1,0 +1,18 @@
+---
+# k3s-hello — self-contained inputs (every variable the role reads is declared
+# here, so it carries no hidden group_vars dependency).
+
+# kubeconfig the kubernetes.core modules use on the first node. k3s writes it
+# here (mode 0644); the API answers on 127.0.0.1:6443 from the node itself.
+k3s_kubeconfig: /etc/rancher/k3s/k3s.yaml
+
+# First-node guard — mirrors roles/k3s so this role stands alone.
+k3s_first_node: "{{ ansible_play_hosts_all[0] }}"
+
+# Category namespace — the hello demo lives alongside the dashboards in `tooling`.
+k3s_hello_namespace: tooling
+
+# Ingress / TLS — shared with k3s-cert-manager. Exposed at hello.<domain>.
+k3s_ingress_domain: "{{ coinops_k3s_ingress_domain | default('lab.coinops.pp.ua', true) }}"
+cert_manager_cluster_issuer: letsencrypt-cloudflare
+k3s_hello_host: "hello.{{ k3s_ingress_domain }}"

@@ -1,0 +1,75 @@
+---
+# Sample learning workload: nginxdemos/hello. 2 replicas behind a ClusterIP
+# Service, exposed through Traefik with a Let's Encrypt cert at
+# hello.{{ k3s_ingress_domain }} (no NodePort — ingress only).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ k3s_hello_namespace }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello
+  namespace: {{ k3s_hello_namespace }}
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: hello
+  template:
+    metadata:
+      labels:
+        app: hello
+    spec:
+      containers:
+        - name: hello
+          image: nginxdemos/hello:plain-text
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello
+  namespace: {{ k3s_hello_namespace }}
+spec:
+  type: ClusterIP
+  selector:
+    app: hello
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hello
+  namespace: {{ k3s_hello_namespace }}
+  annotations:
+    cert-manager.io/cluster-issuer: {{ cert_manager_cluster_issuer }}
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - {{ k3s_hello_host }}
+      secretName: hello-tls
+  rules:
+    - host: {{ k3s_hello_host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hello
+                port:
+                  number: 80

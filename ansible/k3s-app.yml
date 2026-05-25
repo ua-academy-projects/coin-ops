@@ -29,7 +29,7 @@
   hosts: localhost
   connection: local
   gather_facts: false
-  roles: [cloud-secrets]
+  roles: [cloud_secrets]
 
 - name: Deploy Coin-Ops backing services and app on k3s
   hosts: k3s
@@ -37,6 +37,8 @@
   roles:
     # k3s-tools is idempotent — ensures the kubernetes Python client is present
     # if this play is run without a fresh k3s-up.yml.
-    - k3s-tools
-    - k3s-coinops-data
-    - k3s-coinops
+    - k3s_tools
+    # CNPG operator must be up before k3s-coinops-data declares the Cluster CR.
+    - k3s_cnpg
+    - k3s_coinops_data
+    - k3s_coinops

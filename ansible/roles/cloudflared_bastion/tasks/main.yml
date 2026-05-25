@@ -1,0 +1,80 @@
+---
+# Install cloudflared on the bastion and run the admin tunnel as a systemd
+# service (token from an 0600 EnvironmentFile, so it's never in the process
+# args). Idempotent. Skips cleanly when no admin-tunnel token is configured.
+
+- name: Report skip when no admin-tunnel token is configured
+  ansible.builtin.debug:
+    msg: "coinops_cloudflare_tunnel_token_admin is empty; skipping cloudflared on {{ inventory_hostname }} (Zero Trust not enabled)."
+  when: cloudflared_bastion_token | length == 0
+
+- name: Install and run the cloudflared admin tunnel
+  when: cloudflared_bastion_token | length > 0
+  block:
+    - name: Install cloudflared apt signing key
+      ansible.builtin.get_url:
+        url: https://pkg.cloudflare.com/cloudflare-main.gpg
+        dest: /usr/share/keyrings/cloudflare-main.gpg
+        mode: "0644"
+        force: false
+
+    - name: Install cloudflared apt repository
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared {{ ansible_distribution_release }} main"
+        filename: cloudflared
+        state: present
+
+    - name: Install cloudflared
+      ansible.builtin.apt:
+        name: cloudflared
+        state: present
+        update_cache: true
+
+    - name: Ensure /etc/cloudflared exists
+      ansible.builtin.file:
+        path: /etc/cloudflared
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Write the admin-tunnel token environment file
+      ansible.builtin.copy:
+        dest: /etc/cloudflared/admin.env
+        content: "TUNNEL_TOKEN={{ cloudflared_bastion_token }}\n"
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+      notify: Restart cloudflared-admin
+
+    - name: Install the cloudflared-admin systemd unit
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/cloudflared-admin.service
+        content: |
+          [Unit]
+          Description=cloudflared admin tunnel (Coin-Ops k3s zero-trust SSH + kube API)
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=simple
+          EnvironmentFile=/etc/cloudflared/admin.env
+          ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate --metrics 127.0.0.1:2000 run
+          Restart=on-failure
+          RestartSec=5
+          User=root
+
+          [Install]
+          WantedBy=multi-user.target
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart cloudflared-admin
+
+    - name: Enable and start cloudflared-admin
+      ansible.builtin.systemd:
+        name: cloudflared-admin
+        enabled: true
+        state: started
+        daemon_reload: true

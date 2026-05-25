@@ -1,5 +1,5 @@
 ---
-# Tailscale auth key — flowed in by [[cloud-secrets]] as coinops_tailscale_auth_key
+# Tailscale auth key — flowed in by [[cloud_secrets]] as coinops_tailscale_auth_key
 # (add_host), with an env fallback for local runs. Empty -> the role is a no-op
 # so the stack still deploys without Tailscale configured.
 tailscale_auth_key: "{{ coinops_tailscale_auth_key | default(lookup('env', 'TAILSCALE_AUTH_KEY') | default('', true), true) }}"

@@ -1,0 +1,43 @@
+---
+# Install the CloudNativePG operator from its Helm chart on the first node, so
+# k3s-coinops-data can declare PostgreSQL as a `Cluster` CR. Native modules
+# only (helm_repository + helm). Joiner nodes exit.
+
+- name: Skip k3s-cnpg (not the first node)
+  ansible.builtin.meta: end_host
+  when: inventory_hostname != k3s_first_node
+
+- name: Add the CloudNativePG Helm repository
+  kubernetes.core.helm_repository:
+    name: "{{ k3s_cnpg_chart_repo_name }}"
+    repo_url: "{{ k3s_cnpg_chart_repo_url }}"
+
+- name: Install the CloudNativePG operator
+  kubernetes.core.helm:
+    name: "{{ k3s_cnpg_release }}"
+    chart_ref: "{{ k3s_cnpg_chart_ref }}"
+    chart_version: "{{ k3s_cnpg_chart_version }}"
+    release_namespace: "{{ k3s_cnpg_namespace }}"
+    create_namespace: true
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    wait: true
+
+# Block until the Cluster CRD is registered, so the Cluster CR that
+# k3s-coinops-data applies next isn't rejected by a not-yet-ready API.
+- name: Wait for the CNPG Cluster CRD to be established
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    api_version: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    name: clusters.postgresql.cnpg.io
+    wait: true
+    wait_condition:
+      type: Established
+      status: "True"
+    wait_timeout: 120
+
+- name: Report CNPG operator status
+  ansible.builtin.debug:
+    msg:
+      - "CloudNativePG operator {{ k3s_cnpg_chart_version }} installed in {{ k3s_cnpg_namespace }}."
+      - "Declare PostgreSQL as a Cluster (postgresql.cnpg.io/v1) — k3s-coinops-data does this for Coin-Ops."

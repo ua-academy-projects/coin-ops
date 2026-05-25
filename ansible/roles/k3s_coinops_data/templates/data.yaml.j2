@@ -1,0 +1,164 @@
+---
+# Backing services for Coin-Ops on k3s: a creds Secret, a CloudNativePG
+# `Cluster` for PostgreSQL (managed by the operator from k3s-cnpg), and RabbitMQ
+# + Redis StatefulSets each with a stable in-cluster Service for DNS.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ coinops_data_namespace }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: coinops-data-creds
+  namespace: {{ coinops_data_namespace }}
+type: Opaque
+stringData:
+  POSTGRES_USER: {{ coinops_data_db_user }}
+  POSTGRES_PASSWORD: {{ coinops_data_db_password }}
+  POSTGRES_DB: {{ coinops_data_db_name }}
+  RABBITMQ_DEFAULT_USER: {{ coinops_data_rabbitmq_user }}
+  RABBITMQ_DEFAULT_PASS: {{ coinops_data_rabbitmq_password }}
+---
+# CNPG reads the application role's credentials from a basic-auth Secret named
+# in the Cluster's bootstrap.initdb.secret. Same user/password the app uses.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: coinops-pg-app
+  namespace: {{ coinops_data_namespace }}
+type: kubernetes.io/basic-auth
+stringData:
+  username: {{ coinops_data_db_user }}
+  password: {{ coinops_data_db_password }}
+---
+# PostgreSQL, managed by the CloudNativePG operator. The operator creates the
+# StatefulSet, PVCs, and the -rw / -ro / -r Services. The app connects to
+# {{ coinops_cnpg_cluster_name }}-rw. initdb bootstraps the app database + owner
+# from the basic-auth Secret above; the schema Job (below) loads the tables.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ coinops_cnpg_cluster_name }}
+  namespace: {{ coinops_data_namespace }}
+spec:
+  instances: {{ coinops_cnpg_instances }}
+{% if coinops_cnpg_postgres_image | length > 0 %}
+  imageName: {{ coinops_cnpg_postgres_image }}
+{% endif %}
+  bootstrap:
+    initdb:
+      database: {{ coinops_data_db_name }}
+      owner: {{ coinops_data_db_user }}
+      secret:
+        name: coinops-pg-app
+  storage:
+    size: {{ coinops_postgres_storage }}
+    storageClass: {{ coinops_data_storage_class }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  namespace: {{ coinops_data_namespace }}
+spec:
+  clusterIP: None
+  selector:
+    app: rabbitmq
+  ports:
+    - port: 5672
+      targetPort: 5672
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rabbitmq
+  namespace: {{ coinops_data_namespace }}
+spec:
+  serviceName: rabbitmq
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      containers:
+        - name: rabbitmq
+          image: {{ coinops_rabbitmq_image }}
+          envFrom:
+            - secretRef:
+                name: coinops-data-creds
+          ports:
+            - containerPort: 5672
+          readinessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "-q", "ping"]
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/rabbitmq
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ coinops_data_storage_class }}
+        resources:
+          requests:
+            storage: {{ coinops_rabbitmq_storage }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: {{ coinops_data_namespace }}
+spec:
+  clusterIP: None
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: {{ coinops_data_namespace }}
+spec:
+  serviceName: redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: {{ coinops_redis_image }}
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ coinops_data_storage_class }}
+        resources:
+          requests:
+            storage: {{ coinops_redis_storage }}

@@ -1,0 +1,34 @@
+---
+# Run the in-cluster cloudflared connector for the apps tunnel. Skips cleanly
+# when no tunnel token is present (Zero Trust not enabled). Runs once on the
+# first node; joiners exit.
+
+- name: Skip k3s_cloudflared (not the first node)
+  ansible.builtin.meta: end_host
+  when: inventory_hostname != k3s_first_node
+
+- name: Report skip when no apps-tunnel token is configured
+  ansible.builtin.debug:
+    msg: "coinops_cloudflare_tunnel_token_apps is empty; skipping in-cluster cloudflared (Zero Trust not enabled)."
+  when: k3s_cloudflared_tunnel_token | length == 0
+
+- name: Deploy in-cluster cloudflared (apps tunnel)
+  when: k3s_cloudflared_tunnel_token | length > 0
+  block:
+    - name: Apply cloudflared manifests (namespace, token Secret, Deployment)
+      kubernetes.core.k8s:
+        state: present
+        definition: "{{ item }}"
+        kubeconfig: "{{ k3s_kubeconfig }}"
+        wait: true
+        wait_timeout: 180
+      loop: "{{ lookup('template', 'cloudflared.yaml.j2') | from_yaml_all | list }}"
+      loop_control:
+        label: "{{ item.kind }}/{{ item.metadata.name }}"
+      no_log: true  # the Secret carries the tunnel token
+
+    - name: Report cloudflared status
+      ansible.builtin.debug:
+        msg:
+          - "In-cluster cloudflared running the apps tunnel ({{ k3s_cloudflared_replicas }} replicas) in {{ k3s_cloudflared_namespace }}."
+          - "Routing (-> Traefik) and Access are managed in Cloudflare by terraform: app.<domain> public, dashboards Access-gated."

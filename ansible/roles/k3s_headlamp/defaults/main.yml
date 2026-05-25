@@ -1,0 +1,27 @@
+---
+# k3s-headlamp — the Headlamp Kubernetes dashboard, installed from its official
+# Helm chart (kubernetes-sigs) and exposed through Traefik with TLS at
+# headlamp.<domain>. The chart creates the ServiceAccount and a cluster-admin
+# ClusterRoleBinding (kept for the learning lab — tighten clusterRoleName for
+# real workloads); mint a login token from that SA (see the tasks output).
+# Self-contained: every input is declared here as a default.
+
+# First-node guard (runs once; joiners exit) + kubeconfig the modules use.
+k3s_first_node: "{{ ansible_play_hosts_all[0] }}"
+k3s_kubeconfig: /etc/rancher/k3s/k3s.yaml
+
+# Helm chart coordinates.
+k3s_headlamp_chart_repo_name: headlamp
+k3s_headlamp_chart_repo_url: https://kubernetes-sigs.github.io/headlamp/
+k3s_headlamp_chart_ref: headlamp/headlamp
+k3s_headlamp_chart_version: 0.42.0
+k3s_headlamp_namespace: tooling
+k3s_headlamp_release: headlamp
+
+# Pin the Headlamp image tag for reproducible rollouts (empty == chart default).
+k3s_headlamp_image_tag: ""
+
+# Ingress / TLS — shared with k3s-cert-manager. Exposed at headlamp.<domain>.
+k3s_ingress_domain: "{{ coinops_k3s_ingress_domain | default('lab.coinops.pp.ua', true) }}"
+cert_manager_cluster_issuer: letsencrypt-cloudflare
+k3s_headlamp_host: "headlamp.{{ k3s_ingress_domain }}"

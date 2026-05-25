@@ -1,0 +1,33 @@
+---
+# Install Headlamp from its official Helm chart on the first node. The chart
+# creates the ServiceAccount + cluster-admin ClusterRoleBinding and the Service;
+# the rendered values turn on a Traefik Ingress with a cert-manager TLS cert.
+# Native modules only (helm_repository + helm). Joiner nodes exit.
+
+- name: Skip k3s-headlamp (not the first node)
+  ansible.builtin.meta: end_host
+  when: inventory_hostname != k3s_first_node
+
+- name: Add the Headlamp Helm repository
+  kubernetes.core.helm_repository:
+    name: "{{ k3s_headlamp_chart_repo_name }}"
+    repo_url: "{{ k3s_headlamp_chart_repo_url }}"
+
+- name: Install Headlamp via Helm (SA + cluster-admin + ingress/TLS)
+  kubernetes.core.helm:
+    name: "{{ k3s_headlamp_release }}"
+    chart_ref: "{{ k3s_headlamp_chart_ref }}"
+    chart_version: "{{ k3s_headlamp_chart_version }}"
+    release_namespace: "{{ k3s_headlamp_namespace }}"
+    create_namespace: true
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    wait: true
+    values: "{{ lookup('template', 'headlamp-values.yaml.j2') | from_yaml }}"
+
+- name: Show how to reach Headlamp and mint a login token
+  ansible.builtin.debug:
+    msg:
+      - "Headlamp is up at https://{{ k3s_headlamp_host }} (cert via {{ cert_manager_cluster_issuer }})."
+      - "Reachable once *.{{ k3s_ingress_domain }} resolves to a k3s node IP from your tailnet client."
+      - "Mint a 24h login token with (the chart's SA is named after the release):"
+      - "  kubectl --kubeconfig=~/.kube/coinops-k3s.yaml -n {{ k3s_headlamp_namespace }} create token {{ k3s_headlamp_release }} --duration=24h"

@@ -1,0 +1,21 @@
+---
+# Meta-role: provision + deploy the cloud private DB/runtime node.
+# Applied to `hosts: db` by cloud-deploy.yml. The `cloud-db` child role's
+# tasks are gated by `when: runtime_backend != "cloud_native"`, so this
+# whole stack is effectively a no-op in cloud-native mode (where managed
+# RDS / Cloud SQL replaces this VM).
+
+- ansible.builtin.import_role:
+    name: common
+
+- ansible.builtin.import_role:
+    name: docker
+
+- ansible.builtin.import_role:
+    name: registry_login
+
+# DB VM is private and does NOT run Tailscale — reached via the bastion's
+# advertised tailnet route. Only cloud-bastion-stack joins the tailnet.
+
+- ansible.builtin.import_role:
+    name: cloud_db

@@ -7,7 +7,7 @@ with `--server https://first:6443` sharing the cluster token persisted
 at `/var/lib/rancher/k3s/server/coinops-token` on the first node.
 
 **Where it runs:** every host in the `k3s` inventory group, via the
-[[k3s-cluster]] meta-role.
+`k3s-up.yml` playbook.
 
 **Reads:**
 - `k3s_release_version` — pinned k3s release (see `defaults/main.yml`).

@@ -25,12 +25,12 @@
 
 - hosts: history
   become: true
-  roles: [vm-history-stack]
+  roles: [vm_history_stack]
 
 - hosts: proxy
   become: true
-  roles: [vm-proxy-stack]
+  roles: [vm_proxy_stack]
 
 - hosts: ui
   become: true
-  roles: [vm-ui-stack]
+  roles: [vm_ui_stack]
