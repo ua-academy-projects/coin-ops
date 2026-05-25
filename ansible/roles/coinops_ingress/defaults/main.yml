@@ -1,0 +1,20 @@
+---
+# Public CoinOps ingress.
+# Role variables are prefixed with coinops_ingress_ by convention.
+
+coinops_ingress_kubeconfig: "{{ lookup('env', 'KUBECONFIG') | default('~/.kube/config', true) | expanduser }}"
+coinops_ingress_frontend_namespace: coinops-frontend
+coinops_ingress_backend_namespace: coinops-backend
+coinops_ingress_name: coinops
+coinops_ingress_class_name: traefik
+coinops_ingress_domain: coinops.kazachuk-k3s.pp.ua
+coinops_ingress_tls_secret_name: coinops-tls
+coinops_ingress_cluster_issuer_name: letsencrypt-cloudflare-production
+coinops_ingress_ui_service_name: coinops-ui
+coinops_ingress_ui_service_port: 80
+coinops_ingress_proxy_service_name: coinops-proxy
+coinops_ingress_proxy_service_port: 80
+coinops_ingress_history_service_name: coinops-history-api
+coinops_ingress_history_service_port: 80
+coinops_ingress_proxy_strip_middleware_name: coinops-strip-api
+coinops_ingress_history_strip_middleware_name: coinops-strip-history-api

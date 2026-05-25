@@ -1,0 +1,21 @@
+---
+# CoinOps history API and history consumer.
+# Role variables are prefixed with coinops_history_ by convention.
+
+coinops_history_kubeconfig: "{{ lookup('env', 'KUBECONFIG') | default('~/.kube/config', true) | expanduser }}"
+coinops_history_namespace: coinops-backend
+coinops_history_api_app_name: coinops-history-api
+coinops_history_consumer_app_name: coinops-history-consumer
+coinops_history_api_replicas: 2
+coinops_history_consumer_replicas: 1
+coinops_history_image_registry: ghcr.io/ua-academy-projects
+coinops_history_api_image_name: coin-ops-history-api
+coinops_history_consumer_image_name: coin-ops-history-consumer
+coinops_history_image_tag: dev-latest
+coinops_history_api_image: "{{ coinops_history_image_registry }}/{{ coinops_history_api_image_name }}:{{ coinops_history_image_tag }}"
+coinops_history_consumer_image: "{{ coinops_history_image_registry }}/{{ coinops_history_consumer_image_name }}:{{ coinops_history_image_tag }}"
+coinops_history_api_container_port: 8000
+coinops_history_api_service_port: 80
+coinops_history_runtime_backend: external
+coinops_history_image_pull_secret_name: ghcr-pull-secret
+coinops_history_backend_env_secret_name: coinops-backend-env

@@ -1,0 +1,9 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ coinops_ingress_proxy_strip_middleware_name }}
+  namespace: {{ coinops_ingress_backend_namespace }}
+spec:
+  stripPrefix:
+    prefixes:
+      - /api

@@ -1,0 +1,17 @@
+---
+# CoinOps proxy service.
+# Role variables are prefixed with coinops_proxy_ by convention.
+
+coinops_proxy_kubeconfig: "{{ lookup('env', 'KUBECONFIG') | default('~/.kube/config', true) | expanduser }}"
+coinops_proxy_namespace: coinops-backend
+coinops_proxy_app_name: coinops-proxy
+coinops_proxy_replicas: 2
+coinops_proxy_image_registry: ghcr.io/ua-academy-projects
+coinops_proxy_image_name: coin-ops-proxy
+coinops_proxy_image_tag: dev-latest
+coinops_proxy_image: "{{ coinops_proxy_image_registry }}/{{ coinops_proxy_image_name }}:{{ coinops_proxy_image_tag }}"
+coinops_proxy_container_port: 8080
+coinops_proxy_service_port: 80
+coinops_proxy_runtime_backend: external
+coinops_proxy_image_pull_secret_name: ghcr-pull-secret
+coinops_proxy_backend_env_secret_name: coinops-backend-env

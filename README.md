@@ -288,6 +288,59 @@ Headlamp is installed in the cluster and can be opened locally at
 [docs/k3s-cluster.md](docs/k3s-cluster.md) for the full runbook, verification
 commands, and beginner notes.
 
+### CoinOps on k3s
+
+The real CoinOps application is also deployed into the GCP k3s cluster. This is
+separate from the older three-VM Docker Compose deployment.
+
+Public endpoint:
+
+```text
+https://coinops.kazachuk-k3s.pp.ua/
+```
+
+Traffic path:
+
+```text
+Browser
+  -> Cloudflare DNS
+  -> GCP L4 Load Balancer
+  -> Traefik in k3s
+  -> Kubernetes Ingress
+  -> CoinOps Services
+  -> Pods
+```
+
+Application playbook:
+
+```bash
+ANSIBLE_LOCAL_TEMP=/private/tmp/coin-ops-ansible-tmp \
+ANSIBLE_REMOTE_TEMP=/tmp/coin-ops-ansible-tmp \
+ANSIBLE_SSH_CONTROL_PATH_DIR=/private/tmp/coin-ops-ansible-cp \
+ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml
+```
+
+Useful targeted runs:
+
+```bash
+ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags data
+ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags backend
+ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags frontend
+ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags ingress
+```
+
+The k3s app deployment uses:
+
+- CNPG for PostgreSQL inside Kubernetes
+- Bitnami Helm charts for RabbitMQ and Redis
+- Kubernetes Deployments and Services for CoinOps app containers
+- Traefik Ingress for public routing
+- cert-manager with Cloudflare DNS-01 for HTTPS certificates
+- GCP Secret Manager as the source of sensitive values
+
+See [docs/coinops-k3s-deployment.md](docs/coinops-k3s-deployment.md) for the
+full architecture, role map, verification commands, and review notes.
+
 Current moving-tag deploys:
 
 ```bash

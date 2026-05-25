@@ -1,0 +1,51 @@
+---
+# Data layer for CoinOps: Postgres via CNPG, RabbitMQ, Redis, and app secrets.
+# Role variables are prefixed with coinops_data_ by convention.
+
+coinops_data_kubeconfig: "{{ lookup('env', 'KUBECONFIG') | default('~/.kube/config', true) | expanduser }}"
+coinops_data_namespace: coinops-data
+coinops_data_backend_namespace: coinops-backend
+coinops_data_frontend_namespace: coinops-frontend
+coinops_data_gcp_project_id: project-8888321c-54a9-4dac-86d
+coinops_data_db_gcp_secret_name: coinops-db-secrets
+coinops_data_service_gcp_secret_name: coinops-service-secrets
+coinops_data_image_pull_secret_name: ghcr-pull-secret
+coinops_data_backend_env_secret_name: coinops-backend-env
+
+coinops_data_postgres_cluster_name: coinops-postgres
+coinops_data_postgres_database: cognitor
+coinops_data_postgres_owner: coinops
+coinops_data_postgres_image: ghcr.io/cloudnative-pg/postgresql:16.4
+coinops_data_postgres_instances: 3
+coinops_data_postgres_storage_size: 5Gi
+coinops_data_postgres_storage_class: local-path
+coinops_data_postgres_credentials_secret_name: coinops-postgres-app-creds
+coinops_data_postgres_wait_timeout: 600
+
+coinops_data_rabbitmq_release_name: rabbitmq
+coinops_data_rabbitmq_chart_ref: oci://registry-1.docker.io/bitnamicharts/rabbitmq
+coinops_data_rabbitmq_chart_version: "16.0.14"
+coinops_data_rabbitmq_credentials_secret_name: coinops-rabbitmq-creds
+coinops_data_rabbitmq_storage_size: 2Gi
+
+coinops_data_redis_release_name: redis
+coinops_data_redis_chart_ref: oci://registry-1.docker.io/bitnamicharts/redis
+coinops_data_redis_chart_version: "22.0.7"
+coinops_data_redis_credentials_secret_name: coinops-redis-creds
+coinops_data_redis_storage_size: 2Gi
+
+coinops_data_namespaces:
+  - "{{ coinops_data_namespace }}"
+  - "{{ coinops_data_backend_namespace }}"
+  - "{{ coinops_data_frontend_namespace }}"
+
+coinops_data_image_pull_secret_namespaces:
+  - "{{ coinops_data_backend_namespace }}"
+  - "{{ coinops_data_frontend_namespace }}"
+
+coinops_data_postgres_host: "{{ coinops_data_postgres_cluster_name }}-rw.{{ coinops_data_namespace }}.svc"
+coinops_data_postgres_port: 5432
+coinops_data_rabbitmq_host: "{{ coinops_data_rabbitmq_release_name }}.{{ coinops_data_namespace }}.svc"
+coinops_data_rabbitmq_port: 5672
+coinops_data_redis_host: "{{ coinops_data_redis_release_name }}-master.{{ coinops_data_namespace }}.svc"
+coinops_data_redis_port: 6379

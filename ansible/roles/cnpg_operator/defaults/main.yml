@@ -1,0 +1,10 @@
+---
+# CNPG operator manages PostgreSQL clusters inside Kubernetes.
+# Role variables are prefixed with cnpg_operator_ by convention.
+
+cnpg_operator_kubeconfig: "{{ lookup('env', 'KUBECONFIG') | default('~/.kube/config', true) | expanduser }}"
+cnpg_operator_release_name: cnpg
+cnpg_operator_namespace: cnpg-system
+cnpg_operator_chart_ref: cloudnative-pg
+cnpg_operator_chart_repo_url: https://cloudnative-pg.github.io/charts
+cnpg_operator_chart_version: "0.26.1"

@@ -1,0 +1,18 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ coinops_data_postgres_cluster_name }}
+  namespace: {{ coinops_data_namespace }}
+spec:
+  instances: {{ coinops_data_postgres_instances }}
+  imageName: {{ coinops_data_postgres_image }}
+  primaryUpdateStrategy: unsupervised
+  bootstrap:
+    initdb:
+      database: {{ coinops_data_postgres_database }}
+      owner: {{ coinops_data_postgres_owner }}
+      secret:
+        name: {{ coinops_data_postgres_credentials_secret_name }}
+  storage:
+    size: {{ coinops_data_postgres_storage_size }}
+    storageClass: {{ coinops_data_postgres_storage_class }}

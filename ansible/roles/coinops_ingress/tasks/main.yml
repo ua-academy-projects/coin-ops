@@ -1,0 +1,38 @@
+---
+- name: Apply CoinOps frontend ingress
+  kubernetes.core.k8s:
+    kubeconfig: "{{ coinops_ingress_kubeconfig }}"
+    state: present
+    definition: "{{ lookup('template', role_path ~ '/templates/frontend-ingress.yml.j2') | from_yaml }}"
+
+- name: Apply CoinOps proxy strip-prefix middleware
+  kubernetes.core.k8s:
+    kubeconfig: "{{ coinops_ingress_kubeconfig }}"
+    state: present
+    definition: "{{ lookup('template', role_path ~ '/templates/proxy-strip-middleware.yml.j2') | from_yaml }}"
+
+- name: Apply CoinOps history strip-prefix middleware
+  kubernetes.core.k8s:
+    kubeconfig: "{{ coinops_ingress_kubeconfig }}"
+    state: present
+    definition: "{{ lookup('template', role_path ~ '/templates/history-strip-middleware.yml.j2') | from_yaml }}"
+
+- name: Apply CoinOps backend ingress
+  kubernetes.core.k8s:
+    kubeconfig: "{{ coinops_ingress_kubeconfig }}"
+    state: present
+    definition: "{{ lookup('template', role_path ~ '/templates/backend-ingress.yml.j2') | from_yaml }}"
+
+- name: Read CoinOps certificate
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ coinops_ingress_kubeconfig }}"
+    api_version: cert-manager.io/v1
+    kind: Certificate
+    namespace: "{{ coinops_ingress_frontend_namespace }}"
+    name: "{{ coinops_ingress_tls_secret_name }}"
+  register: coinops_ingress_certificate
+
+- name: Show CoinOps certificate status
+  debug:
+    msg: "{{ coinops_ingress_certificate.resources[0].status.conditions | default([]) }}"
+  when: coinops_ingress_certificate.resources | length > 0

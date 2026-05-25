@@ -1,0 +1,35 @@
+---
+- name: Ensure CoinOps UI namespace exists
+  kubernetes.core.k8s:
+    kubeconfig: "{{ coinops_ui_kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ coinops_ui_namespace }}"
+
+- name: Apply CoinOps UI deployment
+  kubernetes.core.k8s:
+    kubeconfig: "{{ coinops_ui_kubeconfig }}"
+    state: present
+    definition: "{{ lookup('template', role_path ~ '/templates/deployment.yml.j2') | from_yaml }}"
+
+- name: Apply CoinOps UI service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ coinops_ui_kubeconfig }}"
+    state: present
+    definition: "{{ lookup('template', role_path ~ '/templates/service.yml.j2') | from_yaml }}"
+
+- name: Wait for CoinOps UI rollout
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ coinops_ui_kubeconfig }}"
+    api_version: apps/v1
+    kind: Deployment
+    namespace: "{{ coinops_ui_namespace }}"
+    name: "{{ coinops_ui_app_name }}"
+    wait: true
+    wait_condition:
+      type: Available
+      status: "True"
+    wait_timeout: 300

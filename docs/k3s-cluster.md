@@ -4,6 +4,9 @@ This document describes the current GCP k3s learning cluster and how to verify
 it. The goal of this lab is to understand Kubernetes by first bringing up a
 small cluster, then inspecting and breaking it in controlled ways.
 
+For the real CoinOps application running on top of this cluster, see
+[CoinOps On k3s](coinops-k3s-deployment.md).
+
 ## What We Built
 
 Infrastructure is created in the separate `gcp-terraform-bootstrap` repository.

@@ -1,0 +1,35 @@
+---
+- name: Ensure CoinOps proxy namespace exists
+  kubernetes.core.k8s:
+    kubeconfig: "{{ coinops_proxy_kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ coinops_proxy_namespace }}"
+
+- name: Apply CoinOps proxy deployment
+  kubernetes.core.k8s:
+    kubeconfig: "{{ coinops_proxy_kubeconfig }}"
+    state: present
+    definition: "{{ lookup('template', role_path ~ '/templates/deployment.yml.j2') | from_yaml }}"
+
+- name: Apply CoinOps proxy service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ coinops_proxy_kubeconfig }}"
+    state: present
+    definition: "{{ lookup('template', role_path ~ '/templates/service.yml.j2') | from_yaml }}"
+
+- name: Wait for CoinOps proxy rollout
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ coinops_proxy_kubeconfig }}"
+    api_version: apps/v1
+    kind: Deployment
+    namespace: "{{ coinops_proxy_namespace }}"
+    name: "{{ coinops_proxy_app_name }}"
+    wait: true
+    wait_condition:
+      type: Available
+      status: "True"
+    wait_timeout: 300
