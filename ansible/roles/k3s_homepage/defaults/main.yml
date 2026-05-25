@@ -1,4 +1,4 @@
 ---
 # Default variables for Homepage dashboard.
 homepage_namespace: "homepage"
-homepage_domain: "coinops-softserve-penina.pp.ua"
+homepage_domain: "k3s.coinops-softserve-penina.pp.ua"

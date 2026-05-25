@@ -101,3 +101,18 @@ resource "google_compute_firewall" "allow_k3s_api_external" {
   source_ranges = ["0.0.0.0/0"]
   target_tags   = ["k3s-server"]
 }
+
+# Allows HTTP and HTTPS traffic to k3s Traefik ingress
+resource "google_compute_firewall" "allow_k3s_ingress" {
+  count   = contains(["gcp", "hybrid"], var.config.general.cloud) ? 1 : 0
+  name    = "allow-k3s-ingress"
+  network = var.vpc_name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["80", "443"]
+  }
+
+  source_ranges = ["0.0.0.0/0"]
+  target_tags   = ["k3s-server"]
+}
