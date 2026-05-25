@@ -22,6 +22,11 @@
   args:
     creates: /usr/local/bin/helm
 
+- name: Install pip3
+  apt:
+    name: python3-pip
+    state: present
+
 - name: Install Python kubernetes library
   pip:
     name: kubernetes
