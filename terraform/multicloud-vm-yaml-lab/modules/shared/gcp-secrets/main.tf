@@ -5,7 +5,6 @@ locals {
   secret_item_names = {
     for key, value in try(var.secrets.items, {}) :
     key => replace(replace(try(value.name, tostring(value)), "/", "-"), "_", "-")
-    if key != "cloudflare_token"
   }
 }
 

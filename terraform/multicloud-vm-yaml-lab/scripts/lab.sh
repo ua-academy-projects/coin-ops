@@ -379,6 +379,9 @@ secrets_push() {
     push_secret_value rabbitmq_password RABBITMQ_PASSWORD rabbitmq-password true
   fi
   push_secret_value ghcr_token GHCR_TOKEN ghcr-token false
+  # Cloudflare API token for cert-manager's DNS-01 solver (optional — only when
+  # issuing Let's Encrypt certs). Same token works if it has Zone:DNS:Edit.
+  push_secret_value cloudflare_token CLOUDFLARE_TOKEN cloudflare-token false
 }
 
 check_secret_value_exists() {

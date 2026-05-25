@@ -2,7 +2,6 @@ locals {
   secret_item_names = {
     for key, value in try(var.secrets.items, {}) :
     key => try(value.name, tostring(value))
-    if key != "cloudflare_token"
   }
 }
 

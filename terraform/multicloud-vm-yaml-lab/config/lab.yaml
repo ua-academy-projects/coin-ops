@@ -1,4 +1,4 @@
-cloud: aws
+cloud: gcp
 location: eu_central
 
 name_prefix: coinops-lab
