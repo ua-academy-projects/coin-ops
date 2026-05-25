@@ -86,3 +86,18 @@ resource "google_compute_firewall" "allow_k3s" {
   source_tags = ["k3s-server"]
   target_tags = ["k3s-server"]
 }
+
+# Allows kubectl access from internet to k3s API server
+resource "google_compute_firewall" "allow_k3s_api_external" {
+  count   = contains(["gcp", "hybrid"], var.config.general.cloud) ? 1 : 0
+  name    = "allow-k3s-api-external"
+  network = var.vpc_name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["6443"]
+  }
+
+  source_ranges = ["0.0.0.0/0"]
+  target_tags   = ["k3s-server"]
+}

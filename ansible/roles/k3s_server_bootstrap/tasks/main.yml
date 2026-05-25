@@ -1,6 +1,6 @@
 ---
 # Initializes k3s cluster on the first server node only.
-# Reads the join token and stores it as an Ansible fact for k3s_server_join role.
+# --tls-san adds public IP to TLS cert so kubectl works from outside.
 
 - name: Download k3s install script
   get_url:
@@ -9,7 +9,7 @@
     mode: '0755'
 
 - name: Install k3s and initialize cluster (first node only)
-  shell: INSTALL_K3S_EXEC="server --cluster-init" /tmp/k3s-install.sh
+  shell: INSTALL_K3S_EXEC="server --cluster-init --tls-san {{ ansible_host }}" /tmp/k3s-install.sh
   environment:
     INSTALL_K3S_VERSION: "{{ k3s_version }}"
   args:
