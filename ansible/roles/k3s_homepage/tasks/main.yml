@@ -26,6 +26,8 @@
                   - href: "https://headlamp.coinops-softserve-penina.pp.ua"
               - GitHub:
                   - href: "https://github.com/ua-academy-projects/coin-ops"
+              - YouTube:
+                  - href: "https://youtube.com"
 
 - name: Create Ingress for Homepage
   kubernetes.core.k8s:

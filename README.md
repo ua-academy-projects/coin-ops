@@ -8,11 +8,13 @@ Based on: `dev` branch of [ua-academy-projects/coin-ops](https://github.com/ua-a
 
 ## What This Branch Does
 
-Deploys the CoinOps application to AWS + Azure (hybrid multi-cloud) using:
-- **Terraform** — provisions cloud infrastructure across Azure + AWS
-- **Ansible** — configures VMs and deploys containers
-- **Docker Compose** — runs services on each VM
+Deploys the CoinOps application to AWS + Azure (hybrid multi-cloud) and a k3s Kubernetes cluster on GCP using:
+- **Terraform** — provisions cloud infrastructure across Azure + AWS + GCP
+- **Ansible** — configures VMs, deploys containers, installs k3s cluster and apps
+- **Docker Compose** — runs services on each VM (hybrid)
 - **Tailscale** — overlay VPN with subnet router pattern connecting VMs across clouds
+- **k3s** — lightweight Kubernetes cluster on GCP
+- **Helm** — installs Kubernetes apps (cert-manager, Headlamp, Homepage)
 - **Cloudflare** — DNS + HTTPS proxy
 
 ## Application
@@ -21,11 +23,15 @@ Coin rates monitoring dashboard:
 - Live BTC, ETH prices from CoinGecko
 - USD/UAH rate from NBU
 - Historical data charts
-- Accessible at: `https://coinops-softserve-penina.pp.ua` (Hybrid Azure+AWS, live ✅)
+- Hybrid app: `https://coinops-softserve-penina.pp.ua` ✅
+- k3s Homepage: `https://k3s.coinops-softserve-penina.pp.ua` ✅
+- k3s Headlamp: `https://headlamp.coinops-softserve-penina.pp.ua` ✅
 
 ---
 
 ## Architecture
+
+### Hybrid Azure + AWS (Task 1)
 
 ```
 Internet
@@ -53,6 +59,31 @@ SSH: Your machine → jump-host (AWS, port 9922, 3.70.205.142) → nodes via Pro
 Cross-cloud SSH:  jump-host → gateway-aws → Tailscale → node-03 (Azure)
 ```
 
+### GCP k3s Cluster (Task 2 + Task 3)
+
+```
+Internet
+  │
+  ▼
+Cloudflare (DNS only)
+  │
+  ▼
+34.158.238.181 (k3s-server-1, GCP europe-central2)
+  │
+  ▼
+Traefik Ingress (built into k3s)
+  │
+  ├── k3s.coinops-softserve-penina.pp.ua      → Homepage pod
+  └── headlamp.coinops-softserve-penina.pp.ua → Headlamp pod
+
+GCP k3s Cluster:
+  k3s-server-1 (control plane + worker, public IP 34.158.238.181 / 10.0.1.11)
+  k3s-server-2 (control plane + worker, private 10.0.1.12)
+  k3s-server-3 (control plane + worker, private 10.0.1.13)
+
+cert-manager → Let's Encrypt TLS certificates (auto-renewed)
+```
+
 ---
 
 ## Cloud Status
@@ -60,11 +91,11 @@ Cross-cloud SSH:  jump-host → gateway-aws → Tailscale → node-03 (Azure)
 | Cloud | Infrastructure | Ansible | App | URL |
 |-------|---------------|---------|-----|-----|
 | **Azure+AWS Hybrid** | ✅ Complete | ✅ Complete | ✅ Live | coinops-softserve-penina.pp.ua |
-| **GCP** | 📝 Planned | ⏳ Pending | ⏳ Pending | Task 2 |
+| **GCP k3s** | ✅ Complete | ✅ Complete | ✅ Live | k3s.coinops-softserve-penina.pp.ua |
 
 ---
 
-## Hybrid Azure + AWS (Current)
+## Hybrid Azure + AWS (Task 1)
 
 ### VM Distribution
 
@@ -80,15 +111,11 @@ Cross-cloud SSH:  jump-host → gateway-aws → Tailscale → node-03 (Azure)
 | Azure LB | Azure | swedencentral | Load Balancer | 20.91.139.85 (public) |
 | Terraform state | GCP | europe-central2 | State storage | gs://devops-intern-penina-tf-state |
 
-### Why Hybrid?
-
-Azure Free account quota: 4 vCPU in swedencentral. `Standard_B2s_v2` = 2 vCPU each. Maximum 2 Azure VMs = 4 vCPU. Solution: jump-host moved to AWS, leaving gateway-azure + node-03 in Azure = 4 vCPU exactly.
-
 ### Tailscale Subnet Router Pattern
 
-See [docs/tailscale-subnet-router.md](docs/tailscale-subnet-router.md) for full explanation.
+See [tailscale-subnet-router.md](tailscale-subnet-router.md) for full explanation.
 
-Summary: instead of installing Tailscale on every VM, one dedicated gateway VM per network acts as subnet router. It advertises its entire subnet to the Tailscale network. Other VMs need no Tailscale installed — they are reachable through the gateway's route.
+Summary: instead of installing Tailscale on every VM, one dedicated gateway VM per network acts as subnet router. It advertises its entire subnet to the Tailscale network. Other VMs need no Tailscale installed.
 
 ```
 AWS VPC
@@ -103,71 +130,84 @@ Azure VNet
 
 ---
 
-## Quick Start
+## GCP k3s Cluster (Task 2 + Task 3)
 
-### Prerequisites
+### VM Distribution
 
-- AWS CLI configured
-- Azure CLI (`az`) logged in to Azure subscription 1 (`309b8392...`)
-- GCP CLI (`gcloud`) configured as `marta.penina.academic@gmail.com`
-- Terraform installed
-- SSH key at `/d/.ssh/id_ed25519_devops`
-- Tailscale account with reusable auth key
+| VM | Role | IP |
+|----|------|----|
+| k3s-server-1 | control plane + worker | 34.158.238.181 (public) / 10.0.1.11 |
+| k3s-server-2 | control plane + worker | 10.0.1.12 (private) |
+| k3s-server-3 | control plane + worker | 10.0.1.13 (private) |
 
-### Deploy Hybrid (Azure + AWS)
+### Ansible Roles
+
+| Role | Purpose |
+|------|---------|
+| `k3s_prereqs` | curl, Helm, pip3, python kubernetes library |
+| `k3s_server_bootstrap` | initializes cluster on node-1, sets TLS SAN |
+| `k3s_server_join` | joins node-2 and node-3 to cluster |
+| `k3s_postcheck` | verifies all nodes Ready, downloads kubeconfig |
+| `cert_manager` | installs cert-manager + Let's Encrypt ClusterIssuer |
+| `k3s_headlamp` | installs Headlamp UI + Ingress + TLS |
+| `k3s_homepage` | installs Homepage dashboard + Ingress + TLS |
+
+### Playbooks
+
+```bash
+# Bootstrap k3s cluster
+ansible-playbook -i ansible/inventory ansible/k3s-cluster.yml
+
+# Install apps (cert-manager, Headlamp, Homepage)
+ansible-playbook -i ansible/inventory ansible/k3s-apps.yml
+```
+
+### kubectl Access
+
+```bash
+export KUBECONFIG=/d/.ssh/k3s-config.yaml
+kubectl get nodes
+```
+
+---
+
+## Quick Start — Hybrid (Azure + AWS)
 
 ```bash
 # 1. Set credentials in terraform/terraform.tfvars
-# azure_subscription_id, azure_client_id, azure_client_secret, azure_tenant_id
-# aws_access_key, aws_secret_key, db_password, tailscale_auth_key
-# ssh_public_key_path = "D:/.ssh/id_ed25519_devops.pub"
 
-# 2. GCP backend active in terraform/backend.tf
+# 2. Init and apply Terraform
 cd terraform
 terraform init -reconfigure
-
-# 3. Always check plan first
-terraform plan
-
-# 4. Apply
 terraform apply -auto-approve
 
-# 5. SSH to jump-host
+# 3. SSH to jump-host
 eval $(ssh-agent -s)
 ssh-add /d/.ssh/id_ed25519_devops
 ssh -A -p 9922 marta_ops@3.70.205.142
 
-# 6. On jump-host: clone repo
-git clone https://github.com/ua-academy-projects/coin-ops.git
-cd coin-ops && git checkout dev-penina-cloud
-
-# 7. Copy .env from local
-# (from local machine) scp -P 9922 /d/DevOps_internship/coin-ops/.env marta_ops@3.70.205.142:~/coin-ops/.env
-
-# 8. Provision (all nodes except node-03 first)
+# 4. On jump-host: pull repo and provision
+cd coin-ops && git pull origin dev-penina-cloud
 source .env
 ansible-playbook -i ansible/inventory ansible/provision.yml --limit 'all:!node-03'
-
-# 9. Fix Tailscale CIDRs on gateways
-ssh -p 9922 marta_ops@10.0.1.145 "sudo tailscale up --accept-routes --advertise-routes=10.0.1.0/24,10.0.2.0/24 --hostname=gateway-aws"
-ssh -p 9922 marta_ops@135.225.57.231 "sudo tailscale up --accept-routes --advertise-routes=10.0.4.0/24 --hostname=gateway-azure"
-
-# 10. Approve routes in Tailscale admin panel
-# https://login.tailscale.com/admin/machines
-# gateway-aws  → enable 10.0.1.0/24 and 10.0.2.0/24
-# gateway-azure → enable 10.0.4.0/24
-
-# 11. Provision node-03 (now reachable via Tailscale)
 ansible-playbook -i ansible/inventory ansible/provision.yml --limit node-03
-
-# 12. Deploy app
 ansible-playbook -i ansible/inventory ansible/deploy.yml
+```
 
-# 13. Add DNS in Cloudflare
-# A record: coinops-softserve-penina.pp.ua → 20.91.139.85 (Proxied)
+## Quick Start — GCP k3s
 
-# 14. Destroy when done to save credits
-terraform destroy -auto-approve
+```bash
+# After terraform apply (GCP VMs already created)
+
+# On jump-host:
+source .env
+ansible-playbook -i ansible/inventory ansible/k3s-cluster.yml
+ansible-playbook -i ansible/inventory ansible/k3s-apps.yml
+
+# On local machine:
+scp -P 9922 marta_ops@3.70.205.142:/tmp/k3s-config.yaml /d/.ssh/k3s-config.yaml
+export KUBECONFIG=/d/.ssh/k3s-config.yaml
+kubectl get nodes
 ```
 
 ---
@@ -204,6 +244,24 @@ ui
 [azure_internal:vars]
 ansible_ssh_common_args=-o ProxyJump=marta_ops@10.0.1.145:9922 -o StrictHostKeyChecking=no
 
+[k3s_bootstrap]
+k3s-server-1  ansible_host=34.158.238.181
+
+[k3s_join]
+k3s-server-2  ansible_host=10.0.1.12
+k3s-server-3  ansible_host=10.0.1.13
+
+[k3s_server:children]
+k3s_bootstrap
+k3s_join
+
+[k3s_server:vars]
+common_allowed_ports=["9922", "6443", "9345", "10250", "2379", "2380"]
+common_allowed_udp_ports=["8472"]
+
+[k3s_join:vars]
+ansible_ssh_common_args=-o ProxyJump=marta_ops@34.158.238.181:9922 -o StrictHostKeyChecking=no
+
 [all:vars]
 ansible_user=marta_ops
 ansible_port=9922
@@ -215,29 +273,53 @@ ansible_ssh_common_args=-o StrictHostKeyChecking=no
 
 ## Problems & Solutions
 
-### Problem 1 — Azure vCPU quota limit (4 vCPU in swedencentral)
-**What:** 3 Azure VMs needed 6 vCPU, quota only 4.
-**Fix:** Moved jump-host to AWS (t3.micro). Azure now has only gateway-azure + node-03 = 4 vCPU.
+### Task 1
 
-### Problem 2 — Azure public IP limit (3 per subscription)
-**What:** jump-host + gateway-azure + node-03 + LB = 4 IPs needed.
-**Fix:** node-03 set to `public_ip: false` — sits behind LB. LB gets the public IP instead.
+**Problem 1 — Azure vCPU quota limit**
+3 Azure VMs needed 6 vCPU, quota only 4.
+Fix: moved jump-host to AWS. Azure now has only gateway-azure + node-03 = 4 vCPU.
 
-### Problem 3 — Tailscale `creates:` idempotency bug
-**What:** Task used `creates: /var/lib/tailscale/tailscaled.state` — file existed after first run, command always skipped.
-**Fix:** Replaced with `register/changed_when` pattern.
+**Problem 2 — Tailscale `creates:` idempotency bug**
+Task used `creates:` — file existed after first run, command always skipped.
+Fix: replaced with `register/changed_when` pattern.
 
-### Problem 4 — Both gateways advertising same CIDR 10.0.0.0/16
-**What:** Tailscale got confused which gateway owns which subnet.
-**Fix:** Split into specific CIDRs: gateway-aws advertises `10.0.1.0/24,10.0.2.0/24`, gateway-azure advertises `10.0.4.0/24`.
+**Problem 3 — Both gateways advertising same CIDR 10.0.0.0/16**
+Tailscale got confused which gateway owns which subnet.
+Fix: split into specific CIDRs per gateway.
 
-### Problem 5 — node-03 unreachable via ProxyJump through jump-host
-**What:** jump-host (AWS) cannot reach 10.0.4.x (Azure) — no Tailscale on jump-host.
-**Fix:** node-03 uses ProxyJump through gateway-aws which has Tailscale route to Azure.
+**Problem 4 — node-03 unreachable via ProxyJump through jump-host**
+jump-host (AWS) cannot reach 10.0.4.x (Azure) — no Tailscale on jump-host.
+Fix: node-03 uses ProxyJump through gateway-aws which has Tailscale route to Azure.
 
-### Problem 6 — `terraform.tfstate` accidentally committed
-**What:** Local state file committed to git — contains sensitive data.
-**Fix:** Added to `.gitignore`. Deleted local file. GCP backend is the source of truth.
+### Task 2 + Task 3
+
+**Problem 5 — GCP startup script CRLF line endings**
+GCP could not execute script: `cannot execute: required file not found`
+Fix: separate `startup.sh` file + `.gitattributes` `*.sh eol=lf`
+
+**Problem 6 — Private GCP nodes had no internet access**
+k3s-server-2/3 could not run apt install.
+Fix: added Cloud NAT + Cloud Router.
+
+**Problem 7 — k3s join used public IP instead of private**
+k3s-server-2/3 tried to connect via 34.158.238.181 — blocked by GCP firewall.
+Fix: `k3s_server_ip` fact uses `ansible_default_ipv4.address` (private IP).
+
+**Problem 8 — kubectl TLS certificate mismatch**
+k3s TLS cert only valid for private IPs, kubectl connects via public IP.
+Fix: `--tls-san {{ ansible_host }}` in bootstrap install command.
+
+**Problem 9 — UFW blocked k3s inter-node ports**
+common role only opened 9922. k3s needs 6443, 9345, 2379-2380, 8472 UDP, 10250.
+Fix: `common_allowed_ports` override in `[k3s_server:vars]`.
+
+**Problem 10 — Let's Encrypt rejected email**
+`marta.penina@devops` — domain `.devops` does not exist.
+Fix: changed to `marta.penina.academic@gmail.com`.
+
+**Problem 11 — Homepage "Host validation failed"**
+Homepage validates Host header, rejects unknown domains.
+Fix: `HOMEPAGE_ALLOWED_HOSTS` env variable in Helm values.
 
 ---
 
@@ -248,3 +330,4 @@ ansible_ssh_common_args=-o StrictHostKeyChecking=no
 | `.env` | RABBITMQ_PASSWORD, DB_PASSWORD, TAILSCALE_AUTH_KEY | ✓ |
 | `terraform/terraform.tfvars` | cloud credentials, db_password, ssh_public_key_path | ✓ |
 | `terraform/terraform.tfstate` | live infrastructure state | ✓ |
+| `/d/.ssh/k3s-config.yaml` | k3s cluster admin credentials | local only |

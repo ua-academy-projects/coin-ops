@@ -15,6 +15,8 @@
     create_namespace: true
     wait: true
     timeout: 5m
+    # values:
+    #   replicaCount: 2
 
 - name: Create Ingress for Headlamp
   kubernetes.core.k8s:
