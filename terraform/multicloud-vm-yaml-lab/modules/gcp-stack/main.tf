@@ -183,6 +183,7 @@ module "access_outputs" {
   app_domain               = local.app_domain
   image_registry           = local.stack.app.image_registry
   image_tag                = local.stack.app.image_tag
+  k3s_ingress_domain       = try(local.stack.domain.k3s_ingress, "lab.coinops.pp.ua")
   known_hosts_file         = "~/.ssh/known_hosts_gcp_lab"
   secret_refs              = module.secrets.refs
   load_balancer            = local.k3s_only ? null : one(module.load_balancer[*].load_balancer)

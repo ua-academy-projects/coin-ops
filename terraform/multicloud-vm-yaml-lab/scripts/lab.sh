@@ -122,6 +122,7 @@ Commands:
   ping       ansible ping all cloud hosts through generated inventory
   deploy     run Ansible provision + deploy using generated inventory
   k3s        run the k3s learning-cluster playbook (GCP only; apply first)
+  k3s-app    deploy the real Coin-Ops app on k3s (GCP only; apply + k3s first)
   full       apply, regenerate outputs, then deploy
 
 Useful env vars:
@@ -541,6 +542,19 @@ ansible_k3s() {
   ansible-playbook -i "$ANSIBLE_INVENTORY_OUT" ansible/k3s-up.yml
 }
 
+ansible_k3s_app() {
+  load_env_file
+  : "${SSH_KEY_PATH:?Set SSH_KEY_PATH or put it in .env}"
+  if [ "$CLOUD" != "gcp" ]; then
+    echo "k3s-app is a GCP-only deployment; config/lab.yaml has cloud=$CLOUD." >&2
+    echo "Set 'cloud: gcp' in config/lab.yaml, then apply + k3s, then re-run." >&2
+    exit 2
+  fi
+  export RUNTIME_BACKEND="$RUNTIME_MODE"
+  cd "$REPO_ROOT"
+  ansible-playbook -i "$ANSIBLE_INVENTORY_OUT" ansible/k3s-app.yml
+}
+
 cmd="${1:-}"
 case "$cmd" in
   doctor)
@@ -589,6 +603,10 @@ case "$cmd" in
   k3s)
     write_outputs
     ansible_k3s
+    ;;
+  k3s-app)
+    write_outputs
+    ansible_k3s_app
     ;;
   full)
     terraform_init

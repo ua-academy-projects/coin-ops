@@ -11,7 +11,7 @@ k3s_kubeconfig: /etc/rancher/k3s/k3s.yaml
 coinops_app_namespace: coinops
 
 # Ingress / TLS — shared with k3s-cert-manager. Served at app.<domain>.
-k3s_ingress_domain: "lab.coinops.pp.ua"
+k3s_ingress_domain: "{{ coinops_k3s_ingress_domain | default('lab.coinops.pp.ua', true) }}"
 cert_manager_cluster_issuer: letsencrypt-cloudflare
 coinops_app_host: "app.{{ k3s_ingress_domain }}"
 

@@ -17,6 +17,7 @@ locals {
       cloudflare_zone_id = ""
       create_records     = false
       cloudflare_proxy   = false
+      k3s_ingress        = "lab.coinops.pp.ua"
       ui = {
         name  = ""
         cloud = ""

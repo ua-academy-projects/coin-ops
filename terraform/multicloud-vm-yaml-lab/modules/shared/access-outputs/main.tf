@@ -139,6 +139,7 @@ locals {
   coinops_app_url=${var.app_url}
   coinops_image_registry=${var.image_registry}
   coinops_image_tag=${var.image_tag}
+  coinops_k3s_ingress_domain=${var.k3s_ingress_domain}
   coinops_queue_backend=${local.queue_backend}
   coinops_queue_name=${local.queue_name}
   coinops_queue_url=${local.queue_url}

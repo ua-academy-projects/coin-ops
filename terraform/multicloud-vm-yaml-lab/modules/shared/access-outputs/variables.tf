@@ -52,6 +52,13 @@ variable "image_tag" {
   default = ""
 }
 
+# k3s ingress base domain from config/lab.yaml (domain.k3s_ingress); emitted as
+# coinops_k3s_ingress_domain so the k3s roles build <app>.<domain> from one source.
+variable "k3s_ingress_domain" {
+  type    = string
+  default = ""
+}
+
 variable "app_domain" {
   type = string
 }

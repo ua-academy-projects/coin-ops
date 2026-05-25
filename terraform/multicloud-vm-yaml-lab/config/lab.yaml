@@ -58,6 +58,10 @@ domain:
   cloudflare_zone_id: 48a16dd57c128fb6b341e10dfe8eef6b
   create_records: true
   cloudflare_proxy: true
+  # Base domain for the GCP k3s ingress hosts (<app>.<this>). Single source of
+  # truth: drives both the Cloudflare wildcard A record (terraform) and the
+  # ansible ingress hostnames (via coinops_k3s_ingress_domain).
+  k3s_ingress: lab.coinops.pp.ua
 
 networks:
   lab:

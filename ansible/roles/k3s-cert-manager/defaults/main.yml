@@ -23,7 +23,7 @@ acme_email: "admin@coinops.pp.ua"
 # Base domain the lab ingress hosts live under. Apps build their hostname as
 # <app>.{{ k3s_ingress_domain }} (e.g. homepage.lab.coinops.pp.ua). The
 # matching Cloudflare zone must exist and the token below must edit its DNS.
-k3s_ingress_domain: "lab.coinops.pp.ua"
+k3s_ingress_domain: "{{ coinops_k3s_ingress_domain | default('lab.coinops.pp.ua', true) }}"
 
 # Name of the ClusterIssuer apps reference via the
 # cert-manager.io/cluster-issuer ingress annotation.
