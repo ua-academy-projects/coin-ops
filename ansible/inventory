@@ -53,3 +53,7 @@ k3s_join
 
 [k3s_join:vars]
 ansible_ssh_common_args=-o ProxyJump=marta_ops@34.158.238.181:9922 -o StrictHostKeyChecking=no
+
+[k3s_server:vars]
+common_allowed_ports=["9922", "6443", "9345", "10250", "2379", "2380"]
+common_allowed_udp_ports=["8472"]
