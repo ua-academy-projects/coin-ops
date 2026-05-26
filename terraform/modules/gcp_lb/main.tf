@@ -1,138 +1,115 @@
 # gcp_lb/main.tf
-# Regional TCP Load Balancer for k3s cluster.
-# Distributes ports 80 and 443 across all 3 k3s nodes.
-# Traefik (running on each node) handles TLS termination and routing.
-#
-# Architecture:
-#   Internet → GCP TCP LB (static IP) → k3s nodes (all 3) → Traefik → Services
+# Global TCP/HTTP Load Balancer for k3s cluster.
+# Port 80  → HTTP proxy  → HTTP backend service  → k3s nodes → Traefik
+# Port 443 → TCP proxy   → TCP backend service   → k3s nodes → Traefik (handles TLS)
 
 locals {
-  # Only create LB resources when deploying to GCP
   create = contains(["gcp", "hybrid"], var.config.general.cloud) ? 1 : 0
 }
 
-# Static external IP for the Load Balancer.
-# Unlike VM IPs, this persists across terraform apply/destroy cycles.
-# DNS record in Cloudflare should point to this IP.
+# Global static IP — persists across apply/destroy cycles.
+# Global forwarding rules require global (not regional) IP addresses.
 resource "google_compute_address" "lb_ip" {
-  count  = local.create
-  name   = "coinops-lb-ip"
-  region = var.config.locations[var.config.general.location].gcp.region
+  count        = local.create
+  name         = "coinops-lb-ip"
+  address_type = "EXTERNAL"
+  # No region field = global address
 }
 
-# Firewall: allow HTTP/HTTPS from internet to k3s nodes.
-# k3s-server tag matches all 3 nodes.
 resource "google_compute_firewall" "allow_http_https" {
   count   = local.create
   name    = "allow-http-https-k3s"
   network = var.network
-
   allow {
     protocol = "tcp"
-    # 80 = HTTP (also used by cert-manager ACME HTTP challenge)
-    # 443 = HTTPS (Traefik TLS termination)
-    ports = ["80", "443"]
+    ports    = ["80", "443"]
   }
-
   source_ranges = ["0.0.0.0/0"]
   target_tags   = ["k3s-server"]
 }
 
-# Firewall: allow GCP health checker IP ranges to reach k3s nodes.
-# GCP health checks come from these specific IP ranges — must be allowed.
 resource "google_compute_firewall" "allow_health_check" {
   count   = local.create
   name    = "allow-lb-health-check-k3s"
   network = var.network
-
   allow {
     protocol = "tcp"
     ports    = ["80"]
   }
-
-  # Official GCP health checker source ranges — do not change
   source_ranges = ["130.211.0.0/22", "35.191.0.0/16"]
   target_tags   = ["k3s-server"]
 }
 
-# Data source — looks up existing k3s VMs by name+zone.
-# Returns self_link = full GCP resource URL required by instance group API.
-# Without self_link GCP returns "URL is malformed" error.
+# Data source — looks up existing VM self_link by name+zone
 data "google_compute_instance" "k3s" {
   for_each = local.create == 1 ? var.k3s_instance_zones : {}
   name     = each.key
   zone     = each.value
 }
 
-# Instance groups — one per zone (GCP requires zone-specific groups).
-# Each group contains the k3s node(s) in that zone.
-# for_each creates one group per unique zone.
 resource "google_compute_instance_group" "k3s" {
   for_each = local.create == 1 ? var.k3s_instance_zones : {}
-
-  name = "coinops-k3s-${replace(each.key, ".", "-")}"
-  zone = each.value
-
-  # self_link from data source = correct full GCP URL the API expects
-  # e.g. https://www.googleapis.com/compute/v1/projects/.../instances/k3s-server-1
+  name     = "coinops-k3s-${replace(each.key, ".", "-")}"
+  zone     = each.value
   instances = [data.google_compute_instance.k3s[each.key].self_link]
-
   named_port {
     name = "http"
     port = 80
   }
-
   named_port {
     name = "https"
     port = 443
   }
 }
 
-# Health check — verifies k3s nodes are alive before sending traffic.
-# Checks /health endpoint on port 80 (Traefik responds to this).
 resource "google_compute_health_check" "k3s" {
   count = local.create
   name  = "coinops-k3s-health"
-
   http_health_check {
     port         = 80
     request_path = "/health"
   }
 }
 
-# Backend service — defines the pool of k3s nodes to send traffic to.
-# EXTERNAL = accepts traffic from internet.
-resource "google_compute_backend_service" "k3s" {
+# HTTP backend service — protocol HTTP, used for port 80
+resource "google_compute_backend_service" "k3s_http" {
   count                 = local.create
-  name                  = "coinops-k3s-backend"
+  name                  = "coinops-k3s-backend-http"
   protocol              = "HTTP"
   load_balancing_scheme = "EXTERNAL"
   health_checks         = [google_compute_health_check.k3s[0].id]
-
-  # Add all instance groups (one per zone) as backends
   dynamic "backend" {
     for_each = google_compute_instance_group.k3s
-    content {
-      group = backend.value.id
-    }
+    content { group = backend.value.id }
   }
 }
 
-# URL map — routes all traffic to k3s backend service.
+# TCP backend service — protocol TCP, required by target_tcp_proxy for port 443
+resource "google_compute_backend_service" "k3s_tcp" {
+  count                 = local.create
+  name                  = "coinops-k3s-backend-tcp"
+  protocol              = "TCP"
+  load_balancing_scheme = "EXTERNAL"
+  health_checks         = [google_compute_health_check.k3s[0].id]
+  dynamic "backend" {
+    for_each = google_compute_instance_group.k3s
+    content { group = backend.value.id }
+  }
+}
+
 resource "google_compute_url_map" "k3s" {
   count           = local.create
   name            = "coinops-k3s-url-map"
-  default_service = google_compute_backend_service.k3s[0].id
+  default_service = google_compute_backend_service.k3s_http[0].id
 }
 
-# HTTP proxy — handles port 80 traffic.
 resource "google_compute_target_http_proxy" "k3s" {
   count   = local.create
   name    = "coinops-k3s-http-proxy"
   url_map = google_compute_url_map.k3s[0].id
 }
 
-# Forwarding rule port 80 — directs HTTP traffic to HTTP proxy.
+# Port 80 forwarding rule → HTTP proxy
 resource "google_compute_global_forwarding_rule" "http" {
   count                 = local.create
   name                  = "coinops-k3s-http"
@@ -142,8 +119,6 @@ resource "google_compute_global_forwarding_rule" "http" {
   load_balancing_scheme = "EXTERNAL"
 }
 
-# SSL policy — enforces modern TLS standards.
-# MODERN profile = TLS 1.2+ only, strong cipher suites.
 resource "google_compute_ssl_policy" "k3s" {
   count           = local.create
   name            = "coinops-k3s-ssl-policy"
@@ -151,15 +126,14 @@ resource "google_compute_ssl_policy" "k3s" {
   min_tls_version = "TLS_1_2"
 }
 
-# TCP proxy for HTTPS — passes 443 traffic through to Traefik unchanged.
-# Traefik handles TLS termination — LB just forwards raw TCP.
+# TCP proxy uses TCP backend service — passes 443 traffic raw to Traefik
 resource "google_compute_target_tcp_proxy" "k3s_https" {
   count           = local.create
   name            = "coinops-k3s-https-proxy"
-  backend_service = google_compute_backend_service.k3s[0].id
+  backend_service = google_compute_backend_service.k3s_tcp[0].id
 }
 
-# Forwarding rule port 443 — directs HTTPS traffic to TCP proxy.
+# Port 443 forwarding rule → TCP proxy
 resource "google_compute_global_forwarding_rule" "https" {
   count                 = local.create
   name                  = "coinops-k3s-https"
