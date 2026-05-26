@@ -9,11 +9,9 @@ locals {
 
 # Global static IP — persists across apply/destroy cycles.
 # Global forwarding rules require global (not regional) IP addresses.
-resource "google_compute_address" "lb_ip" {
-  count        = local.create
-  name         = "coinops-lb-ip"
-  address_type = "EXTERNAL"
-  # No region field = global address
+resource "google_compute_global_address" "lb_ip" {
+  count = local.create
+  name  = "coinops-lb-ip"
 }
 
 resource "google_compute_firewall" "allow_http_https" {
@@ -114,7 +112,7 @@ resource "google_compute_global_forwarding_rule" "http" {
   count                 = local.create
   name                  = "coinops-k3s-http"
   target                = google_compute_target_http_proxy.k3s[0].id
-  ip_address            = google_compute_address.lb_ip[0].id
+  ip_address = google_compute_global_address.lb_ip[0].id
   port_range            = "80"
   load_balancing_scheme = "EXTERNAL"
 }
@@ -138,7 +136,7 @@ resource "google_compute_global_forwarding_rule" "https" {
   count                 = local.create
   name                  = "coinops-k3s-https"
   target                = google_compute_target_tcp_proxy.k3s_https[0].id
-  ip_address            = google_compute_address.lb_ip[0].id
+  ip_address = google_compute_global_address.lb_ip[0].id
   port_range            = "443"
   load_balancing_scheme = "EXTERNAL"
 }
