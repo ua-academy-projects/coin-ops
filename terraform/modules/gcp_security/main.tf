@@ -116,3 +116,19 @@ resource "google_compute_firewall" "allow_k3s_ingress" {
   source_ranges = ["0.0.0.0/0"]
   target_tags   = ["k3s-server"]
 }
+
+# Allows GCP health checker to reach Traefik ping endpoint on port 8080.
+# Source ranges are official GCP health checker IPs — do not change.
+resource "google_compute_firewall" "allow_traefik_health" {
+  count   = contains(["gcp", "hybrid"], var.config.general.cloud) ? 1 : 0
+  name    = "allow-traefik-health"
+  network = var.vpc_name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["8080"]
+  }
+
+  source_ranges = ["130.211.0.0/22", "35.191.0.0/16"]
+  target_tags   = ["k3s-server"]
+}
