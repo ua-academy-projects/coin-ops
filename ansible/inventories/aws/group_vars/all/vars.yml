@@ -1,0 +1,53 @@
+---
+# =============================================================================
+# inventories/aws/group_vars/all/vars.yml
+# =============================================================================
+# AWS-SPECIFIC context variables — defines WHERE this deployment runs.
+#
+# Application defaults live in playbooks/group_vars/all/vars.yml.
+# Secrets live in vault.yml (this same directory). Encrypt before committing.
+# =============================================================================
+
+# ── SSH ───────────────────────────────────────────────────────────────────────
+ansible_user: ubuntu
+ansible_ssh_private_key_file: "~/.ssh/id_rsa"
+
+# ── Bastion ───────────────────────────────────────────────────────────────────
+bastion_ip: >-
+  {{
+    hostvars[groups['bastion'][0]].ansible_host
+    if groups.get('bastion', []) | length > 0
+    else lookup('env', 'BASTION_IP') | default('', true)
+  }}
+
+bastion_private_ip: >-
+  {{
+    hostvars[groups['bastion'][0]].private_ip
+    if groups.get('bastion', []) | length > 0
+    else '127.0.0.1'
+  }}
+
+app_http_proxy: "http://{{ bastion_private_ip }}:3128"
+app_no_proxy: "localhost,127.0.0.1,postgres,rabbitmq,redis,172.31.0.0/16"
+
+# ── SSH Connection ────────────────────────────────────────────────────────────
+# AWS: ProxyJump through the Bastion (no IAP available).
+ansible_ssh_common_args: >-
+  -o StrictHostKeyChecking=no
+  {% if packer_build_name is not defined %}
+  {% if bastion_ip | length > 0 and inventory_hostname not in groups.get('bastion', []) %}
+  -o ProxyJump={{ ansible_user }}@{{ bastion_ip }}
+  {% endif %}
+  {% endif %}
+
+# ── Cloud Identity ────────────────────────────────────────────────────────────
+cloud_provider: aws
+gcp_project_id: ""    # Unused for AWS; retained for var completeness
+
+# ── Database Host Resolution ──────────────────────────────────────────────────
+use_cloud_db: "{{ cloud_provider in ['gcp', 'aws', 'azure'] }}"
+db_host: >-
+  {{
+    tf_db_host
+    | default(lookup('env', 'DB_HOST') | default('localhost', true))
+  }}

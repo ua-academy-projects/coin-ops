@@ -1,15 +1,21 @@
 ---
+# =============================================================================
+# roles/common/tasks/main.yml
+# =============================================================================
+# Base OS hardening applied to every node: packages, timezone, NTP, UFW.
+# =============================================================================
+
 - name: Update apt cache
-  apt:
-    update_cache: yes
+  ansible.builtin.apt:
+    update_cache: true
     cache_valid_time: 3600
 
-- name: Upgrade all packages
-  apt:
+- name: Upgrade all packages (safe)
+  ansible.builtin.apt:
     upgrade: safe
 
 - name: Install base packages
-  apt:
+  ansible.builtin.apt:
     name:
       - curl
       - htop
@@ -20,28 +26,28 @@
     state: present
 
 - name: Set timezone to UTC
-  timezone:
+  community.general.timezone:
     name: UTC
 
 - name: Ensure systemd-timesyncd is running
-  systemd:
+  ansible.builtin.systemd:
     name: systemd-timesyncd
-    enabled: yes
+    enabled: true
     state: started
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: Install UFW
-  apt:
+  ansible.builtin.apt:
     name: ufw
     state: present
 
-- name: Set UFW default deny incoming
+- name: Set UFW default — deny incoming
   community.general.ufw:
     direction: incoming
     policy: deny
   notify: Reload UFW
 
-- name: Set UFW default allow outgoing
+- name: Set UFW default — allow outgoing
   community.general.ufw:
     direction: outgoing
     policy: allow
@@ -57,4 +63,4 @@
 
 - name: Enable UFW
   community.general.ufw:
-    state: disabled
+    state: enabled

@@ -1,22 +1,27 @@
 ---
+# =============================================================================
+# roles/history/tasks/main.yml
+# =============================================================================
+
 - name: Check for existing containerized PostgreSQL data
-  stat:
+  ansible.builtin.stat:
     path: /var/lib/coin-ops/postgres/PG_VERSION
   register: container_postgres_pg_version
 
 - name: Check for completed host PostgreSQL migration
-  stat:
+  ansible.builtin.stat:
     path: /var/lib/coin-ops/postgres/.migrated-from-host
   register: host_postgres_migration_marker
 
 - name: Check for legacy host PostgreSQL data
-  shell: "find /var/lib/postgresql -mindepth 3 -maxdepth 3 -name PG_VERSION -print -quit 2>/dev/null"
+  ansible.builtin.shell: >-
+    find /var/lib/postgresql -mindepth 3 -maxdepth 3 -name PG_VERSION -print -quit 2>/dev/null
   register: legacy_postgres_pg_version
   changed_when: false
   failed_when: false
 
 - name: Create migration backup directory
-  file:
+  ansible.builtin.file:
     path: /var/backups/coin-ops
     state: directory
     owner: postgres
@@ -28,7 +33,7 @@
     - not host_postgres_migration_marker.stat.exists
 
 - name: Ensure legacy PostgreSQL is running for one-time dump
-  service:
+  ansible.builtin.service:
     name: postgresql
     state: started
   when:
@@ -39,17 +44,19 @@
 
 - name: Dump legacy application database before container cutover
   become_user: postgres
-  command: "pg_dump --clean --if-exists --no-owner --no-acl -d {{ db_name }} -f /var/backups/coin-ops/pre-container-postgres.sql"
+  ansible.builtin.command: >-
+    pg_dump --clean --if-exists --no-owner --no-acl
+    -d {{ db_name }} -f /var/backups/coin-ops/pre-container-postgres.sql
   when:
     - legacy_postgres_pg_version.stdout != ''
     - not container_postgres_pg_version.stat.exists
     - not host_postgres_migration_marker.stat.exists
 
 - name: Stop and disable legacy host services
-  service:
+  ansible.builtin.service:
     name: "{{ item }}"
     state: stopped
-    enabled: no
+    enabled: false
   loop:
     - postgresql
     - rabbitmq-server
@@ -57,8 +64,8 @@
     - cognitor-history-api
   failed_when: false
 
-- name: Create secrets directory
-  file:
+- name: Create secrets and config directories
+  ansible.builtin.file:
     path: "{{ item }}"
     state: directory
     owner: root
@@ -69,30 +76,32 @@
     - /opt/coinops
 
 - name: Install postgresql-client for Cloud DB management
-  apt:
+  ansible.builtin.apt:
     name: postgresql-client
     state: present
-    update_cache: yes
+    update_cache: true
   when: use_cloud_db
 
-- name: Write history environment file (Bootstrap)
-  template:
+- name: Write history environment file
+  ansible.builtin.template:
     src: history.env.j2
     dest: /etc/cognitor/history.env
     owner: root
     group: root
     mode: '0640'
+  notify: restart history services
 
 - name: Write application configuration file
-  template:
+  ansible.builtin.template:
     src: config.yaml.j2
     dest: /opt/coinops/config.yaml
     owner: root
     group: root
     mode: '0644'
+  notify: restart history services
 
 - name: Create history deploy directory
-  file:
+  ansible.builtin.file:
     path: /opt/cognitor/history
     state: directory
     owner: root
@@ -100,12 +109,12 @@
     mode: '0755'
 
 - name: Remove legacy synced history source
-  file:
+  ansible.builtin.file:
     path: /opt/cognitor/history/history
     state: absent
 
 - name: Copy PostgreSQL runtime schema
-  copy:
+  ansible.builtin.copy:
     src: "{{ playbook_dir }}/../history/schema.sql"
     dest: /opt/cognitor/history/schema.sql
     owner: root
@@ -113,7 +122,7 @@
     mode: '0644'
 
 - name: Copy runtime SQL schema files
-  copy:
+  ansible.builtin.copy:
     src: "{{ playbook_dir }}/../runtime/"
     dest: /opt/cognitor/history/runtime/
     owner: root
@@ -121,49 +130,49 @@
     mode: '0644'
 
 - name: Render compose file
-  template:
+  ansible.builtin.template:
     src: "{{ playbook_dir }}/../deploy/compose/node-01.compose.yaml"
     dest: /opt/cognitor/history/compose.yaml
 
 - name: Validate history compose configuration
-  command: docker compose -f /opt/cognitor/history/compose.yaml config -q
+  ansible.builtin.command: docker compose -f /opt/cognitor/history/compose.yaml config -q
   args:
     chdir: /opt/cognitor/history
   changed_when: false
 
 - name: Stop PostgreSQL before repairing data directory ownership
-  command: docker compose -f /opt/cognitor/history/compose.yaml stop postgres
+  ansible.builtin.command: docker compose -f /opt/cognitor/history/compose.yaml stop postgres
   args:
     chdir: /opt/cognitor/history
   changed_when: false
   failed_when: false
 
-- name: Repair data directory ownership for container users
-  file:
+- name: Repair data directory ownership for container users (external backend)
+  ansible.builtin.file:
     path: "{{ item.path }}"
     state: directory
     owner: "{{ item.owner }}"
     group: "{{ item.owner }}"
-    recurse: yes
+    recurse: true
   loop:
     - { path: '/var/lib/coin-ops/rabbitmq', owner: '999' }
     - { path: '/var/lib/coin-ops/postgres', owner: '999' }
   when: runtime_backend == 'external'
 
 - name: Repair PostgreSQL data directory ownership for local runtime image
-  file:
+  ansible.builtin.file:
     path: /var/lib/coin-ops/postgres
     state: directory
-    # Keep the runtime image on Alpine-compatible uid/gid 70 so existing
-    # postgres volumes can be reused during external -> postgres cutover.
+    # Keep runtime image on Alpine-compatible uid/gid 70 so existing
+    # postgres volumes can be reused during external → postgres cutover.
     owner: '70'
     group: '70'
     mode: '0700'
-    recurse: yes
+    recurse: true
   when: not use_cloud_db
 
 - name: Stop all history services before repair
-  command: docker compose -f /opt/cognitor/history/compose.yaml down
+  ansible.builtin.command: docker compose -f /opt/cognitor/history/compose.yaml down
   args:
     chdir: /opt/cognitor/history
   failed_when: false
@@ -173,13 +182,13 @@
 # The .erlang.cookie file inside the RabbitMQ volume must be owned by
 # UID 999 (rabbitmq). Force-wipe and recreate the entire directory.
 - name: Wipe RabbitMQ volume (clears stale .erlang.cookie ownership)
-  file:
+  ansible.builtin.file:
     path: /var/lib/coin-ops/rabbitmq
     state: absent
   when: runtime_backend == 'external'
 
 - name: Re-create RabbitMQ data directory with correct ownership
-  file:
+  ansible.builtin.file:
     path: /var/lib/coin-ops/rabbitmq
     state: directory
     owner: '999'
@@ -188,12 +197,12 @@
   when: runtime_backend == 'external'
 
 - name: Pull history container images
-  command: docker compose -f /opt/cognitor/history/compose.yaml pull
+  ansible.builtin.command: docker compose -f /opt/cognitor/history/compose.yaml pull
   args:
     chdir: /opt/cognitor/history
 
-- name: Start history dependencies first
-  command: >-
+- name: Start history dependencies first (postgres / rabbitmq)
+  ansible.builtin.command: >-
     docker compose -f /opt/cognitor/history/compose.yaml up -d
     {% if not use_cloud_db %}postgres{% endif %}{% if runtime_backend == "external" %} rabbitmq{% endif %}
   args:
@@ -201,7 +210,8 @@
   when: not use_cloud_db or runtime_backend == "external"
 
 - name: Wait for RabbitMQ to become healthy
-  command: docker inspect --format='{% raw %}{{.State.Health.Status}}{% endraw %}' history-rabbitmq-1
+  ansible.builtin.command: >-
+    docker inspect --format='{% raw %}{{.State.Health.Status}}{% endraw %}' history-rabbitmq-1
   register: rabbitmq_ready
   until: rabbitmq_ready.stdout == 'healthy'
   retries: 18
@@ -209,7 +219,9 @@
   when: runtime_backend == 'external'
 
 - name: Wait for containerized PostgreSQL readiness
-  command: "docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres pg_isready -U {{ db_user }} -d {{ db_name }}"
+  ansible.builtin.command: >-
+    docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres
+    pg_isready -U {{ db_user }} -d {{ db_name }}
   args:
     chdir: /opt/cognitor/history
   retries: 12
@@ -218,14 +230,16 @@
   until: postgres_ready.rc == 0
   when: not use_cloud_db
 
-
 - name: Check for legacy dump file
-  stat:
+  ansible.builtin.stat:
     path: /var/backups/coin-ops/pre-container-postgres.sql
   register: legacy_postgres_dump
 
 - name: Restore legacy PostgreSQL dump into container
-  shell: "docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres psql -U {{ db_user }} -d {{ db_name }} < /var/backups/coin-ops/pre-container-postgres.sql"
+  ansible.builtin.shell: >-
+    docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres
+    psql -U {{ db_user }} -d {{ db_name }}
+    < /var/backups/coin-ops/pre-container-postgres.sql
   args:
     chdir: /opt/cognitor/history
   when:
@@ -233,32 +247,66 @@
     - not host_postgres_migration_marker.stat.exists
     - not use_cloud_db
 
-- name: Apply PostgreSQL runtime schema
-  shell: |
-    {% if use_cloud_db %}
-    PGPASSWORD='{{ db_password }}' psql -h {{ db_host }} -U {{ db_user }} -d {{ db_name }} -v ON_ERROR_STOP=1 < /opt/cognitor/history/schema.sql
-    {% else %}
-    docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres psql -v ON_ERROR_STOP=1 -U {{ db_user }} -d {{ db_name }} < /opt/cognitor/history/schema.sql
-    {% endif %}
+# ── Schema application ─────────────────────────────────────────────────────────
+# SECURITY: db_password is passed via environment variable, NOT in the shell
+# command string, so it does not appear in `ps aux` or Ansible logs.
+# no_log: true suppresses the task output to prevent token leakage.
+
+- name: Apply PostgreSQL runtime schema (cloud DB)
+  ansible.builtin.shell: |
+    psql -h {{ db_host }} -U {{ db_user }} -d {{ db_name }} \
+      -v ON_ERROR_STOP=1 < /opt/cognitor/history/schema.sql
+  environment:
+    PGPASSWORD: "{{ db_password }}"
+  no_log: true
   args:
     chdir: /opt/cognitor/history
   register: schema_result
   changed_when: false
+  when: use_cloud_db
 
-- name: Persist runtime application role before wrapper bootstrap
-  shell: >-
-    {% if use_cloud_db %}PGPASSWORD='{{ db_password }}' psql -h {{ db_host }} -U {{ db_user }} -d {{ db_name }}{% else %}docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres psql{% endif %} -v ON_ERROR_STOP=1 -U {{ db_user }} -d {{ db_name }}
+- name: Apply PostgreSQL runtime schema (local container)
+  ansible.builtin.shell: |
+    docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres \
+      psql -v ON_ERROR_STOP=1 -U {{ db_user }} -d {{ db_name }} \
+      < /opt/cognitor/history/schema.sql
+  args:
+    chdir: /opt/cognitor/history
+  register: schema_result_local
+  changed_when: false
+  when: not use_cloud_db
+
+- name: Persist runtime application role (cloud DB)
+  ansible.builtin.shell: >-
+    psql -h {{ db_host }} -U {{ db_user }} -d {{ db_name }}
+    -v ON_ERROR_STOP=1
     -c "ALTER DATABASE {{ db_name }} SET runtime.app_role = '{{ db_user }}';"
+  environment:
+    PGPASSWORD: "{{ db_password }}"
+  no_log: true
   args:
     chdir: /opt/cognitor/history
   register: runtime_app_role_result
   changed_when: false
-  when: 
+  when:
+    - runtime_backend == "postgres"
+    - use_cloud_db
+
+- name: Persist runtime application role (local container)
+  ansible.builtin.shell: >-
+    docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres psql
+    -v ON_ERROR_STOP=1 -U {{ db_user }} -d {{ db_name }}
+    -c "ALTER DATABASE {{ db_name }} SET runtime.app_role = '{{ db_user }}';"
+  args:
+    chdir: /opt/cognitor/history
+  register: runtime_app_role_result_local
+  changed_when: false
+  when:
     - runtime_backend == "postgres"
     - not use_cloud_db
 
-- name: Apply runtime queue and session schema
-  shell: |
+- name: Apply runtime queue and session schema (cloud DB)
+  ansible.builtin.shell: |
     (
       printf "%s\n" "SET runtime.app_role = '{{ db_user }}';"
       cat \
@@ -270,37 +318,93 @@
         /opt/cognitor/history/runtime/06_cache_schema.sql \
         /opt/cognitor/history/runtime/07_cache_wrappers.sql \
         /opt/cognitor/history/runtime/08_cron.sql
-    ) | {% if use_cloud_db %}PGPASSWORD='{{ db_password }}' psql -h {{ db_host }} -U {{ db_user }} -d {{ db_name }} -v ON_ERROR_STOP=1{% else %}docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres psql -v ON_ERROR_STOP=1 -U {{ db_user }} -d {{ db_name }}{% endif %}
+    ) | psql -h {{ db_host }} -U {{ db_user }} -d {{ db_name }} -v ON_ERROR_STOP=1
+  environment:
+    PGPASSWORD: "{{ db_password }}"
+  no_log: true
   args:
     chdir: /opt/cognitor/history
   register: runtime_schema_result
   changed_when: false
-  when: runtime_backend == "postgres"
+  when: runtime_backend == "postgres" and use_cloud_db
 
-- name: Verify PostgreSQL runtime extensions are installed
-  shell: >-
-    {% if use_cloud_db %}PGPASSWORD='{{ db_password }}' psql -h {{ db_host }} -U {{ db_user }} -d {{ db_name }}{% else %}docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres psql{% endif %} -v ON_ERROR_STOP=1 -At -U {{ db_user }} -d {{ db_name }}
+- name: Apply runtime queue and session schema (local container)
+  ansible.builtin.shell: |
+    (
+      printf "%s\n" "SET runtime.app_role = '{{ db_user }}';"
+      cat \
+        /opt/cognitor/history/runtime/01_schema.sql \
+        /opt/cognitor/history/runtime/02_wrappers.sql \
+        /opt/cognitor/history/runtime/03_notify.sql \
+        /opt/cognitor/history/runtime/04_advisory.sql \
+        /opt/cognitor/history/runtime/05_dlq.sql \
+        /opt/cognitor/history/runtime/06_cache_schema.sql \
+        /opt/cognitor/history/runtime/07_cache_wrappers.sql \
+        /opt/cognitor/history/runtime/08_cron.sql
+    ) | docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres \
+        psql -v ON_ERROR_STOP=1 -U {{ db_user }} -d {{ db_name }}
+  args:
+    chdir: /opt/cognitor/history
+  register: runtime_schema_result_local
+  changed_when: false
+  when: runtime_backend == "postgres" and not use_cloud_db
+
+- name: Verify PostgreSQL runtime extensions are installed (cloud DB)
+  ansible.builtin.shell: >-
+    psql -h {{ db_host }} -U {{ db_user }} -d {{ db_name }}
+    -v ON_ERROR_STOP=1 -At
     -c "SELECT string_agg(extname, ',' ORDER BY extname) FROM pg_extension WHERE extname IN ('pg_cron', 'pgmq');"
+  environment:
+    PGPASSWORD: "{{ db_password }}"
+  no_log: true
   args:
     chdir: /opt/cognitor/history
   register: runtime_extension_check
   changed_when: false
   failed_when: runtime_extension_check.stdout | trim != "pg_cron,pgmq"
-  when: runtime_backend == "postgres"
+  when: runtime_backend == "postgres" and use_cloud_db
 
-- name: Verify PostgreSQL runtime cron jobs are registered
-  shell: >-
-    {% if use_cloud_db %}PGPASSWORD='{{ db_password }}' psql -h {{ db_host }} -U {{ db_user }} -d {{ db_name }}{% else %}docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres psql{% endif %} -v ON_ERROR_STOP=1 -At -U {{ db_user }} -d {{ db_name }}
+- name: Verify PostgreSQL runtime extensions are installed (local container)
+  ansible.builtin.shell: >-
+    docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres
+    psql -v ON_ERROR_STOP=1 -At -U {{ db_user }} -d {{ db_name }}
+    -c "SELECT string_agg(extname, ',' ORDER BY extname) FROM pg_extension WHERE extname IN ('pg_cron', 'pgmq');"
+  args:
+    chdir: /opt/cognitor/history
+  register: runtime_extension_check_local
+  changed_when: false
+  failed_when: runtime_extension_check_local.stdout | trim != "pg_cron,pgmq"
+  when: runtime_backend == "postgres" and not use_cloud_db
+
+- name: Verify PostgreSQL runtime cron jobs are registered (cloud DB)
+  ansible.builtin.shell: >-
+    psql -h {{ db_host }} -U {{ db_user }} -d {{ db_name }}
+    -v ON_ERROR_STOP=1 -At
     -c "SELECT count(*) FROM cron.job WHERE jobname IN ('runtime-cache-reap', 'runtime-session-reap', 'runtime-dlq-reap') AND active;"
+  environment:
+    PGPASSWORD: "{{ db_password }}"
+  no_log: true
   args:
     chdir: /opt/cognitor/history
   register: runtime_cron_check
   changed_when: false
   failed_when: runtime_cron_check.stdout | trim | int != 3
-  when: runtime_backend == "postgres"
+  when: runtime_backend == "postgres" and use_cloud_db
+
+- name: Verify PostgreSQL runtime cron jobs are registered (local container)
+  ansible.builtin.shell: >-
+    docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres
+    psql -v ON_ERROR_STOP=1 -At -U {{ db_user }} -d {{ db_name }}
+    -c "SELECT count(*) FROM cron.job WHERE jobname IN ('runtime-cache-reap', 'runtime-session-reap', 'runtime-dlq-reap') AND active;"
+  args:
+    chdir: /opt/cognitor/history
+  register: runtime_cron_check_local
+  changed_when: false
+  failed_when: runtime_cron_check_local.stdout | trim | int != 3
+  when: runtime_backend == "postgres" and not use_cloud_db
 
 - name: Mark legacy PostgreSQL migration complete
-  file:
+  ansible.builtin.file:
     path: /var/lib/coin-ops/postgres/.migrated-from-host
     state: touch
     mode: '0644'
@@ -308,13 +412,14 @@
     - legacy_postgres_dump.stat.exists
     - not host_postgres_migration_marker.stat.exists
 
-- name: Run Docker Compose
-  command: docker compose -f /opt/cognitor/history/compose.yaml up -d --remove-orphans
+- name: Start all history services
+  ansible.builtin.command: >-
+    docker compose -f /opt/cognitor/history/compose.yaml up -d --remove-orphans
   args:
     chdir: /opt/cognitor/history
 
 - name: Wait for history-api health endpoint
-  uri:
+  ansible.builtin.uri:
     url: "http://localhost:{{ history_port }}/health"
     method: GET
     status_code: 200
@@ -324,5 +429,5 @@
   until: result.status == 200
 
 - name: Remove dangling Docker images
-  command: docker image prune -f
+  ansible.builtin.command: docker image prune -f
   changed_when: false

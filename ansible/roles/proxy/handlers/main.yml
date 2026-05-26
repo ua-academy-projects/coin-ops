@@ -1,0 +1,9 @@
+---
+# Triggered when proxy.env or config.yaml change.
+- name: restart proxy services
+  ansible.builtin.command: >-
+    docker compose -f /opt/cognitor/proxy/compose.yaml
+    up -d --remove-orphans --force-recreate
+  args:
+    chdir: /opt/cognitor/proxy
+  changed_when: true

@@ -1,0 +1,22 @@
+---
+# =============================================================================
+# playbooks/fix-apt.yml
+# =============================================================================
+# Fix Azure Apt mirror URLs (replace azure.deb.debian.cloud with deb.debian.org).
+# Only needed for Azure-based deployments.
+#
+# Usage:
+#   ansible-playbook playbooks/fix-apt.yml -i inventories/azure
+# =============================================================================
+
+- name: Fix Azure apt mirrors
+  hosts: all
+  become: yes
+  tasks:
+    - name: Replace azure.deb.debian.cloud with deb.debian.org
+      ansible.builtin.shell: |
+        sed -i 's/azure.deb.debian.cloud/deb.debian.org/g' \
+          /etc/apt/sources.list.d/debian.sources \
+          /etc/apt/mirrors/debian.list \
+          /etc/apt/mirrors/debian-security.list 2>/dev/null || true
+      changed_when: false

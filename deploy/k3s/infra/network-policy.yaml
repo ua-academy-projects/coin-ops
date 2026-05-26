@@ -1,0 +1,131 @@
+# =============================================================================
+# deploy/k3s/infra/network-policy.yaml.j2
+# =============================================================================
+# Kubernetes NetworkPolicies for the infrastructure namespace.
+# =============================================================================
+
+# ── Default deny all in the namespace ─────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+spec:
+  podSelector: {}  # Applies to ALL Pods in the namespace.
+  policyTypes:
+    - Ingress
+    - Egress
+
+---
+# ── Allow DNS resolution for all pods ─────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+
+---
+# ── Redis: Allow ingress from Proxy ───────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-redis-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: "{{ app_namespace }}"
+          podSelector:
+            matchLabels:
+              app: proxy
+      ports:
+        - port: 6379
+
+---
+# ── RabbitMQ: Allow ingress from Proxy and History Consumer ───────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-rabbitmq-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app: rabbitmq
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: "{{ app_namespace }}"
+          podSelector:
+            matchLabels:
+              app: proxy
+      ports:
+        - port: 5672
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: "{{ app_namespace }}"
+          podSelector:
+            matchLabels:
+              app: history-consumer
+      ports:
+        - port: 5672
+
+---
+# ── Postgres: Allow ingress from Proxy, History API, History Consumer ─────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-postgres-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: "{{ app_namespace }}"
+          podSelector:
+            matchLabels:
+              app: proxy
+      ports:
+        - port: 5432
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: "{{ app_namespace }}"
+          podSelector:
+            matchLabels:
+              app: history-api
+      ports:
+        - port: 5432
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: "{{ app_namespace }}"
+          podSelector:
+            matchLabels:
+              app: history-consumer
+      ports:
+        - port: 5432

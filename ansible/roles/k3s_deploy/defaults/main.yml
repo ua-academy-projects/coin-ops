@@ -1,0 +1,28 @@
+---
+# =============================================================================
+# roles/k3s_deploy/defaults/main.yml
+# =============================================================================
+
+k3s_prefix: "coin-ops"
+app_namespace: "{{ k3s_prefix }}-app"
+infra_namespace: "{{ k3s_prefix }}-infra"
+ingress_namespace: "{{ k3s_prefix }}-ingress"
+
+# Dynamic lookups for credentials and settings
+kubeconfig_path: "{{ lookup('env', 'KUBECONFIG') | default(playbook_dir + '/../../terraform/k3s/.kube/config', true) }}"
+
+image_registry: "{{ lookup('env', 'IMAGE_REGISTRY') | default('ghcr.io/ua-academy-projects', true) }}"
+image_tag: "{{ lookup('env', 'IMAGE_TAG') | default('shabat-latest', true) }}"
+ghcr_username: "{{ lookup('env', 'GHCR_USERNAME') | default('', true) }}"
+ghcr_token: "{{ lookup('env', 'GHCR_TOKEN') | default('', true) }}"
+
+app_domain: "{{ lookup('env', 'APP_DOMAIN') | default('coinops.test', true) }}"
+env: "{{ lookup('env', 'ENV') | default('production', true) }}"
+
+# Service credentials
+db_user: "{{ lookup('env', 'DB_USER') | default('cognitor', true) }}"
+db_password: "{{ lookup('env', 'DB_PASSWORD') | default('changeme', true) }}"
+db_name: "{{ lookup('env', 'DB_NAME') | default('cognitor', true) }}"
+
+rabbitmq_user: "{{ lookup('env', 'RABBITMQ_USER') | default('cognitor', true) }}"
+rabbitmq_password: "{{ lookup('env', 'RABBITMQ_PASSWORD') | default('changeme', true) }}"

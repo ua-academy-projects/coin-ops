@@ -1,0 +1,93 @@
+---
+# =============================================================================
+# playbooks/group_vars/all/vars.yml
+# =============================================================================
+# Cloud-AGNOSTIC application defaults.
+# These values are the same regardless of whether we deploy to GCP, AWS,
+# or Azure. They define WHAT the application is, not WHERE it runs.
+#
+# Inventory group_vars (inventories/<cloud>/group_vars/) define WHERE:
+#   - cloud_provider, SSH args, bastion IPs, IAP tunnels, cloud credentials
+#
+# These playbook group_vars define WHAT:
+#   - service user names, port numbers, image coordinates, TLS paths
+#   - connection string templates (the injected values come from inventory)
+#
+# Precedence note: playbook group_vars WIN over inventory group_vars when
+# the same key is defined in both. Use that only intentionally.
+# =============================================================================
+
+# ── Service Identity ──────────────────────────────────────────────────────────
+# Application-level user and database names — same on every cloud.
+rabbitmq_user: cognitor
+db_name: cognitor
+db_user: postgres
+
+# ── Runtime Behaviour ─────────────────────────────────────────────────────────
+# Set RUNTIME_BACKEND=postgres to use a containerised Postgres instead of
+# the managed cloud database. Overrideable at deploy time via -e or env var.
+runtime_backend: "{{ lookup('env', 'RUNTIME_BACKEND') | default('external', true) }}"
+
+# ── Service Ports ─────────────────────────────────────────────────────────────
+# These are the ports the services listen on inside each VM.
+# Group-level overrides (e.g., TLS port changes) go in group-level files below.
+proxy_port: 8080
+history_port: 8000
+
+# ── TLS / Domain ─────────────────────────────────────────────────────────────
+# Supported tls_mode values:
+#   selfsigned - Ansible generates a self-signed cert on the UI node
+#   provided   - cert/key already exist under tls_cert_dir on the target host
+#   off        - HTTP only (quick internal debugging, never use in prod)
+app_domain: "{{ lookup('env', 'APP_DOMAIN') | default('coinops.example.com', true) }}"
+tls_mode: "{{ lookup('env', 'TLS_MODE') | default('selfsigned', true) }}"
+tls_enabled: "{{ tls_mode != 'off' }}"
+tls_cert_dir: /etc/cognitor/tls
+tls_cert_path: "{{ tls_cert_dir }}/coinops.crt"
+tls_key_path: "{{ tls_cert_dir }}/coinops.key"
+
+# ── Container Image Coordinates ───────────────────────────────────────────────
+# Override IMAGE_TAG for immutable, commit-pinned deploys:
+#   IMAGE_TAG=abc1234 ansible-playbook playbooks/deploy.yml
+# Override IMAGE_REGISTRY to pull from a different registry (e.g., ECR, ACR).
+image_registry: "{{ lookup('env', 'IMAGE_REGISTRY') | default('ghcr.io/ua-academy-projects', true) }}"
+image_registry_host: "{{ image_registry.split('/')[0] }}"
+image_tag: "{{ lookup('env', 'IMAGE_TAG') | default('latest', true) }}"
+
+proxy_image:            "{{ image_registry }}/coin-ops-proxy:{{ image_tag }}"
+history_api_image:      "{{ image_registry }}/coin-ops-history-api:{{ image_tag }}"
+history_consumer_image: "{{ image_registry }}/coin-ops-history-consumer:{{ image_tag }}"
+ui_image:               "{{ image_registry }}/coin-ops-ui:{{ image_tag }}"
+postgres_runtime_image: "{{ image_registry }}/coin-ops-postgres-runtime:{{ image_tag }}"
+postgres_image: "{{ postgres_runtime_image if runtime_backend == 'postgres' else 'postgres:16-alpine' }}"
+
+# ── Derived Connection String Templates ───────────────────────────────────────
+# These templates consume values injected from inventory group_vars:
+#   - rabbitmq_password, db_password     → from vault.yml (inventory)
+#   - db_host, tf_database_url           → from vars.yml  (inventory)
+#   - hostvars[...].private_ip           → from dynamic inventory plugin
+#
+# postgres_bind_ip: the IP Postgres binds to on the history node.
+postgres_bind_ip: "{{ hostvars[groups['history'][0]].private_ip }}"
+
+rabbitmq_url: >-
+  amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@{{ hostvars[groups['history'][0]].private_ip }}:5672/
+
+database_url: >-
+  {% if tf_database_url is defined and tf_database_url | length > 0 %}
+  {{ tf_database_url }}
+  {% else %}
+  postgresql://{{ db_user }}:{{ db_password }}@{{ db_host }}:5432/{{ db_name }}
+  {% endif %}
+
+# history_database_url uses the service-name alias 'postgres' when running
+# local Docker Compose (db_host == localhost), otherwise uses the real host.
+history_database_url: >-
+  {% if tf_database_url is defined and tf_database_url | length > 0 %}
+  {{ tf_database_url }}
+  {% else %}
+  postgresql://{{ db_user }}:{{ db_password }}@{{ 'postgres' if db_host == 'localhost' else db_host }}:5432/{{ db_name }}
+  {% endif %}
+
+proxy_database_url: "{{ database_url }}"
+redis_url: "redis://{{ hostvars[groups['proxy'][0]].private_ip }}:6379/0"

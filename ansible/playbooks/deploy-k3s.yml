@@ -1,0 +1,33 @@
+---
+# =============================================================================
+# playbooks/deploy-k3s.yml
+# =============================================================================
+# Deploys Coin Ops into the cloud K3s cluster using a modular, zero-trust
+# multi-namespace architecture.
+#
+# Usage:
+#   ansible-playbook playbooks/deploy-k3s.yml
+#
+# Re-run safe, fully idempotent, and validates active container readiness.
+# =============================================================================
+
+- name: Deploy Coin Ops workloads to Cloud K3s
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  
+  pre_tasks:
+    - name: Validate environment variables / credentials
+      ansible.builtin.assert:
+        that:
+          - lookup('env', 'GHCR_USERNAME') | length > 0 or registry_username | default('') | length > 0
+          - lookup('env', 'GHCR_TOKEN') | length > 0 or registry_token | default('') | length > 0
+        fail_msg: |
+          Required credentials could not be resolved.
+          Ensure you have sourced your .env file or populated GHCR_USERNAME and GHCR_TOKEN.
+
+  roles:
+    - role: k3s_deploy
+      vars:
+        ghcr_username: "{{ lookup('env', 'GHCR_USERNAME') | default(registry_username | default(''), true) }}"
+        ghcr_token: "{{ lookup('env', 'GHCR_TOKEN') | default(registry_token | default(''), true) }}"

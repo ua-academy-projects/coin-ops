@@ -1,0 +1,69 @@
+---
+# =============================================================================
+# inventories/gcp/group_vars/all/vars.yml
+# =============================================================================
+# GCP-SPECIFIC context variables — defines WHERE this deployment runs.
+# These values change when switching clouds.
+#
+# Application defaults (ports, image names, service users, TLS, URL templates)
+# live in playbooks/group_vars/all/vars.yml and are cloud-agnostic.
+# Secrets live in vault.yml (this same directory). Encrypt before committing.
+# =============================================================================
+
+# ── SSH ───────────────────────────────────────────────────────────────────────
+ansible_user: ubuntu
+ansible_ssh_private_key_file: "~/.ssh/id_rsa"
+
+# ── Bastion ───────────────────────────────────────────────────────────────────
+# Auto-detected from the 'bastion' inventory group.
+# Falls back to BASTION_IP env var for Packer builds or manual use.
+bastion_ip: >-
+  {{
+    hostvars[groups['bastion'][0]].ansible_host
+    if groups.get('bastion', []) | length > 0
+    else lookup('env', 'BASTION_IP') | default('', true)
+  }}
+
+# Private IP of the bastion (for Squid proxy routing on other nodes).
+bastion_private_ip: >-
+  {{
+    hostvars[groups['bastion'][0]].private_ip
+    if groups.get('bastion', []) | length > 0
+    else '127.0.0.1'
+  }}
+
+# Route internet-bound container traffic through Squid on the Bastion.
+app_http_proxy: "http://{{ bastion_private_ip }}:3128"
+app_no_proxy: "localhost,127.0.0.1,postgres,rabbitmq,redis,10.20.0.0/16"
+
+# ── SSH Connection ────────────────────────────────────────────────────────────
+# GCP: Identity-Aware Proxy (IAP) tunneling — no public IPs needed.
+# Other clouds: ProxyJump through the Bastion.
+ansible_ssh_common_args: >-
+  -o StrictHostKeyChecking=no
+  {% if packer_build_name is not defined %}
+  {% if cloud_provider == 'gcp' %}
+  -o ProxyCommand="gcloud compute start-iap-tunnel {{ inventory_hostname }} %p --listen-on-stdin --project={{ gcp_project_id }} --zone={{ zone }}"
+  {% elif bastion_ip | length > 0 and inventory_hostname not in groups.get('bastion', []) %}
+  -o ProxyJump={{ ansible_user }}@{{ bastion_ip }}
+  {% endif %}
+  {% endif %}
+
+# ── Cloud Identity ────────────────────────────────────────────────────────────
+cloud_provider: gcp
+gcp_project_id: "{{ lookup('env', 'GCP_PROJECT_ID') | default('coinops', true) }}"
+
+# ── Database Host Resolution ──────────────────────────────────────────────────
+# GCP always uses a managed cloud DB (Cloud SQL via Terraform output).
+# Resolution order:
+#   1. tf_db_host from vault.yml (Terraform output / Secret Manager)
+#   2. DB_HOST environment variable
+#   3. localhost (fallback for local testing only)
+# GCP always has a managed cloud DB (Cloud SQL via Terraform). Derived from
+# cloud_provider so a future local/minikube inventory gets use_cloud_db: false.
+use_cloud_db: "{{ cloud_provider in ['gcp', 'aws', 'azure'] }}"
+db_host: >-
+  {{
+    tf_db_host
+    | default(lookup('env', 'DB_HOST') | default('localhost', true))
+  }}

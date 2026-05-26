@@ -31,7 +31,7 @@ resource "google_compute_firewall" "this" {
   network     = google_compute_network.this[0].id
   description = each.value.description
   direction   = upper(each.value.direction)
-
+  priority    = try(each.value.priority, 1000)
   dynamic "allow" {
     for_each = each.value.action == "allow" ? [1] : []
     content {
@@ -50,9 +50,9 @@ resource "google_compute_firewall" "this" {
 
   source_ranges      = upper(each.value.direction) == "INGRESS" && length(each.value.source_cidrs) > 0 ? each.value.source_cidrs : null
   destination_ranges = upper(each.value.direction) == "EGRESS" && length(each.value.destination_cidrs) > 0 ? each.value.destination_cidrs : null
-
-  source_tags = upper(each.value.direction) == "INGRESS" && each.value.source_group != "" ? [each.value.source_group] : null
-  target_tags = each.value.target_group != "" ? [each.value.target_group] : null
+  
+  source_tags        = upper(each.value.direction) == "INGRESS" && each.value.source_group != "" ? [each.value.source_group] : null
+  target_tags        = each.value.target_group != "" ? [each.value.target_group] : null
 }
 
 # ─── GCP Cloud NAT ───────────────────────────────────────────────────────────

@@ -1,0 +1,6 @@
+---
+# playbooks/group_vars/history.yml
+# Firewall ports that must be open on every history node.
+# This is an application constant — same on GCP, AWS, and Azure.
+# Cloud-specific security group rules are managed by Terraform, not Ansible.
+common_allowed_ports: [22, 5432, 5672, 15672, 8000]

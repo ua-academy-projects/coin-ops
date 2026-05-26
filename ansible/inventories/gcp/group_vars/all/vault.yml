@@ -1,0 +1,40 @@
+---
+# =============================================================================
+# inventories/gcp/group_vars/all/vault.yml
+# =============================================================================
+#
+# This file contains ALL secrets for the GCP environment.
+# After filling in values, encrypt this file with Ansible Vault:
+#
+#   ansible-vault encrypt inventories/gcp/group_vars/all/vault.yml
+#
+# To run playbooks after encryption:
+#   ansible-playbook playbooks/deploy.yml --ask-vault-pass
+#   # or: export ANSIBLE_VAULT_PASSWORD_FILE=~/.vault_pass_gcp
+#
+# Variables prefixed with `vault_` are referenced by vars.yml.
+# =============================================================================
+
+# ── Container Registry ────────────────────────────────────────────────────────
+vault_registry_username: "CHANGEME"          # GHCR username / service-account
+vault_registry_token: "CHANGEME"             # GHCR PAT or service-account token
+
+# ── Application Runtime Secrets ───────────────────────────────────────────────
+vault_rabbitmq_password: "CHANGEME"
+vault_db_password: "CHANGEME"
+
+# ── Cloud-managed DB (populated by Terraform output / Secret Manager) ─────────
+# Leave blank ("") when using a self-hosted Postgres container.
+vault_tf_db_host: ""
+vault_tf_db_password: ""
+vault_tf_database_url: ""
+
+# ── Convenience aliases used across group_vars ────────────────────────────────
+# These map vault_ vars to the short names expected by roles and templates.
+registry_username: "{{ vault_registry_username }}"
+registry_token: "{{ vault_registry_token }}"
+rabbitmq_password: "{{ vault_rabbitmq_password }}"
+db_password: "{{ vault_db_password }}"
+tf_db_host: "{{ vault_tf_db_host }}"
+tf_db_password: "{{ vault_tf_db_password }}"
+tf_database_url: "{{ vault_tf_database_url }}"

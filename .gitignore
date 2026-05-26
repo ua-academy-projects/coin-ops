@@ -60,3 +60,20 @@ terraform-guide.pdf
 ansible/group_vars/all/*.backup
 ansible/group_vars/all/secrets.yml
 runtime/__pycache__
+
+# ── Ansible Vault ─────────────────────────────────────────────────────────────
+
+*.vault.yml.plaintext
+
+# ── Fact Cache ────────────────────────────────────────────────────────────────
+/tmp/ansible_facts_cache/
+
+# ── Inventory Cache ───────────────────────────────────────────────────────────
+.ansible_inventory_cache.json
+*.cache.json
+
+# ── Retry Files ───────────────────────────────────────────────────────────────
+*.retry
+
+# ── Molecule ──────────────────────────────────────────────────────────────────
+.molecule/

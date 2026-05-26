@@ -1,0 +1,10 @@
+---
+# Triggered when history.env or config.yaml change.
+# Restarts the entire compose stack so the new env is picked up.
+- name: restart history services
+  ansible.builtin.command: >-
+    docker compose -f /opt/cognitor/history/compose.yaml
+    up -d --remove-orphans --force-recreate
+  args:
+    chdir: /opt/cognitor/history
+  changed_when: true

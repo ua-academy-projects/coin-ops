@@ -1,0 +1,9 @@
+---
+# Triggered when ui.env or nginx.conf change.
+- name: restart ui services
+  ansible.builtin.command: >-
+    docker compose -f /opt/cognitor/ui/compose.yaml
+    up -d --remove-orphans --force-recreate
+  args:
+    chdir: /opt/cognitor/ui
+  changed_when: true

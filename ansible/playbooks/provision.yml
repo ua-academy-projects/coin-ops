@@ -1,0 +1,89 @@
+---
+# =============================================================================
+# playbooks/provision.yml
+# =============================================================================
+# Install system packages and create host-level data directories on all VMs.
+# Safe to re-run (idempotent).
+#
+# Usage:
+#   ansible-playbook playbooks/provision.yml                    # production (GCP)
+#   ansible-playbook playbooks/provision.yml -i inventories/aws # AWS
+# =============================================================================
+
+- name: Validate required variables
+  hosts: localhost
+  connection: local
+  tags: [always]
+  tasks:
+    - name: Check required variables are set
+      ansible.builtin.assert:
+        that:
+          - rabbitmq_password | default('') | length > 0
+          - db_password | default('') | length > 0
+          - ansible_ssh_private_key_file | default('') | length > 0
+          - runtime_backend | default('external') in ['external', 'postgres']
+        fail_msg: |
+          One or more required variables are missing.
+          Ensure vault.yml is populated and decrypted, or run: source .env
+
+- name: Provision Bastion — Squid egress proxy (run first)
+  hosts: bastion
+  become: yes
+  tags: [bastion, squid]
+  roles:
+    - squid
+
+- name: Common setup — all nodes
+  hosts: all
+  become: yes
+  tags: [common]
+  environment:
+    http_proxy: "{{ app_http_proxy if inventory_hostname not in groups.get('bastion', []) else '' }}"
+    https_proxy: "{{ app_http_proxy if inventory_hostname not in groups.get('bastion', []) else '' }}"
+    no_proxy: "{{ app_no_proxy if inventory_hostname not in groups.get('bastion', []) else '' }}"
+  roles:
+    - common
+    - docker
+
+- name: Provision history node — data directories
+  hosts: history
+  become: yes
+  tags: [history, data-dirs]
+  tasks:
+    - name: Create PostgreSQL data directory
+      ansible.builtin.file:
+        path: /var/lib/coin-ops/postgres
+        state: directory
+        owner: 70
+        group: 70
+        mode: '0700'
+
+    - name: Create RabbitMQ data directory
+      ansible.builtin.file:
+        path: /var/lib/coin-ops/rabbitmq
+        state: directory
+        owner: 999
+        group: 999
+        mode: '0755'
+
+- name: Provision proxy node — data directories
+  hosts: proxy
+  become: yes
+  tags: [proxy, data-dirs]
+  tasks:
+    - name: Create Redis data directory
+      ansible.builtin.file:
+        path: /var/lib/coin-ops/redis
+        state: directory
+        owner: 999
+        group: 999
+        mode: '0755'
+
+- name: Provision UI node
+  hosts: ui
+  become: yes
+  tags: [ui]
+  tasks:
+    - name: No host-level provisioning required for UI node
+      ansible.builtin.debug:
+        msg: "UI node only requires Docker (applied via common + docker roles above)."

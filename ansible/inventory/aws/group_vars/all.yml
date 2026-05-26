@@ -1,5 +1,0 @@
----
-# Variables in this file apply to ALL hosts when using the 'aws' inventory directory.
-# This permanently defines our cloud context for this specific infrastructure tier.
-
-cloud_provider: aws

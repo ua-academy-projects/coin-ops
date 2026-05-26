@@ -1,0 +1,72 @@
+---
+# =============================================================================
+# playbooks/deploy.yml
+# =============================================================================
+# Deploy all Coin Ops services. Safe to re-run on every code push.
+#
+# Usage:
+#   ansible-playbook playbooks/deploy.yml                    # production (GCP)
+#   ansible-playbook playbooks/deploy.yml -i inventories/aws # AWS
+#   ansible-playbook playbooks/deploy.yml --tags history      # only history node
+#
+# Override image tag for immutable deploys:
+#   IMAGE_TAG=<commit-sha> ansible-playbook playbooks/deploy.yml
+# =============================================================================
+
+- name: Validate required variables
+  hosts: localhost
+  connection: local
+  tags: [always]
+  tasks:
+    - name: Check required variables are set
+      ansible.builtin.assert:
+        that:
+          - rabbitmq_password | default('') | length > 0
+          - db_password | default('') | length > 0
+          - ansible_ssh_private_key_file | default('') | length > 0
+          - runtime_backend | default('external') in ['external', 'postgres']
+        fail_msg: |
+          Required secrets could not be resolved.
+          Ensure vault.yml is decrypted, or run: source .env
+
+- name: Authenticate Docker registry on all target nodes
+  hosts: all:!localhost
+  become: yes
+  tags: [registry, always]
+  tasks:
+    - name: Log in to configured container registry
+      community.docker.docker_login:
+        registry_url: "{{ image_registry_host }}"
+        username: "{{ registry_username }}"
+        password: "{{ registry_token }}"
+        reauthorize: true
+      no_log: true
+      when:
+        - registry_username | length > 0
+        - registry_token | length > 0
+
+    - name: Explain skipped registry login
+      ansible.builtin.debug:
+        msg: "GHCR_USERNAME/GHCR_TOKEN not set; assuming registry images are public."
+      when: registry_username | length == 0 or registry_token | length == 0
+
+- name: Deploy History Service
+  hosts: history
+  become: yes
+  tags: [history]
+  roles:
+    - history
+
+- name: Deploy Proxy Service
+  hosts: proxy
+  become: yes
+  tags: [proxy]
+  roles:
+    - proxy
+
+- name: Deploy Web UI
+  hosts: ui
+  become: yes
+  tags: [ui]
+  roles:
+    - ui

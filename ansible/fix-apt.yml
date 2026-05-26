@@ -1,7 +1,0 @@
-- name: Fix Azure apt mirrors
-  hosts: all
-  become: yes
-  tasks:
-    - name: Replace azure.deb.debian.cloud with deb.debian.org
-      shell: |
-        sed -i 's/azure.deb.debian.cloud/deb.debian.org/g' /etc/apt/sources.list.d/debian.sources /etc/apt/mirrors/debian.list /etc/apt/mirrors/debian-security.list 2>/dev/null || true

@@ -1,0 +1,26 @@
+# =============================================================================
+# deploy/k3s/cluster/namespaces.yaml
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: "{{ app_namespace }}"
+  labels:
+    environment: "{{ env | default('production') }}"
+    tier: app
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: "{{ infra_namespace }}"
+  labels:
+    environment: "{{ env | default('production') }}"
+    tier: infra
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: "{{ ingress_namespace }}"
+  labels:
+    environment: "{{ env | default('production') }}"
+    tier: routing

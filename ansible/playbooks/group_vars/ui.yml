@@ -1,0 +1,4 @@
+---
+# playbooks/group_vars/ui.yml
+# Firewall ports that must be open on every UI node.
+common_allowed_ports: [22, 80, 443]

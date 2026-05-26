@@ -1,0 +1,23 @@
+---
+# =============================================================================
+# inventories/azure/group_vars/all/vault.yml
+# =============================================================================
+# Azure-environment secrets. Encrypt before committing.
+#   ansible-vault encrypt inventories/azure/group_vars/all/vault.yml
+# =============================================================================
+
+vault_registry_username: "CHANGEME"
+vault_registry_token: "CHANGEME"
+vault_rabbitmq_password: "CHANGEME"
+vault_db_password: "CHANGEME"
+vault_tf_db_host: ""
+vault_tf_db_password: ""
+vault_tf_database_url: ""
+
+registry_username: "{{ vault_registry_username }}"
+registry_token: "{{ vault_registry_token }}"
+rabbitmq_password: "{{ vault_rabbitmq_password }}"
+db_password: "{{ vault_db_password }}"
+tf_db_host: "{{ vault_tf_db_host }}"
+tf_db_password: "{{ vault_tf_db_password }}"
+tf_database_url: "{{ vault_tf_database_url }}"

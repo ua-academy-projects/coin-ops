@@ -1,12 +1,16 @@
 ---
+# =============================================================================
+# roles/squid/tasks/main.yml
+# =============================================================================
+
 - name: Install Squid
-  apt:
+  ansible.builtin.apt:
     name: squid
     state: present
-    update_cache: yes
+    update_cache: true
 
 - name: Copy allowed domains list
-  template:
+  ansible.builtin.template:
     src: allowed_domains.txt.j2
     dest: /etc/squid/allowed_domains.txt
     owner: root
@@ -15,7 +19,7 @@
   notify: restart squid
 
 - name: Configure Squid
-  template:
+  ansible.builtin.template:
     src: squid.conf.j2
     dest: /etc/squid/squid.conf
     owner: root
@@ -24,7 +28,7 @@
   notify: restart squid
 
 - name: Ensure Squid is enabled and started
-  service:
+  ansible.builtin.service:
     name: squid
     state: started
-    enabled: yes
+    enabled: true

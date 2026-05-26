@@ -1,0 +1,69 @@
+# =============================================================================
+# deploy/k3s/ingress/ingress.yaml
+# =============================================================================
+# Nginx Ingress for the real Coin Ops app (adapted for k3s).
+#
+# Routing table:
+#   {{ app_domain }}/              → ui:80
+#   {{ app_domain }}/api/*         → proxy:8080     (strip /api prefix)
+#   {{ app_domain }}/history-api/* → history-api:8000 (strip /history-api prefix)
+# =============================================================================
+
+# Ingress for APIs (with prefix rewrite)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: coin-ops-api
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - "{{ app_domain }}"
+      secretName: "{{ app_domain | replace('.', '-') }}-tls"
+  rules:
+    - host: "{{ app_domain }}"
+      http:
+        paths:
+          - path: /api(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: proxy
+                port:
+                  number: 8080
+          - path: /history-api(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: history-api
+                port:
+                  number: 8000
+---
+# Ingress for UI (no rewrite)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: coin-ops-ui
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - "{{ app_domain }}"
+      secretName: "{{ app_domain | replace('.', '-') }}-tls"
+  rules:
+    - host: "{{ app_domain }}"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ui
+                port:
+                  number: 80

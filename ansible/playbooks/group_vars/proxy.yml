@@ -1,0 +1,4 @@
+---
+# playbooks/group_vars/proxy.yml
+# Firewall ports that must be open on every proxy node.
+common_allowed_ports: [22, 8080, 6379]

@@ -1,0 +1,4 @@
+---
+# Bastion host overrides — direct connection (no ProxyJump, no IAP tunnel).
+# The bastion is the entry point; it connects to the internet directly.
+ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
