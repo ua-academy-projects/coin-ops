@@ -1,24 +1,17 @@
 locals {
 
-  # normalized input
-  normalized_secrets = var.secrets
-  supported_clouds   = ["gcp", "azure", "aws"]
+  supported_clouds = ["gcp", "azure", "aws"]
 
-  # networks keep their own cloud, workloads use top-level cloud by default
-  normalized_networks = {
-    for name, network in var.networks : name => network
-  }
-
-  normalized_workloads = {
+  workloads = {
     for name, workload in var.workloads : name => merge(workload, {
-      cloud = coalesce(try(workload.cloud, null), var.cloud)
+      cloud = coalesce(workload.cloud, var.cloud)
     })
   }
 
   # for now we support only one network per cloud
   network_names_by_cloud = {
     for cloud in local.supported_clouds : cloud => [
-      for name, network in local.normalized_networks : name
+      for name, network in var.networks : name
       if network.cloud == cloud
     ]
   }
@@ -27,7 +20,7 @@ locals {
   networks_by_cloud = {
     for cloud in local.supported_clouds : cloud => (
       length(local.network_names_by_cloud[cloud]) == 1
-      ? local.normalized_networks[local.network_names_by_cloud[cloud][0]]
+      ? var.networks[local.network_names_by_cloud[cloud][0]]
       : null
     )
   }
@@ -35,7 +28,7 @@ locals {
   # split workloads by cloud before sending them to cloud modules
   workloads_by_cloud = {
     for cloud in local.supported_clouds : cloud => {
-      for name, workload in local.normalized_workloads : name => workload
+      for name, workload in local.workloads : name => workload
       if workload.cloud == cloud
     }
   }
@@ -47,16 +40,16 @@ locals {
   ]
 
   workload_clouds_without_network = distinct([
-    for _, workload in local.normalized_workloads : workload.cloud
+    for _, workload in local.workloads : workload.cloud
     if try(local.networks_by_cloud[workload.cloud], null) == null
   ])
 
   invalid_workload_subnet_refs = [
-    for name, workload in local.normalized_workloads : name
+    for name, workload in local.workloads : name
     if try(local.networks_by_cloud[workload.cloud].subnets[workload.subnet], null) == null
   ]
 
-  active_workload_clouds = distinct([for _, workload in local.normalized_workloads : workload.cloud])
+  active_workload_clouds = distinct([for _, workload in local.workloads : workload.cloud])
   mixed_cloud_enabled    = length(local.active_workload_clouds) > 1
 
   # top-level cloud owns shared resources like sql, nat, and security rules
@@ -86,7 +79,7 @@ locals {
 
   # private hosts connect through the public bastion when it exists
   inventory_bastion_host = try(one([
-    for name, workload in local.normalized_workloads : name
+    for name, workload in local.workloads : name
     if contains(workload.roles, "bastion")
   ]), null)
 
@@ -94,7 +87,7 @@ locals {
 
   # inventory hosts
   inventory_hosts = {
-    for name, workload in local.normalized_workloads : name => {
+    for name, workload in local.workloads : name => {
       cloud        = workload.cloud
       roles        = workload.roles
       private_ip   = try(local.private_ips[name], "")
