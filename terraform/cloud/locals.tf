@@ -1,10 +1,4 @@
 locals {
-  # cloud-specific settings
-  azure = {
-    resource_group_name = var.azure_resource_group_name
-    key_vault_name      = var.azure_key_vault_name
-    location            = var.azure_location
-  }
 
   # normalized input
   normalized_secrets = var.secrets
