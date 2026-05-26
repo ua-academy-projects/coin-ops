@@ -21,10 +21,12 @@ output "internal_vm_ips" {
     module.azure_vm.internal_vm_ips))
 }
 
+# SSH connection string to k3s-server-1 (public node).
+# In GCP-only mode there is no jump-host — connect directly to k3s-server-1.
 output "ssh_connection" {
-  description = "Ready-to-use SSH command to connect to the jump host"
+  description = "Ready-to-use SSH command to connect to the cluster entry point"
   value = "ssh -p ${local.general.ssh_port} ${local.general.ops_user}@${
-    local.cloud == "gcp" ? module.gcp_vm.jump_host_external_ip : (
+    local.cloud == "gcp" ? coalesce(module.gcp_vm.jump_host_external_ip, "no-jump-host-use-k3s-server-1") : (
     local.cloud == "aws" ? module.aws_vm.jump_host_external_ip : (
     local.cloud == "hybrid" ? module.aws_vm.jump_host_external_ip :
     module.azure_vm.jump_host_external_ip))
