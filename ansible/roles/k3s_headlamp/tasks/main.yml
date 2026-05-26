@@ -1,6 +1,7 @@
 ---
-# Installs Headlamp Kubernetes UI via Helm and creates Ingress with TLS.
-# Accessible at https://headlamp.coinops-softserve-penina.pp.ua
+# Installs Headlamp Kubernetes UI via Helm.
+# NO public Ingress — admin tools must not be publicly exposed.
+# Access only via: kubectl port-forward -n headlamp svc/headlamp 8080:80
 
 - name: Add Headlamp Helm repo
   kubernetes.core.helm_repository:
@@ -17,32 +18,3 @@
     timeout: 5m
     # values:
     #   replicaCount: 2
-
-- name: Create Ingress for Headlamp
-  kubernetes.core.k8s:
-    state: present
-    definition:
-      apiVersion: networking.k8s.io/v1
-      kind: Ingress
-      metadata:
-        name: headlamp
-        namespace: "{{ headlamp_namespace }}"
-        annotations:
-          cert-manager.io/cluster-issuer: letsencrypt-prod
-      spec:
-        ingressClassName: traefik
-        rules:
-          - host: "{{ headlamp_domain }}"
-            http:
-              paths:
-                - path: /
-                  pathType: Prefix
-                  backend:
-                    service:
-                      name: headlamp
-                      port:
-                        number: 80
-        tls:
-          - hosts:
-              - "{{ headlamp_domain }}"
-            secretName: headlamp-tls
