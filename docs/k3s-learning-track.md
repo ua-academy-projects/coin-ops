@@ -95,7 +95,7 @@ the ingress controller; **cert-manager** (installed via Helm by the
 `k3s-cert-manager` role) issues real Let's Encrypt certs through a **DNS-01
 ClusterIssuer backed by Cloudflare** — valid even though the cluster is private,
 because DNS-01 validates over DNS, not HTTP. Every app gets a host
-`<app>.lab.coinops.pp.ua` and an `Ingress` annotated with
+`<app>.coinops.pp.ua` and an `Ingress` annotated with
 `cert-manager.io/cluster-issuer: letsencrypt-cloudflare`.
 
 Hosts today: `hello.`, `headlamp.`, `homepage.` (the deploy-and-expose example,
@@ -107,7 +107,7 @@ opens 80/443 from the bastion to the k3s tag.
 
 1. Cloudflare-managed zone; an API token with DNS:Edit, pushed to the cloud
    secret manager as `cloudflare_token` (`./scripts/lab.sh secrets push`).
-2. A wildcard DNS record `*.lab.coinops.pp.ua` → a k3s node private IP
+2. A wildcard DNS record `*.coinops.pp.ua` → a k3s node private IP
    (e.g. `10.10.20.40`), so tailnet clients resolve the app hosts. `/etc/hosts`
    is the no-DNS fallback.
 3. `terraform apply` (firewall 80/443) → `./scripts/lab.sh k3s` (cluster +
@@ -133,11 +133,11 @@ kubectl --kubeconfig=~/.kube/coinops-k3s.yaml get pods -A
 # Expect: kube-system pods Running; tooling/hello-* Running ×2.
 
 # Workloads are behind the Traefik ingress with TLS now (no NodePorts).
-# With *.lab.coinops.pp.ua pointed at a k3s node IP (see Ingress section):
-curl -s https://hello.lab.coinops.pp.ua | head -3
-curl -s https://homepage.lab.coinops.pp.ua | head -3
+# With *.coinops.pp.ua pointed at a k3s node IP (see Ingress section):
+curl -s https://hello.coinops.pp.ua | head -3
+curl -s https://homepage.coinops.pp.ua | head -3
 
-# Headlamp dashboard: browse to https://headlamp.lab.coinops.pp.ua and log in with:
+# Headlamp dashboard: browse to https://headlamp.coinops.pp.ua and log in with:
 kubectl --kubeconfig=~/.kube/coinops-k3s.yaml -n tooling create token headlamp --duration=24h
 ```
 

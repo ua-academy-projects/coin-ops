@@ -29,9 +29,9 @@ token), and the `cloudflared-admin` systemd service (enabled + started).
 
 ```bash
 # SSH (ansible ProxyJump): add to ~/.ssh/config or use directly
-cloudflared access ssh --hostname ssh.lab.coinops.pp.ua
+cloudflared access ssh --hostname ssh.coinops.pp.ua
 # kubectl: open a local proxy to the k3s API, point kubeconfig at it
-cloudflared access tcp --hostname k8s.lab.coinops.pp.ua --url 127.0.0.1:6443
+cloudflared access tcp --hostname k8s.coinops.pp.ua --url 127.0.0.1:6443
 ```
 
 First use of each opens a browser for the Access one-time-PIN login.

@@ -22,6 +22,6 @@ k3s_headlamp_release: headlamp
 k3s_headlamp_image_tag: ""
 
 # Ingress / TLS — shared with k3s-cert-manager. Exposed at headlamp.<domain>.
-k3s_ingress_domain: "{{ coinops_k3s_ingress_domain | default('lab.coinops.pp.ua', true) }}"
+k3s_ingress_domain: "{{ coinops_k3s_ingress_domain | default('coinops.pp.ua', true) }}"
 cert_manager_cluster_issuer: letsencrypt-cloudflare
 k3s_headlamp_host: "headlamp.{{ k3s_ingress_domain }}"

@@ -23,6 +23,6 @@ k3s_homepage_image_tag: ""
 
 # Ingress / TLS — shared with k3s-cert-manager. The host is <name>.<domain>;
 # the annotation points Traefik at the cert-manager ClusterIssuer.
-k3s_ingress_domain: "{{ coinops_k3s_ingress_domain | default('lab.coinops.pp.ua', true) }}"
+k3s_ingress_domain: "{{ coinops_k3s_ingress_domain | default('coinops.pp.ua', true) }}"
 cert_manager_cluster_issuer: letsencrypt-cloudflare
 k3s_homepage_host: "homepage.{{ k3s_ingress_domain }}"

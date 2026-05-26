@@ -18,7 +18,7 @@ locals {
       cloudflare_account_id = ""
       create_records        = false
       cloudflare_proxy      = false
-      k3s_ingress           = "lab.coinops.pp.ua"
+      k3s_ingress           = "coinops.pp.ua"
       zero_trust = {
         enabled       = false
         access_emails = []

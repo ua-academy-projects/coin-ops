@@ -61,7 +61,7 @@ domain:
   # Base domain for the GCP k3s ingress hosts (<app>.<this>). Single source of
   # truth: drives both the Cloudflare wildcard A record (terraform) and the
   # ansible ingress hostnames (via coinops_k3s_ingress_domain).
-  k3s_ingress: lab.coinops.pp.ua
+  k3s_ingress: coinops.pp.ua
   # Cloudflare Zero Trust (GCP k3s edge). Terraform creates two cloudflared
   # tunnels (apps in-cluster, admin on the bastion), their routing, proxied
   # DNS, Access policies, and writes the tunnel tokens into Secret Manager.
@@ -73,7 +73,7 @@ domain:
   # account_id + access_emails below are consumed by terraform.
   cloudflare_account_id: 5f9c49428f4150cf25eefe619dad508c
   zero_trust:
-    enabled: false
+    enabled: true
     access_emails:
       - vshabat64@gmail.com
 

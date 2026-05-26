@@ -13,6 +13,6 @@ k3s_first_node: "{{ ansible_play_hosts_all[0] }}"
 k3s_hello_namespace: tooling
 
 # Ingress / TLS — shared with k3s-cert-manager. Exposed at hello.<domain>.
-k3s_ingress_domain: "{{ coinops_k3s_ingress_domain | default('lab.coinops.pp.ua', true) }}"
+k3s_ingress_domain: "{{ coinops_k3s_ingress_domain | default('coinops.pp.ua', true) }}"
 cert_manager_cluster_issuer: letsencrypt-cloudflare
 k3s_hello_host: "hello.{{ k3s_ingress_domain }}"

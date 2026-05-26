@@ -16,7 +16,7 @@ coinops_ingress_namespace: ingress
 coinops_data_namespace: data
 
 # Ingress / TLS — shared with k3s-cert-manager. Served at app.<domain>.
-k3s_ingress_domain: "{{ coinops_k3s_ingress_domain | default('lab.coinops.pp.ua', true) }}"
+k3s_ingress_domain: "{{ coinops_k3s_ingress_domain | default('coinops.pp.ua', true) }}"
 cert_manager_cluster_issuer: letsencrypt-cloudflare
 coinops_app_host: "app.{{ k3s_ingress_domain }}"
 
