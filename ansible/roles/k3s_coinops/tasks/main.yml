@@ -11,21 +11,11 @@
 #   4. app         — backend services + schema init Job
 #   5. frontend    — ui last, depends on app layer being ready
 
-# Step 1: Read CloudSQL private IP from Terraform output.
-# We run this on localhost (the jump-host) where terraform state lives.
-# register = store the result in a variable named 'cloudsql_result'
-- name: Get CloudSQL private IP from Terraform output
-  command: terraform -chdir={{ coinops_terraform_dir }} output -raw gcp_db_endpoint
-  register: cloudsql_result
-  changed_when: false
-  delegate_to: localhost
-  become: false
-
-# Step 2: Store IP as a clean fact for use in all subsequent tasks.
-# cloudsql_result.stdout = the actual IP string e.g. "10.100.0.3"
+# CloudSQL IP comes from CLOUDSQL_IP environment variable (set in .env)
+# Value: 10.113.0.3 — get fresh value with: terraform output -raw gcp_db_endpoint
 - name: Set CloudSQL IP fact
   set_fact:
-    cloudsql_ip: "{{ cloudsql_result.stdout | trim }}"
+    cloudsql_ip: "{{ cloudsql_ip }}"
 
 # Step 3: Call sub-task files in correct order.
 # include_tasks = run another task file as if its contents were pasted here.
