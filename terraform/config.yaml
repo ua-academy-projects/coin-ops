@@ -1,12 +1,16 @@
+# Purpose: Terraform infrastructure config.
+# Currently set to GCP-only mode for Task 4 (k3s + CloudSQL).
+# To restore hybrid deployment: change cloud back to "hybrid" and
+# uncomment AWS/Azure VMs below.
+
 general:
-  cloud: "hybrid"
+  cloud: "gcp"           # changed from "hybrid" — GCP only for Task 4
   project_id: "devops-intern-penina"
   location: "europe"
   disk_size: 30
   ssh_port: "9922"
   ops_user: "marta_ops"
-  database: "aws"
-
+  database: "gcp"        # changed from "aws" — use CloudSQL not RDS
 
 locations:
   europe:
@@ -54,54 +58,57 @@ sizes:
     aws: "t3.micro"
     azure: "Standard_B2s_v2"
   medium:
-    gcp: "e2-medium" #(4GB)
+    gcp: "e2-medium"
     aws: "t3.small"
     azure: "Standard_B2s_v2"
 
-# gateway is a separate VM
 vms:
-  jump-host:
-    cloud: "aws"
-    size: small
-    zone: primary
-    tags: ["jump-host"]
-    public_ip: true
+  # ── AWS/Azure VMs commented out — not needed for Task 4 (k3s on GCP) ──
+  # Uncomment to restore hybrid deployment for Tasks 1-2.
+  #
+  # jump-host:
+  #   cloud: "aws"
+  #   size: small
+  #   zone: primary
+  #   tags: ["jump-host"]
+  #   public_ip: true
+  #
+  # gateway-azure:
+  #   cloud: "azure"
+  #   size: small
+  #   zone: primary
+  #   tags: ["gateway"]
+  #   public_ip: true
+  #
+  # gateway-aws:
+  #   cloud: "aws"
+  #   size: small
+  #   zone: primary
+  #   tags: ["gateway"]
+  #   public_ip: true
+  #
+  # node-01:
+  #   cloud: "aws"
+  #   size: small
+  #   zone: primary
+  #   tags: ["internal", "history", "queue"]
+  #   public_ip: false
+  #
+  # node-02:
+  #   cloud: "aws"
+  #   size: small
+  #   zone: primary
+  #   tags: ["internal", "proxy"]
+  #   public_ip: false
+  #
+  # node-03:
+  #   cloud: "azure"
+  #   size: small
+  #   zone: secondary
+  #   tags: ["ui", "web"]
+  #   public_ip: false
 
-  gateway-azure:
-    cloud: "azure"
-    size: small
-    zone: primary
-    tags: ["gateway"]
-    public_ip: true
-
-  gateway-aws:
-    cloud: "aws"
-    size: small
-    zone: primary
-    tags: ["gateway"]
-    public_ip: true
-
-  node-01:
-    cloud: "aws"
-    size: small
-    zone: primary
-    tags: ["internal", "history", "queue"]
-    public_ip: false
-
-  node-02:
-    cloud: "aws"
-    size: small
-    zone: primary
-    tags: ["internal", "proxy"]
-    public_ip: false
-
-  node-03:
-    cloud: "azure"
-    size: small
-    zone: secondary
-    tags: ["ui", "web"]
-    public_ip: false
-
+  # ── GCP k3s cluster — active for Task 4 ──────────────────────────────
   k3s-server-1:
     cloud: "gcp"
     size: medium

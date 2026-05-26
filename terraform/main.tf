@@ -32,12 +32,16 @@ module "gcp_vm" {
   ssh_public_key = file(var.ssh_public_key_path)
 }
 
+# gcp_lb — TCP Load Balancer across all 3 k3s nodes.
 module "gcp_lb" {
-  source           = "./modules/gcp_lb"
-  config           = local.config
-  network          = module.gcp_network.vpc_name
-  ui_instance_name = "node-03"
-  ui_instance_zone = local.active_location.zones.secondary
+  source  = "./modules/gcp_lb"
+  config  = local.config
+  network = module.gcp_network.vpc_name
+  k3s_instance_zones = {
+    "k3s-server-1" = local.config.locations[local.general.location].gcp.zones.primary
+    "k3s-server-2" = local.config.locations[local.general.location].gcp.zones.primary
+    "k3s-server-3" = local.config.locations[local.general.location].gcp.zones.secondary
+  }
 }
 
 module "gcp_sql" {

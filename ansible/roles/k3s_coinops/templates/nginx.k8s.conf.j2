@@ -1,0 +1,59 @@
+# nginx configuration for Kubernetes deployment.
+# Routes API requests to backend services via Kubernetes internal DNS.
+# /api/         → proxy Service in coinops-app namespace
+# /history-api/ → history-api Service in coinops-app namespace
+# /             → React SPA (try_files for client-side routing)
+
+server {
+    listen 80;
+    server_name {{ coinops_domain }} _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Health check endpoint — used by Kubernetes readinessProbe
+    location = /health {
+        access_log off;
+        add_header Content-Type application/json;
+        return 200 '{"status":"ok"}';
+    }
+
+    # Routes /api/ requests to proxy service.
+    # proxy_pass strips /api/ prefix — proxy receives request at /
+    # Kubernetes DNS: proxy.coinops-app.svc.cluster.local
+    location /api/ {
+        proxy_pass http://proxy.{{ coinops_ns_app }}.svc.cluster.local:{{ coinops_proxy_port }}/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    }
+
+    # Routes /history-api/ requests to history-api service.
+    # history-api Service in coinops-app namespace — same namespace as proxy.
+    location /history-api/ {
+        proxy_pass http://history-api.{{ coinops_ns_app }}.svc.cluster.local:{{ coinops_history_port }}/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    }
+
+    # React SPA routing — try file, then directory, then fall back to index.html
+    # This allows React Router to handle client-side navigation
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    gzip on;
+    gzip_types text/html text/css application/javascript application/json;
+}

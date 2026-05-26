@@ -1,0 +1,36 @@
+---
+# ── k3s_coinops role defaults ──────────────────────────────────────────────
+# All variables for deploying CoinOps application stack into k3s.
+# Sensitive values (passwords, tokens) come from environment via lookup('env')
+# and are defined in ansible/group_vars/all/main.yml — not here.
+
+# Namespace names — one per logical layer (separate namespaces)
+coinops_ns_queue:    "coinops-queue"     # rabbitmq + redis
+coinops_ns_app:      "coinops-app"       # proxy, history-api, history-consumer
+coinops_ns_frontend: "coinops-frontend"  # ui + ingress
+
+# Application domain — used in Ingress rule
+# Points to k3s public IP: 34.158.238.181
+coinops_domain: "coinops-softserve-penina.pp.ua"
+
+# Image registry — same pattern as group_vars/all/main.yml
+coinops_image_registry: "ghcr.io/ua-academy-projects"
+coinops_image_tag: "{{ lookup('env', 'IMAGE_TAG') | default('shabat-latest', true) }}"
+
+# Full image references for each service
+coinops_proxy_image:            "{{ coinops_image_registry }}/coin-ops-proxy:{{ coinops_image_tag }}"
+coinops_history_api_image:      "{{ coinops_image_registry }}/coin-ops-history-api:{{ coinops_image_tag }}"
+coinops_history_consumer_image: "{{ coinops_image_registry }}/coin-ops-history-consumer:{{ coinops_image_tag }}"
+coinops_ui_image:               "{{ coinops_image_registry }}/coin-ops-ui:{{ coinops_image_tag }}"
+
+# Service ports — matches docker-compose and group_vars
+coinops_proxy_port:   "8080"
+coinops_history_port: "8000"
+
+# RabbitMQ settings — external runtime mode
+coinops_rabbitmq_user: "cognitor"
+coinops_redis_port:    "6379"
+coinops_rabbitmq_port: "5672"
+
+# Terraform working directory — used to read CloudSQL IP output
+coinops_terraform_dir: "/home/{{ ansible_user }}/coin-ops/terraform"

@@ -1,0 +1,297 @@
+---
+# ── app.yml ────────────────────────────────────────────────────────────────
+# Deploys backend application layer into coinops-app namespace.
+#
+# Execution order inside Kubernetes:
+#   1. schema-init Job    → creates tables in CloudSQL (runs once)
+#   2. history-api        → Python REST API for market history data
+#   3. history-consumer   → Python worker consuming RabbitMQ messages
+#   4. proxy              → Go service, central API hub
+#
+# All pods use initContainers to wait for dependencies before starting.
+# All pods pull from GHCR private registry using ghcr-pull-secret.
+
+# ── Schema Init Job ───────────────────────────────────────────────────────
+# Job = runs a container once to completion.
+# Applies history/schema.sql to CloudSQL to create all tables.
+# Other services must not start until this completes.
+
+- name: Copy schema.sql to k3s-server-1 for schema init Job
+  copy:
+    # src = local path on the machine running ansible (jump-host)
+    src: "{{ playbook_dir }}/../history/schema.sql"
+    dest: /tmp/coinops-schema.sql
+    mode: '0644'
+
+- name: Create schema ConfigMap
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      # ConfigMap = stores non-sensitive files/data inside Kubernetes
+      # We store schema.sql content here so the Job pod can access it
+      kind: ConfigMap
+      metadata:
+        name: coinops-schema
+        namespace: "{{ coinops_ns_app }}"
+      data:
+        # schema.sql becomes a key in the ConfigMap
+        # lookup('file') reads the file content from the control node
+        schema.sql: "{{ lookup('file', playbook_dir + '/../history/schema.sql') }}"
+
+- name: Run schema init Job
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: batch/v1
+      # Job = runs pod once to completion, tracks success/failure
+      kind: Job
+      metadata:
+        name: coinops-schema-init
+        namespace: "{{ coinops_ns_app }}"
+      spec:
+        # backoffLimit = how many times to retry if Job fails
+        backoffLimit: 3
+        template:
+          spec:
+            imagePullSecrets:
+              - name: ghcr-pull-secret
+            # restartPolicy must be Never or OnFailure for Jobs
+            # Never = if pod fails, create a new pod (don't restart same one)
+            restartPolicy: Never
+            containers:
+              - name: schema-init
+                # postgres:16-alpine = has psql CLI tool built in
+                image: postgres:16-alpine
+                command:
+                  - sh
+                  - -c
+                  # Wait for CloudSQL to accept connections, then apply schema
+                  # ON_ERROR_STOP=1 = fail immediately if any SQL statement fails
+                  - |
+                    until pg_isready -h {{ cloudsql_ip }} -U {{ db_user }} -d {{ db_name }}; do
+                      echo "Waiting for CloudSQL..."; sleep 3;
+                    done
+                    psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f /schema/schema.sql
+                    echo "Schema applied successfully"
+                env:
+                  - name: DATABASE_URL
+                    valueFrom:
+                      secretKeyRef:
+                        name: coinops-app-secret
+                        key: DATABASE_URL
+                  - name: PGPASSWORD
+                    valueFrom:
+                      secretKeyRef:
+                        name: coinops-app-secret
+                        key: POSTGRES_PASSWORD
+                volumeMounts:
+                  # Mount the ConfigMap as a directory
+                  # schema.sql key becomes /schema/schema.sql file inside pod
+                  - name: schema-volume
+                    mountPath: /schema
+            volumes:
+              # Connect the volume to the ConfigMap
+              - name: schema-volume
+                configMap:
+                  name: coinops-schema
+
+# ── Wait for schema Job to complete ──────────────────────────────────────
+# Ansible waits here until Job status is Complete before continuing.
+# This ensures history-api and proxy never start with empty database.
+
+- name: Wait for schema-init Job to complete
+  kubernetes.core.k8s_info:
+    kind: Job
+    namespace: "{{ coinops_ns_app }}"
+    name: coinops-schema-init
+    wait: true
+    wait_condition:
+      type: Complete
+      status: "True"
+    wait_timeout: 120
+
+# ── History API ───────────────────────────────────────────────────────────
+# Python REST API — serves market history data to the UI via proxy.
+# Reads from CloudSQL. Exposes /health endpoint for readiness checks.
+
+- name: Deploy history-api
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: history-api
+        namespace: "{{ coinops_ns_app }}"
+        labels:
+          app: history-api
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: history-api
+        template:
+          metadata:
+            labels:
+              app: history-api
+          spec:
+            imagePullSecrets:
+              - name: ghcr-pull-secret
+            containers:
+              - name: history-api
+                image: "{{ coinops_history_api_image }}"
+                ports:
+                  - containerPort: 8000
+                # envFrom = inject all keys from Secret as env vars
+                envFrom:
+                  - secretRef:
+                      name: coinops-app-secret
+                env:
+                  # PORT explicitly set — overrides PORT_HISTORY from secret
+                  - name: PORT
+                    value: "{{ coinops_history_port }}"
+                readinessProbe:
+                  httpGet:
+                    path: /health
+                    port: 8000
+                  initialDelaySeconds: 10
+                  periodSeconds: 10
+                  failureThreshold: 5
+
+- name: Create history-api Service
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: history-api
+        namespace: "{{ coinops_ns_app }}"
+      spec:
+        selector:
+          app: history-api
+        ports:
+          - port: 8000
+            targetPort: 8000
+
+# ── History Consumer ──────────────────────────────────────────────────────
+# Python background worker — reads events from RabbitMQ, writes to CloudSQL.
+# No HTTP port — it only consumes messages, never serves requests.
+
+- name: Deploy history-consumer
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: history-consumer
+        namespace: "{{ coinops_ns_app }}"
+        labels:
+          app: history-consumer
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: history-consumer
+        template:
+          metadata:
+            labels:
+              app: history-consumer
+          spec:
+            imagePullSecrets:
+              - name: ghcr-pull-secret
+            containers:
+              - name: history-consumer
+                image: "{{ coinops_history_consumer_image }}"
+                # No ports — consumer only reads from RabbitMQ, never receives requests
+                envFrom:
+                  - secretRef:
+                      name: coinops-app-secret
+
+# ── Proxy ─────────────────────────────────────────────────────────────────
+# Go service — central hub. Fetches market data, publishes to RabbitMQ,
+# caches in Redis, serves API to UI. Depends on RabbitMQ and Redis being ready.
+
+- name: Deploy proxy
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: proxy
+        namespace: "{{ coinops_ns_app }}"
+        labels:
+          app: proxy
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: proxy
+        template:
+          metadata:
+            labels:
+              app: proxy
+          spec:
+            imagePullSecrets:
+              - name: ghcr-pull-secret
+            # initContainers run before main container starts.
+            # Proxy must wait for RabbitMQ and Redis to be ready.
+            # These replace depends_on from docker-compose.
+            initContainers:
+              - name: wait-for-rabbitmq
+                image: busybox:1.36
+                # nc (netcat) = checks if a TCP port is open
+                # Loops until rabbitmq port 5672 accepts connections
+                command:
+                  - sh
+                  - -c
+                  - |
+                    until nc -z rabbitmq.{{ coinops_ns_queue }}.svc.cluster.local 5672; do
+                      echo "Waiting for RabbitMQ..."; sleep 3;
+                    done
+              - name: wait-for-redis
+                image: busybox:1.36
+                command:
+                  - sh
+                  - -c
+                  - |
+                    until nc -z redis.{{ coinops_ns_queue }}.svc.cluster.local 6379; do
+                      echo "Waiting for Redis..."; sleep 3;
+                    done
+            containers:
+              - name: proxy
+                image: "{{ coinops_proxy_image }}"
+                ports:
+                  - containerPort: 8080
+                envFrom:
+                  - secretRef:
+                      name: coinops-app-secret
+                env:
+                  - name: PORT
+                    value: "{{ coinops_proxy_port }}"
+                readinessProbe:
+                  httpGet:
+                    path: /health
+                    port: 8080
+                  initialDelaySeconds: 10
+                  periodSeconds: 10
+                  failureThreshold: 5
+
+- name: Create proxy Service
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: proxy
+        namespace: "{{ coinops_ns_app }}"
+      spec:
+        selector:
+          app: proxy
+        ports:
+          - port: 8080
+            targetPort: 8080

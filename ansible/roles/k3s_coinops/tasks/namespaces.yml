@@ -1,0 +1,28 @@
+---
+# ── namespaces.yml ─────────────────────────────────────────────────────────
+# Creates 3 namespaces — one per application layer.
+# Namespace = isolation boundary in Kubernetes.
+# Secrets, Services, Pods in one namespace are invisible to other namespaces.
+#
+# coinops-queue    → rabbitmq + redis (messaging infrastructure)
+# coinops-app      → proxy, history-api, history-consumer (business logic)
+# coinops-frontend → ui + ingress (presentation layer)
+
+- name: Create coinops namespaces
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ item }}"
+        labels:
+          # Label identifies these namespaces as part of coinops application.
+          # Labels are key-value tags — used for filtering, network policies, etc.
+          app.kubernetes.io/part-of: coinops
+  # loop runs this task once per item in the list
+  # item = current namespace name in each iteration
+  loop:
+    - "{{ coinops_ns_queue }}"
+    - "{{ coinops_ns_app }}"
+    - "{{ coinops_ns_frontend }}"

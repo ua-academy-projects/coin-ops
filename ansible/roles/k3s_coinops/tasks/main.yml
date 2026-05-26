@@ -1,0 +1,45 @@
+---
+# ── k3s_coinops: main orchestrator ────────────────────────────────────────
+# Deploys full CoinOps stack into k3s cluster.
+# Execution order matters — each layer depends on the previous one.
+# Uses separate namespaces per concern.
+#
+# Order:
+#   1. namespaces  — create isolation boundaries first
+#   2. secrets     — credentials must exist before any pod starts
+#   3. queue       — rabbitmq + redis before app services
+#   4. app         — backend services + schema init Job
+#   5. frontend    — ui last, depends on app layer being ready
+
+# Step 1: Read CloudSQL private IP from Terraform output.
+# We run this on localhost (the jump-host) where terraform state lives.
+# register = store the result in a variable named 'cloudsql_result'
+- name: Get CloudSQL private IP from Terraform output
+  command: terraform -chdir={{ coinops_terraform_dir }} output -raw gcp_db_endpoint
+  register: cloudsql_result
+  changed_when: false
+  delegate_to: localhost
+  become: false
+
+# Step 2: Store IP as a clean fact for use in all subsequent tasks.
+# cloudsql_result.stdout = the actual IP string e.g. "10.100.0.3"
+- name: Set CloudSQL IP fact
+  set_fact:
+    cloudsql_ip: "{{ cloudsql_result.stdout | trim }}"
+
+# Step 3: Call sub-task files in correct order.
+# include_tasks = run another task file as if its contents were pasted here.
+- name: Create namespaces
+  include_tasks: namespaces.yml
+
+- name: Create secrets
+  include_tasks: secrets.yml
+
+- name: Deploy queue layer (rabbitmq + redis)
+  include_tasks: queue.yml
+
+- name: Deploy app layer (schema init + history + proxy)
+  include_tasks: app.yml
+
+- name: Deploy frontend layer (ui + ingress)
+  include_tasks: frontend.yml

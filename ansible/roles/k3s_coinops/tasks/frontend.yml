@@ -1,0 +1,142 @@
+---
+# ── frontend.yml ───────────────────────────────────────────────────────────
+# Deploys presentation layer into coinops-frontend namespace.
+#
+# Components:
+#   - ConfigMap: nginx config rendered from template (uses k8s DNS names)
+#   - Deployment: UI pod (nginx serving React SPA)
+#   - Service: ClusterIP for UI pod (stable internal name)
+#   - Ingress: public entry point via Traefik + TLS from cert-manager
+#
+# Traffic flow:
+#   Internet → Traefik → Ingress → UI Service → UI Pod (nginx)
+#   UI Pod nginx → /api/         → proxy.coinops-app (internal)
+#   UI Pod nginx → /history-api/ → history-api.coinops-app (internal)
+
+# ── nginx ConfigMap ───────────────────────────────────────────────────────
+# Stores rendered nginx config inside Kubernetes.
+# lookup('template') renders the Jinja2 template — replaces all {{ }} vars.
+# Mounted into UI pod at /etc/nginx/conf.d/default.conf.
+
+- name: Create nginx ConfigMap for UI
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: coinops-nginx-config
+        namespace: "{{ coinops_ns_frontend }}"
+      data:
+        # lookup('template') renders nginx.k8s.conf.j2 with all variables
+        # Result is stored as 'default.conf' key in this ConfigMap
+        default.conf: "{{ lookup('template', role_path + '/templates/nginx.k8s.conf.j2') }}"
+
+# ── UI Deployment ─────────────────────────────────────────────────────────
+
+- name: Deploy UI
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: ui
+        namespace: "{{ coinops_ns_frontend }}"
+        labels:
+          app: ui
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: ui
+        template:
+          metadata:
+            labels:
+              app: ui
+          spec:
+            imagePullSecrets:
+              - name: ghcr-pull-secret
+            containers:
+              - name: ui
+                image: "{{ coinops_ui_image }}"
+                ports:
+                  - containerPort: 80
+                volumeMounts:
+                  # Mount ConfigMap key 'default.conf' at nginx config path.
+                  # nginx reads this file on startup — gets our k8s DNS config.
+                  - name: nginx-config
+                    mountPath: /etc/nginx/conf.d/default.conf
+                    # subPath = mount only this specific key, not whole ConfigMap
+                    # Without subPath, the entire directory gets replaced
+                    subPath: default.conf
+                readinessProbe:
+                  httpGet:
+                    path: /health
+                    port: 80
+                  initialDelaySeconds: 5
+                  periodSeconds: 10
+                  failureThreshold: 3
+            volumes:
+              # Connect volume to ConfigMap
+              # name must match volumeMounts.name above
+              - name: nginx-config
+                configMap:
+                  name: coinops-nginx-config
+
+# ── UI Service ────────────────────────────────────────────────────────────
+# ClusterIP Service — gives stable internal DNS name to UI pod.
+# Traefik Ingress forwards to this Service, not directly to pod.
+
+- name: Create UI Service
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: ui
+        namespace: "{{ coinops_ns_frontend }}"
+      spec:
+        selector:
+          app: ui
+        ports:
+          - port: 80
+            targetPort: 80
+
+# ── Ingress ───────────────────────────────────────────────────────────────
+# Public entry point for the application.
+# Traefik reads this rule: requests for coinops domain → forward to UI Service.
+# cert-manager annotation triggers automatic TLS certificate from Let's Encrypt.
+
+- name: Create Ingress for UI
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: coinops-ui
+        namespace: "{{ coinops_ns_frontend }}"
+        annotations:
+          # Tells cert-manager: request TLS certificate for this domain
+          # Uses the ClusterIssuer we created in cert_manager role
+          cert-manager.io/cluster-issuer: letsencrypt-prod
+      spec:
+        ingressClassName: traefik
+        rules:
+          - host: "{{ coinops_domain }}"
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: ui
+                      port:
+                        number: 80
+        tls:
+          - hosts:
+              - "{{ coinops_domain }}"
+            # secretName = where cert-manager stores the TLS certificate
+            secretName: coinops-ui-tls

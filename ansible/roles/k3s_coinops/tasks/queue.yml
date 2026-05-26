@@ -1,0 +1,143 @@
+---
+# ── queue.yml ──────────────────────────────────────────────────────────────
+# Deploys messaging infrastructure into coinops-queue namespace.
+# RabbitMQ = message broker (proxy publishes, history-consumer reads)
+# Redis    = session cache (proxy reads/writes fast temporary data)
+#
+# Both get:
+#   - Deployment: keeps container running, restarts on crash
+#   - ClusterIP Service: stable DNS name for cross-namespace communication
+#
+# Other namespaces reach these via full DNS:
+#   rabbitmq.coinops-queue.svc.cluster.local:5672
+#   redis.coinops-queue.svc.cluster.local:6379
+
+# ── RabbitMQ ──────────────────────────────────────────────────────────────
+
+- name: Deploy RabbitMQ
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: apps/v1
+      # Deployment = manages pod lifecycle, ensures N replicas always running
+      kind: Deployment
+      metadata:
+        name: rabbitmq
+        namespace: "{{ coinops_ns_queue }}"
+        labels:
+          app: rabbitmq
+      spec:
+        # replicas: 1 = run exactly one pod
+        replicas: 1
+        # selector tells Deployment which pods it manages
+        # must match template.metadata.labels below
+        selector:
+          matchLabels:
+            app: rabbitmq
+        template:
+          metadata:
+            labels:
+              app: rabbitmq
+          spec:
+            # imagePullSecrets = which Secret to use for GHCR authentication
+            # References the Secret we created in secrets.yml
+            imagePullSecrets:
+              - name: ghcr-pull-secret
+            containers:
+              - name: rabbitmq
+                # rabbitmq:3-alpine = same image as docker-compose
+                image: rabbitmq:3-alpine
+                ports:
+                  - containerPort: 5672   # AMQP protocol port
+                # envFrom = inject ALL keys from Secret as environment variables
+                # RABBITMQ_DEFAULT_USER and RABBITMQ_DEFAULT_PASS come from here
+                envFrom:
+                  - secretRef:
+                      name: coinops-queue-secret
+                # readinessProbe = Kubernetes checks if container is ready
+                # Pod won't receive traffic until this passes
+                # Same logic as healthcheck in docker-compose
+                readinessProbe:
+                  exec:
+                    command: ["rabbitmq-diagnostics", "-q", "ping"]
+                  initialDelaySeconds: 20
+                  periodSeconds: 10
+                  failureThreshold: 5
+
+# ── RabbitMQ Service ──────────────────────────────────────────────────────
+
+- name: Create RabbitMQ Service
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      # Service = stable network endpoint for a set of pods
+      # ClusterIP = internal only, not reachable from outside cluster
+      kind: Service
+      metadata:
+        name: rabbitmq
+        namespace: "{{ coinops_ns_queue }}"
+      spec:
+        # selector matches pods with label app: rabbitmq
+        # Service forwards traffic to those pods
+        selector:
+          app: rabbitmq
+        ports:
+          - port: 5672        # port the Service listens on
+            targetPort: 5672  # port on the pod to forward to
+
+# ── Redis ─────────────────────────────────────────────────────────────────
+
+- name: Deploy Redis
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: redis
+        namespace: "{{ coinops_ns_queue }}"
+        labels:
+          app: redis
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: redis
+        template:
+          metadata:
+            labels:
+              app: redis
+          spec:
+            imagePullSecrets:
+              - name: ghcr-pull-secret
+            containers:
+              - name: redis
+                # redis:7-alpine = same image as docker-compose
+                image: redis:7-alpine
+                ports:
+                  - containerPort: 6379
+                readinessProbe:
+                  exec:
+                    command: ["redis-cli", "ping"]
+                  initialDelaySeconds: 5
+                  periodSeconds: 10
+                  failureThreshold: 3
+
+# ── Redis Service ─────────────────────────────────────────────────────────
+
+- name: Create Redis Service
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: redis
+        namespace: "{{ coinops_ns_queue }}"
+      spec:
+        selector:
+          app: redis
+        ports:
+          - port: 6379
+            targetPort: 6379

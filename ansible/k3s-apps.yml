@@ -1,6 +1,12 @@
 ---
-# Installs all apps on k3s cluster: cert-manager, Headlamp, Homepage.
+# Installs all apps on k3s cluster: cert-manager, Headlamp, Homepage, CoinOps.
 # Run after k3s-cluster.yml — requires working cluster.
+#
+# Play execution order matters:
+#   1. cert-manager   — TLS infrastructure (must exist before any Ingress with TLS)
+#   2. k3s_headlamp   — admin UI (no public Ingress — port-forward only)
+#   3. k3s_homepage   — dashboard at k3s.coinops-softserve-penina.pp.ua
+#   4. k3s_coinops    — full application stack (needs cert-manager ClusterIssuer)
 
 - name: Install cert-manager
   hosts: k3s_bootstrap
@@ -25,3 +31,13 @@
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   roles:
     - k3s_homepage
+
+- name: Deploy CoinOps application stack
+  hosts: k3s_bootstrap
+  become: yes
+  environment:
+    # KUBECONFIG tells kubectl/helm/kubernetes modules where the cluster config is
+    # k3s stores it at this path on the server node
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  roles:
+    - k3s_coinops

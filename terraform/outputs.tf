@@ -49,8 +49,10 @@ output "gcp_lb_ip" {
   value = local.cloud == "gcp" ? module.gcp_lb.lb_ip : null
 }
 
+# Returns CloudSQL private IP after terraform apply.
+# Ansible reads this value to build DATABASE_URL for Kubernetes Secrets.
 output "gcp_db_endpoint" {
-  value = local.cloud == "gcp" ? module.gcp_sql.db_endpoint : null
+  value = contains(["gcp", "hybrid"], local.cloud) ? module.gcp_sql.db_endpoint : null
 }
 
 output "azure_lb_ip" {
