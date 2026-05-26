@@ -1,317 +1,116 @@
-# Coin-Ops
+# CoinOps
 
-Coin-Ops is a distributed Polymarket dashboard deployed across three VMs. The default deployed path on `dev` is still a containerized React + Go + Python system that uses RabbitMQ for asynchronous ingestion and Redis for short-lived UI session state.
+CoinOps is a Polymarket intelligence dashboard deployed on a self-managed k3s
+cluster in GCP.
 
-At the same time, the roadmap from the April 20-21, 2026 GitHub issues has already started landing on `dev`:
+The repository contains the application code, Kubernetes automation, tests, and
+current documentation.
 
-- `dev` is the integration branch for team PRs
-- PR validation now runs on pull requests into `dev`
-- pushes to `dev` now publish `dev-latest` images
-- queue-side PostgreSQL runtime assets are present under `runtime/`
-- the full proxy/consumer/deploy cutover behind `RUNTIME_BACKEND=external|postgres` is still pending
-- RabbitMQ and Redis are still part of the default deployment until that cutover is verified
-
-**[Read the Documentation](docs/)** | **[How to Contribute](CONTRIBUTING.md)**
-
-## Status Snapshot
-
-| Topic | Current repo state on `dev` | Next planned step |
-| --- | --- | --- |
-| Runtime backend | Default deployed path is `external`: RabbitMQ queue + Redis session state | Add service/deploy switching so proxy and consumer can run in `postgres` mode |
-| Runtime queue assets | `runtime/` already contains `pgmq` queue SQL, DLQ, `LISTEN/NOTIFY`, advisory locks, and `runtime_consumer.py` | Wire proxy and deployment to use those assets |
-| Frontend contract | same-origin `/api` and `/history-api` | keep the same HTTP contract while backend internals change |
-| Deployment shape | Docker Compose on three VMs via Ansible | keep the three-VM story during the migration |
-| Image publishing | `Shabat` -> `shabat-latest`, `dev` -> `dev-latest`, tags -> `vX.Y.Z` | use moving branch tags for integration/demo deploys and tags for pinned releases |
-| Validation | PR checks run on pull requests into `dev` | extend the test pyramid beyond the current baseline over time |
-
-## Current Architecture (`external` runtime path)
-
-```text
-Browser
-  |
-  v
-node-03
-  ui container (nginx + React SPA)
-  |
-  +-- /api -----------> node-02 proxy container :8080
-  |                       - fetches Polymarket markets
-  |                       - fetches whale leaderboard/positions
-  |                       - fetches BTC/ETH and USD/UAH
-  |                       - stores session JSON in Redis
-  |                       - publishes market/price events to RabbitMQ
-  |
-  +-- /history-api ---> node-01 history-api container :8000
-                          - reads PostgreSQL history tables
-
-node-01
-  postgres container
-  rabbitmq container
-  history-consumer container
-    - consumes `market_events`
-    - writes `market_snapshots` and `price_snapshots`
-
-node-02
-  redis container
-```
-
-| VM | IP | Runtime services |
-| --- | --- | --- |
-| node-01 | `172.31.1.10` | PostgreSQL, RabbitMQ, history consumer, history API |
-| node-02 | `172.31.1.11` | Go proxy, Redis |
-| node-03 | `172.31.1.12` | nginx gateway, React SPA |
-
-## Current Data Flow
-
-| Path | Flow | Purpose |
-| --- | --- | --- |
-| Live path | Browser -> `/api` -> Go proxy -> external APIs -> Browser | fast live market data |
-| Write path | Go proxy -> RabbitMQ -> Python consumer -> PostgreSQL | async persistence |
-| History path | Browser -> `/history-api` -> FastAPI -> PostgreSQL -> Browser | chart time series |
-| Session path | Browser -> `/api/state` -> Redis | short-lived UI state |
-
-The browser does not call `172.31.1.10:8000` or `172.31.1.11:8080` directly. Node-03 keeps the frontend same-origin by reverse-proxying `/api` and `/history-api`.
-
-## Roadmap Status
-
-### Already adopted on `dev`
-
-- `dev` is the intended integration branch
-- PR checks exist in `.github/workflows/pr-checks.yml`
-- GHCR publishing for `dev-latest` exists in `.github/workflows/docker-images.yml`
-- PostgreSQL queue-side runtime SQL and `runtime_consumer.py` exist under `runtime/`
-
-### Still in progress
-
-- adding `RUNTIME_BACKEND=external|postgres` wiring to proxy and consumer startup paths
-- switching proxy event publishing from RabbitMQ to `runtime.enqueue_event(...)`
-- switching deployed consumption from `history/consumer.py` to `runtime/runtime_consumer.py`
-- wiring runtime schema/bootstrap into Ansible and Compose
-- moving Redis-backed session/cache behavior into PostgreSQL runtime primitives
-- removing RabbitMQ and Redis only after the PostgreSQL runtime path is verified
-
-## Tech Stack
-
-| Layer | Tech |
-| --- | --- |
-| Frontend | React, Vite, TypeScript, Tailwind, Recharts |
-| Live gateway | Go |
-| History API and current consumer | Python, FastAPI, pika |
-| Queue | RabbitMQ for the default deployed path; `pgmq` queue assets merged under `runtime/` |
-| Database | PostgreSQL |
-| Session/runtime state | Redis today, PostgreSQL runtime consolidation planned |
-| Containers | Docker, Docker Compose |
-| Infrastructure | Terraform for VM provisioning, Ansible for deployment |
-| Web server | nginx |
-
-## Repository Layout
-
-```text
-.
-|-- ansible/          # provisioning and deployment automation
-|-- deploy/compose/   # per-node Docker Compose stacks
-|-- docs/             # architecture, deployment, and runbook notes
-|-- history/          # FastAPI history API, RabbitMQ consumer, schema
-|-- proxy/            # Go live-data proxy
-|-- runtime/          # PostgreSQL runtime queue SQL and pgmq-backed consumer assets
-|-- terraform/        # VM and network provisioning
-|-- ui/               # legacy static UI
-`-- ui-react/         # main React/Vite frontend
-```
-
-## Container Images
-
-Each application service has its own Dockerfile.
-
-| Image | Dockerfile | Runtime shape |
-| --- | --- | --- |
-| Go proxy | `proxy/Dockerfile` | multi-stage build, `golang:1.22-alpine` builder, `scratch` runtime |
-| History API | `history/Dockerfile.api` | `python:3.12-slim-bookworm` |
-| History consumer | `history/Dockerfile.consumer` | `python:3.12-slim-bookworm` |
-| UI | `ui-react/Dockerfile` | `node:22-bookworm-slim` builder, `nginx:alpine` runtime |
-
-Official images are still used for PostgreSQL, RabbitMQ, and Redis. The queue-side PostgreSQL runtime SQL assumes `pgmq` is available in PostgreSQL, but the default deployment has not been switched over to that path yet.
-
-## Deployment Model
-
-Application images are built by GitHub Actions and pushed to GitHub Container Registry.
-
-```text
-push to Shabat
-  -> publish shabat-latest
-
-push to dev
-  -> publish dev-latest
-
-push tag vX.Y.Z
-  -> publish immutable release images
-
-Ansible deploy
-  -> renders per-node Compose files and env files
-  -> Docker Compose pulls tagged images
-  -> containers start on node-01, node-02, and node-03
-```
-
-## Branches and Release Tags
-
-Current branch and publishing model:
-
-- `feature/*` -> PR -> `dev`
-- `dev` is the integration branch
-- `main` remains stable/release-oriented
-- `Shabat` publishes moving `shabat-latest`
-- `dev` publishes moving `dev-latest`
-- `vX.Y.Z` publishes immutable release tags
-
-Release tags are automated from Conventional Commit style squash merge titles on `main`. See [Release Automation](docs/release-automation.md) for the version bump rules and maintainer workflow.
-
-## Public Gateway and TLS
-
-Node-03 is the browser-facing gateway. It serves the React UI and reverse-proxies the backend paths:
-
-```text
-https://coinops.test/              -> React UI
-https://coinops.test/api/*         -> node-02 proxy
-https://coinops.test/history-api/* -> node-01 history API
-```
-
-For local lab HTTPS, keep `APP_DOMAIN=coinops.test`, `TLS_MODE=selfsigned`, and add this hosts entry on the machine running the browser:
-
-```text
-172.31.1.12 coinops.test
-```
-
-## Secrets and Runtime Configuration
-
-Secrets are not baked into images. In the GCP deployment, Terraform creates GCP
-Secret Manager secret containers and Ansible reads grouped secret values from
-Secret Manager at deploy time. Secrets are passed to Docker Compose through the
-Ansible process environment and are not written to `/etc/cognitor/*.env` files.
-
-Current runtime env highlights:
-
-- proxy: `DATABASE_URL`, `RABBITMQ_URL`, `REDIS_URL`, `PORT`
-- history: `DATABASE_URL`, `RABBITMQ_URL`, `PORT`
-- ui: `PROXY_URL=/api`, `HISTORY_URL=/history-api`
-
-The GCP runtime uses Cloud SQL PostgreSQL over private IP. RabbitMQ and Redis
-remain containerized on the private application VMs.
-
-## Deployment Commands
-
-Prepare environment variables first:
-
-```bash
-cp .env.example .env
-source .env
-```
-
-For the local root `docker compose` flow, use a plain Compose `.env` file and the root `Makefile` convenience targets:
-
-```bash
-cp .env.compose.example .env
-make local-up
-```
-
-Equivalent direct Compose command:
-
-```bash
-docker compose up --build
-```
-
-This local flow is a developer convenience stack for the default root Compose setup. It does not replace the VM-based Terraform + Ansible deployment flow.
-
-Install pinned Ansible collections:
-
-```bash
-ansible-galaxy collection install -r ansible/requirements.yml
-```
-
-Provision infrastructure:
-
-```bash
-terraform -chdir=terraform apply
-```
-
-Install host dependencies and Docker:
-
-```bash
-ansible-playbook -i ansible/inventory ansible/provision.yml
-```
-
-Deploy application containers:
-
-```bash
-ansible-playbook -i ansible/inventory ansible/deploy.yml
-```
-
-GCP deployment uses the shared GCP infrastructure project and a dedicated
-inventory. Secrets are loaded from GCP Secret Manager, so no `.env` file is
-required:
-
-```bash
-ansible-playbook -i ansible/inventory.gcp ansible/provision.yml
-ansible-playbook -i ansible/inventory.gcp ansible/deploy.yml
-```
-
-See [docs/gcp-deployment.md](docs/gcp-deployment.md) for the GCP node mapping,
-verification commands, and domain/HTTPS plan.
-
-### GCP k3s cluster lab
-
-The repository also contains an Ansible extension for the Kubernetes learning
-lab. The VM infrastructure is created by the separate `gcp-terraform-bootstrap`
-repository, while this repository owns the Ansible automation that installs and
-verifies k3s.
-
-Current lab shape:
-
-```text
-local kubectl
-  -> k3s-jump public IP :6443
-  -> HAProxy on k3s-jump
-  -> k3s-node-1/2/3 private IP :6443
-```
-
-The three k3s nodes are private GCP VMs. All three run as k3s server nodes, so
-each node participates in the control plane, embedded etcd, and workload
-scheduling.
-
-```bash
-ansible-playbook -i ansible/inventory.k3s.gcp ansible/k3s-cluster.yml
-kubectl get nodes -o wide
-kubectl get pods -A
-kubectl -n kube-system port-forward service/headlamp 8080:80
-```
-
-Headlamp is installed in the cluster and can be opened locally at
-`http://localhost:8080` while the port-forward command is running. See
-[docs/k3s-cluster.md](docs/k3s-cluster.md) for the full runbook, verification
-commands, and beginner notes.
-
-### CoinOps on k3s
-
-The real CoinOps application is also deployed into the GCP k3s cluster. This is
-separate from the older three-VM Docker Compose deployment.
-
-Public endpoint:
+## Current Public Endpoint
 
 ```text
 https://coinops.kazachuk-k3s.pp.ua/
 ```
 
-Traffic path:
+## Current Architecture
 
 ```text
 Browser
-  -> Cloudflare DNS
-  -> GCP L4 Load Balancer
-  -> Traefik in k3s
-  -> Kubernetes Ingress
-  -> CoinOps Services
-  -> Pods
+  |
+  v
+Cloudflare DNS
+  coinops.kazachuk-k3s.pp.ua -> GCP Load Balancer IP
+  |
+  v
+GCP L4 Load Balancer
+  |
+  v
+k3s nodes
+  |
+  v
+Traefik Ingress
+  |
+  +-- /             -> coinops-ui
+  +-- /api          -> coinops-proxy
+  +-- /history-api  -> coinops-history-api
+
+coinops-proxy
+  +-- Redis
+  +-- RabbitMQ
+
+coinops-history-consumer
+  +-- RabbitMQ
+  +-- CNPG PostgreSQL
+
+coinops-history-api
+  +-- CNPG PostgreSQL
 ```
 
-Application playbook:
+## Repository Layout
+
+```text
+.
+|-- .github/       # CI workflows for tests and container image publishing
+|-- ansible/       # k3s cluster, platform, and CoinOps Kubernetes deployment
+|-- docs/          # current architecture and runbooks
+|-- history/       # FastAPI history API, RabbitMQ consumer, schema
+|-- proxy/         # Go live-data proxy
+|-- runtime/       # PostgreSQL runtime queue/session assets for future work
+|-- tests/         # Python unit and integration tests
+`-- ui-react/      # React/Vite frontend
+```
+
+## Main Runtime Components
+
+| Layer | Component |
+| --- | --- |
+| Frontend | React, Vite, nginx container |
+| Live gateway | Go proxy |
+| History API | Python, FastAPI |
+| Async ingestion | RabbitMQ and Python consumer |
+| Database | PostgreSQL managed by CloudNativePG |
+| Session state | Redis |
+| Ingress | k3s Traefik |
+| TLS | cert-manager with Cloudflare DNS-01 |
+| Secrets | GCP Secret Manager -> Kubernetes Secrets |
+| Deployment automation | Ansible Kubernetes modules and Helm modules |
+
+## Container Images
+
+GitHub Actions publishes service images to GHCR.
+
+| Service | Image |
+| --- | --- |
+| Proxy | `ghcr.io/ua-academy-projects/coin-ops-proxy:dev-latest` |
+| History API | `ghcr.io/ua-academy-projects/coin-ops-history-api:dev-latest` |
+| History consumer | `ghcr.io/ua-academy-projects/coin-ops-history-consumer:dev-latest` |
+| UI | `ghcr.io/ua-academy-projects/coin-ops-ui:dev-latest` |
+
+## k3s Cluster Automation
+
+The GCP VM infrastructure is created in the separate
+`gcp-terraform-bootstrap` repository. This repository owns the Ansible
+automation that configures k3s and deploys the application.
+
+Cluster playbook:
+
+```bash
+ANSIBLE_LOCAL_TEMP=/private/tmp/coin-ops-ansible-tmp \
+ANSIBLE_REMOTE_TEMP=/tmp/coin-ops-ansible-tmp \
+ANSIBLE_SSH_CONTROL_PATH_DIR=/private/tmp/coin-ops-ansible-cp \
+ansible-playbook -i ansible/inventory.k3s.gcp ansible/k3s-cluster.yml
+```
+
+Platform playbook:
+
+```bash
+ANSIBLE_LOCAL_TEMP=/private/tmp/coin-ops-ansible-tmp \
+ANSIBLE_REMOTE_TEMP=/tmp/coin-ops-ansible-tmp \
+ANSIBLE_SSH_CONTROL_PATH_DIR=/private/tmp/coin-ops-ansible-cp \
+ansible-playbook -i ansible/inventory.k3s.gcp ansible/k3s-platform.yml
+```
+
+CoinOps app playbook:
 
 ```bash
 ANSIBLE_LOCAL_TEMP=/private/tmp/coin-ops-ansible-tmp \
@@ -320,60 +119,38 @@ ANSIBLE_SSH_CONTROL_PATH_DIR=/private/tmp/coin-ops-ansible-cp \
 ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml
 ```
 
-Useful targeted runs:
+Targeted app runs:
 
 ```bash
+ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags cnpg
 ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags data
 ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags backend
 ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags frontend
 ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags ingress
 ```
 
-The k3s app deployment uses:
-
-- CNPG for PostgreSQL inside Kubernetes
-- Bitnami Helm charts for RabbitMQ and Redis
-- Kubernetes Deployments and Services for CoinOps app containers
-- Traefik Ingress for public routing
-- cert-manager with Cloudflare DNS-01 for HTTPS certificates
-- GCP Secret Manager as the source of sensitive values
-
-See [docs/coinops-k3s-deployment.md](docs/coinops-k3s-deployment.md) for the
-full architecture, role map, verification commands, and review notes.
-
-Current moving-tag deploys:
+## Useful Kubernetes Checks
 
 ```bash
-IMAGE_TAG=shabat-latest ansible-playbook -i ansible/inventory ansible/deploy.yml
-IMAGE_TAG=dev-latest ansible-playbook -i ansible/inventory ansible/deploy.yml
+kubectl get nodes -o wide
+kubectl -n cnpg-system get pods
+kubectl -n coinops-data get pods
+kubectl -n coinops-backend get pods
+kubectl -n coinops-frontend get pods
+kubectl -n coinops-frontend get certificate
+kubectl -n coinops-backend get ingress
 ```
 
-Pinned release deploy:
+External checks:
 
 ```bash
-IMAGE_TAG=v0.1.0 ansible-playbook -i ansible/inventory ansible/deploy.yml
+dig @1.1.1.1 coinops.kazachuk-k3s.pp.ua +short
+curl -I https://coinops.kazachuk-k3s.pp.ua/
+curl -I https://coinops.kazachuk-k3s.pp.ua/api/health
+curl -I https://coinops.kazachuk-k3s.pp.ua/history-api/health
 ```
 
 ## Local Development
-
-Quick local Compose workflow:
-
-```bash
-cp .env.compose.example .env
-make local-up
-```
-
-Open the app at `http://localhost:5000`.
-
-Useful local commands:
-
-```bash
-make local-logs
-make local-ps
-make local-down
-make local-restart
-make local-config
-```
 
 Frontend:
 
@@ -391,6 +168,7 @@ Go proxy:
 cd proxy
 make run
 make build
+go test ./...
 ```
 
 Python history services:
@@ -399,58 +177,36 @@ Python history services:
 cd history
 python -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements-dev.txt
 python main.py
 python consumer.py
 ```
 
-Queue-side PostgreSQL runtime assets:
+Python tests:
 
 ```bash
-psql "$DATABASE_URL" -f runtime/00_run_all.sql
-python runtime/runtime_consumer.py
-```
-
-Fast Python unit tests for both the current `external` path and the PostgreSQL runtime target:
-
-```bash
-cd <repo-root>
-python -m venv venv
-source venv/bin/activate
-pip install -r history/requirements-dev.txt
-python -m pytest tests/python/unit
-```
-
-If you are already in `history/`, either `cd ..` first or run `python -m pytest ../tests/python/unit`.
-
-The fast `pytest` suite lives under `tests/python/unit`. Keep PostgreSQL-backed integration coverage separate from these unit tests.
-
-PostgreSQL-backed integration tests for `history/main.py` and the queue-side PostgreSQL consumer in `runtime/runtime_consumer.py` (requires Docker):
-
-```bash
-cd <repo-root>
-python -m venv venv
-source venv/bin/activate
-pip install -r history/requirements-dev.txt
+python -m pytest tests/python/unit -v
 python -m pytest tests/python/integration -v
 ```
 
-These integration tests boot an ephemeral runtime-ready PostgreSQL container (`quay.io/tembo/pg16-pgmq@sha256:7f80d046257d585d1af9d19cf28bd355a4b854b0a7d643c02ebbe6b84457868a` by default, override with `COINOPS_TEST_POSTGRES_IMAGE`), apply `history/schema.sql` plus `runtime/00_run_all.sql`, and validate real history read/write behavior through the actual PostgreSQL queue path.
+## Documentation
 
-They do not replace the broader runtime smoke tests in `runtime/tests/test_runtime.sql`; cache/session `pg_cron` coverage still lives there.
+- [Architecture](docs/architecture.md)
+- [k3s Cluster Runbook](docs/k3s-cluster.md)
+- [CoinOps on k3s Runbook](docs/coinops-k3s-deployment.md)
+- [Release Automation](docs/release-automation.md)
 
-## External Data Sources
+## Secrets
 
-| Source | Data |
-| --- | --- |
-| `gamma-api.polymarket.com` | live market metadata |
-| `data-api.polymarket.com` | whale leaderboard and positions |
-| `api.coingecko.com` | BTC and ETH prices |
-| `bank.gov.ua` | USD/UAH reference rate |
+Do not commit secrets. Sensitive values live in GCP Secret Manager and are
+projected into Kubernetes by Ansible.
 
-These are public unauthenticated APIs, so live behavior depends on upstream availability and rate limits.
+Current expected GCP secrets:
 
-## More Detail
+- `cloudflare-api-token`
+- `coinops-db-secrets`
+- `coinops-service-secrets`
 
-- [docs/architecture.md](docs/architecture.md) explains the current deployed path versus the PostgreSQL runtime target.
-- [docs/runtime-queue-architecture.md](docs/runtime-queue-architecture.md) focuses on the queue-side PostgreSQL runtime design and its current status on `dev`.
+Never commit kubeconfig files, Headlamp tokens, GHCR tokens, Cloudflare tokens,
+SSH private keys, GCP service account JSON files, or `.env` files with real
+values.

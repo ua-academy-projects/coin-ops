@@ -112,9 +112,7 @@ describe('App', () => {
     expect(screen.getByPlaceholderText('Search markets, categories, or whales...')).toBeInTheDocument();
     expect(screen.getAllByText('₴41.25').length).toBeGreaterThan(0);
 
-    expect(
-      fetchMock.mock.calls.some(([input]) => String(input).includes('172.31.1.10') || String(input).includes('172.31.1.11'))
-    ).toBe(false);
+    expect(fetchMock.mock.calls.some(([input]) => /^https?:\/\//.test(String(input)))).toBe(false);
   });
 
   it('shows the empty state safely when there are no markets', async () => {

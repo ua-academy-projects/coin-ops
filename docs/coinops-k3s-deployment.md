@@ -1,12 +1,7 @@
 # CoinOps On k3s
 
-This document describes the current Kubernetes deployment of the real CoinOps
+This document describes the Kubernetes deployment of the real CoinOps
 application on the GCP k3s cluster.
-
-The important difference from the old VM deployment:
-
-- old flow: Ansible starts Docker Compose services on separate VMs
-- new flow: Ansible talks to the Kubernetes API and creates Kubernetes resources
 
 The application is publicly available at:
 

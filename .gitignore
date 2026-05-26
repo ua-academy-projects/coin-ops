@@ -1,5 +1,3 @@
-DASHBOARD_PROJECT.md
-
 # Environment file — passwords and local paths, never commit
 .env
 
@@ -17,16 +15,6 @@ proxy/proxy
 # Local/scratch analysis and helper artifacts excluded from dev
 scripts/
 tournament/
-
-# Terraform
-terraform/.terraform/
-terraform/.terraform.lock.hcl
-terraform/*.tfstate
-terraform/*.tfstate.backup
-terraform/terraform.tfstate.*.backup
-terraform/terraform.tfvars
-terraform/keys/
-terraform/keys/
 
 # React build output
 ui-react/dist/
@@ -54,9 +42,10 @@ interview-notes.md
 1004meet.txt
 container-sizes-report.txt
 
-# Local docs and infrastructure artifacts
-hyper-v/
-terraform-guide.pdf
-ansible/group_vars/all/*.backup
-ansible/group_vars/all/secrets.yml
+# Local Kubernetes and infrastructure access artifacts
+*.kubeconfig
+kubeconfig*
+*.tfstate
+*.tfstate.backup
+*.tfvars
 runtime/__pycache__

@@ -17,7 +17,7 @@
 -- pins the *execution* DB of each job body; it does NOT remove the need to
 -- point the launcher at the DB where pg_cron is installed. In this project
 -- that DB is `cognitor`, so `cron.database_name = 'cognitor'` is required,
--- not optional. See docs/runtime.md for the full postgresql.conf block.
+-- not optional.
 --
 -- Ordering note: runtime-dlq-reap references runtime.dlq_reap_expired(), which
 -- is defined in 05_dlq.sql (queue branch). pg_cron stores the command body as

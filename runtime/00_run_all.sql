@@ -15,7 +15,7 @@
 --     and is not a preload library.
 --   • cron.database_name in postgresql.conf must point at THIS database —
 --     the pg_cron launcher bgworker binds to exactly one DB, so jobs
---     registered anywhere else are inert. See docs/runtime.md.
+--     registered anywhere else are inert.
 --   • Before running, set the application role via the GUC,
 --     e.g. ALTER DATABASE <db> SET runtime.app_role = 'cognitor_app';
 --     otherwise [7/8] runs the REVOKE, skips the GRANT, and the proxy will

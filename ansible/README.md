@@ -1,44 +1,41 @@
 # Ansible Layout
 
-This directory contains both the older VM deployment automation and the newer
-k3s/Kubernetes automation.
+This directory contains the k3s and Kubernetes deployment automation for
+CoinOps.
 
 ## Main Playbooks
 
 | Playbook | Purpose |
 | --- | --- |
-| `provision.yml` | Installs common VM dependencies for the Docker Compose deployment |
-| `deploy.yml` | Deploys the older three-VM Docker Compose CoinOps stack |
-| `k3s-cluster.yml` | Creates the k3s cluster on the GCP VMs |
-| `k3s-platform.yml` | Installs platform components on k3s, such as cert-manager and Homepage |
+| `k3s-cluster.yml` | Bootstraps the 3-node HA k3s cluster on existing GCP VMs |
+| `k3s-platform.yml` | Installs platform components such as cert-manager and Homepage |
 | `coinops-app.yml` | Deploys the real CoinOps application into k3s |
 
-## Inventories
+## Inventory
 
 | Inventory | Purpose |
 | --- | --- |
-| `inventory` | Local/older VM layout |
-| `inventory.gcp` | GCP VM Docker Compose layout |
 | `inventory.k3s.gcp` | GCP k3s cluster layout with jump host access |
 
 ## k3s Cluster Roles
 
 | Role | Purpose |
 | --- | --- |
-| `haproxy_k3s_api` | Installs HAProxy on the jump host and forwards Kubernetes API traffic to server nodes |
+| `common` | Shared Linux preparation used by the jump host and k3s nodes |
+| `haproxy_k3s_api` | Installs HAProxy on the jump host and forwards Kubernetes API traffic |
 | `k3s_node_prep` | Prepares Linux networking settings required by Kubernetes |
 | `k3s_server` | Installs the first k3s server and joins the remaining server nodes |
 
-## k3s Platform Roles
+## Platform Roles
 
 | Role | Purpose |
 | --- | --- |
 | `cert_manager` | Installs cert-manager with Helm |
-| `cert_manager_issuer` | Creates the Cloudflare DNS-01 ClusterIssuers |
+| `cert_manager_issuer` | Creates Cloudflare DNS-01 ClusterIssuers |
 | `homepage` | Deploys the Homepage dashboard app |
 | `homepage_ingress` | Exposes Homepage through Traefik Ingress |
 
-## CoinOps k3s Roles
+## CoinOps App Roles
 
 | Role | Purpose |
 | --- | --- |
@@ -79,8 +76,8 @@ roles.
 ## Local Kubernetes Execution
 
 The Kubernetes playbooks run on `localhost`. Ansible does not SSH into a node to
-run `helm` or `kubectl`. Instead, it uses the local kubeconfig and calls the
-Kubernetes API directly through Ansible modules:
+run Helm-wrapped application installs. Instead, it uses the local kubeconfig and
+calls the Kubernetes API directly through Ansible modules:
 
 - `kubernetes.core.helm` for Helm charts
 - `kubernetes.core.k8s` for Kubernetes manifests

@@ -295,14 +295,9 @@ not live credentials.
 
 ## Current Scope
 
-This lab only brings up Kubernetes itself and Headlamp. The Coin-Ops application
-is not migrated to Kubernetes yet. The current application deployment remains
-the existing Docker Compose plus Ansible flow.
+This runbook covers the Kubernetes cluster itself: nodes, control plane,
+embedded etcd, HAProxy API access, kubectl, and Headlamp.
 
-Future application work should answer:
-
-- which services become Kubernetes deployments
-- how PostgreSQL, RabbitMQ, and Redis should be handled
-- how secrets move from GCP Secret Manager into Kubernetes
-- whether ingress should use the default k3s Traefik or a custom controller
-- how CI/CD should deploy images into the cluster
+The real CoinOps application now runs on top of this cluster. Its application
+architecture, namespaces, CNPG, RabbitMQ, Redis, Ingress, and TLS flow are
+documented separately in [CoinOps On k3s](coinops-k3s-deployment.md).

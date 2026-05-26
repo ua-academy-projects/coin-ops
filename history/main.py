@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 history-api — FastAPI service exposing historical market data.
-Runs as a systemd service (history-api.service) on node-01.
-Shares the same venv as consumer.py; never writes to PostgreSQL.
+Runs as the history API container in Kubernetes.
+Reads from PostgreSQL and never writes to it.
 """
 import os
 from typing import Optional

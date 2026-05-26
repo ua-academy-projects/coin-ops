@@ -2,7 +2,7 @@
 """
 runtime_consumer.py — pgmq-backed event consumer for the runtime queue.
 
-Replaces the RabbitMQ consumer for the feature/postgres-runtime-queue branch.
+Future replacement path for the current RabbitMQ consumer.
 Reads from the `events` pgmq queue via runtime.claim_events() and persists
 market / price snapshots into PostgreSQL, exactly like the original RabbitMQ
 consumer but with:

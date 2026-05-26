@@ -14,17 +14,16 @@ Use a Conventional Commit style PR title when this change can reach `main`:
 - [ ] Go Proxy (`proxy/`)
 - [ ] Python / History (`history/`)
 - [ ] Runtime (`runtime/`)
-- [ ] Infrastructure (`ansible/`, `terraform/`, `deploy/`)
+- [ ] Kubernetes / Ansible (`ansible/`)
 - [ ] Docs only
 
 **Local verification** (check every box that applies — see [CONTRIBUTING.md](../CONTRIBUTING.md#before-you-open-a-pr--local-verification-checklist))
-- [ ] `make verify` passes (or ran per-service checks below)
 - [ ] Frontend: `npm run lint` + `npm run build` clean
 - [ ] Go: `go test ./...` + `go build ./...` clean
 - [ ] Python: `ruff check .` + `py_compile` clean
 - [ ] Docker: affected image(s) build successfully
 - [ ] Verified in browser / dev server (for UI changes)
-- [ ] Requires full VM/environment testing (explain below)
+- [ ] Verified against k3s or reviewed Ansible diff (for deployment changes)
 
 **Test plan**
 - [ ] 

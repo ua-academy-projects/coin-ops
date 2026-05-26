@@ -13,12 +13,12 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://172.31.1.11:8080',
+        target: process.env.VITE_PROXY_TARGET ?? 'http://localhost:8080',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
       '/history-api': {
-        target: 'http://172.31.1.10:8000',
+        target: process.env.VITE_HISTORY_TARGET ?? 'http://localhost:8000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/history-api/, ''),
       },
