@@ -55,6 +55,15 @@ resource "google_compute_firewall" "allow_health_check" {
   target_tags   = ["k3s-server"]
 }
 
+# Data source — looks up existing k3s VMs by name+zone.
+# Returns self_link = full GCP resource URL required by instance group API.
+# Without self_link GCP returns "URL is malformed" error.
+data "google_compute_instance" "k3s" {
+  for_each = local.create == 1 ? var.k3s_instance_zones : {}
+  name     = each.key
+  zone     = each.value
+}
+
 # Instance groups — one per zone (GCP requires zone-specific groups).
 # Each group contains the k3s node(s) in that zone.
 # for_each creates one group per unique zone.
@@ -64,12 +73,10 @@ resource "google_compute_instance_group" "k3s" {
   name = "coinops-k3s-${replace(each.key, ".", "-")}"
   zone = each.value
 
-  # Each instance group contains the node for this zone
-  instances = [
-    "zones/${each.value}/instances/${each.key}"
-  ]
+  # self_link from data source = correct full GCP URL the API expects
+  # e.g. https://www.googleapis.com/compute/v1/projects/.../instances/k3s-server-1
+  instances = [data.google_compute_instance.k3s[each.key].self_link]
 
-  # Named port maps "http" → 80 so backend service can reference by name
   named_port {
     name = "http"
     port = 80
@@ -135,8 +142,8 @@ resource "google_compute_global_forwarding_rule" "http" {
   load_balancing_scheme = "EXTERNAL"
 }
 
-# SSL proxy — handles port 443 traffic.
-# UNMANAGED = Traefik manages certificates, not GCP.
+# SSL policy — enforces modern TLS standards.
+# MODERN profile = TLS 1.2+ only, strong cipher suites.
 resource "google_compute_ssl_policy" "k3s" {
   count           = local.create
   name            = "coinops-k3s-ssl-policy"
@@ -145,6 +152,7 @@ resource "google_compute_ssl_policy" "k3s" {
 }
 
 # TCP proxy for HTTPS — passes 443 traffic through to Traefik unchanged.
+# Traefik handles TLS termination — LB just forwards raw TCP.
 resource "google_compute_target_tcp_proxy" "k3s_https" {
   count           = local.create
   name            = "coinops-k3s-https-proxy"
