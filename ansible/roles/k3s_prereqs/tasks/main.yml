@@ -34,9 +34,6 @@
     extra_args: --break-system-packages
 
 - name: Configure Traefik ping endpoint
-  # HelmChartConfig patches the k3s built-in Traefik Helm chart.
-  # ping.enabled = true adds /ping endpoint on port 8080 (Traefik's internal port).
-  # This endpoint returns 200 without needing a Host header — perfect for LB health checks.
   kubernetes.core.k8s:
     state: present
     definition:
@@ -49,5 +46,12 @@
         valuesContent: |-
           ping:
             enabled: true
+          ports:
+            traefik:
+              expose:
+                default: true
+              port: 9000
+              exposedPort: 9000
+              protocol: TCP
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
