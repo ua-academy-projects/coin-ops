@@ -90,42 +90,48 @@ spec:
         - port: 5672
 
 ---
-# ── Postgres: Allow ingress from Proxy, History API, History Consumer ─────────
+---
+# ── CloudNativePG: Cluster Communication & External Access ────────────────────
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-postgres-ingress
+  name: cnpg-cluster-policy
 spec:
   podSelector:
-    matchLabels:
-      app: postgres
+    matchExpressions:
+      - key: cnpg.io/cluster
+        operator: Exists
   policyTypes:
     - Ingress
+    - Egress
   ingress:
+    # Allow intra-cluster communication and Operator communication
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: cnpg.io/cluster
+                operator: Exists
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cnpg-system
+      ports:
+        - port: 5432
+          protocol: TCP
+        - port: 8000
+          protocol: TCP
+    # 2. Allow incoming connections from the App namespace (Proxy, History)
     - from:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: "{{ app_namespace }}"
           podSelector:
-            matchLabels:
-              app: proxy
+            matchExpressions:
+              - key: app
+                operator: In
+                values: ["proxy", "history-api", "history-consumer"]
       ports:
         - port: 5432
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: "{{ app_namespace }}"
-          podSelector:
-            matchLabels:
-              app: history-api
-      ports:
-        - port: 5432
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: "{{ app_namespace }}"
-          podSelector:
-            matchLabels:
-              app: history-consumer
-      ports:
-        - port: 5432
+  egress:
+    # Allow all egress from CNPG pods so they can communicate with K8s API (Service IP),
+    # other CNPG nodes, and the legacy database for pg_dump.
+    - {}

@@ -18,6 +18,8 @@ ghcr_token: "{{ lookup('env', 'GHCR_TOKEN') | default('', true) }}"
 
 app_domain: "{{ lookup('env', 'APP_DOMAIN') | default('coinops.test', true) }}"
 env: "{{ lookup('env', 'ENV') | default('production', true) }}"
+# CIDR of the k3s node network (used for hostNetwork ingress-nginx ipBlock rules)
+node_cidr: "{{ lookup('env', 'NODE_CIDR') | default('10.10.1.0/24', true) }}"
 
 # Service credentials
 db_user: "{{ lookup('env', 'DB_USER') | default('cognitor', true) }}"

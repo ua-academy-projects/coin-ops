@@ -35,7 +35,7 @@ spec:
           protocol: TCP
 
 ---
-# ── UI: Allow ingress from Traefik ────────────────────────────────────────────
+# ── UI: Allow ingress from Nginx (overlay pods + host-network node IPs) ─────────
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -51,9 +51,14 @@ spec:
         - namespaceSelector: {}
       ports:
         - port: 80
+    - from:
+        - ipBlock:
+            cidr: "{{ node_cidr | default('10.10.1.0/24') }}"
+      ports:
+        - port: 80
 
 ---
-# ── Proxy: Allow ingress from Traefik and UI, egress to Infra ─────────────────
+# ── Proxy: Allow ingress from Nginx (overlay + host-network), egress to Infra ──
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -76,7 +81,14 @@ spec:
               app: ui
       ports:
         - port: 8080
+    - from:
+        - ipBlock:
+            cidr: "{{ node_cidr | default('10.10.1.0/24') }}"
+      ports:
+        - port: 8080
   egress:
+    - ports:
+        - port: 443
     - to:
         - namespaceSelector:
             matchLabels:
@@ -100,13 +112,14 @@ spec:
             matchLabels:
               kubernetes.io/metadata.name: "{{ infra_namespace }}"
           podSelector:
-            matchLabels:
-              app: postgres
+            matchExpressions:
+              - key: cnpg.io/cluster
+                operator: Exists
       ports:
         - port: 5432
 
 ---
-# ── History API: Allow ingress from Traefik, egress to Postgres ───────────────
+# ── History API: Allow ingress from Nginx (overlay + host-network), egress to Postgres
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -123,14 +136,20 @@ spec:
         - namespaceSelector: {}
       ports:
         - port: 8000
+    - from:
+        - ipBlock:
+            cidr: "{{ node_cidr | default('10.10.1.0/24') }}"
+      ports:
+        - port: 8000
   egress:
     - to:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: "{{ infra_namespace }}"
           podSelector:
-            matchLabels:
-              app: postgres
+            matchExpressions:
+              - key: cnpg.io/cluster
+                operator: Exists
       ports:
         - port: 5432
 
@@ -161,7 +180,71 @@ spec:
             matchLabels:
               kubernetes.io/metadata.name: "{{ infra_namespace }}"
           podSelector:
-            matchLabels:
-              app: postgres
+            matchExpressions:
+              - key: cnpg.io/cluster
+                operator: Exists
       ports:
         - port: 5432
+
+---
+# =============================================================================
+# Cilium-specific: allow ingress-nginx (hostNetwork DaemonSet) to reach app pods.
+#
+# Standard k8s NetworkPolicy ipBlock cannot match Cilium's 'remote-node'
+# identity, which is assigned to hostNetwork pods from other nodes.
+# CiliumNetworkPolicy with fromEntities: [remote-node, host] covers:
+#   - ingress-nginx controller pods (hostNetwork: true) on all nodes
+#   - kubelet health probes originating from the node itself
+# =============================================================================
+apiVersion: "cilium.io/v2"
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-ingress-nginx-to-ui
+spec:
+  endpointSelector:
+    matchLabels:
+      app: ui
+  ingress:
+    - fromEntities:
+        - remote-node
+        - host
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP
+
+---
+apiVersion: "cilium.io/v2"
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-ingress-nginx-to-proxy
+spec:
+  endpointSelector:
+    matchLabels:
+      app: proxy
+  ingress:
+    - fromEntities:
+        - remote-node
+        - host
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+
+---
+apiVersion: "cilium.io/v2"
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-ingress-nginx-to-history-api
+spec:
+  endpointSelector:
+    matchLabels:
+      app: history-api
+  ingress:
+    - fromEntities:
+        - remote-node
+        - host
+      toPorts:
+        - ports:
+            - port: "8000"
+              protocol: TCP

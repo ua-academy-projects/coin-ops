@@ -31,7 +31,9 @@ const (
 )
 
 const (
-	coingeckoURL = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true"
+	// Binance public ticker — no API key, generous rate limits.
+	// Returns: [{"symbol":"BTCUSDT","price":"...","priceChangePercent":"..."},...]
+	binanceURL   = "https://api.binance.com/api/v3/ticker/24hr?symbols=[%22BTCUSDT%22,%22ETHUSDT%22]"
 	nbuURL       = "https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?valcode=USD&json"
 )
 
@@ -103,12 +105,12 @@ type Whale struct {
 
 // ---- Price API raw types ----
 
-type cgPriceEntry struct {
-	Usd          float64 `json:"usd"`
-	Usd24hChange float64 `json:"usd_24h_change"`
+// binanceTicker represents one symbol from the Binance 24hr ticker response.
+type binanceTicker struct {
+	Symbol             string `json:"symbol"`
+	LastPrice          string `json:"lastPrice"`
+	PriceChangePercent string `json:"priceChangePercent"`
 }
-
-type cgPriceResponse map[string]cgPriceEntry
 
 type nbuEntry struct {
 	Rate float64 `json:"rate"`
@@ -360,9 +362,25 @@ func fetchPositions(address string) ([]WhalePosition, error) {
 
 // ---- Price APIs ----
 
-func fetchCoinGecko() (cgPriceResponse, error) {
-	var resp cgPriceResponse
-	return resp, fetchJSON(coingeckoURL, &resp)
+func fetchBinance() (btc, eth float64, btc24h, eth24h float64, err error) {
+	var tickers []binanceTicker
+	if err = fetchJSON(binanceURL, &tickers); err != nil {
+		return
+	}
+	for _, t := range tickers {
+		price, _ := strconv.ParseFloat(t.LastPrice, 64)
+		pct, _ := strconv.ParseFloat(t.PriceChangePercent, 64)
+		switch t.Symbol {
+		case "BTCUSDT":
+			btc, btc24h = price, pct
+		case "ETHUSDT":
+			eth, eth24h = price, pct
+		}
+	}
+	if btc <= 0 || eth <= 0 {
+		err = fmt.Errorf("binance: incomplete ticker data (btc=%.0f eth=%.0f)", btc, eth)
+	}
+	return
 }
 
 func fetchNBU() (float64, error) {
@@ -446,33 +464,29 @@ func (s *Server) fetchAndUpdatePrices() {
 		newUAH, err := fetchNBU()
 		if err != nil {
 			log.Printf("Price update: NBU fetch failed: %v", err)
-			lastNBU = now // Prevent retrying every 10 seconds on failure
+			lastNBU = now // Prevent retrying every cycle on failure
 		} else if newUAH > 0 {
 			uah = newUAH
 			lastNBU = now
 		}
 	}
 
-	var btc, eth cgPriceEntry
-	cg, errCG := fetchCoinGecko()
-	btcData, btcOk := cg["bitcoin"]
-	ethData, ethOk := cg["ethereum"]
-
-	if errCG != nil || !btcOk || !ethOk || btcData.Usd <= 0 || ethData.Usd <= 0 {
-		log.Printf("Price update: CoinGecko fetch failed or returned invalid data: %v", errCG)
-		btc = cgPriceEntry{Usd: oldPrices.BtcUsd, Usd24hChange: oldPrices.Btc24hChange}
-		eth = cgPriceEntry{Usd: oldPrices.EthUsd, Usd24hChange: oldPrices.Eth24hChange}
-		errCG = fmt.Errorf("invalid or missing CoinGecko data") // Ensure errCG is non-nil so we don't publish bad prices
+	btcUsd, ethUsd, btc24h, eth24h, errBin := fetchBinance()
+	var publishCrypto bool
+	if errBin != nil {
+		log.Printf("Price update: Binance fetch failed: %v", errBin)
+		// Keep stale values in cache; don't publish stale prices
+		btcUsd, ethUsd = oldPrices.BtcUsd, oldPrices.EthUsd
+		btc24h, eth24h = oldPrices.Btc24hChange, oldPrices.Eth24hChange
 	} else {
-		btc = btcData
-		eth = ethData
+		publishCrypto = true
 	}
 
 	prices := Prices{
-		BtcUsd:       btc.Usd,
-		EthUsd:       eth.Usd,
-		Btc24hChange: btc.Usd24hChange,
-		Eth24hChange: eth.Usd24hChange,
+		BtcUsd:       btcUsd,
+		EthUsd:       ethUsd,
+		Btc24hChange: btc24h,
+		Eth24hChange: eth24h,
 		UsdUah:       uah,
 		FetchedAt:    now,
 	}
@@ -483,21 +497,21 @@ func (s *Server) fetchAndUpdatePrices() {
 	s.cache.Unlock()
 
 	// Publish price events to queue for persistence in PostgreSQL
-	if errCG == nil {
-		if err := s.publishPriceEvent("bitcoin", btc.Usd, btc.Usd24hChange, now); err != nil {
+	if publishCrypto {
+		if err := s.publishPriceEvent("bitcoin", btcUsd, btc24h, now); err != nil {
 			log.Printf("Price publish failed (bitcoin): %v", err)
 		}
-		if err := s.publishPriceEvent("ethereum", eth.Usd, eth.Usd24hChange, now); err != nil {
+		if err := s.publishPriceEvent("ethereum", ethUsd, eth24h, now); err != nil {
 			log.Printf("Price publish failed (ethereum): %v", err)
 		}
 	}
-	if uah > 0 && lastNBU == now { // Only publish NBU when it is actually fetched/updated
+	if uah > 0 && lastNBU == now { // Only publish NBU when freshly fetched
 		if err := s.publishPriceEvent("usd_uah", uah, 0, now); err != nil {
 			log.Printf("Price publish failed (usd_uah): %v", err)
 		}
 	}
 
-	log.Printf("Price cache updated: BTC=$%.0f ETH=$%.0f UAH=%.2f", btc.Usd, eth.Usd, uah)
+	log.Printf("Price cache updated: BTC=$%.0f ETH=$%.0f UAH=%.2f", btcUsd, ethUsd, uah)
 }
 
 // ---- HTTP handlers ----
@@ -884,10 +898,11 @@ func main() {
 		}
 	}()
 
-	// Populate price cache immediately, then refresh every 10 seconds.
+	// Populate price cache immediately, then refresh every 60 seconds.
+	// Binance public API: no key required, generous rate limits.
 	go func() {
 		srv.fetchAndUpdatePrices()
-		ticker := time.NewTicker(10 * time.Second)
+		ticker := time.NewTicker(60 * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
 			srv.fetchAndUpdatePrices()

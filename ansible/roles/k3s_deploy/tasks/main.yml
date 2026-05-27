@@ -16,14 +16,14 @@
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig_path }}"
     state: present
-    src: "{{ playbook_dir }}/../../deploy/k3s/cluster/namespaces.yaml"
+    template: "{{ playbook_dir }}/../../deploy/k3s/cluster/namespaces.yaml"
 
 # ── 3. Apply cert-manager ClusterIssuer ────────────────────────────────────────
 - name: Apply ClusterIssuer for automated TLS
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig_path }}"
     state: present
-    src: "{{ playbook_dir }}/../../deploy/k3s/cluster/cluster-issuer.yaml"
+    template: "{{ playbook_dir }}/../../deploy/k3s/cluster/cluster-issuer.yaml"
 
 # ── 4. Setup GHCR Secrets ──────────────────────────────────────────────────────
 - name: Configure GHCR Pull Secret
@@ -61,7 +61,7 @@
     kubeconfig: "{{ kubeconfig_path }}"
     state: present
     namespace: "{{ item }}"
-    src: "{{ playbook_dir }}/../../deploy/k3s/app/secrets.yaml"
+    template: "{{ playbook_dir }}/../../deploy/k3s/app/secrets.yaml"
   loop:
     - "{{ app_namespace }}"
     - "{{ infra_namespace }}"
@@ -72,32 +72,66 @@
     kubeconfig: "{{ kubeconfig_path }}"
     state: present
     namespace: "{{ infra_namespace }}"
-    src: "{{ playbook_dir }}/../../deploy/k3s/infra/network-policy.yaml"
+    template: "{{ playbook_dir }}/../../deploy/k3s/infra/network-policy.yaml"
 
 - name: Apply Network Policies for App namespace
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig_path }}"
     state: present
     namespace: "{{ app_namespace }}"
-    src: "{{ playbook_dir }}/../../deploy/k3s/app/network-policy.yaml"
+    template: "{{ playbook_dir }}/../../deploy/k3s/app/network-policy.yaml"
+
+# ── 6.5 Deploy CloudNativePG Operator ──────────────────────────────────────────
+- name: Download CloudNativePG Operator manifest
+  ansible.builtin.command:
+    cmd: curl -sL https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.23/releases/cnpg-1.23.0.yaml -o /tmp/cnpg-operator.yaml
+  changed_when: false
+
+- name: Apply CloudNativePG Operator
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig_path }}"
+    state: present
+    src: /tmp/cnpg-operator.yaml
+
+- name: Wait for CloudNativePG Operator to become ready
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ kubeconfig_path }}"
+    kind: Deployment
+    namespace: cnpg-system
+    name: cnpg-controller-manager
+  register: cnpg_deploy_info
+  until:
+    - cnpg_deploy_info.resources | length > 0
+    - cnpg_deploy_info.resources[0].status.readyReplicas | default(0) > 0
+  retries: 24
+  delay: 5
 
 # ── 7. Deploy Stateful Services (Infra) ────────────────────────────────────────
-- name: Deploy Postgres Persistent DB
+
+
+- name: Deploy CNPG Secrets
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig_path }}"
     state: present
     namespace: "{{ infra_namespace }}"
-    src: "{{ playbook_dir }}/../../deploy/k3s/infra/postgres.yaml"
+    template: "{{ playbook_dir }}/../../deploy/k3s/infra/cnpg-secrets.yaml"
+
+- name: Deploy CloudNativePG Cluster
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig_path }}"
+    state: present
+    namespace: "{{ infra_namespace }}"
+    template: "{{ playbook_dir }}/../../deploy/k3s/infra/cnpg.yaml"
 
 - name: Deploy Redis and RabbitMQ Message Brokering
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig_path }}"
     state: present
     namespace: "{{ infra_namespace }}"
-    src: "{{ playbook_dir }}/../../deploy/k3s/infra/infra.yaml"
+    template: "{{ playbook_dir }}/../../deploy/k3s/infra/infra.yaml"
 
 # ── 8. Wait for Stateful Services ──────────────────────────────────────────────
-- name: Wait for Postgres, Redis, and RabbitMQ to become active
+- name: Wait for Redis and RabbitMQ to become active
   kubernetes.core.k8s_info:
     kubeconfig: "{{ kubeconfig_path }}"
     kind: Deployment
@@ -110,9 +144,22 @@
   retries: 24
   delay: 5
   loop:
-    - postgres
     - rabbitmq
     - redis
+
+- name: Wait for CloudNativePG Cluster to become active
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ kubeconfig_path }}"
+    kind: Cluster
+    api_version: postgresql.cnpg.io/v1
+    namespace: "{{ infra_namespace }}"
+    name: coin-ops-db
+  register: cnpg_cluster_info
+  until:
+    - cnpg_cluster_info.resources | length > 0
+    - cnpg_cluster_info.resources[0].status.phase | default('') == 'Cluster in healthy state'
+  retries: 30
+  delay: 5
 
 # ── 9. Deploy Stateless Applications (App) ──────────────────────────────────────
 - name: Deploy Go Proxy Gateway
@@ -120,21 +167,21 @@
     kubeconfig: "{{ kubeconfig_path }}"
     state: present
     namespace: "{{ app_namespace }}"
-    src: "{{ playbook_dir }}/../../deploy/k3s/app/proxy.yaml"
+    template: "{{ playbook_dir }}/../../deploy/k3s/app/proxy.yaml"
 
 - name: Deploy FastAPI and RabbitMQ History Worker
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig_path }}"
     state: present
     namespace: "{{ app_namespace }}"
-    src: "{{ playbook_dir }}/../../deploy/k3s/app/history.yaml"
+    template: "{{ playbook_dir }}/../../deploy/k3s/app/history.yaml"
 
 - name: Deploy Web UI SPA
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig_path }}"
     state: present
     namespace: "{{ app_namespace }}"
-    src: "{{ playbook_dir }}/../../deploy/k3s/app/ui.yaml"
+    template: "{{ playbook_dir }}/../../deploy/k3s/app/ui.yaml"
 
 # ── 10. Wait for Stateless Applications ──────────────────────────────────────────
 - name: Wait for App Deployments to become active
@@ -161,4 +208,4 @@
     kubeconfig: "{{ kubeconfig_path }}"
     state: present
     namespace: "{{ app_namespace }}"
-    src: "{{ playbook_dir }}/../../deploy/k3s/ingress/ingress.yaml"
+    template: "{{ playbook_dir }}/../../deploy/k3s/ingress/ingress.yaml"
