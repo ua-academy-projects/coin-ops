@@ -63,6 +63,7 @@
                   initialDelaySeconds: 20
                   periodSeconds: 10
                   failureThreshold: 5
+                  timeoutSeconds: 5
 
 # ── RabbitMQ Service ──────────────────────────────────────────────────────
 
