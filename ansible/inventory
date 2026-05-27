@@ -41,7 +41,7 @@ ansible_ssh_common_args=-o StrictHostKeyChecking=no
 
 # k3s cluster — GCP
 [k3s_bootstrap]
-k3s-server-1  ansible_host=34.116.142.103
+k3s-server-1  ansible_host=34.116.135.79
 
 [k3s_join]
 k3s-server-2  ansible_host=10.0.1.4
@@ -53,7 +53,7 @@ k3s_join
 
 # k3s-server-2 and k3s-server-3 are private — SSH via k3s-server-1 as jump host
 [k3s_join:vars]
-ansible_ssh_common_args=-o ProxyJump=marta_ops@34.116.142.103:9922 -o StrictHostKeyChecking=no
+ansible_ssh_common_args=-o ProxyJump=marta_ops@34.116.135.79:9922 -o StrictHostKeyChecking=no
 
 [k3s_server:vars]
 common_allowed_ports=["9922", "6443", "9345", "10250", "2379", "2380"]
