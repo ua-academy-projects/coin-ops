@@ -55,7 +55,7 @@
   ansible.builtin.debug:
     msg:
       - "1. Start SSH tunnel and Headlamp port-forward from your laptop:"
-      - "   ssh -i /Users/arturvolinec/.ssh/coinops_gcp \\"
+      - "   ssh -i {{ headlamp_ssh_private_key_path }} \\"
       - "     -L 8080:127.0.0.1:8080 \\"
       - "     {{ ansible_user }}@{{ public_ip }} \\"
       - "     'sudo k3s kubectl port-forward -n {{ headlamp_namespace }} svc/headlamp 8080:80'"
