@@ -1,0 +1,6 @@
+---
+- name: Provision k3s cluster to infrastructure
+  hosts: all
+  become: yes
+  roles:
+    - k3s_cluster
