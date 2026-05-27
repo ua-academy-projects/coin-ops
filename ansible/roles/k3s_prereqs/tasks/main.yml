@@ -54,7 +54,5 @@
                 trustedIPs:
                   - "130.211.0.0/22"
                   - "35.191.0.0/16"
-              tls:
-                enabled: true
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
