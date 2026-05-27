@@ -10,5 +10,5 @@
   hosts: k3s-node-01
   become: yes
   roles:
-    - role: k3s_headlamp
+    - role: headlamp
       tags: headlamp
