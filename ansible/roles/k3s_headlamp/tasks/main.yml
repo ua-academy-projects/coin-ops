@@ -8,7 +8,6 @@
   args:
     creates: /usr/local/bin/helm
 
-
 - name: Install Python venv support 
 # Needed for kubernetes.core.k8s
   ansible.builtin.apt:
@@ -51,6 +50,8 @@
     create_namespace: false
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  vars:
+    ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
 
 - name: How to access Headlamp
   ansible.builtin.debug:
