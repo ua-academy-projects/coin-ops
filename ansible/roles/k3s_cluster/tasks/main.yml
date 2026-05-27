@@ -23,6 +23,13 @@
     - not k3s_binary.stat.exists
     - inventory_hostname == k3s_cluster_primary_node
 
+- name: Wait for k3s cluster token on primary
+  ansible.builtin.wait_for:
+    path: /var/lib/rancher/k3s/server/node-token
+    timeout: 120
+  delegate_to: "{{ k3s_cluster_primary_node }}"
+  run_once: true
+
 - name: Get k3s cluster token from primary
   ansible.builtin.command: cat /var/lib/rancher/k3s/server/node-token
   register: k3s_token
