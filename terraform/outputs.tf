@@ -48,7 +48,7 @@ output "alb_dns_name" {
 }
 
 output "gcp_lb_ip" {
-  value = local.cloud == "gcp" ? module.gcp_lb.lb_ip : null
+  value = contains(["gcp", "hybrid"], local.cloud) ? module.gcp_lb.lb_ip : null
 }
 
 # Returns CloudSQL private IP after terraform apply.

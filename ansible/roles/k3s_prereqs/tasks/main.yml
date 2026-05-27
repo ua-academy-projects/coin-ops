@@ -33,26 +33,26 @@
     state: present
     extra_args: --break-system-packages
 
-- name: Configure Traefik to accept PROXY Protocol from GCP LB
-  # PROXY Protocol = механізм передачі оригінальних заголовків через TCP proxy.
-  # GCP TCP proxy надсилає PROXY Protocol v1 header перед TCP з'єднанням.
-  # Traefik повинен вміти його читати — інакше побачить сміття замість TLS.
-  # trustedIPs = тільки з цих IP приймаємо PROXY Protocol заголовки (GCP ranges).
-  kubernetes.core.k8s:
-    state: present
-    definition:
-      apiVersion: helm.cattle.io/v1
-      kind: HelmChartConfig
-      metadata:
-        name: traefik
-        namespace: kube-system
-      spec:
-        valuesContent: |-
-          ports:
-            websecure:
-              proxyProtocol:
-                trustedIPs:
-                  - "130.211.0.0/22"
-                  - "35.191.0.0/16"
-  environment:
-    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+# - name: Configure Traefik to accept PROXY Protocol from GCP LB
+#   # PROXY Protocol = механізм передачі оригінальних заголовків через TCP proxy.
+#   # GCP TCP proxy надсилає PROXY Protocol v1 header перед TCP з'єднанням.
+#   # Traefik повинен вміти його читати — інакше побачить сміття замість TLS.
+#   # trustedIPs = тільки з цих IP приймаємо PROXY Protocol заголовки (GCP ranges).
+#   kubernetes.core.k8s:
+#     state: present
+#     definition:
+#       apiVersion: helm.cattle.io/v1
+#       kind: HelmChartConfig
+#       metadata:
+#         name: traefik
+#         namespace: kube-system
+#       spec:
+#         valuesContent: |-
+#           ports:
+#             websecure:
+#               proxyProtocol:
+#                 trustedIPs:
+#                   - "130.211.0.0/22"
+#                   - "35.191.0.0/16"
+#   environment:
+#     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
