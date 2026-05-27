@@ -15,7 +15,7 @@
 
 - name: Install k3s primary
   ansible.builtin.shell: |
-    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server \
+    curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="{{ k3s_cluster_version }}" INSTALL_K3S_EXEC="server \
       --cluster-init \
       --node-ip={{ hostvars[inventory_hostname][k3s_cluster_node_ip] }} \
       --advertise-address={{ hostvars[inventory_hostname][k3s_cluster_node_ip] }}" sh -
@@ -39,7 +39,7 @@
 
 - name: Install k3s secondary
   ansible.builtin.shell: |
-    curl -sfL https://get.k3s.io | K3S_TOKEN="{{ k3s_token.stdout }}" INSTALL_K3S_EXEC="server \
+    curl -sfL https://get.k3s.io | K3S_TOKEN="{{ k3s_token.stdout }}" INSTALL_K3S_VERSION="{{ k3s_cluster_version }}" INSTALL_K3S_EXEC="server \
       --server https://{{ hostvars[k3s_cluster_primary_node][k3s_cluster_node_ip] }}:6443 \
       --node-ip={{ hostvars[inventory_hostname][k3s_cluster_node_ip] }} \
       --advertise-address={{ hostvars[inventory_hostname][k3s_cluster_node_ip] }}" sh -
