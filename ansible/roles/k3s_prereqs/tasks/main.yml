@@ -48,9 +48,6 @@
         namespace: kube-system
       spec:
         valuesContent: |-
-          service:
-            spec:
-              externalTrafficPolicy: Local
           ports:
             websecure:
               proxyProtocol:
