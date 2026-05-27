@@ -1,3 +1,107 @@
 #SPDX-License-Identifier: MIT-0
 ---
 # tasks file for ansible/roles/k3s_cert_manager
+- name: Install Helm
+  ansible.builtin.shell: |
+    curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+  args:
+    creates: /usr/local/bin/helm
+
+- name: Install Python venv support 
+# Needed for kubernetes.core.k8s
+  ansible.builtin.apt:
+    name:
+      - python3-venv
+      - python3-pip
+    state: present
+
+- name: Install Kubernetes Python client in venv
+  ansible.builtin.pip:
+    name: "kubernetes=={{ k3s_cert_manager_python_kubernetes_version }}"
+    virtualenv: /opt/headlamp-ansible-venv
+    virtualenv_command: python3 -m venv
+
+- name: Add cert-manager Helm repo
+  kubernetes.core.helm_repository:
+    name: jetstack
+    repo_url: https://charts.jetstack.io
+
+# helm repo add jetstack https://charts.jetstack.io --force-update
+#
+# helm install \
+#   cert-manager jetstack/cert-manager \
+#   --namespace cert-manager \
+#   --create-namespace \
+#   --version v1.20.2 \
+#   --set crds.enabled=true
+
+- name: Create cert-manager namespace
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: /etc/rancher/k3s/k3s.yaml
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ k3s_cert_manager_namespace }}"
+  vars:
+      ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
+
+  # creates cert-manager-controller, cert-manager-cainjector, cert-manager-webhook
+- name: Deploy cert-manager via Helm
+  kubernetes.core.helm:
+    name: "{{ k3s_cert_manager_release_name }}"
+    chart_ref: jetstack/cert-manager
+    release_namespace: "{{ k3s_cert_manager_namespace }}"
+    chart_version: "{{ k3s_cert_manager_version }}"
+    kubeconfig: /etc/rancher/k3s/k3s.yaml
+    values:
+      crds:
+        enabled: true
+
+- name: Create ClusterIssuer
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: /etc/rancher/k3s/k3s.yaml
+    definition:
+      apiVersion: cert-manager.io/v1
+      kind: ClusterIssuer # clusterissuer -> cluster wide, issuer -> namespace
+      metadata:
+        name: letsencrypt # ingress referenced to it in annotations
+      spec:
+        acme:
+          server: https://acme-staging-v02.api.letsencrypt.org/directory
+          email: "{{ k3s_cert_manager_email }}"
+          privateKeySecretRef:
+            name: letsencrypt-account-key # secret to store lets encrypt key
+          solvers:
+            # dns challenge
+            - http01:
+                ingress:
+                  class: traefik
+  vars:
+    ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
+
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: nginx-test
+#   namespace: default
+#   annotations:
+#     cert-manager.io/cluster-issuer: letsencrypt
+# spec:
+#   rules:
+#     - host: test.arturvolynets.pp.ua
+#       http:
+#         paths:
+#           - path: /
+#             pathType: Prefix
+#             backend:
+#               service:
+#                 name: nginx
+#                 port:
+#                   number: 80
+#   tls:
+#     - hosts:
+#         - test.arturvolynets.pp.ua
+#       secretName: nginx-test-tls
