@@ -60,15 +60,16 @@ resource "google_compute_instance_group" "k3s" {
   }
 }
 
-# Health check hits Traefik's /ping endpoint on port 8080.
-# /ping returns 200 without requiring a Host header — unlike application routes.
-# Port 8080 is Traefik's internal dashboard/metrics port, separate from traffic port 80/443.
+# TCP health check on port 80 — verifies Traefik accepts connections.
+# HTTP health check cannot be used because Traefik requires Host header
+# for routing — without it returns 404 which GCP considers unhealthy.
+# TCP check confirms port is open and service is running.
+# This is standard practice for Ingress controllers behind GCP LB.
 resource "google_compute_health_check" "k3s" {
   count = local.create
   name  = "coinops-k3s-health"
-  http_health_check {
-    port         = 8080
-    request_path = "/ping"
+  tcp_health_check {
+    port = 80
   }
 }
 

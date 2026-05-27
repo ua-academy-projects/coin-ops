@@ -33,25 +33,25 @@
     state: present
     extra_args: --break-system-packages
 
-- name: Configure Traefik ping endpoint
-  kubernetes.core.k8s:
-    state: present
-    definition:
-      apiVersion: helm.cattle.io/v1
-      kind: HelmChartConfig
-      metadata:
-        name: traefik
-        namespace: kube-system
-      spec:
-        valuesContent: |-
-          ping:
-            enabled: true
-          ports:
-            traefik:
-              port: 9000
-              expose:
-                default: true
-              exposedPort: 9000
-              protocol: TCP
-  environment:
-    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+# - name: Configure Traefik ping endpoint
+#   kubernetes.core.k8s:
+#     state: present
+#     definition:
+#       apiVersion: helm.cattle.io/v1
+#       kind: HelmChartConfig
+#       metadata:
+#         name: traefik
+#         namespace: kube-system
+#       spec:
+#         valuesContent: |-
+#           ping:
+#             enabled: true
+#           ports:
+#             traefik:
+#               port: 9000
+#               expose:
+#                 default: true
+#               exposedPort: 9000
+#               protocol: TCP
+#   environment:
+#     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
