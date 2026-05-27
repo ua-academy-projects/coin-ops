@@ -1,0 +1,34 @@
+{{- if .Values.ingress.enabled -}}
+{{- $ns := .Values.global.backendNamespace -}}
+{{- $proxyMw := .Values.ingress.middlewares.proxyStrip.name -}}
+{{- $historyMw := .Values.ingress.middlewares.historyStrip.name -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.ingress.name }}-backend
+  namespace: {{ $ns }}
+  labels:
+    {{- include "coinops.labels" (dict "ctx" . "component" (printf "%s-backend" .Values.ingress.name)) | nindent 4 }}
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: {{ printf "%s-%s@kubernetescrd,%s-%s@kubernetescrd" $ns $proxyMw $ns $historyMw }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ .Values.ingress.domain }}
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.proxy.name }}
+                port:
+                  number: {{ .Values.proxy.servicePort }}
+          - path: /history-api
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.history.api.name }}
+                port:
+                  number: {{ .Values.history.api.servicePort }}
+{{- end }}

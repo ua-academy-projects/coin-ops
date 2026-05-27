@@ -57,10 +57,16 @@ Use tags for targeted app deployment:
 
 ```bash
 ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags data
-ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags backend
-ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags frontend
-ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags ingress
+ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags app
 ```
+
+The application layer (proxy, history API, history consumer, UI, public
+Ingress, Traefik middlewares) is packaged as a local Helm chart at
+`charts/coinops/` and installed by the `coinops_app_chart` role. The chart is
+deployed as the `coinops` Helm release in the `coinops-backend` namespace.
+
+The legacy tags `backend`, `frontend`, `ingress`, `proxy`, `history`, and `ui`
+are still accepted but each runs `helm upgrade` on the full release.
 
 ## Secrets
 

@@ -41,10 +41,13 @@ CoinOps.
 | --- | --- |
 | `cnpg_operator` | Installs the CloudNativePG operator with Helm |
 | `coinops_data` | Creates namespaces, secrets, CNPG PostgreSQL, RabbitMQ, and Redis |
-| `coinops_proxy` | Deploys the Go proxy |
-| `coinops_history` | Deploys history API and history consumer |
-| `coinops_ui` | Deploys the React UI |
-| `coinops_ingress` | Creates public Ingress rules and TLS routing for CoinOps |
+| `coinops_app_chart` | Installs the CoinOps application Helm chart from `charts/coinops/` (proxy, history API, history consumer, UI, ingress + Traefik middlewares) |
+
+The application layer is packaged as a single local Helm chart located at the
+repository root in `charts/coinops/`. The Ansible role `coinops_app_chart` is a
+thin wrapper around `kubernetes.core.helm` and forwards a small set of
+overrides (component toggles, image tag, ingress domain) into the chart's
+`values.yaml`.
 
 ## CoinOps App Tags
 
@@ -53,10 +56,12 @@ Use tags when only one layer needs to be changed.
 ```bash
 ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags cnpg
 ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags data
-ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags backend
-ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags frontend
-ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags ingress
+ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags app
 ```
+
+The legacy tags `backend`, `frontend`, `ingress`, `proxy`, `history`, and `ui`
+are kept for backward compatibility, but they all reinstall the full Helm
+release (Helm has no concept of partial release upgrades).
 
 ## Variable Convention
 
@@ -65,8 +70,8 @@ role name. Examples:
 
 ```text
 coinops_data_postgres_cluster_name
-coinops_proxy_image_tag
-coinops_ingress_domain
+coinops_app_chart_image_tag
+coinops_app_chart_ingress_domain
 cnpg_operator_chart_version
 ```
 

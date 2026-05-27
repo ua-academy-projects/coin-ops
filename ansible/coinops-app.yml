@@ -8,9 +8,13 @@
 # Run examples:
 #   ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml
 #   ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags data
-#   ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags backend
-#   ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags frontend
-#   ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags ingress
+#   ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags app
+#
+# Note: the application layer (proxy, history API, history consumer, UI,
+# ingress + middlewares) is deployed via a single Helm release `coinops`
+# from the chart at `charts/coinops/`. The legacy backend/frontend/ingress
+# tags still work for backward compatibility, but they all reinstall the
+# full chart release (Helm has no concept of partial release upgrades).
 
 - name: Deploy CoinOps on k3s
   hosts: localhost
@@ -26,21 +30,13 @@
       tags:
         - data
 
-    - role: coinops_proxy
+    - role: coinops_app_chart
       tags:
-        - proxy
+        - app
+        - chart
         - backend
-
-    - role: coinops_history
-      tags:
-        - history
-        - backend
-
-    - role: coinops_ui
-      tags:
-        - ui
         - frontend
-
-    - role: coinops_ingress
-      tags:
         - ingress
+        - proxy
+        - history
+        - ui

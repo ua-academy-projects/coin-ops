@@ -1,0 +1,31 @@
+{{- if .Values.history.consumer.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.history.consumer.name }}
+  namespace: {{ .Values.global.backendNamespace }}
+  labels:
+    {{- include "coinops.labels" (dict "ctx" . "component" .Values.history.consumer.name) | nindent 4 }}
+spec:
+  replicas: {{ .Values.history.consumer.replicas }}
+  selector:
+    matchLabels:
+      {{- include "coinops.selectorLabels" (dict "ctx" . "component" .Values.history.consumer.name) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "coinops.selectorLabels" (dict "ctx" . "component" .Values.history.consumer.name) | nindent 8 }}
+    spec:
+      imagePullSecrets:
+        - name: {{ .Values.global.imagePullSecret }}
+      containers:
+        - name: history-consumer
+          image: {{ include "coinops.image" (dict "ctx" . "image" .Values.history.consumer.image) }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: RUNTIME_BACKEND
+              value: {{ .Values.global.runtimeBackend | quote }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.global.backendEnvSecret }}
+{{- end }}

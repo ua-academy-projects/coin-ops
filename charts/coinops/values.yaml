@@ -1,0 +1,88 @@
+# =============================================================================
+# CoinOps Helm chart — default values
+# =============================================================================
+# Every component (proxy, history.api, history.consumer, ui, ingress) can be
+# toggled with its `enabled` flag.
+#
+# The data layer (PostgreSQL, RabbitMQ, Redis) and the secrets
+# (coinops-backend-env, ghcr-pull-secret) are NOT managed by this chart.
+# They are provisioned by the Ansible role `coinops_data` and are referenced
+# here by name only.
+# =============================================================================
+
+global:
+  imageRegistry: ghcr.io/ua-academy-projects
+  imageTag: dev-latest
+  imagePullSecret: ghcr-pull-secret
+  backendNamespace: coinops-backend
+  frontendNamespace: coinops-frontend
+  backendEnvSecret: coinops-backend-env
+  runtimeBackend: external
+
+# -----------------------------------------------------------------------------
+# Go live-data proxy
+# -----------------------------------------------------------------------------
+proxy:
+  enabled: true
+  name: coinops-proxy
+  replicas: 2
+  image:
+    name: coin-ops-proxy
+    tag: ""             # falls back to global.imageTag
+  containerPort: 8080
+  servicePort: 80
+
+# -----------------------------------------------------------------------------
+# FastAPI history (HTTP API + RabbitMQ consumer)
+# -----------------------------------------------------------------------------
+history:
+  api:
+    enabled: true
+    name: coinops-history-api
+    replicas: 2
+    image:
+      name: coin-ops-history-api
+      tag: ""
+    containerPort: 8000
+    servicePort: 80
+  consumer:
+    enabled: true
+    name: coinops-history-consumer
+    replicas: 1
+    image:
+      name: coin-ops-history-consumer
+      tag: ""
+
+# -----------------------------------------------------------------------------
+# React UI
+# -----------------------------------------------------------------------------
+ui:
+  enabled: true
+  name: coinops-ui
+  replicas: 2
+  image:
+    name: coin-ops-ui
+    tag: ""
+  containerPort: 80
+  servicePort: 80
+  proxyUrl: /api
+  historyUrl: /history-api
+
+# -----------------------------------------------------------------------------
+# Public ingress (Traefik) + TLS via cert-manager + path-strip middlewares
+# -----------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: traefik
+  domain: coinops.kazachuk-k3s.pp.ua
+  name: coinops
+  tls:
+    secretName: coinops-tls
+    clusterIssuer: letsencrypt-cloudflare-production
+  middlewares:
+    proxyStrip:
+      name: coinops-strip-api
+      prefix: /api
+    historyStrip:
+      name: coinops-strip-history-api
+      prefix: /history-api

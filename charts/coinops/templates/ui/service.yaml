@@ -1,0 +1,17 @@
+{{- if .Values.ui.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.ui.name }}
+  namespace: {{ .Values.global.frontendNamespace }}
+  labels:
+    {{- include "coinops.labels" (dict "ctx" . "component" .Values.ui.name) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "coinops.selectorLabels" (dict "ctx" . "component" .Values.ui.name) | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.ui.servicePort }}
+      targetPort: http
+{{- end }}

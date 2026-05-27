@@ -87,13 +87,15 @@ Run only one layer:
 ```bash
 ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags cnpg
 ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags data
-ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags backend
-ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags frontend
-ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags ingress
+ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags app
 ```
 
 Tags are used because each layer has a different lifecycle. For example,
-changing an Ingress should not reinstall PostgreSQL.
+changing the app should not reinstall PostgreSQL.
+
+The legacy tags `backend`, `frontend`, `ingress`, `proxy`, `history`, and `ui`
+are still accepted; each of them runs `helm upgrade` on the full `coinops`
+release.
 
 ## Role Map
 
@@ -101,28 +103,30 @@ changing an Ingress should not reinstall PostgreSQL.
 | --- | --- |
 | `cnpg_operator` | Installs the CloudNativePG operator with Helm |
 | `coinops_data` | Creates namespaces, reads GCP secrets, creates Kubernetes secrets, creates PostgreSQL, installs RabbitMQ and Redis |
-| `coinops_proxy` | Deploys the Go proxy Deployment and Service |
-| `coinops_history` | Deploys the history API, history consumer, and API Service |
-| `coinops_ui` | Deploys the React UI Deployment and Service |
-| `coinops_ingress` | Creates public Ingress resources, Traefik middlewares, and requests the TLS certificate |
+| `coinops_app_chart` | Installs the CoinOps application Helm chart from `charts/coinops/` (proxy, history API, history consumer, UI, public Ingress, Traefik strip-prefix middlewares) |
 
 All role variables live in `roles/<role>/defaults/main.yml` and are prefixed
-with the role name, for example `coinops_data_*` and `coinops_ingress_*`.
+with the role name, for example `coinops_data_*` and `coinops_app_chart_*`.
 
 ## Why Helm Is Used
 
-Helm is a package manager for Kubernetes. It is used for complex third-party
-software that already has a chart.
+Helm is a package manager for Kubernetes. It is used both for third-party
+software that already has a chart and to package the CoinOps application
+itself.
 
-In this deployment Helm installs:
+Helm releases in this deployment:
 
-- CNPG operator
-- RabbitMQ
-- Redis
+| Release | Namespace | Source |
+| --- | --- | --- |
+| `cnpg` | `cnpg-system` | upstream chart |
+| `rabbitmq` | `coinops-data` | upstream Bitnami chart |
+| `redis` | `coinops-data` | upstream Bitnami chart |
+| `coinops` | `coinops-backend` | local chart in `charts/coinops/` |
 
-CoinOps services are not installed with Helm yet. They are rendered as native
-Kubernetes manifests through Ansible templates because they are project-specific
-and simple enough for this stage.
+The local CoinOps chart deploys the application layer only (proxy, history API,
+history consumer, UI, ingress + middlewares). The data layer (PostgreSQL,
+RabbitMQ, Redis, secrets) stays outside the chart because it has a different
+lifecycle and is provisioned by `coinops_data`.
 
 ## Why CNPG Is Used
 
@@ -265,12 +269,15 @@ helm -n coinops-data list
 | `ansible/roles/cnpg_operator/defaults/main.yml` | CNPG Helm chart config |
 | `ansible/roles/coinops_data/tasks/main.yml` | Secrets, namespaces, CNPG, RabbitMQ, Redis |
 | `ansible/roles/coinops_data/templates/postgres-cluster.yml.j2` | PostgreSQL cluster CR |
-| `ansible/roles/coinops_proxy/templates/deployment.yml.j2` | Go proxy Kubernetes Deployment |
-| `ansible/roles/coinops_history/templates/api-deployment.yml.j2` | History API Deployment |
-| `ansible/roles/coinops_history/templates/consumer-deployment.yml.j2` | History consumer Deployment |
-| `ansible/roles/coinops_ui/templates/deployment.yml.j2` | React UI Deployment |
-| `ansible/roles/coinops_ingress/templates/frontend-ingress.yml.j2` | TLS Ingress for UI |
-| `ansible/roles/coinops_ingress/templates/backend-ingress.yml.j2` | Backend path routing |
+| `ansible/roles/coinops_app_chart/tasks/main.yml` | Calls `helm install/upgrade` for the app chart |
+| `charts/coinops/Chart.yaml` | Helm chart metadata |
+| `charts/coinops/values.yaml` | Default values for the app chart |
+| `charts/coinops/values.schema.json` | JSON Schema validation for values |
+| `charts/coinops/templates/_helpers.tpl` | Shared label / selector / image helpers |
+| `charts/coinops/templates/proxy/` | Go proxy Deployment + Service |
+| `charts/coinops/templates/history/` | History API Deployment + Service, history consumer Deployment |
+| `charts/coinops/templates/ui/` | React UI Deployment + Service |
+| `charts/coinops/templates/ingress/` | Frontend and backend Ingress, strip-prefix middlewares |
 
 ## Known Notes
 

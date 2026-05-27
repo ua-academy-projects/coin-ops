@@ -113,10 +113,12 @@ Role responsibilities:
 | --- | --- |
 | `cnpg_operator` | Installs CNPG with Helm |
 | `coinops_data` | Creates namespaces, secrets, PostgreSQL, RabbitMQ, Redis |
-| `coinops_proxy` | Deploys the Go proxy |
-| `coinops_history` | Deploys history API and consumer |
-| `coinops_ui` | Deploys the React UI |
-| `coinops_ingress` | Creates public Ingress and TLS routing |
+| `coinops_app_chart` | Installs the CoinOps application Helm chart from `charts/coinops/` (proxy, history API + consumer, UI, public Ingress, Traefik middlewares) |
+
+The application layer is packaged as a single local Helm chart at
+`charts/coinops/`. The data layer (PostgreSQL, RabbitMQ, Redis, secrets) is
+intentionally outside the chart and stays under `coinops_data` because it has a
+different lifecycle.
 
 ## Runtime Assets
 

@@ -12,6 +12,7 @@ Current layout:
 - `history/` - FastAPI history API, RabbitMQ consumer, PostgreSQL schema
 - `runtime/` - PostgreSQL runtime queue/session assets for future work
 - `ansible/` - k3s cluster, platform, and CoinOps Kubernetes deployment
+- `charts/coinops/` - local Helm chart for the CoinOps application layer
 - `tests/` - Python unit and integration tests
 - `docs/` - current k3s and application runbooks
 
@@ -72,10 +73,17 @@ Use tags for targeted changes:
 
 ```bash
 ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags data
-ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags backend
-ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags frontend
-ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags ingress
+ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags app
 ```
+
+The application layer is packaged as a local Helm chart at `charts/coinops/`
+and installed by the `coinops_app_chart` role as the `coinops` Helm release.
+The chart deploys: proxy Deployment + Service, history API Deployment + Service,
+history consumer Deployment, UI Deployment + Service, frontend and backend
+Ingresses, and two Traefik strip-prefix middlewares.
+
+The data layer (PostgreSQL via CNPG, RabbitMQ, Redis, all secrets) stays in
+the `coinops_data` role and is intentionally outside the chart.
 
 ## Coding Style
 
@@ -85,7 +93,13 @@ names and keep API and consumer responsibilities separated.
 
 YAML files use two-space indentation. Ansible role variables should live in
 `roles/<role>/defaults/main.yml` and start with the role name, for example
-`coinops_data_*`.
+`coinops_data_*` and `coinops_app_chart_*`.
+
+Helm chart templates live in `charts/coinops/templates/`, grouped by component
+(`proxy/`, `history/`, `ui/`, `ingress/`). Common label, selector, and image
+helpers are defined in `templates/_helpers.tpl` and reused via `include`.
+Chart values are validated against `charts/coinops/values.schema.json`; run
+`helm lint ./charts/coinops` before committing chart changes.
 
 ## Security
 

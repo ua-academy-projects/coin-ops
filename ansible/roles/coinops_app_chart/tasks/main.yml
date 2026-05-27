@@ -1,0 +1,89 @@
+---
+# Install / upgrade the CoinOps Helm chart.
+#
+# Assumes that the role `coinops_data` has already created:
+#   - namespaces coinops-backend, coinops-frontend
+#   - Secrets: coinops-backend-env, ghcr-pull-secret (in both namespaces)
+#
+# The chart deploys only the application layer (proxy, history API,
+# history consumer, UI, ingress + middlewares). The data layer
+# (PostgreSQL, RabbitMQ, Redis) stays in `coinops_data`.
+
+- name: Build CoinOps chart value overrides
+  ansible.builtin.set_fact:
+    coinops_app_chart_values: >-
+      {{
+        {
+          'global': (
+            ({'backendNamespace': coinops_app_chart_backend_namespace,
+              'frontendNamespace': coinops_app_chart_frontend_namespace})
+            | combine(
+                {'imageTag': coinops_app_chart_image_tag}
+                if coinops_app_chart_image_tag | length > 0 else {}
+              )
+          ),
+          'proxy':   {'enabled': coinops_app_chart_proxy_enabled},
+          'history': {
+            'api':      {'enabled': coinops_app_chart_history_api_enabled},
+            'consumer': {'enabled': coinops_app_chart_history_consumer_enabled}
+          },
+          'ui':      {'enabled': coinops_app_chart_ui_enabled},
+          'ingress': (
+            {'enabled': coinops_app_chart_ingress_enabled}
+            | combine(
+                {'domain': coinops_app_chart_ingress_domain}
+                if coinops_app_chart_ingress_domain | length > 0 else {}
+              )
+          )
+        }
+      }}
+
+- name: Install or upgrade CoinOps Helm release
+  kubernetes.core.helm:
+    kubeconfig: "{{ coinops_app_chart_kubeconfig }}"
+    name: "{{ coinops_app_chart_release_name }}"
+    chart_ref: "{{ coinops_app_chart_chart_ref }}"
+    release_namespace: "{{ coinops_app_chart_release_namespace }}"
+    create_namespace: false
+    wait: "{{ coinops_app_chart_wait }}"
+    wait_timeout: "{{ coinops_app_chart_wait_timeout }}"
+    values: "{{ coinops_app_chart_values }}"
+
+- name: Read CoinOps backend pods
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ coinops_app_chart_kubeconfig }}"
+    api_version: v1
+    kind: Pod
+    namespace: "{{ coinops_app_chart_backend_namespace }}"
+  register: coinops_app_chart_backend_pods
+
+- name: Read CoinOps frontend pods
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ coinops_app_chart_kubeconfig }}"
+    api_version: v1
+    kind: Pod
+    namespace: "{{ coinops_app_chart_frontend_namespace }}"
+  register: coinops_app_chart_frontend_pods
+
+- name: Show CoinOps backend pod names
+  ansible.builtin.debug:
+    msg: "{{ coinops_app_chart_backend_pods.resources | map(attribute='metadata.name') | list }}"
+
+- name: Show CoinOps frontend pod names
+  ansible.builtin.debug:
+    msg: "{{ coinops_app_chart_frontend_pods.resources | map(attribute='metadata.name') | list }}"
+
+- name: Read CoinOps TLS certificate
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ coinops_app_chart_kubeconfig }}"
+    api_version: cert-manager.io/v1
+    kind: Certificate
+    namespace: "{{ coinops_app_chart_frontend_namespace }}"
+  register: coinops_app_chart_certificates
+
+- name: Show CoinOps TLS certificate conditions
+  ansible.builtin.debug:
+    msg: "{{ item.status.conditions | default([]) }}"
+  loop: "{{ coinops_app_chart_certificates.resources }}"
+  loop_control:
+    label: "{{ item.metadata.name }}"

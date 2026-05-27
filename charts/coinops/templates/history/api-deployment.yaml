@@ -1,0 +1,48 @@
+{{- if .Values.history.api.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.history.api.name }}
+  namespace: {{ .Values.global.backendNamespace }}
+  labels:
+    {{- include "coinops.labels" (dict "ctx" . "component" .Values.history.api.name) | nindent 4 }}
+spec:
+  replicas: {{ .Values.history.api.replicas }}
+  selector:
+    matchLabels:
+      {{- include "coinops.selectorLabels" (dict "ctx" . "component" .Values.history.api.name) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "coinops.selectorLabels" (dict "ctx" . "component" .Values.history.api.name) | nindent 8 }}
+    spec:
+      imagePullSecrets:
+        - name: {{ .Values.global.imagePullSecret }}
+      containers:
+        - name: history-api
+          image: {{ include "coinops.image" (dict "ctx" . "image" .Values.history.api.image) }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: {{ .Values.history.api.containerPort }}
+          env:
+            - name: PORT
+              value: {{ .Values.history.api.containerPort | quote }}
+            - name: RUNTIME_BACKEND
+              value: {{ .Values.global.runtimeBackend | quote }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.global.backendEnvSecret }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+{{- end }}
