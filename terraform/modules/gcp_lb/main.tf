@@ -93,10 +93,6 @@ resource "google_compute_backend_service" "k3s_tcp" {
   load_balancing_scheme = "EXTERNAL"
   health_checks         = [google_compute_health_check.k3s[0].id]
 
-  # PROXY Protocol v1 — tells GCP to prepend connection info to TCP stream
-  # Traefik must also have proxyProtocol enabled to read this header
-  custom_request_headers = ["X-Forwarded-For:{client_ip}"]
-
   dynamic "backend" {
     for_each = google_compute_instance_group.k3s
     content { group = backend.value.id }
