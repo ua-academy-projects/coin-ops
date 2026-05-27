@@ -32,13 +32,12 @@
 - name: Create headlamp namespace
   kubernetes.core.k8s:
     state: present
+    kubeconfig: /etc/rancher/k3s/k3s.yaml
     definition:
       apiVersion: v1
       kind: Namespace
       metadata:
         name: "{{ headlamp_namespace }}"
-  environment:
-    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   vars:
     ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
 
@@ -48,8 +47,7 @@
     chart_ref: headlamp/headlamp
     release_namespace: "{{ headlamp_namespace }}"
     create_namespace: false
-  environment:
-    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+    kubeconfig: /etc/rancher/k3s/k3s.yaml
   vars:
     ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
 
