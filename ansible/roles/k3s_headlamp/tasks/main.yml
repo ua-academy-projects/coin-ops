@@ -1,0 +1,66 @@
+#SPDX-License-Identifier: MIT-0
+---
+# tasks file for ansible/roles/k3s_headlamp
+
+- name: Install Helm
+  ansible.builtin.shell: |
+    curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+  args:
+    creates: /usr/local/bin/helm
+
+
+- name: Install Python venv support 
+# Needed for kubernetes.core.k8s
+  ansible.builtin.apt:
+    name:
+      - python3-venv
+      - python3-pip
+    state: present
+
+- name: Install Kubernetes Python client in venv
+  ansible.builtin.pip:
+    name: "kubernetes=={{ headlamp_python_kubernetes_version }}"
+    virtualenv: /opt/headlamp-ansible-venv
+    virtualenv_command: python3 -m venv
+
+- name: Add Headlamp Helm repo
+  kubernetes.core.helm_repository:
+    name: headlamp
+    repo_url: https://kubernetes-sigs.github.io/headlamp/
+  vars:
+    ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
+
+- name: Create headlamp namespace
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ headlamp_namespace }}"
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  vars:
+    ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
+
+- name: Deploy Headlamp via Helm
+  kubernetes.core.helm:
+    name: "{{ headlamp_release_name }}"
+    chart_ref: headlamp/headlamp
+    release_namespace: "{{ headlamp_namespace }}"
+    create_namespace: false
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: How to access Headlamp
+  ansible.builtin.debug:
+    msg:
+      - "1. Start SSH tunnel and Headlamp port-forward from your laptop:"
+      - "   ssh -i /Users/arturvolinec/.ssh/coinops_gcp \\"
+      - "     -L 8080:127.0.0.1:8080 \\"
+      - "     {{ ansible_user }}@{{ public_ip }} \\"
+      - "     'sudo k3s kubectl port-forward -n {{ headlamp_namespace }} svc/headlamp 8080:80'"
+      - "2. Open in your laptop browser:"
+      - "   http://localhost:8080"
+      - "3. Get token on k3s primary:"
+      - "   sudo k3s kubectl create token {{ headlamp_service_account }} -n {{ headlamp_namespace }} --duration=2h"
