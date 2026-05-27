@@ -17,25 +17,25 @@
   ansible.builtin.shell: |
     curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server \
       --cluster-init \
-      --node-ip={{ private_ip }} \
-      --advertise-address={{ private_ip }}" sh -
+      --node-ip={{ hostvars[inventory_hostname][k3s_cluster_node_ip] }} \
+      --advertise-address={{ hostvars[inventory_hostname][k3s_cluster_node_ip] }}" sh -
   when:
     - not k3s_binary.stat.exists
-    - inventory_hostname == groups['all'][0]
+    - inventory_hostname == k3s_cluster_primary_node
 
 - name: Get k3s cluster token from primary
   ansible.builtin.command: cat /var/lib/rancher/k3s/server/node-token
   register: k3s_token
   changed_when: false
-  delegate_to: "{{ groups['all'][0] }}"
+  delegate_to: "{{ k3s_cluster_primary_node }}"
   run_once: true
 
 - name: Install k3s secondary
   ansible.builtin.shell: |
     curl -sfL https://get.k3s.io | K3S_TOKEN="{{ k3s_token.stdout }}" INSTALL_K3S_EXEC="server \
-      --server https://{{ hostvars[groups['all'][0]].private_ip }}:6443 \
-      --node-ip={{ private_ip }} \
-      --advertise-address={{ private_ip }}" sh -
+      --server https://{{ hostvars[k3s_cluster_primary_node][k3s_cluster_node_ip] }}:6443 \
+      --node-ip={{ hostvars[inventory_hostname][k3s_cluster_node_ip] }} \
+      --advertise-address={{ hostvars[inventory_hostname][k3s_cluster_node_ip] }}" sh -
   when:
     - not k3s_binary.stat.exists
-    - inventory_hostname != groups['all'][0]
+    - inventory_hostname != k3s_cluster_primary_node
