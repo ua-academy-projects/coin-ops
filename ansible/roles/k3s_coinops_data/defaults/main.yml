@@ -9,8 +9,10 @@
 k3s_first_node: "{{ ansible_play_hosts_all[0] }}"
 k3s_kubeconfig: /etc/rancher/k3s/k3s.yaml
 
-# Category namespace for the stateful backing tier (postgres/rabbitmq/redis).
-coinops_data_namespace: data
+# Per-workload namespaces for the stateful tier.
+coinops_postgres_namespace: coinops-postgres
+coinops_rabbitmq_namespace: coinops-rabbitmq
+coinops_redis_namespace: coinops-redis
 
 # Identities. coinops_db_* / coinops_rabbitmq_* come from the inventory /
 # add_host (config); read here as defaults under distinct names to avoid

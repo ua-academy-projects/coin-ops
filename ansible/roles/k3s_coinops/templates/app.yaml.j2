@@ -1,26 +1,22 @@
 ---
-# Coin-Ops application on k3s, split across category namespaces:
-#   app     — the workloads (proxy / history-api / history-consumer / ui) +
-#             their config + secrets + ClusterIP Services.
-#   ingress — the edge tier: a gateway nginx that path-routes to the app
-#             Services (cross-namespace, *.app.svc) + the Ingress that fronts it.
-# Backing services live in the `data` namespace (see k3s_coinops_data); the
-# connection URLs in coinops-app-secrets point at *.data.svc.
+# Coin-Ops on k3s — one workload per namespace. Each app Deployment runs under a
+# dedicated ServiceAccount with automountServiceAccountToken:false (no k8s API
+# surface; app-to-app traffic is governed by NetworkPolicies in k3s_netpol).
+# These Namespaces are also pre-created in tasks/main.yml (the ghcr-pull Secret
+# is applied before this template); re-asserting them here is idempotent.
+{% for ns in [coinops_proxy_namespace, coinops_history_api_namespace, coinops_history_consumer_namespace, coinops_ui_namespace, coinops_gateway_namespace] %}
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: {{ coinops_app_namespace }}
+  name: {{ ns }}
 ---
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: {{ coinops_ingress_namespace }}
----
+{% endfor %}
+{% for ns in coinops_app_namespaces %}
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: coinops-app-config
-  namespace: {{ coinops_app_namespace }}
+  namespace: {{ ns }}
 data:
   RUNTIME_BACKEND: "external"
   PGCLIENTENCODING: "UTF8"
@@ -30,18 +26,27 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: coinops-app-secrets
-  namespace: {{ coinops_app_namespace }}
+  namespace: {{ ns }}
 type: Opaque
 stringData:
   DATABASE_URL: "{{ coinops_app_database_url }}"
   RABBITMQ_URL: "{{ coinops_app_rabbitmq_url }}"
   REDIS_URL: "{{ coinops_app_redis_url }}"
 ---
+{% endfor %}
+# proxy
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: coinops-proxy
+  namespace: {{ coinops_proxy_namespace }}
+automountServiceAccountToken: false
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: proxy
-  namespace: {{ coinops_app_namespace }}
+  namespace: {{ coinops_proxy_namespace }}
   labels:
     app: proxy
 spec:
@@ -54,6 +59,7 @@ spec:
       labels:
         app: proxy
     spec:
+      serviceAccountName: coinops-proxy
       imagePullSecrets:
         - name: ghcr-pull
       containers:
@@ -74,7 +80,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: proxy
-  namespace: {{ coinops_app_namespace }}
+  namespace: {{ coinops_proxy_namespace }}
 spec:
   type: ClusterIP
   selector:
@@ -83,11 +89,19 @@ spec:
     - port: {{ coinops_proxy_port }}
       targetPort: {{ coinops_proxy_port }}
 ---
+# history-api
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: coinops-history-api
+  namespace: {{ coinops_history_api_namespace }}
+automountServiceAccountToken: false
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: history-api
-  namespace: {{ coinops_app_namespace }}
+  namespace: {{ coinops_history_api_namespace }}
   labels:
     app: history-api
 spec:
@@ -100,6 +114,7 @@ spec:
       labels:
         app: history-api
     spec:
+      serviceAccountName: coinops-history-api
       imagePullSecrets:
         - name: ghcr-pull
       containers:
@@ -120,7 +135,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: history-api
-  namespace: {{ coinops_app_namespace }}
+  namespace: {{ coinops_history_api_namespace }}
 spec:
   type: ClusterIP
   selector:
@@ -129,11 +144,19 @@ spec:
     - port: {{ coinops_history_port }}
       targetPort: {{ coinops_history_port }}
 ---
+# history-consumer (no Service; nothing connects to it)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: coinops-history-consumer
+  namespace: {{ coinops_history_consumer_namespace }}
+automountServiceAccountToken: false
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: history-consumer
-  namespace: {{ coinops_app_namespace }}
+  namespace: {{ coinops_history_consumer_namespace }}
   labels:
     app: history-consumer
 spec:
@@ -147,6 +170,7 @@ spec:
       labels:
         app: history-consumer
     spec:
+      serviceAccountName: coinops-history-consumer
       imagePullSecrets:
         - name: ghcr-pull
       containers:
@@ -158,11 +182,19 @@ spec:
             - secretRef:
                 name: coinops-app-secrets
 ---
+# ui (no DB secrets; just the same-origin API base)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: coinops-ui
+  namespace: {{ coinops_ui_namespace }}
+automountServiceAccountToken: false
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ui
-  namespace: {{ coinops_app_namespace }}
+  namespace: {{ coinops_ui_namespace }}
   labels:
     app: ui
 spec:
@@ -175,14 +207,13 @@ spec:
       labels:
         app: ui
     spec:
+      serviceAccountName: coinops-ui
       imagePullSecrets:
         - name: ghcr-pull
       containers:
         - name: ui
           image: {{ coinops_ui_image }}
           env:
-            # Same-origin API base — the SPA calls app.<domain>/api and
-            # /history-api, which the gateway routes to the backends.
             - name: PROXY_URL
               value: "https://{{ coinops_app_host }}/api"
             - name: HISTORY_URL
@@ -194,7 +225,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: ui
-  namespace: {{ coinops_app_namespace }}
+  namespace: {{ coinops_ui_namespace }}
 spec:
   type: ClusterIP
   selector:
@@ -203,11 +234,19 @@ spec:
     - port: 80
       targetPort: 80
 ---
+# gateway (edge nginx + the public Ingress)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: coinops-gateway
+  namespace: {{ coinops_gateway_namespace }}
+automountServiceAccountToken: false
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: coinops-gateway-conf
-  namespace: {{ coinops_ingress_namespace }}
+  namespace: {{ coinops_gateway_namespace }}
 data:
   default.conf: |
     server {
@@ -221,7 +260,7 @@ data:
       }
 
       location /api/ {
-        proxy_pass http://proxy.{{ coinops_app_namespace }}.svc.cluster.local:{{ coinops_proxy_port }}/;
+        proxy_pass http://proxy.{{ coinops_proxy_namespace }}.svc.cluster.local:{{ coinops_proxy_port }}/;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -230,7 +269,7 @@ data:
       }
 
       location /history-api/ {
-        proxy_pass http://history-api.{{ coinops_app_namespace }}.svc.cluster.local:{{ coinops_history_port }}/;
+        proxy_pass http://history-api.{{ coinops_history_api_namespace }}.svc.cluster.local:{{ coinops_history_port }}/;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -239,7 +278,7 @@ data:
       }
 
       location / {
-        proxy_pass http://ui.{{ coinops_app_namespace }}.svc.cluster.local:80;
+        proxy_pass http://ui.{{ coinops_ui_namespace }}.svc.cluster.local:80;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -252,7 +291,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: gateway
-  namespace: {{ coinops_ingress_namespace }}
+  namespace: {{ coinops_gateway_namespace }}
   labels:
     app: gateway
 spec:
@@ -265,6 +304,7 @@ spec:
       labels:
         app: gateway
     spec:
+      serviceAccountName: coinops-gateway
       containers:
         - name: gateway
           image: {{ coinops_gateway_image }}
@@ -282,7 +322,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: gateway
-  namespace: {{ coinops_ingress_namespace }}
+  namespace: {{ coinops_gateway_namespace }}
 spec:
   type: ClusterIP
   selector:
@@ -295,7 +335,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: coinops
-  namespace: {{ coinops_ingress_namespace }}
+  namespace: {{ coinops_gateway_namespace }}
   annotations:
     cert-manager.io/cluster-issuer: {{ cert_manager_cluster_issuer }}
 spec:

@@ -8,12 +8,23 @@
 k3s_first_node: "{{ ansible_play_hosts_all[0] }}"
 k3s_kubeconfig: /etc/rancher/k3s/k3s.yaml
 
-# Category namespaces: app workloads in `app`, the edge gateway + Ingress in
-# `ingress`, and the backing services (postgres/rabbitmq/redis) in `data`
-# (owned by k3s_coinops_data — referenced here only for cross-namespace DNS).
-coinops_app_namespace: app
-coinops_ingress_namespace: ingress
-coinops_data_namespace: data
+# Per-workload namespaces (one Deployment per namespace). The backing-service
+# namespaces are owned by k3s_coinops_data; referenced here only for cross-ns DNS.
+coinops_proxy_namespace: coinops-proxy
+coinops_history_api_namespace: coinops-history-api
+coinops_history_consumer_namespace: coinops-history-consumer
+coinops_ui_namespace: coinops-ui
+coinops_gateway_namespace: coinops-gateway
+coinops_postgres_namespace: coinops-postgres
+coinops_rabbitmq_namespace: coinops-rabbitmq
+coinops_redis_namespace: coinops-redis
+
+# Namespaces that pull private GHCR images / need app config+secrets.
+coinops_app_namespaces:
+  - "{{ coinops_proxy_namespace }}"
+  - "{{ coinops_history_api_namespace }}"
+  - "{{ coinops_history_consumer_namespace }}"
+coinops_image_pull_namespaces: "{{ coinops_app_namespaces + [coinops_ui_namespace] }}"
 
 # Ingress / TLS — shared with k3s-cert-manager. Served at app.<domain>.
 k3s_ingress_domain: "{{ coinops_k3s_ingress_domain | default('coinops.pp.ua', true) }}"
@@ -44,15 +55,16 @@ coinops_image_pull_registry: "{{ coinops_image_registry.split('/')[0] }}"
 coinops_image_pull_username: "{{ coinops_ghcr_username | default('', true) }}"
 coinops_image_pull_token: "{{ coinops_ghcr_token | default('') }}"
 
-# In-cluster service hostnames + connection URLs (external runtime mode). The
-# backing services live in the `data` namespace, so clients address them
-# cross-namespace as <svc>.data.svc.cluster.local. PostgreSQL is a CloudNativePG
-# Cluster; clients use its read-write Service `<cluster>-rw` (the cluster name
-# must match coinops_cnpg_cluster_name in k3s_coinops_data).
+# In-cluster service hostnames + connection URLs (external runtime mode). Each
+# backing service lives in its own namespace (coinops-postgres / coinops-rabbitmq
+# / coinops-redis), so clients address them cross-namespace as
+# <svc>.<namespace>.svc.cluster.local. PostgreSQL is a CloudNativePG Cluster;
+# clients use its read-write Service `<cluster>-rw` (the cluster name must match
+# coinops_cnpg_cluster_name in k3s_coinops_data).
 coinops_cnpg_cluster_name: coinops-pg
-coinops_pg_host: "{{ coinops_cnpg_cluster_name }}-rw.{{ coinops_data_namespace }}.svc.cluster.local"
-coinops_mq_host: "rabbitmq.{{ coinops_data_namespace }}.svc.cluster.local"
-coinops_redis_host: "redis.{{ coinops_data_namespace }}.svc.cluster.local"
+coinops_pg_host: "{{ coinops_cnpg_cluster_name }}-rw.{{ coinops_postgres_namespace }}.svc.cluster.local"
+coinops_mq_host: "rabbitmq.{{ coinops_rabbitmq_namespace }}.svc.cluster.local"
+coinops_redis_host: "redis.{{ coinops_redis_namespace }}.svc.cluster.local"
 coinops_app_database_url: "postgresql://{{ coinops_app_db_user }}:{{ coinops_app_db_password }}@{{ coinops_pg_host }}:5432/{{ coinops_app_db_name }}"
 coinops_app_rabbitmq_url: "amqp://{{ coinops_app_rabbitmq_user }}:{{ coinops_app_rabbitmq_password }}@{{ coinops_mq_host }}:5672/"
 coinops_app_redis_url: "redis://{{ coinops_redis_host }}:6379/0"

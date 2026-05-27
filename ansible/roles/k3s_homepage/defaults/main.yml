@@ -15,7 +15,7 @@ k3s_homepage_chart_repo_name: jameswynn
 k3s_homepage_chart_repo_url: https://jameswynn.github.io/helm-charts
 k3s_homepage_chart_ref: jameswynn/homepage
 k3s_homepage_chart_version: 2.1.0
-k3s_homepage_namespace: tooling
+k3s_homepage_namespace: homepage
 k3s_homepage_release: homepage
 
 # Pin the Homepage image tag for reproducible rollouts (empty == chart default).

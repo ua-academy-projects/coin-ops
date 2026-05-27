@@ -1,46 +1,36 @@
 ---
-# Backing services for Coin-Ops on k3s: a creds Secret, a CloudNativePG
-# `Cluster` for PostgreSQL (managed by the operator from k3s-cnpg), and RabbitMQ
-# + Redis StatefulSets each with a stable in-cluster Service for DNS.
+# postgres namespace + creds + CNPG Cluster
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: {{ coinops_data_namespace }}
+  name: {{ coinops_postgres_namespace }}
 ---
 apiVersion: v1
 kind: Secret
 metadata:
-  name: coinops-data-creds
-  namespace: {{ coinops_data_namespace }}
+  name: coinops-pg-creds
+  namespace: {{ coinops_postgres_namespace }}
 type: Opaque
 stringData:
   POSTGRES_USER: {{ coinops_data_db_user }}
   POSTGRES_PASSWORD: {{ coinops_data_db_password }}
   POSTGRES_DB: {{ coinops_data_db_name }}
-  RABBITMQ_DEFAULT_USER: {{ coinops_data_rabbitmq_user }}
-  RABBITMQ_DEFAULT_PASS: {{ coinops_data_rabbitmq_password }}
 ---
-# CNPG reads the application role's credentials from a basic-auth Secret named
-# in the Cluster's bootstrap.initdb.secret. Same user/password the app uses.
 apiVersion: v1
 kind: Secret
 metadata:
   name: coinops-pg-app
-  namespace: {{ coinops_data_namespace }}
+  namespace: {{ coinops_postgres_namespace }}
 type: kubernetes.io/basic-auth
 stringData:
   username: {{ coinops_data_db_user }}
   password: {{ coinops_data_db_password }}
 ---
-# PostgreSQL, managed by the CloudNativePG operator. The operator creates the
-# StatefulSet, PVCs, and the -rw / -ro / -r Services. The app connects to
-# {{ coinops_cnpg_cluster_name }}-rw. initdb bootstraps the app database + owner
-# from the basic-auth Secret above; the schema Job (below) loads the tables.
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
   name: {{ coinops_cnpg_cluster_name }}
-  namespace: {{ coinops_data_namespace }}
+  namespace: {{ coinops_postgres_namespace }}
 spec:
   instances: {{ coinops_cnpg_instances }}
 {% if coinops_cnpg_postgres_image | length > 0 %}
@@ -56,11 +46,27 @@ spec:
     size: {{ coinops_postgres_storage }}
     storageClass: {{ coinops_data_storage_class }}
 ---
+# rabbitmq namespace + creds + StatefulSet
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ coinops_rabbitmq_namespace }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: coinops-rabbitmq-creds
+  namespace: {{ coinops_rabbitmq_namespace }}
+type: Opaque
+stringData:
+  RABBITMQ_DEFAULT_USER: {{ coinops_data_rabbitmq_user }}
+  RABBITMQ_DEFAULT_PASS: {{ coinops_data_rabbitmq_password }}
+---
 apiVersion: v1
 kind: Service
 metadata:
   name: rabbitmq
-  namespace: {{ coinops_data_namespace }}
+  namespace: {{ coinops_rabbitmq_namespace }}
 spec:
   clusterIP: None
   selector:
@@ -73,7 +79,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: rabbitmq
-  namespace: {{ coinops_data_namespace }}
+  namespace: {{ coinops_rabbitmq_namespace }}
 spec:
   serviceName: rabbitmq
   replicas: 1
@@ -90,7 +96,7 @@ spec:
           image: {{ coinops_rabbitmq_image }}
           envFrom:
             - secretRef:
-                name: coinops-data-creds
+                name: coinops-rabbitmq-creds
           ports:
             - containerPort: 5672
           readinessProbe:
@@ -111,11 +117,17 @@ spec:
           requests:
             storage: {{ coinops_rabbitmq_storage }}
 ---
+# redis namespace + StatefulSet
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ coinops_redis_namespace }}
+---
 apiVersion: v1
 kind: Service
 metadata:
   name: redis
-  namespace: {{ coinops_data_namespace }}
+  namespace: {{ coinops_redis_namespace }}
 spec:
   clusterIP: None
   selector:
@@ -128,7 +140,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: redis
-  namespace: {{ coinops_data_namespace }}
+  namespace: {{ coinops_redis_namespace }}
 spec:
   serviceName: redis
   replicas: 1

@@ -11,8 +11,8 @@
 k3s_first_node: "{{ ansible_play_hosts_all[0] }}"
 k3s_kubeconfig: /etc/rancher/k3s/k3s.yaml
 
-# Edge tier: cloudflared lives in the `ingress` namespace (category taxonomy).
-k3s_cloudflared_namespace: ingress
+# Edge tier: cloudflared gets its own namespace (one namespace per workload).
+k3s_cloudflared_namespace: coinops-cloudflared
 k3s_cloudflared_replicas: 2
 # Pin a release (e.g. cloudflare/cloudflared:2024.12.2) for reproducibility.
 k3s_cloudflared_image: "cloudflare/cloudflared:latest"

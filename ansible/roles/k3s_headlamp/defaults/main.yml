@@ -15,7 +15,7 @@ k3s_headlamp_chart_repo_name: headlamp
 k3s_headlamp_chart_repo_url: https://kubernetes-sigs.github.io/headlamp/
 k3s_headlamp_chart_ref: headlamp/headlamp
 k3s_headlamp_chart_version: 0.42.0
-k3s_headlamp_namespace: tooling
+k3s_headlamp_namespace: headlamp
 k3s_headlamp_release: headlamp
 
 # Pin the Headlamp image tag for reproducible rollouts (empty == chart default).

@@ -7,7 +7,7 @@
   ansible.builtin.meta: end_host
   when: inventory_hostname != k3s_first_node
 
-- name: Ensure the coinops namespace exists
+- name: Ensure per-workload namespaces exist
   kubernetes.core.k8s:
     state: present
     kubeconfig: "{{ k3s_kubeconfig }}"
@@ -15,12 +15,9 @@
       apiVersion: v1
       kind: Namespace
       metadata:
-        name: "{{ coinops_app_namespace }}"
+        name: "{{ item }}"
+  loop: "{{ coinops_image_pull_namespaces + [coinops_gateway_namespace] }}"
 
-# Build the dockerconfigjson in two steps. The registry is a *dict key*, and
-# Ansible does NOT template keys written as "{{ ... }}" in a mapping — only an
-# in-expression dict literal ({{ {var: ...} }}) evaluates the key. So assemble
-# it in a set_fact expression, then base64 the JSON.
 - name: Build the GHCR registry auth entry
   ansible.builtin.set_fact:
     coinops_ghcr_auth:
@@ -36,7 +33,7 @@
   no_log: true
   when: coinops_image_pull_token | length > 0
 
-- name: Create the GHCR image-pull secret
+- name: Create the GHCR image-pull secret in each app namespace
   kubernetes.core.k8s:
     state: present
     kubeconfig: "{{ k3s_kubeconfig }}"
@@ -45,10 +42,11 @@
       kind: Secret
       metadata:
         name: ghcr-pull
-        namespace: "{{ coinops_app_namespace }}"
+        namespace: "{{ item }}"
       type: kubernetes.io/dockerconfigjson
       data:
         .dockerconfigjson: "{{ coinops_dockerconfig | to_json | b64encode }}"
+  loop: "{{ coinops_image_pull_namespaces }}"
   no_log: true
   when: coinops_image_pull_token | length > 0
 
@@ -67,6 +65,5 @@
 - name: Report Coin-Ops app URL
   ansible.builtin.debug:
     msg:
-      - "Coin-Ops app exposed at https://{{ coinops_app_host }} (cert via {{ cert_manager_cluster_issuer }})."
-      - "Reachable once *.{{ k3s_ingress_domain }} resolves to a k3s node IP from your tailnet client."
+      - "Coin-Ops app served at https://{{ coinops_app_host }} via Cloudflare (cert {{ cert_manager_cluster_issuer }})."
       - "Health: https://{{ coinops_app_host }}/health | API: /api | History: /history-api"
