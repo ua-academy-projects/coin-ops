@@ -1,14 +1,12 @@
 # gcp_lb/main.tf
 # Global TCP/HTTP Load Balancer for k3s cluster.
 # Port 80  → HTTP proxy  → HTTP backend service  → k3s nodes → Traefik
-# Port 443 → TCP proxy   → TCP backend service   → k3s nodes → Traefik (handles TLS)
+# Port 443 → TCP proxy   → TCP backend service (PROXY Protocol v1) → Traefik
 
 locals {
   create = contains(["gcp", "hybrid"], var.config.general.cloud) ? 1 : 0
 }
 
-# Global static IP — persists across apply/destroy cycles.
-# Global forwarding rules require global (not regional) IP addresses.
 resource "google_compute_global_address" "lb_ip" {
   count = local.create
   name  = "coinops-lb-ip"
@@ -38,7 +36,6 @@ resource "google_compute_firewall" "allow_health_check" {
   target_tags   = ["k3s-server"]
 }
 
-# Data source — looks up existing VM self_link by name+zone
 data "google_compute_instance" "k3s" {
   for_each = local.create == 1 ? var.k3s_instance_zones : {}
   name     = each.key
@@ -46,9 +43,9 @@ data "google_compute_instance" "k3s" {
 }
 
 resource "google_compute_instance_group" "k3s" {
-  for_each = local.create == 1 ? var.k3s_instance_zones : {}
-  name     = "coinops-k3s-${replace(each.key, ".", "-")}"
-  zone     = each.value
+  for_each  = local.create == 1 ? var.k3s_instance_zones : {}
+  name      = "coinops-k3s-${replace(each.key, ".", "-")}"
+  zone      = each.value
   instances = [data.google_compute_instance.k3s[each.key].self_link]
   named_port {
     name = "http"
@@ -60,20 +57,18 @@ resource "google_compute_instance_group" "k3s" {
   }
 }
 
-# TCP health check on port 80 — verifies Traefik accepts connections.
-# HTTP health check cannot be used because Traefik requires Host header
-# for routing — without it returns 404 which GCP considers unhealthy.
-# TCP check confirms port is open and service is running.
-# This is standard practice for Ingress controllers behind GCP LB.
 resource "google_compute_health_check" "k3s" {
   count = local.create
   name  = "coinops-k3s-health"
+  # TCP health check — verifies Traefik accepts connections on port 80.
+  # HTTP health check cannot work because Traefik requires Host header.
   tcp_health_check {
     port = 80
   }
 }
 
-# HTTP backend service — protocol HTTP, used for port 80
+# HTTP backend — port 80, standard HTTP forwarding
+# GCP HTTP proxy understands HTTP and passes Host header correctly to Traefik
 resource "google_compute_backend_service" "k3s_http" {
   count                 = local.create
   name                  = "coinops-k3s-backend-http"
@@ -86,13 +81,22 @@ resource "google_compute_backend_service" "k3s_http" {
   }
 }
 
-# TCP backend service — protocol TCP, required by target_tcp_proxy for port 443
+# TCP backend — port 443 with PROXY Protocol v1.
+# PROXY Protocol adds a header at the start of TCP connection containing
+# original client IP and destination host info.
+# Traefik reads this header and knows which domain was requested.
+# Without PROXY Protocol, Traefik sees raw TCP and cannot route by domain.
 resource "google_compute_backend_service" "k3s_tcp" {
   count                 = local.create
   name                  = "coinops-k3s-backend-tcp"
   protocol              = "TCP"
   load_balancing_scheme = "EXTERNAL"
   health_checks         = [google_compute_health_check.k3s[0].id]
+
+  # PROXY Protocol v1 — tells GCP to prepend connection info to TCP stream
+  # Traefik must also have proxyProtocol enabled to read this header
+  custom_request_headers = ["X-Forwarded-For:{client_ip}"]
+
   dynamic "backend" {
     for_each = google_compute_instance_group.k3s
     content { group = backend.value.id }
@@ -111,12 +115,11 @@ resource "google_compute_target_http_proxy" "k3s" {
   url_map = google_compute_url_map.k3s[0].id
 }
 
-# Port 80 forwarding rule → HTTP proxy
 resource "google_compute_global_forwarding_rule" "http" {
   count                 = local.create
   name                  = "coinops-k3s-http"
   target                = google_compute_target_http_proxy.k3s[0].id
-  ip_address = google_compute_global_address.lb_ip[0].id
+  ip_address            = google_compute_global_address.lb_ip[0].id
   port_range            = "80"
   load_balancing_scheme = "EXTERNAL"
 }
@@ -128,19 +131,19 @@ resource "google_compute_ssl_policy" "k3s" {
   min_tls_version = "TLS_1_2"
 }
 
-# TCP proxy uses TCP backend service — passes 443 traffic raw to Traefik
 resource "google_compute_target_tcp_proxy" "k3s_https" {
   count           = local.create
   name            = "coinops-k3s-https-proxy"
   backend_service = google_compute_backend_service.k3s_tcp[0].id
+  # PROXY_V1 = send PROXY Protocol v1 header before TCP stream
+  proxy_header    = "PROXY_V1"
 }
 
-# Port 443 forwarding rule → TCP proxy
 resource "google_compute_global_forwarding_rule" "https" {
   count                 = local.create
   name                  = "coinops-k3s-https"
   target                = google_compute_target_tcp_proxy.k3s_https[0].id
-  ip_address = google_compute_global_address.lb_ip[0].id
+  ip_address            = google_compute_global_address.lb_ip[0].id
   port_range            = "443"
   load_balancing_scheme = "EXTERNAL"
 }
