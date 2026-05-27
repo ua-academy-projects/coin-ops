@@ -31,7 +31,7 @@
   pip:
     name: kubernetes
     state: present
-    extra_args: --break-system-packages
+    extra_args: --break-system-packages --ignore-installed
 
 # - name: Configure Traefik to accept PROXY Protocol from GCP LB
 #   # PROXY Protocol = механізм передачі оригінальних заголовків через TCP proxy.
