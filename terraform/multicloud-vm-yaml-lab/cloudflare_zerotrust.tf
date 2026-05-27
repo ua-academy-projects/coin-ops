@@ -17,10 +17,24 @@
 # is set, and domain.zero_trust.enabled is true. So it is a no-op on the AWS
 # compose path (cloud: aws).
 
+variable "github_oauth_client_id" {
+  type        = string
+  default     = ""
+  description = "GitHub OAuth App Client ID for Cloudflare Access GitHub login. Set via TF_VAR_github_oauth_client_id."
+}
+
+variable "github_oauth_client_secret" {
+  type        = string
+  default     = ""
+  sensitive   = true
+  description = "GitHub OAuth App Client Secret. Set via TF_VAR_github_oauth_client_secret."
+}
+
 locals {
   cf_account_id      = try(local.config.domain.cloudflare_account_id, "")
   cf_access_emails   = try(local.config.domain.zero_trust.access_emails, [])
   zero_trust_enabled = local.is_gcp && length(local.k3s_names) > 0 && try(local.config.domain.zero_trust.enabled, false) && local.cf_account_id != ""
+  cf_github_enabled  = local.zero_trust_enabled && var.github_oauth_client_id != ""
 
   # Hostnames served through the tunnels (<name>.<k3s_ingress_domain>).
   cf_apps_hostnames = {
@@ -72,6 +86,22 @@ data "cloudflare_zero_trust_tunnel_cloudflared_token" "admin" {
   count      = local.zero_trust_enabled ? 1 : 0
   account_id = local.cf_account_id
   tunnel_id  = cloudflare_zero_trust_tunnel_cloudflared.admin[0].id
+}
+
+# --- GitHub identity provider (login method) ---------------------------------
+# Requires a GitHub OAuth App (github.com > Settings > Developer settings >
+# OAuth Apps). Authorization callback URL:
+#   https://<team-name>.cloudflareaccess.com/cdn-cgi/access/callback
+# client_id/secret arrive via TF_VAR_github_oauth_client_id / _secret.
+resource "cloudflare_zero_trust_access_identity_provider" "github" {
+  count      = local.cf_github_enabled ? 1 : 0
+  account_id = local.cf_account_id
+  name       = "GitHub"
+  type       = "github"
+  config = {
+    client_id     = var.github_oauth_client_id
+    client_secret = var.github_oauth_client_secret
+  }
 }
 
 # --- Routing -----------------------------------------------------------------
@@ -151,6 +181,9 @@ resource "cloudflare_zero_trust_access_application" "gated" {
   name       = "coinops-${each.key}"
   domain     = each.value
   type       = "self_hosted"
+
+  allowed_idps              = local.cf_github_enabled ? [cloudflare_zero_trust_access_identity_provider.github[0].id] : null
+  auto_redirect_to_identity = local.cf_github_enabled
 
   policies = [{
     id         = cloudflare_zero_trust_access_policy.operators[0].id
