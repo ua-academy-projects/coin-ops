@@ -68,10 +68,11 @@ resource "google_compute_instance_group" "k3s" {
   }
 }
 
-# TCP health check — verifies Traefik accepts connections on port 80
-resource "google_compute_health_check" "k3s" {
-  count = local.create
-  name  = "coinops-k3s-health"
+# Regional health check — required for Regional NLB
+resource "google_compute_region_health_check" "k3s" {
+  count  = local.create
+  name   = "coinops-k3s-health"
+  region = local.region
   tcp_health_check {
     port = 80
   }
@@ -84,7 +85,7 @@ resource "google_compute_region_backend_service" "k3s_http" {
   region                = local.region
   protocol              = "TCP"
   load_balancing_scheme = "EXTERNAL"
-  health_checks         = [google_compute_health_check.k3s[0].id]
+  health_checks = [google_compute_region_health_check.k3s[0].id]
 
   dynamic "backend" {
     for_each = google_compute_instance_group.k3s
@@ -101,7 +102,8 @@ resource "google_compute_region_backend_service" "k3s_https" {
   region                = local.region
   protocol              = "TCP"
   load_balancing_scheme = "EXTERNAL"
-  health_checks         = [google_compute_health_check.k3s[0].id]
+  health_checks = [google_compute_region_health_check.k3s[0].id]
+
 
   dynamic "backend" {
     for_each = google_compute_instance_group.k3s
