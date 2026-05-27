@@ -1,0 +1,23 @@
+---
+# k3s_netpol — default-deny + explicit-allow NetworkPolicies enforcing the
+# per-workload namespace split. k3s enforces these via its bundled kube-router
+# controller. System namespaces (kube-system, cnpg-system, cert-manager) are
+# left unrestricted on purpose.
+k3s_first_node: "{{ ansible_play_hosts_all[0] }}"
+k3s_kubeconfig: /etc/rancher/k3s/k3s.yaml
+
+coinops_proxy_namespace: coinops-proxy
+coinops_history_api_namespace: coinops-history-api
+coinops_history_consumer_namespace: coinops-history-consumer
+coinops_ui_namespace: coinops-ui
+coinops_gateway_namespace: coinops-gateway
+coinops_postgres_namespace: coinops-postgres
+coinops_rabbitmq_namespace: coinops-rabbitmq
+coinops_redis_namespace: coinops-redis
+
+coinops_proxy_port: 8080
+coinops_history_port: 8000
+
+# k3s defaults — used to allow "internet" egress while excluding in-cluster.
+k3s_pod_cidr: 10.42.0.0/16
+k3s_service_cidr: 10.43.0.0/16

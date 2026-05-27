@@ -1,0 +1,19 @@
+---
+- name: Skip k3s_netpol (not the first node)
+  ansible.builtin.meta: end_host
+  when: inventory_hostname != k3s_first_node
+
+- name: Apply NetworkPolicies
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ item }}"
+    kubeconfig: "{{ k3s_kubeconfig }}"
+  loop: "{{ lookup('template', 'netpol.yaml.j2') | from_yaml_all | list }}"
+  loop_control:
+    label: "{{ item.metadata.namespace }}/{{ item.metadata.name }}"
+
+- name: Report NetworkPolicy posture
+  ansible.builtin.debug:
+    msg:
+      - "Default-deny + explicit-allow NetworkPolicies applied across the coinops-* namespaces."
+      - "System namespaces (kube-system, cnpg-system, cert-manager) intentionally unrestricted."

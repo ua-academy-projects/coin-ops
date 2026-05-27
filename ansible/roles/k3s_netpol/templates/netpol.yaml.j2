@@ -1,0 +1,301 @@
+{% set ns_all = [coinops_proxy_namespace, coinops_history_api_namespace, coinops_history_consumer_namespace, coinops_ui_namespace, coinops_gateway_namespace, coinops_rabbitmq_namespace, coinops_redis_namespace] %}
+{# --- default-deny + DNS egress for every restricted namespace (postgres handled separately) --- #}
+{% for ns in ns_all %}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: {{ ns }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: {{ ns }}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+{% endfor %}
+{# --- proxy --- #}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-gateway
+  namespace: {{ coinops_proxy_namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: proxy
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ coinops_gateway_namespace }}
+      ports:
+        - protocol: TCP
+          port: {{ coinops_proxy_port }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-deps
+  namespace: {{ coinops_proxy_namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: proxy
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ coinops_redis_namespace }}
+      ports:
+        - protocol: TCP
+          port: 6379
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ coinops_rabbitmq_namespace }}
+      ports:
+        - protocol: TCP
+          port: 5672
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - {{ k3s_pod_cidr }}
+              - {{ k3s_service_cidr }}
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
+{# --- history-api --- #}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-gateway
+  namespace: {{ coinops_history_api_namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: history-api
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ coinops_gateway_namespace }}
+      ports:
+        - protocol: TCP
+          port: {{ coinops_history_port }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-postgres
+  namespace: {{ coinops_history_api_namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: history-api
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ coinops_postgres_namespace }}
+      ports:
+        - protocol: TCP
+          port: 5432
+{# --- history-consumer --- #}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-deps
+  namespace: {{ coinops_history_consumer_namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: history-consumer
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ coinops_rabbitmq_namespace }}
+      ports:
+        - protocol: TCP
+          port: 5672
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ coinops_postgres_namespace }}
+      ports:
+        - protocol: TCP
+          port: 5432
+{# --- ui --- #}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-gateway
+  namespace: {{ coinops_ui_namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: ui
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ coinops_gateway_namespace }}
+      ports:
+        - protocol: TCP
+          port: 80
+{# --- gateway --- #}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-traefik
+  namespace: {{ coinops_gateway_namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: gateway
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: TCP
+          port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-backends
+  namespace: {{ coinops_gateway_namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: gateway
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ coinops_proxy_namespace }}
+      ports:
+        - protocol: TCP
+          port: {{ coinops_proxy_port }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ coinops_history_api_namespace }}
+      ports:
+        - protocol: TCP
+          port: {{ coinops_history_port }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ coinops_ui_namespace }}
+      ports:
+        - protocol: TCP
+          port: 80
+{# --- rabbitmq --- #}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-clients
+  namespace: {{ coinops_rabbitmq_namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: rabbitmq
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ coinops_proxy_namespace }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ coinops_history_consumer_namespace }}
+      ports:
+        - protocol: TCP
+          port: 5672
+{# --- redis --- #}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-clients
+  namespace: {{ coinops_redis_namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ coinops_proxy_namespace }}
+      ports:
+        - protocol: TCP
+          port: 6379
+{# --- postgres: ingress-restricted, egress open (CNPG operator/replication/apiserver) --- #}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-clients-and-operator
+  namespace: {{ coinops_postgres_namespace }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cnpg-system
+    - from:
+        - podSelector: {}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ coinops_history_api_namespace }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ coinops_history_consumer_namespace }}
+      ports:
+        - protocol: TCP
+          port: 5432

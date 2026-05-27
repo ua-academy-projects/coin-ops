@@ -42,3 +42,4 @@
     - k3s_cnpg
     - k3s_coinops_data
     - k3s_coinops
+    - k3s_netpol
