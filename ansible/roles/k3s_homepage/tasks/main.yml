@@ -139,3 +139,45 @@
               target: _blank
   vars:
     ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
+
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: homepage
+#   namespace: default
+#   labels:
+#     app.kubernetes.io/name: homepage
+#   annotations:
+# spec:
+#   type: ClusterIP
+#   ports:
+#     - port: 3000
+#       targetPort: http
+#       protocol: TCP
+#       name: http
+#   selector:
+#     app.kubernetes.io/name: homepage
+
+- name: Create Homepage service
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_homepage_kubeconfig }}"
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: homepage
+        namespace: "{{ k3s_homepage_namespace }}" 
+        labels:
+          app.kubernetes.io/name: homepage
+        annotations:
+      spec:
+        type: ClusterIP
+        ports:
+          - port: 3000
+            targetPort: http
+            protocol: TCP
+            name: http
+        selector:
+          app.kubernetes.io/name: homepage
+
