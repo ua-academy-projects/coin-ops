@@ -1,0 +1,59 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: coinops-ui
+  namespace: {{ .Values.ui.namespace }}
+  labels:
+    {{- include "coinops-app.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ui
+  namespace: {{ .Values.ui.namespace }}
+  labels:
+    app: ui
+    {{- include "coinops-app.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.ui.replicas }}
+  selector:
+    matchLabels:
+      app: ui
+  template:
+    metadata:
+      labels:
+        app: ui
+    spec:
+      serviceAccountName: coinops-ui
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: ui
+          image: "{{ .Values.image.registry }}/{{ .Values.ui.image }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            # Same-origin API base — the SPA calls app.<host>/api and
+            # /history-api, which the gateway routes to the backends.
+            - name: PROXY_URL
+              value: "https://{{ .Values.ingress.host }}/api"
+            - name: HISTORY_URL
+              value: "https://{{ .Values.ingress.host }}/history-api"
+          ports:
+            - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ui
+  namespace: {{ .Values.ui.namespace }}
+  labels:
+    {{- include "coinops-app.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: ui
+  ports:
+    - port: 80
+      targetPort: 80

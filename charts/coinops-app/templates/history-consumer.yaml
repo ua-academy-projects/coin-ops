@@ -1,0 +1,41 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: coinops-history-consumer
+  namespace: {{ .Values.historyConsumer.namespace }}
+  labels:
+    {{- include "coinops-app.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: history-consumer
+  namespace: {{ .Values.historyConsumer.namespace }}
+  labels:
+    app: history-consumer
+    {{- include "coinops-app.labels" . | nindent 4 }}
+spec:
+  # Single replica: the consumer is order-sensitive (one RabbitMQ consumer).
+  replicas: {{ .Values.historyConsumer.replicas }}
+  selector:
+    matchLabels:
+      app: history-consumer
+  template:
+    metadata:
+      labels:
+        app: history-consumer
+    spec:
+      serviceAccountName: coinops-history-consumer
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: history-consumer
+          image: "{{ .Values.image.registry }}/{{ .Values.historyConsumer.image }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: coinops-app-config
+            - secretRef:
+                name: coinops-app-secrets

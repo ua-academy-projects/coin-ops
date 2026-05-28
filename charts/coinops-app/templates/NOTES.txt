@@ -1,0 +1,8 @@
+Coin-Ops app deployed at https://{{ .Values.ingress.host }} (TLS via {{ .Values.ingress.certManagerClusterIssuer }}).
+
+Inspect:
+  helm history {{ .Release.Name }} -n {{ .Release.Namespace }}
+  helm get values {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+Roll back:
+  helm rollback {{ .Release.Name }} <revision> -n {{ .Release.Namespace }}

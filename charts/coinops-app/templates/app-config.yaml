@@ -1,0 +1,15 @@
+{{- $appNs := list .Values.proxy.namespace .Values.historyApi.namespace .Values.historyConsumer.namespace }}
+{{- range $ns := $appNs }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coinops-app-config
+  namespace: {{ $ns }}
+  labels:
+    {{- include "coinops-app.labels" $ | nindent 4 }}
+data:
+  RUNTIME_BACKEND: "external"
+  PGCLIENTENCODING: "UTF8"
+  CORS_ALLOWED_ORIGINS: "https://{{ $.Values.ingress.host }}"
+{{- end }}

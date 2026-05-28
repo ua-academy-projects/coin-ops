@@ -1,0 +1,60 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: coinops-proxy
+  namespace: {{ .Values.proxy.namespace }}
+  labels:
+    {{- include "coinops-app.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proxy
+  namespace: {{ .Values.proxy.namespace }}
+  labels:
+    app: proxy
+    {{- include "coinops-app.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.proxy.replicas }}
+  selector:
+    matchLabels:
+      app: proxy
+  template:
+    metadata:
+      labels:
+        app: proxy
+    spec:
+      serviceAccountName: coinops-proxy
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: proxy
+          image: "{{ .Values.image.registry }}/{{ .Values.proxy.image }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: coinops-app-config
+            - secretRef:
+                name: coinops-app-secrets
+          env:
+            - name: PORT
+              value: "{{ .Values.proxy.port }}"
+          ports:
+            - containerPort: {{ .Values.proxy.port }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxy
+  namespace: {{ .Values.proxy.namespace }}
+  labels:
+    {{- include "coinops-app.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: proxy
+  ports:
+    - port: {{ .Values.proxy.port }}
+      targetPort: {{ .Values.proxy.port }}

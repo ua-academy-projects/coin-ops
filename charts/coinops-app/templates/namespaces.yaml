@@ -1,0 +1,9 @@
+{{- range $ns := list .Values.proxy.namespace .Values.historyApi.namespace .Values.historyConsumer.namespace .Values.ui.namespace }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  labels:
+    {{- include "coinops-app.labels" $ | nindent 4 }}
+{{- end }}

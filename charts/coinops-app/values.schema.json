@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["image", "ingress", "app", "proxy", "historyApi", "historyConsumer", "ui", "gateway", "backingNamespaces", "networkPolicy"],
+  "properties": {
+    "image": {
+      "type": "object",
+      "required": ["registry", "tag"],
+      "properties": {
+        "registry": {"type": "string", "minLength": 1},
+        "tag": {"type": "string", "minLength": 1},
+        "pullPolicy": {"type": "string"},
+        "pullSecretDockerconfigjson": {"type": "string"}
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "required": ["host", "className", "tlsSecretName", "certManagerClusterIssuer"]
+    },
+    "app": {
+      "type": "object",
+      "required": ["databaseUrl", "rabbitmqUrl", "redisUrl"],
+      "properties": {
+        "databaseUrl": {"type": "string"},
+        "rabbitmqUrl": {"type": "string"},
+        "redisUrl": {"type": "string"}
+      }
+    },
+    "proxy": {"type": "object", "required": ["namespace", "image", "port", "replicas"]},
+    "historyApi": {"type": "object", "required": ["namespace", "image", "port", "replicas"]},
+    "historyConsumer": {"type": "object", "required": ["namespace", "image", "replicas"]},
+    "ui": {"type": "object", "required": ["namespace", "image", "replicas"]},
+    "gateway": {"type": "object", "required": ["namespace", "image", "replicas"]},
+    "backingNamespaces": {
+      "type": "object",
+      "required": ["postgres", "rabbitmq", "redis"]
+    },
+    "networkPolicy": {
+      "type": "object",
+      "required": ["enabled", "podCidr", "serviceCidr"]
+    }
+  }
+}

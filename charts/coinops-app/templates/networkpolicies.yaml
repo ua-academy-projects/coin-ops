@@ -1,0 +1,236 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $appNs := list .Values.proxy.namespace .Values.historyApi.namespace .Values.historyConsumer.namespace .Values.ui.namespace .Values.gateway.namespace }}
+{{- range $ns := $appNs }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: {{ $ns }}
+  labels:
+    {{- include "coinops-app.labels" $ | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: {{ $ns }}
+  labels:
+    {{- include "coinops-app.labels" $ | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+{{- end }}
+---
+# proxy: ingress from gateway:8080; egress to redis, rabbitmq, internet
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-gateway
+  namespace: {{ .Values.proxy.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: proxy
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.gateway.namespace }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.proxy.port }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-deps
+  namespace: {{ .Values.proxy.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: proxy
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.backingNamespaces.redis }}
+      ports:
+        - protocol: TCP
+          port: 6379
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.backingNamespaces.rabbitmq }}
+      ports:
+        - protocol: TCP
+          port: 5672
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - {{ .Values.networkPolicy.podCidr }}
+              - {{ .Values.networkPolicy.serviceCidr }}
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
+---
+# history-api: ingress from gateway:8000; egress to postgres
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-gateway
+  namespace: {{ .Values.historyApi.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: history-api
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.gateway.namespace }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.historyApi.port }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-postgres
+  namespace: {{ .Values.historyApi.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: history-api
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.backingNamespaces.postgres }}
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# history-consumer: egress to rabbitmq + postgres (no ingress)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-deps
+  namespace: {{ .Values.historyConsumer.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: history-consumer
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.backingNamespaces.rabbitmq }}
+      ports:
+        - protocol: TCP
+          port: 5672
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.backingNamespaces.postgres }}
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# ui: ingress from gateway:80
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-gateway
+  namespace: {{ .Values.ui.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: ui
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.gateway.namespace }}
+      ports:
+        - protocol: TCP
+          port: 80
+---
+# gateway: ingress from kube-system (Traefik) :80; egress to backends
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-traefik
+  namespace: {{ .Values.gateway.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: gateway
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: TCP
+          port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-backends
+  namespace: {{ .Values.gateway.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: gateway
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.proxy.namespace }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.proxy.port }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.historyApi.namespace }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.historyApi.port }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.ui.namespace }}
+      ports:
+        - protocol: TCP
+          port: 80
+{{- end }}

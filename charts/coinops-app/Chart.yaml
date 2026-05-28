@@ -1,0 +1,9 @@
+apiVersion: v2
+name: coinops-app
+description: Coin-Ops app workloads (proxy, history-api, history-consumer, ui, gateway) and the per-workload NetworkPolicies that enforce their boundary.
+type: application
+version: 0.1.0
+appVersion: "dev-latest"
+home: https://github.com/ua-academy-projects/coin-ops
+maintainers:
+  - name: Coin-Ops

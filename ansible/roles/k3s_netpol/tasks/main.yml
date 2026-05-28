@@ -15,5 +15,5 @@
 - name: Report NetworkPolicy posture
   ansible.builtin.debug:
     msg:
-      - "Default-deny + explicit-allow NetworkPolicies applied across the coinops-* namespaces."
-      - "System namespaces (kube-system, cnpg-system, cert-manager) intentionally unrestricted."
+      - "Data-tier NetworkPolicies applied (rabbitmq + redis default-deny + flow; postgres ingress-only)."
+      - "App-tier NetworkPolicies are owned by the coinops-app Helm chart."
