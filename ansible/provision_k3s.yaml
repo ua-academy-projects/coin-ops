@@ -10,7 +10,7 @@
   hosts: k3s-node-01
   become: yes
   roles:
-    - role: headlamp
+    - role: k3s_headlamp
       tags: headlamp
 
 - name: Deploy cert-manager
