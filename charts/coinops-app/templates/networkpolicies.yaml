@@ -181,7 +181,7 @@ spec:
         - protocol: TCP
           port: 80
 ---
-# gateway: ingress from kube-system (Traefik) :80; egress to backends
+# gateway: ingress from Traefik (in kube-system) on :80; egress to backends
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -194,9 +194,15 @@ spec:
   policyTypes: [Ingress]
   ingress:
     - from:
+        # AND: kube-system namespace AND a pod labelled as Traefik. Tightens the
+        # earlier "any kube-system pod" allow; the k3s-bundled Traefik pod carries
+        # this label (confirmed via `kubectl get pods --show-labels`).
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
       ports:
         - protocol: TCP
           port: 80
