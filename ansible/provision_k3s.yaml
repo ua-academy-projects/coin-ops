@@ -19,3 +19,10 @@
   roles:
     - role: k3s_cert_manager
       tags: cert-manager
+
+- name: Deploy homepage
+  hosts: k3s-node-01
+  become: yes
+  roles:
+    - role: k3s_homepage
+      tags: homepage
