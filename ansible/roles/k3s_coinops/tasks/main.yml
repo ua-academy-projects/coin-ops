@@ -24,10 +24,26 @@
   no_log: true
   when: coinops_image_pull_token | length > 0
 
+# kubernetes.core.helm invokes `helm` on the target node, which reads the chart
+# from the local filesystem there. The chart files live on the controller
+# (under {{ playbook_dir }}/../charts), so stage them on the node first.
+- name: Ensure chart staging directory exists on the node
+  ansible.builtin.file:
+    path: "{{ coinops_chart_stage_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Copy the coinops-app chart to the node
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../charts/coinops-app/"
+    dest: "{{ coinops_chart_stage_dir }}/coinops-app/"
+    mode: '0644'
+    directory_mode: '0755'
+
 - name: Deploy the coinops-app Helm chart
   kubernetes.core.helm:
     name: coinops-app
-    chart_ref: "{{ playbook_dir }}/../charts/coinops-app"
+    chart_ref: "{{ coinops_chart_stage_dir }}/coinops-app"
     release_namespace: "{{ coinops_gateway_namespace }}"
     create_namespace: true
     kubeconfig: "{{ k3s_kubeconfig }}"

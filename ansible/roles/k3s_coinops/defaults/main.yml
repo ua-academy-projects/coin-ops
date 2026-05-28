@@ -8,6 +8,11 @@
 k3s_first_node: "{{ ansible_play_hosts_all[0] }}"
 k3s_kubeconfig: /etc/rancher/k3s/k3s.yaml
 
+# Helm reads chart files from the local filesystem on whichever host runs the
+# task. The chart lives on the controller; the role stages it here on the node
+# before `kubernetes.core.helm` runs.
+coinops_chart_stage_dir: /opt/coinops/charts
+
 # Per-workload namespaces (one Deployment per namespace). The backing-service
 # namespaces are owned by k3s_coinops_data; referenced here only for cross-ns DNS.
 coinops_proxy_namespace: coinops-proxy
