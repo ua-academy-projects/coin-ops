@@ -7,3 +7,5 @@ k3s_cert_manager_release_name: cert-manager
 # lts version
 k3s_cert_manager_version: v1.17.0
 k3s_cert_manager_email: volunetsartur@gmail.com
+
+cloudflare_api_token: "{{ lookup('env', 'CLOUDFLARE_API_TOKEN') }}"

@@ -12,3 +12,10 @@
   roles:
     - role: headlamp
       tags: headlamp
+
+- name: Deploy cert-manager
+  hosts: k3s-node-01
+  become: yes
+  roles:
+    - role: k3s_cert_manager
+      tags: cert-manager

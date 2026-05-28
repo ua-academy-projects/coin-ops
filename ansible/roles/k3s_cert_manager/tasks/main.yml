@@ -59,6 +59,21 @@
       crds:
         enabled: true
 
+- name: Create Cloudflare API token secret
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: /etc/rancher/k3s/k3s.yaml
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: cloudflare-api-token
+        namespace: "{{ k3s_cert_manager_namespace }}"
+      stringData:
+        api-token: "{{ cloudflare_api_token }}"
+  vars:
+    ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
+
 - name: Create ClusterIssuer
   kubernetes.core.k8s:
     state: present
@@ -75,10 +90,11 @@
           privateKeySecretRef:
             name: letsencrypt-account-key # secret to store lets encrypt key
           solvers:
-            # dns challenge
-            - http01:
-                ingress:
-                  class: traefik
+            - dns01:
+                cloudflare:
+                  apiTokenSecretRef:
+                    name: cloudflare-api-token
+                    key: api-token
   vars:
     ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
 
