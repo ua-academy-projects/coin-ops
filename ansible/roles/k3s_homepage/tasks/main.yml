@@ -22,4 +22,31 @@
     virtualenv: /opt/headlamp-ansible-venv
     virtualenv_command: python3 -m venv
 
+- name: Create Homepage namespace
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_homepage_kubeconfig }}"
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ k3s_homepage_namespace }}"
+  vars:
+    ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
 
+- name: Create Homepage service account
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_homepage_kubeconfig }}"
+    definition:
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: homepage
+        namespace: "{{ k3s_homepage_namespace }}" 
+        labels:
+          app.kubernetes.io/name: homepage
+      secrets:
+        - name: homepage
+  vars:
+    ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
