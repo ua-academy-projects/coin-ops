@@ -50,3 +50,30 @@
         - name: homepage
   vars:
     ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
+
+# apiVersion: v1
+# kind: Secret
+# type: kubernetes.io/service-account-token
+# metadata:
+#   name: homepage
+#   namespace: default
+#   labels:
+#     app.kubernetes.io/name: homepage
+#   annotations:
+#     kubernetes.io/service-account.name: homepage
+
+- name: Create Homepage SA's token
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_homepage_kubeconfig}}" 
+    definition:
+      apiVersion: v1
+      kind: Secret
+      type: kubernetes.io/service-account-token
+      metadata:
+        name: homepage
+        namespace: "{{ k3s_homepage_namespace }}"
+        labels:
+          app.kubernetes.io/name: homepage
+        annotations:
+          kubernetes.io/service-account.name: homepage
