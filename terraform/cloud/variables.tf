@@ -112,6 +112,7 @@ variable "role_definitions" {
 # security 
 
 variable "security_rules" {
+  default  = {}
   type = map(object({
     description      = string
     direction        = string
