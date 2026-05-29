@@ -75,7 +75,9 @@ locals {
   )
 
   # inventory roles
-  inventory_role_names = sort(keys(var.role_definitions))
+  inventory_role_names = sort(distinct(flatten([
+    for _, workload in local.workloads : workloads.roles
+  ])))
 
   # private hosts connect through the public bastion when it exists
   inventory_bastion_host = try(one([
@@ -93,9 +95,7 @@ locals {
       private_ip   = try(local.private_ips[name], "")
       public_ip    = try(local.public_ips[name], null)
       ansible_host = try(local.public_ips[name], null) != null ? local.public_ips[name] : try(local.private_ips[name], "")
-      allowed_ports = distinct(flatten([
-        for role in workload.roles : try(var.role_definitions[role].allowed_ports, [])
-      ]))
+      allowed_ports = workload.allowed_ports
       required_secrets        = distinct(coalesce(try(workload.secrets, null), []))
       ansible_ssh_common_args = try(local.public_ips[name], null) == null && local.inventory_bastion_host_public_ip != null ? "-o StrictHostKeyChecking=accept-new -o ForwardAgent=yes -o IdentitiesOnly=yes -o ProxyCommand=\"ssh -i {{ lookup(\"env\", \"SSH_KEY_PATH\") | expanduser }} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -W %h:%p deployer@${local.inventory_bastion_host_public_ip}\"" : null
     }
