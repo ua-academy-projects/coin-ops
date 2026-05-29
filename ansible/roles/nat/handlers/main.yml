@@ -1,3 +1,7 @@
 #SPDX-License-Identifier: MIT-0
 ---
 # handlers file for /tmp/role_skeleton
+- name: Reload UFW
+  ansible.builtin.systemd:
+    name: ufw
+    state: restarted
