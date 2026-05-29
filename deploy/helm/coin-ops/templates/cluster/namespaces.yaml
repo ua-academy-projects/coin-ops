@@ -1,0 +1,19 @@
+{{- if .Values.features.deployInfra }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespaces.infra }}
+  labels:
+    name: {{ .Values.namespaces.infra }}
+{{- end }}
+
+---
+
+{{- if .Values.features.deployApp }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespaces.app }}
+  labels:
+    name: {{ .Values.namespaces.app }}
+{{- end }}

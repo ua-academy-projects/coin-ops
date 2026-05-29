@@ -32,6 +32,7 @@ cd "${SCRIPT_DIR}/coin-ops"
 
 helm upgrade --install coin-ops . \
   --namespace coin-ops-infra \
+  --create-namespace \
   --set global.env="${ENV:-production}" \
   --set image.registry="${IMAGE_REGISTRY:-ghcr.io/ua-academy-projects}" \
   --set image.tag="${IMAGE_TAG:-shabat-latest}" \
