@@ -147,7 +147,7 @@
 - name: Start history dependencies first
   command: >-
     docker compose -f /opt/cognitor/history/compose.yaml up -d
-    postgres{% if runtime_backend == "external" %} rabbitmq{% endif %}
+    postgres{% if history_runtime_backend == "external" %} rabbitmq{% endif %}
   args:
     chdir: /opt/cognitor/history
   when: not history_external_db_enabled
@@ -159,7 +159,7 @@
     chdir: /opt/cognitor/history
   when:
     - history_external_db_enabled
-    - runtime_backend == "external"
+    - history_runtime_backend == "external"
 
 - name: Wait for containerized PostgreSQL readiness
   command: "docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres pg_isready -U {{ history_db_user }} -d {{ history_db_name }}"
@@ -239,7 +239,7 @@
   register: runtime_app_role_result
   changed_when: false
   when:
-    - runtime_backend == "postgres"
+    - history_runtime_backend == "postgres"
     - not history_external_db_enabled
 
 - name: Persist runtime application role in Cloud SQL before wrapper bootstrap
@@ -252,7 +252,7 @@
   register: cloud_sql_runtime_app_role_result
   changed_when: false
   when:
-    - runtime_backend == "postgres"
+    - history_runtime_backend == "postgres"
     - history_external_db_enabled
 
 - name: Apply runtime queue and session schema
@@ -274,7 +274,7 @@
   register: runtime_schema_result
   changed_when: false
   when:
-    - runtime_backend == "postgres"
+    - history_runtime_backend == "postgres"
     - not history_external_db_enabled
 
 - name: Apply runtime queue and session schema to Cloud SQL
@@ -297,7 +297,7 @@
   changed_when: false
   no_log: true
   when:
-    - runtime_backend == "postgres"
+    - history_runtime_backend == "postgres"
     - history_external_db_enabled
 
 - name: Verify PostgreSQL runtime extensions are installed
@@ -311,7 +311,7 @@
   changed_when: false
   failed_when: runtime_extension_check.stdout | trim != "pg_cron,pgmq"
   when:
-    - runtime_backend == "postgres"
+    - history_runtime_backend == "postgres"
     - not history_external_db_enabled
 
 - name: Verify Cloud SQL runtime extensions are installed
@@ -325,7 +325,7 @@
   changed_when: false
   failed_when: cloud_sql_runtime_extension_check.stdout | trim != "pg_cron,pgmq"
   when:
-    - runtime_backend == "postgres"
+    - history_runtime_backend == "postgres"
     - history_external_db_enabled
 
 - name: Verify PostgreSQL runtime cron jobs are registered
@@ -339,7 +339,7 @@
   changed_when: false
   failed_when: runtime_cron_check.stdout | trim | int != 3
   when:
-    - runtime_backend == "postgres"
+    - history_runtime_backend == "postgres"
     - not history_external_db_enabled
 
 - name: Verify Cloud SQL runtime cron jobs are registered
@@ -353,7 +353,7 @@
   changed_when: false
   failed_when: cloud_sql_runtime_cron_check.stdout | trim | int != 3
   when:
-    - runtime_backend == "postgres"
+    - history_runtime_backend == "postgres"
     - history_external_db_enabled
 
 - name: Mark legacy PostgreSQL migration complete

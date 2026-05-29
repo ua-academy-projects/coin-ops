@@ -3,6 +3,10 @@
 # defaults file for /tmp/role_skeleton
 proxy_db_name: cognitor
 proxy_db_user: cognitor
+proxy_runtime_backend: "{{ lookup('env', 'RUNTIME_BACKEND') | default('external', true) }}"
+proxy_rabbitmq_user: cognitor
+proxy_rabbitmq_url: "amqp://{{ proxy_rabbitmq_user }}:{{ rabbitmq_password }}@{{ hostvars[groups['history'][0]].private_ip }}:5672/"
+proxy_redis_url: "redis://redis:6379/0"
 proxy_external_db_host: "{{ lookup('env', 'EXTERNAL_DB_HOST') | default('', true) }}"
 proxy_database_host: "{{ proxy_external_db_host if proxy_external_db_host | length > 0 else hostvars[groups['history'][0]].private_ip }}"
 proxy_database_url: "postgresql://{{ proxy_db_user }}:{{ db_password }}@{{ proxy_database_host }}:5432/{{ proxy_db_name }}"
