@@ -97,7 +97,7 @@ locals {
         for role in workload.roles : try(var.role_definitions[role].allowed_ports, [])
       ]))
       required_secrets        = distinct(coalesce(try(workload.secrets, null), []))
-      ansible_ssh_common_args = try(local.public_ips[name], null) == null && local.inventory_bastion_host_public_ip != null ? "-o StrictHostKeyChecking=no -o ForwardAgent=yes -o ProxyJump=deployer@${local.inventory_bastion_host_public_ip}" : null
+      ansible_ssh_common_args = try(local.public_ips[name], null) == null && local.inventory_bastion_host_public_ip != null ? "-o StrictHostKeyChecking=accept-new -o ForwardAgent=yes -o IdentitiesOnly=yes -o ProxyJump=deployer@${local.inventory_bastion_host_public_ip}" : null
     }
   }
 
@@ -128,7 +128,13 @@ locals {
             local.inventory_hosts[host_name].ansible_ssh_common_args != null ? "ansible_ssh_common_args='${local.inventory_hosts[host_name].ansible_ssh_common_args}'" : null
           ])))
         ]
-      ))
+      )),
+      join("\n", [
+        "[all:vars]",
+        "ansible_user=deployer",
+        "ansible_ssh_private_key_file={{ lookup('env', 'SSH_KEY_PATH') | expanduser }}",
+        "ansible_ssh_common_args=-o StrictHostKeyChecking=accept-new -o ForwardAgent=yes -o IdentitiesOnly=yes"
+      ])
     ],
     [
       for role in sort(keys(local.inventory_role_members)) : join("\n", concat(
