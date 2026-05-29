@@ -3,4 +3,4 @@
 - hosts: localhost
   remote_user: root
   roles:
-    - /tmp/role_skeleton
+    - roles/k3s_cluster

@@ -1,3 +1,11 @@
 #SPDX-License-Identifier: MIT-0
 ---
-# defaults file for /tmp/role_skeleton
+# defaults file for ansible/roles/k3s_cert_manager
+k3s_cert_manager_python_kubernetes_version: "32.0.0"
+k3s_cert_manager_namespace: cert-manager
+k3s_cert_manager_release_name: cert-manager
+# lts version
+k3s_cert_manager_version: v1.17.0
+k3s_cert_manager_email: volunetsartur@gmail.com
+
+cloudflare_api_token: "{{ lookup('env', 'CLOUDFLARE_API_TOKEN') }}"

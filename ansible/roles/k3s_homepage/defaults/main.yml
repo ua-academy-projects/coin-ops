@@ -1,3 +1,7 @@
 #SPDX-License-Identifier: MIT-0
 ---
-# defaults file for /tmp/role_skeleton
+# defaults file for ansible/roles/k3s_homepage
+k3s_homepage_python_kubernetes_version: "35.0.0"
+k3s_homepage_kubeconfig: "/etc/rancher/k3s/k3s.yaml"
+k3s_homepage_namespace: "homepage"
+k3s_homepage_domain: "homepage.arturvolynets.pp.ua"

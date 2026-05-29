@@ -1,0 +1,28 @@
+---
+- name: Provision k3s cluster 
+  hosts: all
+  become: yes
+  roles:
+    - role: k3s_cluster
+      tags: k3s
+
+- name: Deploy Headlamp
+  hosts: k3s-node-01
+  become: yes
+  roles:
+    - role: k3s_headlamp
+      tags: headlamp
+
+- name: Deploy cert-manager
+  hosts: k3s-node-01
+  become: yes
+  roles:
+    - role: k3s_cert_manager
+      tags: cert-manager
+
+- name: Deploy homepage
+  hosts: k3s-node-01
+  become: yes
+  roles:
+    - role: k3s_homepage
+      tags: homepage
