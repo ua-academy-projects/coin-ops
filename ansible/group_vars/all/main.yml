@@ -22,8 +22,6 @@ db_user: cognitor
 runtime_backend: "{{ lookup('env', 'RUNTIME_BACKEND') | default('external', true) }}"
 
 # ── Ports ────────────────────────────────────────────────────
-proxy_port: 8080
-history_port: 8000
 postgres_bind_ip: "{{ hostvars[groups['history'][0]].private_ip }}"
 external_db_host: "{{ lookup('env', 'EXTERNAL_DB_HOST') | default('', true) }}"
 external_db_enabled: "{{ external_db_host | length > 0 }}"

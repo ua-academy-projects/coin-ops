@@ -1,3 +1,4 @@
 #SPDX-License-Identifier: MIT-0
 ---
 # defaults file for /tmp/role_skeleton
+proxy_port: 8080

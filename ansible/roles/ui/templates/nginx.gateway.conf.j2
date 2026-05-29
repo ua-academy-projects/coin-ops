@@ -52,7 +52,7 @@ server {
     }
 
     location /api/ {
-        proxy_pass http://{{ hostvars[groups['proxy'][0]]['private_ip'] }}:{{ proxy_port }}/;
+        proxy_pass http://{{ hostvars[groups['proxy'][0]]['private_ip'] }}:{{ ui_proxy_upstream_port }}/;
         proxy_http_version 1.1;
         add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate" always;
         add_header Pragma "no-cache" always;
@@ -64,7 +64,7 @@ server {
     }
 
     location /history-api/ {
-        proxy_pass http://{{ hostvars[groups['history'][0]]['private_ip'] }}:{{ history_port }}/;
+        proxy_pass http://{{ hostvars[groups['history'][0]]['private_ip'] }}:{{ ui_history_upstream_port }}/;
         proxy_http_version 1.1;
         add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate" always;
         add_header Pragma "no-cache" always;
