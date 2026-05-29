@@ -133,7 +133,8 @@ locals {
         "[all:vars]",
         "ansible_user=deployer",
         "ansible_ssh_private_key_file={{ lookup(\"env\", \"SSH_KEY_PATH\") | expanduser }}",
-        "ansible_ssh_common_args=-o StrictHostKeyChecking=accept-new -o ForwardAgent=yes -o IdentitiesOnly=yes"
+        "ansible_ssh_common_args=-o StrictHostKeyChecking=accept-new -o ForwardAgent=yes -o IdentitiesOnly=yes",
+        "ansible_python_interpreter=/usr/bin/python3"
       ])
     ],
     [
