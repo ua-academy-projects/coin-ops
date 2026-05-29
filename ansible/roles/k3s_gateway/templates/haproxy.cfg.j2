@@ -1,0 +1,33 @@
+global
+    log /dev/log local0
+    maxconn 4096
+
+defaults
+    log global
+    timeout connect 5s
+    timeout client 30s
+    timeout server 30s
+
+frontend http_in
+    bind *:{{ k3s_gateway_listen_http_port }}
+    mode tcp
+    default_backend k3s_http
+
+frontend https_in
+    bind *:{{ k3s_gateway_listen_https_port }}
+    mode tcp
+    default_backend k3s_https
+
+backend k3s_http
+    mode tcp
+    balance roundrobin
+{% for host in groups[k3s_gateway_backend_group] %}
+    server {{ host }} {{ hostvars[host]['private_ip'] }}:{{ k3s_gateway_backend_http_port }} check inter 5s rise 2 fall 3
+{% endfor %}
+
+backend k3s_https
+    mode tcp
+    balance roundrobin
+{% for host in groups[k3s_gateway_backend_group] %}
+    server {{ host }} {{ hostvars[host]['private_ip'] }}:{{ k3s_gateway_backend_https_port }} check inter 5s rise 2 fall 3
+{% endfor %}
