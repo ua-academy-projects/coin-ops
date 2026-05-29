@@ -40,22 +40,8 @@
 - name: Authenticate Docker registry on target nodes
   hosts: history:proxy:ui
   become: yes
-  tasks:
-    - name: Log in to configured container registry
-      community.docker.docker_login:
-        registry_url: "{{ image_registry_host }}"
-        username: "{{ registry_username }}"
-        password: "{{ registry_token }}"
-        reauthorize: true
-      no_log: true
-      when:
-        - registry_username | length > 0
-        - registry_token | length > 0
-
-    - name: Explain skipped registry login
-      debug:
-        msg: "GHCR_USERNAME/GHCR_TOKEN not available; assuming registry images are public."
-      when: registry_username | length == 0 or registry_token | length == 0
+  roles:
+    - registry_auth
 
 - name: Deploy History Service (node-01)
   hosts: history

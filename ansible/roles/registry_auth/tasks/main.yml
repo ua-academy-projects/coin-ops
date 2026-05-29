@@ -1,0 +1,18 @@
+#SPDX-License-Identifier: MIT-0
+---
+# tasks file for roles/registry_auth
+- name: Log in to configured container registry
+  community.docker.docker_login:
+    registry_url: "{{ registry_auth_image_registry_host }}"
+    username: "{{ registry_auth_username }}"
+    password: "{{ registry_auth_token }}"
+    reauthorize: true
+  no_log: true
+  when:
+    - registry_auth_username | length > 0
+    - registry_auth_token | length > 0
+
+- name: Explain skipped registry login
+  ansible.builtin.debug:
+    msg: "GHCR_USERNAME/GHCR_TOKEN not available; assuming registry images are public."
+  when: registry_auth_username | length == 0 or registry_auth_token | length == 0
