@@ -134,7 +134,8 @@
         labels:
           app.kubernetes.io/name: homepage
       data:
-        kubernetes.yaml: ""
+        kubernetes.yaml: |
+          mode: cluster
         settings.yaml: |
           title: CoinOps
         custom.css: ""
@@ -308,5 +309,21 @@
                       name: homepage
                       port:
                         number: 3000
+  vars:
+    ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
+
+- name: Restart Homepage deployment
+  kubernetes.core.k8s:
+    state: patched
+    kubeconfig: "{{ k3s_homepage_kubeconfig }}"
+    kind: Deployment
+    name: homepage
+    namespace: "{{ k3s_homepage_namespace }}"
+    definition:
+      spec:
+        template:
+          metadata:
+            annotations:
+              kubectl.kubernetes.io/restartedAt: "{{ ansible_facts['date_time']['iso8601'] }}"
   vars:
     ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
