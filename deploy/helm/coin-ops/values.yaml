@@ -15,7 +15,6 @@ image:
   registry: "ghcr.io/ua-academy-projects"
   tag: "shabat-latest"
   pullPolicy: IfNotPresent
-  # If using private repo, set the secret here
   pullSecret:
     enabled: true
     name: ghcr-secret
@@ -23,7 +22,7 @@ image:
     password: ""
 
 routing:
-  domain: "coinops.test"
+  domain: "wrangler.pp.ua"
   nodeCidr: "10.10.1.0/24"
   tls:
     clusterIssuer: "letsencrypt-prod"
