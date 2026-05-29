@@ -58,7 +58,7 @@ locals {
   default_cloud_network   = local.networks_by_cloud[local.default_cloud]
   default_cloud_workloads = local.workloads_by_cloud[local.default_cloud]
 
-  default_cloud_security_rules = var.security_rules
+  default_cloud_security_rules = coalesce(var.security_rules, {}) 
   default_cloud_sql            = var.sql
   default_cloud_nat_route      = var.nat_route
 
