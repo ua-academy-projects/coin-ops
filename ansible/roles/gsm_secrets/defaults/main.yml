@@ -1,3 +1,9 @@
 #SPDX-License-Identifier: MIT-0
 ---
 # defaults file for /tmp/role_skeleton
+google_project: "{{ lookup('env', 'GOOGLE_PROJECT') | default('', true) }}"
+gsm_secret_ids:
+  ghcr_username: ghcr-username
+  ghcr_token: ghcr-token
+  rabbitmq_password: rabbitmq-password
+  db_password: db-password

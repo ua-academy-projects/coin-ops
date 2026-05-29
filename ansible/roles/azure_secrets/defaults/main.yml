@@ -1,3 +1,9 @@
 #SPDX-License-Identifier: MIT-0
 ---
 # defaults file for /tmp/role_skeleton
+azure_key_vault_name: "{{ lookup('env', 'AZ_KEYVAULT_NAME') | default('', true) }}"
+gsm_secret_ids:
+  ghcr_username: ghcr-username
+  ghcr_token: ghcr-token
+  rabbitmq_password: rabbitmq-password
+  db_password: db-password

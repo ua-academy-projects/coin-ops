@@ -2,15 +2,6 @@
 # Local paths come from environment variables.
 # Run `source .env` before any ansible-playbook command.
 
-# ── GCP / Secret Manager ───────────────────────────────────────
-google_project: "{{ lookup('env', 'GOOGLE_PROJECT') | default('', true) }}"
-azure_key_vault_name: "{{ lookup('env', 'AZ_KEYVAULT_NAME') | default('', true) }}"
-gsm_secret_ids:
-  ghcr_username: ghcr-username
-  ghcr_token: ghcr-token
-  rabbitmq_password: rabbitmq-password
-  db_password: db-password
-
 # ── Passwords / tokens ─────────────────────────────────────────
 rabbitmq_password: "{{ fetched_gsm_secrets.rabbitmq_password | default(lookup('env', 'RABBITMQ_PASSWORD'), true) }}"
 db_password: "{{ fetched_gsm_secrets.db_password | default(lookup('env', 'DB_PASSWORD'), true) }}"
