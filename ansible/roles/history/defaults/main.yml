@@ -3,13 +3,15 @@
 # defaults file for /tmp/role_skeleton
 history_db_name: cognitor
 history_db_user: cognitor
+history_db_password: "{{ fetched_gsm_secrets.db_password | default(lookup('env', 'DB_PASSWORD'), true) }}"
 history_runtime_backend: "{{ lookup('env', 'RUNTIME_BACKEND') | default('external', true) }}"
 history_rabbitmq_user: cognitor
+history_rabbitmq_password: "{{ fetched_gsm_secrets.rabbitmq_password | default(lookup('env', 'RABBITMQ_PASSWORD'), true) }}"
 history_postgres_bind_ip: "{{ hostvars[groups['history'][0]].private_ip }}"
 history_external_db_host: "{{ lookup('env', 'EXTERNAL_DB_HOST') | default('', true) }}"
 history_external_db_enabled: "{{ history_external_db_host | length > 0 }}"
 history_database_host: "{{ history_external_db_host if history_external_db_host | length > 0 else 'postgres' }}"
-history_database_url: "postgresql://{{ history_db_user }}:{{ db_password }}@{{ history_database_host }}:5432/{{ history_db_name }}"
+history_database_url: "postgresql://{{ history_db_user }}:{{ history_db_password }}@{{ history_database_host }}:5432/{{ history_db_name }}"
 history_port: 8000
 history_image_registry: "{{ lookup('env', 'IMAGE_REGISTRY') | default('ghcr.io/ua-academy-projects', true) }}"
 history_image_tag: "{{ lookup('env', 'IMAGE_TAG') | default('shabat-latest', true) }}"

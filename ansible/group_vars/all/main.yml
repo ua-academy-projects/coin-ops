@@ -1,7 +1,0 @@
-# All variables — safe to commit.
-# Local paths come from environment variables.
-# Run `source .env` before any ansible-playbook command.
-
-# ── Passwords / tokens ─────────────────────────────────────────
-rabbitmq_password: "{{ fetched_gsm_secrets.rabbitmq_password | default(lookup('env', 'RABBITMQ_PASSWORD'), true) }}"
-db_password: "{{ fetched_gsm_secrets.db_password | default(lookup('env', 'DB_PASSWORD'), true) }}"

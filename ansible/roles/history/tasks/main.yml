@@ -196,7 +196,7 @@
 - name: Restore legacy PostgreSQL dump into Cloud SQL
   shell: "psql -h {{ history_external_db_host }} -U {{ history_db_user }} -d {{ history_db_name }} < /var/backups/coin-ops/pre-container-postgres.sql"
   environment:
-    PGPASSWORD: "{{ db_password }}"
+    PGPASSWORD: "{{ history_db_password }}"
   no_log: true
   args:
     chdir: /opt/cognitor/history
@@ -221,7 +221,7 @@
     psql -v ON_ERROR_STOP=1 -h {{ history_external_db_host }} -U {{ history_db_user }} -d {{ history_db_name }}
     < /opt/cognitor/history/schema.sql
   environment:
-    PGPASSWORD: "{{ db_password }}"
+    PGPASSWORD: "{{ history_db_password }}"
   no_log: true
   args:
     chdir: /opt/cognitor/history
@@ -247,7 +247,7 @@
     psql -v ON_ERROR_STOP=1 -h {{ history_external_db_host }} -U {{ history_db_user }} -d {{ history_db_name }}
     -c "ALTER DATABASE {{ history_db_name }} SET runtime.app_role = '{{ history_db_user }}';"
   environment:
-    PGPASSWORD: "{{ db_password }}"
+    PGPASSWORD: "{{ history_db_password }}"
   no_log: true
   register: cloud_sql_runtime_app_role_result
   changed_when: false
@@ -290,7 +290,7 @@
         /opt/cognitor/history/runtime/06_cache_schema.sql \
         /opt/cognitor/history/runtime/07_cache_wrappers.sql \
         /opt/cognitor/history/runtime/08_cron.sql
-    ) | PGPASSWORD="{{ db_password }}" psql -v ON_ERROR_STOP=1 -h {{ history_external_db_host }} -U {{ history_db_user }} -d {{ history_db_name }}
+    ) | PGPASSWORD="{{ history_db_password }}" psql -v ON_ERROR_STOP=1 -h {{ history_external_db_host }} -U {{ history_db_user }} -d {{ history_db_name }}
   args:
     chdir: /opt/cognitor/history
   register: cloud_sql_runtime_schema_result
@@ -319,7 +319,7 @@
     psql -v ON_ERROR_STOP=1 -At -h {{ history_external_db_host }} -U {{ history_db_user }} -d {{ history_db_name }}
     -c "SELECT string_agg(extname, ',' ORDER BY extname) FROM pg_extension WHERE extname IN ('pg_cron', 'pgmq');"
   environment:
-    PGPASSWORD: "{{ db_password }}"
+    PGPASSWORD: "{{ history_db_password }}"
   no_log: true
   register: cloud_sql_runtime_extension_check
   changed_when: false
@@ -347,7 +347,7 @@
     psql -v ON_ERROR_STOP=1 -At -h {{ history_external_db_host }} -U {{ history_db_user }} -d {{ history_db_name }}
     -c "SELECT count(*) FROM cron.job WHERE jobname IN ('runtime-cache-reap', 'runtime-session-reap', 'runtime-dlq-reap') AND active;"
   environment:
-    PGPASSWORD: "{{ db_password }}"
+    PGPASSWORD: "{{ history_db_password }}"
   no_log: true
   register: cloud_sql_runtime_cron_check
   changed_when: false
