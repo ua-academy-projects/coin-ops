@@ -105,7 +105,7 @@ module "gcp_security" {
 
 module "gcp_secrets" {
   source = "./modules/gcp/secrets"
-  count = local.networks_by_cloud.gcp != null && length(local.workloads_by_cloud.gcp) > 0 && length(var.secrets) > 0 && local.default_cloud == "gcp" ? 1 : 0
+  count  = local.networks_by_cloud.gcp != null && length(local.workloads_by_cloud.gcp) > 0 && length(var.secrets) > 0 && local.default_cloud == "gcp" ? 1 : 0
 
   secrets          = var.secrets
   workloads        = local.workloads_by_cloud.gcp

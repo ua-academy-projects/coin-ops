@@ -103,17 +103,11 @@ variable "workloads" {
   }
 }
 
-variable "role_definitions" {
-  type = map(object({
-    allowed_ports = list(number)
-  }))
-}
-
 
 # security 
 
 variable "security_rules" {
-  default  = {}
+  default = {}
   type = map(object({
     description      = string
     direction        = string

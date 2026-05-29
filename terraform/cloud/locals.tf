@@ -58,7 +58,7 @@ locals {
   default_cloud_network   = local.networks_by_cloud[local.default_cloud]
   default_cloud_workloads = local.workloads_by_cloud[local.default_cloud]
 
-  default_cloud_security_rules = coalesce(var.security_rules, {}) 
+  default_cloud_security_rules = coalesce(var.security_rules, {})
   default_cloud_sql            = var.sql
   default_cloud_nat_route      = var.nat_route
 
@@ -76,7 +76,7 @@ locals {
 
   # inventory roles
   inventory_role_names = sort(distinct(flatten([
-    for _, workload in local.workloads : workloads.roles
+    for _, workload in local.workloads : workload.roles
   ])))
 
   # private hosts connect through the public bastion when it exists
@@ -90,12 +90,12 @@ locals {
   # inventory hosts
   inventory_hosts = {
     for name, workload in local.workloads : name => {
-      cloud        = workload.cloud
-      roles        = workload.roles
-      private_ip   = try(local.private_ips[name], "")
-      public_ip    = try(local.public_ips[name], null)
-      ansible_host = try(local.public_ips[name], null) != null ? local.public_ips[name] : try(local.private_ips[name], "")
-      allowed_ports = workload.allowed_ports
+      cloud                   = workload.cloud
+      roles                   = workload.roles
+      private_ip              = try(local.private_ips[name], "")
+      public_ip               = try(local.public_ips[name], null)
+      ansible_host            = try(local.public_ips[name], null) != null ? local.public_ips[name] : try(local.private_ips[name], "")
+      allowed_ports           = workload.allowed_ports
       required_secrets        = distinct(coalesce(try(workload.secrets, null), []))
       ansible_ssh_common_args = try(local.public_ips[name], null) == null && local.inventory_bastion_host_public_ip != null ? "-o StrictHostKeyChecking=accept-new -o ForwardAgent=yes -o IdentitiesOnly=yes -o ProxyCommand=\"ssh -i {{ lookup(\"env\", \"SSH_KEY_PATH\") | expanduser }} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -W %h:%p deployer@${local.inventory_bastion_host_public_ip}\"" : null
     }
