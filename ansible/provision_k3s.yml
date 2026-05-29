@@ -19,6 +19,17 @@
     - role: k3s_cluster
       tags: k3s
 
+- name: Install k3s Helm dependencies
+  hosts: k3s-node-01
+  become: yes
+  roles:
+    - role: k3s_helm
+      tags:
+        - helm
+        - headlamp
+        - cert-manager
+        - homepage
+
 - name: Deploy Headlamp
   hosts: k3s-node-01
   become: yes
