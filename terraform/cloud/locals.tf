@@ -97,7 +97,7 @@ locals {
         for role in workload.roles : try(var.role_definitions[role].allowed_ports, [])
       ]))
       required_secrets        = distinct(coalesce(try(workload.secrets, null), []))
-      ansible_ssh_common_args = try(local.public_ips[name], null) == null && local.inventory_bastion_host_public_ip != null ? "-o StrictHostKeyChecking=accept-new -o ForwardAgent=yes -o IdentitiesOnly=yes -o ProxyJump=deployer@${local.inventory_bastion_host_public_ip}" : null
+      ansible_ssh_common_args = try(local.public_ips[name], null) == null && local.inventory_bastion_host_public_ip != null ? "-o StrictHostKeyChecking=accept-new -o ForwardAgent=yes -o IdentitiesOnly=yes -o ProxyCommand=\"ssh -i {{ lookup(\"env\", \"SSH_KEY_PATH\") | expanduser }} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -W %h:%p deployer@${local.inventory_bastion_host_public_ip}\"" : null
     }
   }
 
@@ -132,7 +132,7 @@ locals {
       join("\n", [
         "[all:vars]",
         "ansible_user=deployer",
-        "ansible_ssh_private_key_file={{ lookup('env', 'SSH_KEY_PATH') | expanduser }}",
+        "ansible_ssh_private_key_file={{ lookup(\"env\", \"SSH_KEY_PATH\") | expanduser }}",
         "ansible_ssh_common_args=-o StrictHostKeyChecking=accept-new -o ForwardAgent=yes -o IdentitiesOnly=yes"
       ])
     ],
