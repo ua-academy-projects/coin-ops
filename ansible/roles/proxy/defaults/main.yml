@@ -1,5 +1,10 @@
 #SPDX-License-Identifier: MIT-0
 ---
 # defaults file for /tmp/role_skeleton
+proxy_db_name: cognitor
+proxy_db_user: cognitor
+proxy_external_db_host: "{{ lookup('env', 'EXTERNAL_DB_HOST') | default('', true) }}"
+proxy_database_host: "{{ proxy_external_db_host if proxy_external_db_host | length > 0 else hostvars[groups['history'][0]].private_ip }}"
+proxy_database_url: "postgresql://{{ proxy_db_user }}:{{ db_password }}@{{ proxy_database_host }}:5432/{{ proxy_db_name }}"
 proxy_port: 8080
 proxy_image: "{{ image_registry }}/coin-ops-proxy:{{ image_tag }}"
