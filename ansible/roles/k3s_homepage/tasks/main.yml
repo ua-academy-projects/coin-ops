@@ -134,31 +134,20 @@
         labels:
           app.kubernetes.io/name: homepage
       data:
-        kubernetes.yaml: |
-          mode: cluster
-        settings.yaml: ""
+        kubernetes.yaml: ""
+        settings.yaml: |
+          title: CoinOps
         custom.css: ""
         custom.js: ""
         docker.yaml: ""
         proxmox.yaml: ""
-        bookmarks.yaml: |
-          - Developer:
-              - Github:
-                  - abbr: GH
-                    href: https://github.com/
+        bookmarks.yaml: ""
         services.yaml: |
-          - My First Group:
-              - My First Service:
-                  href: http://localhost/
-                  description: Homepage is awesome
-          - My Second Group:
-              - My Second Service:
-                  href: http://localhost/
-                  description: Homepage is the best
-          - My Third Group:
-              - My Third Service:
-                  href: http://localhost/
-                  description: Homepage is 😎
+          - Project:
+              - coin-ops:
+                  href: https://github.com/ua-academy-projects/coin-ops
+                  description: Polymarket dashboard source code
+                  icon: github
         widgets.yaml: |
           - search:
               provider: duckduckgo
