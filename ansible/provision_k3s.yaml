@@ -19,7 +19,6 @@
     - role: k3s_cluster
       tags: k3s
 
-# !!!NOT IN INVENTORY!!! UPDATE IT !!!
 - name: Deploy Headlamp
   hosts: k3s-node-01
   become: yes
