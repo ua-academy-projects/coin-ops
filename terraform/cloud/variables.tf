@@ -92,6 +92,7 @@ variable "workloads" {
     can_ip_forward = bool
     identity       = optional(string)
     secrets        = optional(list(string))
+    allowed_ports  = optional(list(number), [])
   }))
 
   validation {
