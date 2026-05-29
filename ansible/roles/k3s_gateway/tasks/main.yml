@@ -7,6 +7,12 @@
     state: present
     update_cache: true
 
+- name: Enable and start HAProxy
+  ansible.builtin.systemd:
+    name: haproxy
+    enabled: true
+    state: started
+
 - name: Deploy HAProxy config
   ansible.builtin.template:
     src: haproxy.cfg.j2
