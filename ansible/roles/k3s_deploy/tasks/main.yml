@@ -209,3 +209,77 @@
     state: present
     namespace: "{{ app_namespace }}"
     template: "{{ playbook_dir }}/../../deploy/k3s/ingress/ingress.yaml"
+
+# ── 12. Deploy ArgoCD (GitOps Bootstrapping) ────────────────────────────────────
+- name: Create argocd namespace
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig_path }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: argocd
+
+- name: Download ArgoCD stable manifest
+  ansible.builtin.get_url:
+    url: https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+    dest: /tmp/argocd-install.yaml
+
+- name: Install ArgoCD (Server-Side Apply to avoid conflicts)
+  ansible.builtin.command:
+    cmd: kubectl apply --server-side --force-conflicts -n argocd -f /tmp/argocd-install.yaml
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  changed_when: false
+
+- name: Wait for ArgoCD Server Deployment
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ kubeconfig_path }}"
+    kind: Deployment
+    namespace: argocd
+    name: argocd-server
+  register: argocd_deploy_info
+  until:
+    - argocd_deploy_info.resources | length > 0
+    - argocd_deploy_info.resources[0].status.readyReplicas | default(0) > 0
+  retries: 30
+  delay: 5
+
+- name: Configure ArgoCD Public URL
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig_path }}"
+    state: present
+    namespace: argocd
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: argocd-cm
+      data:
+        url: "https://argo.wrangler.pp.ua"
+
+- name: Configure ArgoCD App of Apps (coin-ops GitOps)
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig_path }}"
+    state: present
+    namespace: argocd
+    definition:
+      apiVersion: argoproj.io/v1alpha1
+      kind: Application
+      metadata:
+        name: coin-ops
+        namespace: argocd
+      spec:
+        project: default
+        source:
+          repoURL: 'https://github.com/ua-academy-projects/coin-ops.git'
+          path: deploy/helm/coin-ops
+          targetRevision: dev-Tsyhan
+        destination:
+          server: 'https://kubernetes.default.svc'
+          namespace: coin-ops-infra
+        syncPolicy:
+          automated:
+            prune: true
+            selfHeal: true
