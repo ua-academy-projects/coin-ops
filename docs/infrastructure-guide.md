@@ -118,21 +118,20 @@ softserve-node-03 ansible_host=172.31.1.12
 
 When you run `ansible-playbook deploy.yml`, Ansible reads this file to know who to connect to and what group each host belongs to.
 
-### group_vars hierarchy
+### Variable layout
 
-Variables are layered from least specific to most specific:
+Runtime defaults live in role defaults, not `group_vars`:
 
 ```
-ansible/group_vars/
-  all/              ← applies to every host (non-secret shared config)
-  history/          ← applies only to [history] group
-  proxy/            ← applies only to [proxy] group
-  ui/               ← applies only to [ui] group
-ansible/host_vars/
-  softserve-node-01.yml   ← applies to just one host (SSH key path, etc.)
+ansible/roles/history/defaults/main.yml
+ansible/roles/proxy/defaults/main.yml
+ansible/roles/ui/defaults/main.yml
+ansible/roles/registry_auth/defaults/main.yml
 ```
 
-Lower specificity first, higher overrides. `host_vars` wins over `group_vars`, which wins over `all`.
+Inventory-level connection settings live in `ansible/inventory`. Secrets and image tags come from environment variables, with role defaults reading them via `lookup('env', ...)`.
+
+Keep new service defaults in the role that owns the service. Use inventory vars only for host/group membership and connection details.
 
 ### secrets.yml vs secrets.example.yml
 
@@ -148,7 +147,7 @@ Each role (`roles/common`, `roles/proxy`, `roles/history`, `roles/ui`) has a sta
 - `tasks/` — the list of things to do (install packages, write files, start services).
 - `handlers/` — actions triggered by `notify:` on a task. Deduplicated: if five tasks notify "restart nginx", it restarts once at the end.
 - `templates/` — Jinja2 templates rendered with variables at runtime (e.g., systemd unit files with the service user injected).
-- `defaults/` — lowest-precedence variable values. Any group_var/host_var overrides these.
+- `defaults/` — lowest-precedence variable values owned by the role.
 
 Why separate `handlers/`? Imagine you change four lines in `nginx.conf`. Each change notifies "reload nginx". Without deduplication, nginx restarts four times. Handlers collect all notifies and run each once, at the end of the play.
 

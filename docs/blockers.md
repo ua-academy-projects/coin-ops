@@ -204,11 +204,13 @@ Already added to `provision.yml` for the history node.
 
 ## 8. Ansible `group_vars/secrets.yml` silently ignored
 
+Historical note: current Ansible configuration no longer uses committed `group_vars`; role defaults read secrets from fetched secret facts or environment variables.
+
 **Symptom:** Ansible fails with `'rabbitmq_password' is undefined` even though `ansible/group_vars/secrets.yml` exists and contains the variable.
 
 **Root cause:** Ansible only auto-loads `group_vars/` files whose **filename matches a group name** in the inventory. A file named `secrets.yml` is silently ignored because there is no group called `secrets`.
 
-**Workaround:** Place files inside a directory named after the group instead:
+**Historical workaround:** Place files inside a directory named after the group instead:
 ```
 ansible/group_vars/
 └── all/           ← directory named after the "all" group
@@ -231,8 +233,9 @@ connection to server at "172.31.1.10", port 5432 failed: Connection refused
 
 **Workaround:** Use `localhost` in `DATABASE_URL` for services running on the same VM as PostgreSQL:
 ```yaml
-# ansible/group_vars/all/main.yml
-database_url: "postgresql://{{ db_user }}:{{ db_password }}@localhost:5432/{{ db_name }}"
+# ansible/roles/history/defaults/main.yml
+history_database_host: "postgres"
+history_database_url: "postgresql://{{ history_db_user }}:{{ history_db_password }}@{{ history_database_host }}:5432/{{ history_db_name }}"
 ```
 
 The `rabbitmq_url` intentionally keeps `172.31.1.10` because the proxy service on node-02 connects to RabbitMQ on node-01 over the network — that connection is external and correct.
@@ -550,6 +553,8 @@ This must be re-run once after each `terraform destroy && apply` that recreates 
 ---
 
 ## 25. Ansible ignores `group_vars` key path — leftover Vagrant `host_vars` takes precedence
+
+Historical note: connection vars now live in `ansible/inventory`, not committed `group_vars`.
 
 **Symptom:** `ansible-playbook provision.yml` fails with `Permission denied (publickey)` even though `$SSH_KEY_PATH` is correct and manual `ssh -i $SSH_KEY_PATH vagrant@172.31.1.10` works fine. Running `ansible -m debug -a "msg={{ ansible_ssh_private_key_file }}"` reveals Ansible is using `~/.ssh/vagrant_keys/node-1_key` — a path that doesn't exist.
 
