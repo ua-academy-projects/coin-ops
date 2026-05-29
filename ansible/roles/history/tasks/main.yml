@@ -39,7 +39,7 @@
 
 - name: Dump legacy application database before container cutover
   become_user: postgres
-  command: "pg_dump --clean --if-exists --no-owner --no-acl -d {{ db_name }} -f /var/backups/coin-ops/pre-container-postgres.sql"
+  command: "pg_dump --clean --if-exists --no-owner --no-acl -d {{ history_db_name }} -f /var/backups/coin-ops/pre-container-postgres.sql"
   when:
     - legacy_postgres_pg_version.stdout != ''
     - not container_postgres_pg_version.stat.exists
@@ -162,7 +162,7 @@
     - runtime_backend == "external"
 
 - name: Wait for containerized PostgreSQL readiness
-  command: "docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres pg_isready -U {{ db_user }} -d {{ db_name }}"
+  command: "docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres pg_isready -U {{ history_db_user }} -d {{ history_db_name }}"
   args:
     chdir: /opt/cognitor/history
   retries: 12
@@ -172,7 +172,7 @@
   when: not external_db_enabled
 
 - name: Wait for Cloud SQL PostgreSQL readiness
-  command: "pg_isready -h {{ external_db_host }} -p 5432 -U {{ db_user }} -d {{ db_name }}"
+  command: "pg_isready -h {{ external_db_host }} -p 5432 -U {{ history_db_user }} -d {{ history_db_name }}"
   retries: 12
   delay: 5
   register: cloud_sql_ready
@@ -185,7 +185,7 @@
   register: legacy_postgres_dump
 
 - name: Restore legacy PostgreSQL dump into container
-  shell: "docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres psql -U {{ db_user }} -d {{ db_name }} < /var/backups/coin-ops/pre-container-postgres.sql"
+  shell: "docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres psql -U {{ history_db_user }} -d {{ history_db_name }} < /var/backups/coin-ops/pre-container-postgres.sql"
   args:
     chdir: /opt/cognitor/history
   when:
@@ -194,7 +194,7 @@
     - not external_db_enabled
 
 - name: Restore legacy PostgreSQL dump into Cloud SQL
-  shell: "psql -h {{ external_db_host }} -U {{ db_user }} -d {{ db_name }} < /var/backups/coin-ops/pre-container-postgres.sql"
+  shell: "psql -h {{ external_db_host }} -U {{ history_db_user }} -d {{ history_db_name }} < /var/backups/coin-ops/pre-container-postgres.sql"
   environment:
     PGPASSWORD: "{{ db_password }}"
   no_log: true
@@ -208,7 +208,7 @@
 - name: Apply PostgreSQL runtime schema before app startup
   shell: >-
     docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres
-    psql -v ON_ERROR_STOP=1 -U {{ db_user }} -d {{ db_name }}
+    psql -v ON_ERROR_STOP=1 -U {{ history_db_user }} -d {{ history_db_name }}
     < /opt/cognitor/history/schema.sql
   args:
     chdir: /opt/cognitor/history
@@ -218,7 +218,7 @@
 
 - name: Apply PostgreSQL runtime schema to Cloud SQL before app startup
   shell: >-
-    psql -v ON_ERROR_STOP=1 -h {{ external_db_host }} -U {{ db_user }} -d {{ db_name }}
+    psql -v ON_ERROR_STOP=1 -h {{ external_db_host }} -U {{ history_db_user }} -d {{ history_db_name }}
     < /opt/cognitor/history/schema.sql
   environment:
     PGPASSWORD: "{{ db_password }}"
@@ -232,8 +232,8 @@
 - name: Persist runtime application role before wrapper bootstrap
   command: >-
     docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres
-    psql -v ON_ERROR_STOP=1 -U {{ db_user }} -d {{ db_name }}
-    -c "ALTER DATABASE {{ db_name }} SET runtime.app_role = '{{ db_user }}';"
+    psql -v ON_ERROR_STOP=1 -U {{ history_db_user }} -d {{ history_db_name }}
+    -c "ALTER DATABASE {{ history_db_name }} SET runtime.app_role = '{{ history_db_user }}';"
   args:
     chdir: /opt/cognitor/history
   register: runtime_app_role_result
@@ -244,8 +244,8 @@
 
 - name: Persist runtime application role in Cloud SQL before wrapper bootstrap
   command: >-
-    psql -v ON_ERROR_STOP=1 -h {{ external_db_host }} -U {{ db_user }} -d {{ db_name }}
-    -c "ALTER DATABASE {{ db_name }} SET runtime.app_role = '{{ db_user }}';"
+    psql -v ON_ERROR_STOP=1 -h {{ external_db_host }} -U {{ history_db_user }} -d {{ history_db_name }}
+    -c "ALTER DATABASE {{ history_db_name }} SET runtime.app_role = '{{ history_db_user }}';"
   environment:
     PGPASSWORD: "{{ db_password }}"
   no_log: true
@@ -258,7 +258,7 @@
 - name: Apply runtime queue and session schema
   shell: |
     (
-      printf "%s\n" "SET runtime.app_role = '{{ db_user }}';"
+      printf "%s\n" "SET runtime.app_role = '{{ history_db_user }}';"
       cat \
         /opt/cognitor/history/runtime/01_schema.sql \
         /opt/cognitor/history/runtime/02_wrappers.sql \
@@ -268,7 +268,7 @@
         /opt/cognitor/history/runtime/06_cache_schema.sql \
         /opt/cognitor/history/runtime/07_cache_wrappers.sql \
         /opt/cognitor/history/runtime/08_cron.sql
-    ) | docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres psql -v ON_ERROR_STOP=1 -U {{ db_user }} -d {{ db_name }}
+    ) | docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres psql -v ON_ERROR_STOP=1 -U {{ history_db_user }} -d {{ history_db_name }}
   args:
     chdir: /opt/cognitor/history
   register: runtime_schema_result
@@ -280,7 +280,7 @@
 - name: Apply runtime queue and session schema to Cloud SQL
   shell: |
     (
-      printf "%s\n" "SET runtime.app_role = '{{ db_user }}';"
+      printf "%s\n" "SET runtime.app_role = '{{ history_db_user }}';"
       cat \
         /opt/cognitor/history/runtime/01_schema.sql \
         /opt/cognitor/history/runtime/02_wrappers.sql \
@@ -290,7 +290,7 @@
         /opt/cognitor/history/runtime/06_cache_schema.sql \
         /opt/cognitor/history/runtime/07_cache_wrappers.sql \
         /opt/cognitor/history/runtime/08_cron.sql
-    ) | PGPASSWORD="{{ db_password }}" psql -v ON_ERROR_STOP=1 -h {{ external_db_host }} -U {{ db_user }} -d {{ db_name }}
+    ) | PGPASSWORD="{{ db_password }}" psql -v ON_ERROR_STOP=1 -h {{ external_db_host }} -U {{ history_db_user }} -d {{ history_db_name }}
   args:
     chdir: /opt/cognitor/history
   register: cloud_sql_runtime_schema_result
@@ -303,7 +303,7 @@
 - name: Verify PostgreSQL runtime extensions are installed
   command: >-
     docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres
-    psql -v ON_ERROR_STOP=1 -At -U {{ db_user }} -d {{ db_name }}
+    psql -v ON_ERROR_STOP=1 -At -U {{ history_db_user }} -d {{ history_db_name }}
     -c "SELECT string_agg(extname, ',' ORDER BY extname) FROM pg_extension WHERE extname IN ('pg_cron', 'pgmq');"
   args:
     chdir: /opt/cognitor/history
@@ -316,7 +316,7 @@
 
 - name: Verify Cloud SQL runtime extensions are installed
   command: >-
-    psql -v ON_ERROR_STOP=1 -At -h {{ external_db_host }} -U {{ db_user }} -d {{ db_name }}
+    psql -v ON_ERROR_STOP=1 -At -h {{ external_db_host }} -U {{ history_db_user }} -d {{ history_db_name }}
     -c "SELECT string_agg(extname, ',' ORDER BY extname) FROM pg_extension WHERE extname IN ('pg_cron', 'pgmq');"
   environment:
     PGPASSWORD: "{{ db_password }}"
@@ -331,7 +331,7 @@
 - name: Verify PostgreSQL runtime cron jobs are registered
   command: >-
     docker compose -f /opt/cognitor/history/compose.yaml exec -T postgres
-    psql -v ON_ERROR_STOP=1 -At -U {{ db_user }} -d {{ db_name }}
+    psql -v ON_ERROR_STOP=1 -At -U {{ history_db_user }} -d {{ history_db_name }}
     -c "SELECT count(*) FROM cron.job WHERE jobname IN ('runtime-cache-reap', 'runtime-session-reap', 'runtime-dlq-reap') AND active;"
   args:
     chdir: /opt/cognitor/history
@@ -344,7 +344,7 @@
 
 - name: Verify Cloud SQL runtime cron jobs are registered
   command: >-
-    psql -v ON_ERROR_STOP=1 -At -h {{ external_db_host }} -U {{ db_user }} -d {{ db_name }}
+    psql -v ON_ERROR_STOP=1 -At -h {{ external_db_host }} -U {{ history_db_user }} -d {{ history_db_name }}
     -c "SELECT count(*) FROM cron.job WHERE jobname IN ('runtime-cache-reap', 'runtime-session-reap', 'runtime-dlq-reap') AND active;"
   environment:
     PGPASSWORD: "{{ db_password }}"

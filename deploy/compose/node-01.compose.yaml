@@ -11,7 +11,7 @@ services:
       - -c
       - shared_preload_libraries=pg_cron
       - -c
-      - cron.database_name={{ db_name }}
+      - cron.database_name={{ history_db_name }}
 {% endif %}
     ports:
       - "{{ postgres_bind_ip }}:5432:5432"
