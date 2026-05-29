@@ -1,0 +1,35 @@
+{{- if and .Values.features.deployInfra .Values.cloudflare.tunnelToken }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared
+  namespace: {{ .Values.namespaces.infra }}
+  labels:
+    app: cloudflared
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cloudflared
+  template:
+    metadata:
+      labels:
+        app: cloudflared
+    spec:
+      containers:
+      - name: cloudflared
+        image: "{{ .Values.cloudflare.image.repository }}:{{ .Values.cloudflare.image.tag }}"
+        args:
+        - tunnel
+        - --no-autoupdate
+        - run
+        - --token
+        - {{ .Values.cloudflare.tunnelToken | quote }}
+        resources:
+          requests:
+            cpu: 10m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+{{- end }}

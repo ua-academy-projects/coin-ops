@@ -1,0 +1,181 @@
+{{- if .Values.features.deployInfra }}
+# =============================================================================
+# deploy/k3s/infra/network-policy.yaml.j2
+# =============================================================================
+# Kubernetes NetworkPolicies for the infrastructure namespace.
+# =============================================================================
+
+# ── Default deny all in the namespace ─────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  namespace: {{ .Values.namespaces.infra }}
+  name: default-deny-all
+spec:
+  podSelector: {}  # Applies to ALL Pods in the namespace.
+  policyTypes:
+    - Ingress
+    - Egress
+
+---
+# ── Allow DNS resolution for all pods ─────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  namespace: {{ .Values.namespaces.infra }}
+  name: allow-dns
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+
+---
+# ── Redis: Allow ingress from Proxy ───────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  namespace: {{ .Values.namespaces.infra }}
+  name: allow-redis-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: "{{ .Values.namespaces.app }}"
+          podSelector:
+            matchLabels:
+              app: proxy
+      ports:
+        - port: 6379
+
+---
+# ── RabbitMQ: Allow ingress from Proxy and History Consumer ───────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  namespace: {{ .Values.namespaces.infra }}
+  name: allow-rabbitmq-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: rabbitmq
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: "{{ .Values.namespaces.app }}"
+          podSelector:
+            matchLabels:
+              app: proxy
+      ports:
+        - port: 5672
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: "{{ .Values.namespaces.app }}"
+          podSelector:
+            matchLabels:
+              app: history-consumer
+      ports:
+        - port: 5672
+
+---
+---
+# ── CloudNativePG: Cluster Communication & External Access ────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  namespace: {{ .Values.namespaces.infra }}
+  name: cnpg-cluster-policy
+spec:
+  podSelector:
+    matchExpressions:
+      - key: cnpg.io/cluster
+        operator: Exists
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow intra-cluster communication and Operator communication
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: cnpg.io/cluster
+                operator: Exists
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cnpg-system
+      ports:
+        - port: 5432
+          protocol: TCP
+        - port: 8000
+          protocol: TCP
+    # 2. Allow incoming connections from the App namespace (Proxy, History)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: "{{ .Values.namespaces.app }}"
+          podSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values: ["proxy", "history-api", "history-consumer"]
+      ports:
+        - port: 5432
+  egress:
+    # Allow all egress from CNPG pods so they can communicate with K8s API (Service IP),
+    # other CNPG nodes, and the legacy database for pg_dump.
+    - {}
+
+---
+# ── Cloudflared: Allow outbound tunnels ───────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  namespace: {{ .Values.namespaces.infra }}
+  name: allow-cloudflared-egress
+spec:
+  podSelector:
+    matchLabels:
+      app: cloudflared
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: headlamp
+      ports:
+        - port: 80
+          protocol: TCP
+        - port: 4466
+          protocol: TCP
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - port: 443
+          protocol: TCP
+        - port: 443
+          protocol: UDP
+        - port: 7844
+          protocol: TCP
+        - port: 7844
+          protocol: UDP
+
+{{- end }}

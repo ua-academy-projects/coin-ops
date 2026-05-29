@@ -1,0 +1,64 @@
+# Default values for coin-ops.
+# This is a YAML-formatted file.
+
+global:
+  env: "production"
+  imageRegistry: "public.ecr.aws"
+  security:
+    allowInsecureImages: true
+
+namespaces:
+  app: "coin-ops-app"
+  infra: "coin-ops-infra"
+
+image:
+  registry: "ghcr.io/ua-academy-projects"
+  tag: "shabat-latest"
+  pullPolicy: IfNotPresent
+  # If using private repo, set the secret here
+  pullSecret:
+    enabled: true
+    name: ghcr-secret
+    username: ""
+    password: ""
+
+routing:
+  domain: "coinops.test"
+  nodeCidr: "10.10.1.0/24"
+  tls:
+    clusterIssuer: "letsencrypt-prod"
+
+cloudflare:
+  tunnelToken: ""
+  image:
+    repository: "cloudflare/cloudflared"
+    tag: "latest"
+
+database:
+  user: "cognitor"
+  password: "changeme"
+  name: "cognitor"
+  instances: 3
+  storageSize: "1Gi"
+
+redis:
+  enabled: true
+  fullnameOverride: "redis"
+  architecture: standalone
+  auth:
+    enabled: false
+  image:
+    registry: public.ecr.aws/bitnami
+
+rabbitmq:
+  enabled: true
+  fullnameOverride: "rabbitmq"
+  auth:
+    username: "cognitor"
+    password: "changeme"
+  image:
+    registry: public.ecr.aws/bitnami
+
+features:
+  deployInfra: true
+  deployApp: true

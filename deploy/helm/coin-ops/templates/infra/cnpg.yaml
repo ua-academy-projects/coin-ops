@@ -1,0 +1,24 @@
+{{- if .Values.features.deployInfra }}
+# =============================================================================
+# deploy/k3s/infra/cnpg.yaml
+# =============================================================================
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  namespace: {{ .Values.namespaces.infra }}
+  name: coin-ops-db
+spec:
+  instances: 3
+  imageName: ghcr.io/cloudnative-pg/postgresql:16.2
+
+  storage:
+    size: 1Gi
+
+  bootstrap:
+    initdb:
+      database: cognitor
+      owner: cognitor
+      secret:
+        name: cnpg-app-secret
+
+{{- end }}

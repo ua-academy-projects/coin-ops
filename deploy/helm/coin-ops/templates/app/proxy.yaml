@@ -1,0 +1,90 @@
+{{- if .Values.features.deployApp }}
+# =============================================================================
+# deploy/k3s/app/proxy.yaml
+# =============================================================================
+# Proxy — Go service. Acts as the main API gateway.
+# Image: pulled directly from GHCR using your existing token.
+#
+# Env vars mapped from docker-compose:
+#   RABBITMQ_URL, REDIS_URL, PORT, DATABASE_URL, RUNTIME_BACKEND
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: {{ .Values.namespaces.app }}
+  name: proxy
+  labels:
+    app: proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: proxy
+  template:
+    metadata:
+      labels:
+        app: proxy
+    spec:
+      # Pull the image from GHCR using the imagePullSecret created by Ansible/bash
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: proxy
+          image: "{{ .Values.image.registry }}/coin-ops-proxy:{{ .Values.image.tag }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+            - name: RUNTIME_BACKEND
+              value: "external"
+            - name: RABBITMQ_URL
+              valueFrom:
+                secretKeyRef:
+                  name: coin-ops-secrets
+                  key: rabbitmq-url
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: coin-ops-secrets
+                  key: redis-url
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: coin-ops-secrets
+                  key: database-url
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+            limits:
+              cpu: "500m"
+              memory: "128Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: {{ .Values.namespaces.app }}
+  name: proxy
+  labels:
+    app: proxy
+spec:
+  type: ClusterIP
+  selector:
+    app: proxy
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+
+{{- end }}
