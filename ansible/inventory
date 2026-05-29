@@ -1,14 +1,15 @@
-[history]
-coinops-history ansible_host=10.10.1.3 private_ip=10.10.1.3
+[all]
+k3s-node-01 cloud=gcp ansible_host=207.175.12.31 private_ip=10.30.1.3 public_ip=207.175.12.31 allowed_ports='[22]' required_secrets='[]'
+k3s-node-02 cloud=gcp ansible_host=104.199.97.152 private_ip=10.30.1.4 public_ip=104.199.97.152 allowed_ports='[22]' required_secrets='[]'
+k3s-node-03 cloud=gcp ansible_host=35.240.1.55 private_ip=10.30.1.2 public_ip=35.240.1.55 allowed_ports='[22]' required_secrets='[]'
 
-[proxy]
-coinops-proxy ansible_host=10.10.1.2 private_ip=10.10.1.2
+[all:vars]
+ansible_user=deployer
+ansible_ssh_private_key_file=/Users/arturvolinec/.ssh/coinops_gcp
+ansible_ssh_common_args=-o StrictHostKeyChecking=no -o ForwardAgent=yes -o IdentitiesOnly=yes
+ansible_python_interpreter=/usr/bin/python3.12
 
-[ui]
-coinops-ui ansible_host=10.10.2.4 private_ip=10.10.2.4
-
-[bastion]
-coinops-bastion ansible_host=146.148.13.94 private_ip=10.10.2.3
-
-[nat]
-coinops-nat ansible_host=10.10.2.2 private_ip=10.10.2.2
+[k3s]
+k3s-node-01
+k3s-node-02
+k3s-node-03

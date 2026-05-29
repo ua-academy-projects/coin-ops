@@ -2,13 +2,6 @@
 # Local paths come from environment variables.
 # Run `source .env` before any ansible-playbook command.
 
-# ── SSH ───────────────────────────────────────────────────────
-ansible_user: deployer 
-ansible_ssh_private_key_file: "{{ lookup('env', 'SSH_KEY_PATH') | expanduser }}"
-ansible_ssh_common_args: >-
-  -o StrictHostKeyChecking=no
-  -o ForwardAgent=yes
-
 # ── GCP / Secret Manager ───────────────────────────────────────
 google_project: "{{ lookup('env', 'GOOGLE_PROJECT') | default('', true) }}"
 azure_key_vault_name: "{{ lookup('env', 'AZ_KEYVAULT_NAME') | default('', true) }}"
