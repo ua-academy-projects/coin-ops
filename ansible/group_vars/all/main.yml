@@ -5,10 +5,3 @@
 # ── Passwords / tokens ─────────────────────────────────────────
 rabbitmq_password: "{{ fetched_gsm_secrets.rabbitmq_password | default(lookup('env', 'RABBITMQ_PASSWORD'), true) }}"
 db_password: "{{ fetched_gsm_secrets.db_password | default(lookup('env', 'DB_PASSWORD'), true) }}"
-
-# ── Container images ─────────────────────────────────────────
-# GitHub Actions publishes these images to GHCR.
-# Override IMAGE_TAG for immutable deploys, for example:
-#   IMAGE_TAG=<commit-sha> ansible-playbook -i ansible/inventory ansible/deploy.yml
-image_registry: "{{ lookup('env', 'IMAGE_REGISTRY') | default('ghcr.io/ua-academy-projects', true) }}"
-image_tag: "{{ lookup('env', 'IMAGE_TAG') | default('shabat-latest', true) }}"

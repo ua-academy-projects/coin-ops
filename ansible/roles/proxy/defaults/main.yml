@@ -11,4 +11,6 @@ proxy_external_db_host: "{{ lookup('env', 'EXTERNAL_DB_HOST') | default('', true
 proxy_database_host: "{{ proxy_external_db_host if proxy_external_db_host | length > 0 else hostvars[groups['history'][0]].private_ip }}"
 proxy_database_url: "postgresql://{{ proxy_db_user }}:{{ db_password }}@{{ proxy_database_host }}:5432/{{ proxy_db_name }}"
 proxy_port: 8080
-proxy_image: "{{ image_registry }}/coin-ops-proxy:{{ image_tag }}"
+proxy_image_registry: "{{ lookup('env', 'IMAGE_REGISTRY') | default('ghcr.io/ua-academy-projects', true) }}"
+proxy_image_tag: "{{ lookup('env', 'IMAGE_TAG') | default('shabat-latest', true) }}"
+proxy_image: "{{ proxy_image_registry }}/coin-ops-proxy:{{ proxy_image_tag }}"
