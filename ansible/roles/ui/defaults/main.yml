@@ -1,6 +1,7 @@
 #SPDX-License-Identifier: MIT-0
 ---
 # defaults file for /tmp/role_skeleton
+ui_image: "{{ image_registry }}/coin-ops-ui:{{ image_tag }}"
 ui_proxy_upstream_port: 8080
 ui_history_upstream_port: 8000
 

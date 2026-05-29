@@ -2,3 +2,4 @@
 ---
 # defaults file for /tmp/role_skeleton
 proxy_port: 8080
+proxy_image: "{{ image_registry }}/coin-ops-proxy:{{ image_tag }}"

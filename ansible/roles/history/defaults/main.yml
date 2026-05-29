@@ -2,3 +2,7 @@
 ---
 # defaults file for /tmp/role_skeleton
 history_port: 8000
+history_api_image: "{{ image_registry }}/coin-ops-history-api:{{ image_tag }}"
+history_consumer_image: "{{ image_registry }}/coin-ops-history-consumer:{{ image_tag }}"
+history_postgres_runtime_image: "{{ image_registry }}/coin-ops-postgres-runtime:{{ image_tag }}"
+history_postgres_image: "{{ history_postgres_runtime_image if runtime_backend == 'postgres' else 'postgres:16-alpine' }}"
