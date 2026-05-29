@@ -21,12 +21,8 @@ db_name: cognitor
 db_user: cognitor
 runtime_backend: "{{ lookup('env', 'RUNTIME_BACKEND') | default('external', true) }}"
 
-# ── Ports ────────────────────────────────────────────────────
-postgres_bind_ip: "{{ hostvars[groups['history'][0]].private_ip }}"
 external_db_host: "{{ lookup('env', 'EXTERNAL_DB_HOST') | default('', true) }}"
 external_db_enabled: "{{ external_db_host | length > 0 }}"
-# postgres_bind_ip: 0.0.0.0
-# postgres_bind_ip: "{{ hostvars[groups['history'][0]].ansible_host }}"
 
 # ── Container images ─────────────────────────────────────────
 # GitHub Actions publishes these images to GHCR.
@@ -42,10 +38,6 @@ registry_token: "{{ fetched_gsm_secrets.ghcr_token | default(lookup('env', 'GHCR
 # rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@{{ hostvars[groups['history'][0]].ansible_host }}:5672/"
 rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@{{ hostvars[groups['history'][0]].private_ip }}:5672/"
 # External DB if EXTERNAL_DB_HOST is set, otherwise fall back to self-hosted Postgres.
-database_host: "{{ external_db_host if external_db_host | length > 0 else 'localhost' }}"
-history_database_host: "{{ external_db_host if external_db_host | length > 0 else 'postgres' }}"
 proxy_database_host: "{{ external_db_host if external_db_host | length > 0 else hostvars[groups['history'][0]].private_ip }}"
-database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_host }}:5432/{{ db_name }}"
-history_database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ history_database_host }}:5432/{{ db_name }}"
 proxy_database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ proxy_database_host }}:5432/{{ db_name }}"
 redis_url: "redis://127.0.0.1:6379/0"

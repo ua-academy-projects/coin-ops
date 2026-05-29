@@ -1,5 +1,5 @@
 services:
-{% if not external_db_enabled %}
+{% if not history_external_db_enabled %}
   postgres:
     image: "{{ history_postgres_image }}"
     restart: unless-stopped
@@ -14,7 +14,7 @@ services:
       - cron.database_name={{ history_db_name }}
 {% endif %}
     ports:
-      - "{{ postgres_bind_ip }}:5432:5432"
+      - "{{ history_postgres_bind_ip }}:5432:5432"
     volumes:
       - /var/lib/coin-ops/postgres:/var/lib/postgresql/data
     healthcheck:
@@ -46,9 +46,9 @@ services:
     restart: unless-stopped
     env_file:
       - /etc/cognitor/history.env
-{% if not external_db_enabled or runtime_backend == "external" %}
+{% if not history_external_db_enabled or runtime_backend == "external" %}
     depends_on:
-{% if not external_db_enabled %}
+{% if not history_external_db_enabled %}
       postgres:
         condition: service_healthy
 {% endif %}
@@ -65,7 +65,7 @@ services:
       - "{{ history_port }}:{{ history_port }}"
     env_file:
       - /etc/cognitor/history.env
-{% if not external_db_enabled %}
+{% if not history_external_db_enabled %}
     depends_on:
       postgres:
         condition: service_healthy

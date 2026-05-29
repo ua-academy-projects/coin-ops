@@ -3,6 +3,11 @@
 # defaults file for /tmp/role_skeleton
 history_db_name: cognitor
 history_db_user: cognitor
+history_postgres_bind_ip: "{{ hostvars[groups['history'][0]].private_ip }}"
+history_external_db_host: "{{ lookup('env', 'EXTERNAL_DB_HOST') | default('', true) }}"
+history_external_db_enabled: "{{ history_external_db_host | length > 0 }}"
+history_database_host: "{{ history_external_db_host if history_external_db_host | length > 0 else 'postgres' }}"
+history_database_url: "postgresql://{{ history_db_user }}:{{ db_password }}@{{ history_database_host }}:5432/{{ history_db_name }}"
 history_port: 8000
 history_api_image: "{{ image_registry }}/coin-ops-history-api:{{ image_tag }}"
 history_consumer_image: "{{ image_registry }}/coin-ops-history-consumer:{{ image_tag }}"
