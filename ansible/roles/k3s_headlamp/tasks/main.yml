@@ -1,34 +1,6 @@
 #SPDX-License-Identifier: MIT-0
 ---
 # tasks file for ansible/roles/k3s_headlamp
-
-- name: Install Helm
-  ansible.builtin.shell: |
-    curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-  args:
-    creates: /usr/local/bin/helm
-
-- name: Install Python venv support 
-# Needed for kubernetes.core.k8s
-  ansible.builtin.apt:
-    name:
-      - python3-venv
-      - python3-pip
-    state: present
-
-- name: Install Kubernetes Python client in venv
-  ansible.builtin.pip:
-    name: "kubernetes=={{ headlamp_python_kubernetes_version }}"
-    virtualenv: /opt/headlamp-ansible-venv
-    virtualenv_command: python3 -m venv
-
-- name: Add Headlamp Helm repo
-  kubernetes.core.helm_repository:
-    name: headlamp
-    repo_url: https://kubernetes-sigs.github.io/headlamp/
-  vars:
-    ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
-
 - name: Create headlamp namespace
   kubernetes.core.k8s:
     state: present
@@ -39,7 +11,7 @@
       metadata:
         name: "{{ headlamp_namespace }}"
   vars:
-    ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
+    ansible_python_interpreter: "{{ k3s_ansible_venv_path }}/bin/python"
 
 - name: Deploy Headlamp via Helm
   kubernetes.core.helm:
@@ -49,7 +21,7 @@
     create_namespace: false
     kubeconfig: /etc/rancher/k3s/k3s.yaml
   vars:
-    ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
+    ansible_python_interpreter: "{{ k3s_ansible_venv_path }}/bin/python"
 
 - name: How to access Headlamp
   ansible.builtin.debug:

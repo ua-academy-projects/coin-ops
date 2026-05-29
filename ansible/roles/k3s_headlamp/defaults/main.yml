@@ -1,8 +1,7 @@
 #SPDX-License-Identifier: MIT-0
 ---
 # defaults file for ansible/roles/headlamp
-
-headlamp_python_kubernetes_version: "35.0.0"
+k3s_ansible_venv_path: /opt/k3s-ansible-venv
 
 headlamp_release_name: headlamp
 headlamp_namespace: headlamp

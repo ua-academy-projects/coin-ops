@@ -1,7 +1,8 @@
 #SPDX-License-Identifier: MIT-0
 ---
 # defaults file for ansible/roles/k3s_cert_manager
-k3s_cert_manager_python_kubernetes_version: "32.0.0"
+k3s_ansible_venv_path: /opt/k3s-ansible-venv
+
 k3s_cert_manager_namespace: cert-manager
 k3s_cert_manager_release_name: cert-manager
 # lts version

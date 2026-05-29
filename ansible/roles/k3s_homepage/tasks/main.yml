@@ -1,27 +1,6 @@
 #SPDX-License-Identifier: MIT-0
 ---
 # tasks file for ansible/roles/k3s_homepage
-
-- name: Install Helm
-  ansible.builtin.shell: |
-    curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-  args:
-    creates: /usr/local/bin/helm
-
-- name: Install Python venv support
-  # Needed for kubernetes.core.k8s
-  ansible.builtin.apt:
-    name:
-      - python3-venv
-      - python3-pip
-    state: present
-
-- name: Install Kubernetes Python client in venv
-  ansible.builtin.pip:
-    name: "kubernetes=={{ k3s_homepage_python_kubernetes_version }}"
-    virtualenv: /opt/headlamp-ansible-venv
-    virtualenv_command: python3 -m venv
-
 - name: Create Homepage namespace
   kubernetes.core.k8s:
     state: present
@@ -32,7 +11,7 @@
       metadata:
         name: "{{ k3s_homepage_namespace }}"
   vars:
-    ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
+    ansible_python_interpreter: "{{ k3s_ansible_venv_path }}/bin/python"
 
 - name: Create Homepage service account
   kubernetes.core.k8s:
@@ -49,7 +28,7 @@
       secrets:
         - name: homepage
   vars:
-    ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
+    ansible_python_interpreter: "{{ k3s_ansible_venv_path }}/bin/python"
 
 - name: Create Homepage SA's token
   kubernetes.core.k8s:
@@ -67,7 +46,7 @@
         annotations:
           kubernetes.io/service-account.name: homepage
   vars:
-    ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
+    ansible_python_interpreter: "{{ k3s_ansible_venv_path }}/bin/python"
 
 - name: Create Homepage ClusterRole
   kubernetes.core.k8s:
@@ -97,7 +76,7 @@
           resources: [nodes, pods]
           verbs: [get, list]
   vars:
-    ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
+    ansible_python_interpreter: "{{ k3s_ansible_venv_path }}/bin/python"
 
 - name: Create Homepage ClusterRoleBinding
   kubernetes.core.k8s:
@@ -119,7 +98,7 @@
           name: homepage
           namespace: "{{ k3s_homepage_namespace }}"
   vars:
-    ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
+    ansible_python_interpreter: "{{ k3s_ansible_venv_path }}/bin/python"
 
 - name: Create Homepage ConfigMap
   kubernetes.core.k8s:
@@ -154,7 +133,7 @@
               provider: duckduckgo
               target: _blank
   vars:
-    ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
+    ansible_python_interpreter: "{{ k3s_ansible_venv_path }}/bin/python"
 
 - name: Create Homepage service
   kubernetes.core.k8s:
@@ -178,7 +157,7 @@
         selector:
           app.kubernetes.io/name: homepage
   vars:
-    ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
+    ansible_python_interpreter: "{{ k3s_ansible_venv_path }}/bin/python"
 
 - name: Create Homepage Deployment
   kubernetes.core.k8s:
@@ -277,7 +256,7 @@
               - name: logs
                 emptyDir: {}
   vars:
-    ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
+    ansible_python_interpreter: "{{ k3s_ansible_venv_path }}/bin/python"
 
 - name: Create Homepage Ingress
   kubernetes.core.k8s:
@@ -310,7 +289,7 @@
                       port:
                         number: 3000
   vars:
-    ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
+    ansible_python_interpreter: "{{ k3s_ansible_venv_path }}/bin/python"
 
 - name: Restart Homepage deployment
   kubernetes.core.k8s:
@@ -326,4 +305,4 @@
             annotations:
               kubectl.kubernetes.io/restartedAt: "{{ ansible_facts['date_time']['iso8601'] }}"
   vars:
-    ansible_python_interpreter: /opt/headlamp-ansible-venv/bin/python
+    ansible_python_interpreter: "{{ k3s_ansible_venv_path }}/bin/python"
