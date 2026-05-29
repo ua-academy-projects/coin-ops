@@ -11,7 +11,4 @@ db_password: "{{ fetched_gsm_secrets.db_password | default(lookup('env', 'DB_PAS
 # Override IMAGE_TAG for immutable deploys, for example:
 #   IMAGE_TAG=<commit-sha> ansible-playbook -i ansible/inventory ansible/deploy.yml
 image_registry: "{{ lookup('env', 'IMAGE_REGISTRY') | default('ghcr.io/ua-academy-projects', true) }}"
-image_registry_host: "{{ image_registry.split('/')[0] }}"
 image_tag: "{{ lookup('env', 'IMAGE_TAG') | default('shabat-latest', true) }}"
-registry_username: "{{ fetched_gsm_secrets.ghcr_username | default(lookup('env', 'GHCR_USERNAME'), true) }}"
-registry_token: "{{ fetched_gsm_secrets.ghcr_token | default(lookup('env', 'GHCR_TOKEN'), true) }}"
