@@ -1,11 +1,23 @@
 ---
-- name: Provision k3s cluster 
-  hosts: all
+- name: Provision k3s gateway
+  hosts: bastion
+  become: yes
+  roles:
+    - role: common
+      tags: common
+    - role: nat
+      tags: nat
+    - role: k3s_gateway
+      tags: gateway
+
+- name: Provision k3s cluster
+  hosts: k3s
   become: yes
   roles:
     - role: k3s_cluster
       tags: k3s
 
+# !!!NOT IN INVENTORY!!! UPDATE IT !!!
 - name: Deploy Headlamp
   hosts: k3s-node-01
   become: yes
