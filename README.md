@@ -134,7 +134,9 @@ ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags ing
 ```bash
 kubectl get nodes -o wide
 kubectl -n cnpg-system get pods
-kubectl -n coinops-data get pods
+kubectl -n coinops-postgres get pods
+kubectl -n coinops-rabbitmq get pods
+kubectl -n coinops-redis get pods
 kubectl -n coinops-backend get pods
 kubectl -n coinops-frontend get pods
 kubectl -n coinops-frontend get certificate

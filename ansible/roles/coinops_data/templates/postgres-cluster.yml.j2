@@ -2,7 +2,7 @@ apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
   name: {{ coinops_data_postgres_cluster_name }}
-  namespace: {{ coinops_data_namespace }}
+  namespace: {{ coinops_data_postgres_namespace }}
 spec:
   instances: {{ coinops_data_postgres_instances }}
   imageName: {{ coinops_data_postgres_image }}

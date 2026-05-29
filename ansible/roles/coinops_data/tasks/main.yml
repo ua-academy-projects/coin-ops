@@ -61,7 +61,7 @@
       kind: Secret
       metadata:
         name: "{{ coinops_data_postgres_credentials_secret_name }}"
-        namespace: "{{ coinops_data_namespace }}"
+        namespace: "{{ coinops_data_postgres_namespace }}"
       type: kubernetes.io/basic-auth
       stringData:
         username: "{{ coinops_data_db_secret.db_user }}"
@@ -78,7 +78,7 @@
       kind: Secret
       metadata:
         name: "{{ coinops_data_rabbitmq_credentials_secret_name }}"
-        namespace: "{{ coinops_data_namespace }}"
+        namespace: "{{ coinops_data_rabbitmq_namespace }}"
       type: Opaque
       stringData:
         rabbitmq-username: "{{ coinops_data_service_secret.rabbitmq_user }}"
@@ -94,7 +94,7 @@
       kind: Secret
       metadata:
         name: "{{ coinops_data_redis_credentials_secret_name }}"
-        namespace: "{{ coinops_data_namespace }}"
+        namespace: "{{ coinops_data_redis_namespace }}"
       type: Opaque
       stringData:
         redis-password: "{{ coinops_data_service_secret.redis_password }}"
@@ -158,7 +158,7 @@
     kubeconfig: "{{ coinops_data_kubeconfig }}"
     api_version: postgresql.cnpg.io/v1
     kind: Cluster
-    namespace: "{{ coinops_data_namespace }}"
+    namespace: "{{ coinops_data_postgres_namespace }}"
     name: "{{ coinops_data_postgres_cluster_name }}"
   register: coinops_data_postgres_cluster
   retries: "{{ (coinops_data_postgres_wait_timeout / 10) | int }}"
@@ -177,7 +177,7 @@
     name: "{{ coinops_data_rabbitmq_release_name }}"
     chart_ref: "{{ coinops_data_rabbitmq_chart_ref }}"
     chart_version: "{{ coinops_data_rabbitmq_chart_version }}"
-    release_namespace: "{{ coinops_data_namespace }}"
+    release_namespace: "{{ coinops_data_rabbitmq_namespace }}"
     wait: true
     timeout: 10m
     values:
@@ -203,7 +203,7 @@
     name: "{{ coinops_data_redis_release_name }}"
     chart_ref: "{{ coinops_data_redis_chart_ref }}"
     chart_version: "{{ coinops_data_redis_chart_version }}"
-    release_namespace: "{{ coinops_data_namespace }}"
+    release_namespace: "{{ coinops_data_redis_namespace }}"
     wait: true
     timeout: 10m
     values:
@@ -225,14 +225,38 @@
           size: "{{ coinops_data_redis_storage_size }}"
   no_log: true
 
-- name: Read CoinOps data pods
+- name: Read CoinOps PostgreSQL pods
   kubernetes.core.k8s_info:
     kubeconfig: "{{ coinops_data_kubeconfig }}"
     api_version: v1
     kind: Pod
-    namespace: "{{ coinops_data_namespace }}"
-  register: coinops_data_pods
+    namespace: "{{ coinops_data_postgres_namespace }}"
+  register: coinops_data_postgres_pods
 
-- name: Show CoinOps data pod names
+- name: Show CoinOps PostgreSQL pod names
   debug:
-    msg: "{{ coinops_data_pods.resources | map(attribute='metadata.name') | list }}"
+    msg: "{{ coinops_data_postgres_pods.resources | map(attribute='metadata.name') | list }}"
+
+- name: Read CoinOps RabbitMQ pods
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ coinops_data_kubeconfig }}"
+    api_version: v1
+    kind: Pod
+    namespace: "{{ coinops_data_rabbitmq_namespace }}"
+  register: coinops_data_rabbitmq_pods
+
+- name: Show CoinOps RabbitMQ pod names
+  debug:
+    msg: "{{ coinops_data_rabbitmq_pods.resources | map(attribute='metadata.name') | list }}"
+
+- name: Read CoinOps Redis pods
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ coinops_data_kubeconfig }}"
+    api_version: v1
+    kind: Pod
+    namespace: "{{ coinops_data_redis_namespace }}"
+  register: coinops_data_redis_pods
+
+- name: Show CoinOps Redis pod names
+  debug:
+    msg: "{{ coinops_data_redis_pods.resources | map(attribute='metadata.name') | list }}"

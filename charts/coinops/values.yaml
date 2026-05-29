@@ -17,6 +17,7 @@ global:
   backendNamespace: coinops-backend
   frontendNamespace: coinops-frontend
   backendEnvSecret: coinops-backend-env
+  backendEnvSecretVersion: ""
   runtimeBackend: external
 
 # -----------------------------------------------------------------------------

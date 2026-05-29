@@ -33,3 +33,4 @@ coinops_app_chart_ingress_domain: ""
 # These are NOT created by this role — they are created by `coinops_data`.
 coinops_app_chart_backend_namespace: coinops-backend
 coinops_app_chart_frontend_namespace: coinops-frontend
+coinops_app_chart_backend_env_secret_name: coinops-backend-env

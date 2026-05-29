@@ -3,7 +3,9 @@
 # Role variables are prefixed with coinops_data_ by convention.
 
 coinops_data_kubeconfig: "{{ lookup('env', 'KUBECONFIG') | default('~/.kube/config', true) | expanduser }}"
-coinops_data_namespace: coinops-data
+coinops_data_postgres_namespace: coinops-postgres
+coinops_data_rabbitmq_namespace: coinops-rabbitmq
+coinops_data_redis_namespace: coinops-redis
 coinops_data_backend_namespace: coinops-backend
 coinops_data_frontend_namespace: coinops-frontend
 coinops_data_gcp_project_id: project-8888321c-54a9-4dac-86d
@@ -35,7 +37,9 @@ coinops_data_redis_credentials_secret_name: coinops-redis-creds
 coinops_data_redis_storage_size: 2Gi
 
 coinops_data_namespaces:
-  - "{{ coinops_data_namespace }}"
+  - "{{ coinops_data_postgres_namespace }}"
+  - "{{ coinops_data_rabbitmq_namespace }}"
+  - "{{ coinops_data_redis_namespace }}"
   - "{{ coinops_data_backend_namespace }}"
   - "{{ coinops_data_frontend_namespace }}"
 
@@ -43,9 +47,9 @@ coinops_data_image_pull_secret_namespaces:
   - "{{ coinops_data_backend_namespace }}"
   - "{{ coinops_data_frontend_namespace }}"
 
-coinops_data_postgres_host: "{{ coinops_data_postgres_cluster_name }}-rw.{{ coinops_data_namespace }}.svc"
+coinops_data_postgres_host: "{{ coinops_data_postgres_cluster_name }}-rw.{{ coinops_data_postgres_namespace }}.svc"
 coinops_data_postgres_port: 5432
-coinops_data_rabbitmq_host: "{{ coinops_data_rabbitmq_release_name }}.{{ coinops_data_namespace }}.svc"
+coinops_data_rabbitmq_host: "{{ coinops_data_rabbitmq_release_name }}.{{ coinops_data_rabbitmq_namespace }}.svc"
 coinops_data_rabbitmq_port: 5672
-coinops_data_redis_host: "{{ coinops_data_redis_release_name }}-master.{{ coinops_data_namespace }}.svc"
+coinops_data_redis_host: "{{ coinops_data_redis_release_name }}-master.{{ coinops_data_redis_namespace }}.svc"
 coinops_data_redis_port: 6379

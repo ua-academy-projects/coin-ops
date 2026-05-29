@@ -61,7 +61,9 @@ into `default`.
 | Namespace | Purpose |
 | --- | --- |
 | `cnpg-system` | CNPG operator |
-| `coinops-data` | PostgreSQL, RabbitMQ, Redis, data secrets |
+| `coinops-postgres` | CNPG PostgreSQL cluster and PostgreSQL credentials |
+| `coinops-rabbitmq` | RabbitMQ and RabbitMQ credentials |
+| `coinops-redis` | Redis and Redis credentials |
 | `coinops-backend` | Proxy, history API, history consumer |
 | `coinops-frontend` | React UI and public TLS certificate |
 
@@ -119,8 +121,8 @@ Helm releases in this deployment:
 | Release | Namespace | Source |
 | --- | --- | --- |
 | `cnpg` | `cnpg-system` | upstream chart |
-| `rabbitmq` | `coinops-data` | upstream Bitnami chart |
-| `redis` | `coinops-data` | upstream Bitnami chart |
+| `rabbitmq` | `coinops-rabbitmq` | upstream Bitnami chart |
+| `redis` | `coinops-redis` | upstream Bitnami chart |
 | `coinops` | `coinops-backend` | local chart in `charts/coinops/` |
 
 The local CoinOps chart deploys the application layer only (proxy, history API,
@@ -147,7 +149,7 @@ coinops-postgres
   instances: 3
   database: cognitor
   owner: coinops
-  service: coinops-postgres-rw.coinops-data.svc
+  service: coinops-postgres-rw.coinops-postgres.svc
 ```
 
 ## Secrets
@@ -166,9 +168,9 @@ Ansible reads these values and creates Kubernetes Secrets:
 
 | Kubernetes Secret | Namespace | Purpose |
 | --- | --- | --- |
-| `coinops-postgres-app-creds` | `coinops-data` | CNPG application user |
-| `coinops-rabbitmq-creds` | `coinops-data` | RabbitMQ password |
-| `coinops-redis-creds` | `coinops-data` | Redis password |
+| `coinops-postgres-app-creds` | `coinops-postgres` | CNPG application user |
+| `coinops-rabbitmq-creds` | `coinops-rabbitmq` | RabbitMQ password |
+| `coinops-redis-creds` | `coinops-redis` | Redis password |
 | `coinops-backend-env` | `coinops-backend` | `DATABASE_URL`, `RABBITMQ_URL`, `REDIS_URL` |
 | `ghcr-pull-secret` | `coinops-backend`, `coinops-frontend` | Pull private GHCR images |
 | `coinops-tls` | `coinops-frontend` | HTTPS certificate private key and cert |
@@ -216,7 +218,9 @@ Pods:
 
 ```bash
 kubectl -n cnpg-system get pods
-kubectl -n coinops-data get pods
+kubectl -n coinops-postgres get pods
+kubectl -n coinops-rabbitmq get pods
+kubectl -n coinops-redis get pods
 kubectl -n coinops-backend get pods
 kubectl -n coinops-frontend get pods
 ```
@@ -249,16 +253,18 @@ kubectl -n coinops-frontend logs deployment/coinops-ui --tail=100
 CNPG:
 
 ```bash
-kubectl -n coinops-data get cluster
-kubectl -n coinops-data get pods -l cnpg.io/cluster=coinops-postgres
-kubectl -n coinops-data get svc | grep coinops-postgres
+kubectl -n coinops-postgres get cluster
+kubectl -n coinops-postgres get pods -l cnpg.io/cluster=coinops-postgres
+kubectl -n coinops-postgres get svc | grep coinops-postgres
 ```
 
 Helm releases:
 
 ```bash
 helm -n cnpg-system list
-helm -n coinops-data list
+helm -n coinops-rabbitmq list
+helm -n coinops-redis list
+helm -n coinops-backend list
 ```
 
 ## Files To Show In Review

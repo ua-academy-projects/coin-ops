@@ -39,7 +39,9 @@ It must not call internal Kubernetes service DNS names directly.
 | Namespace | Components |
 | --- | --- |
 | `cnpg-system` | CloudNativePG operator |
-| `coinops-data` | PostgreSQL, RabbitMQ, Redis, data-layer secrets |
+| `coinops-postgres` | CNPG PostgreSQL cluster and PostgreSQL credentials |
+| `coinops-rabbitmq` | RabbitMQ and RabbitMQ credentials |
+| `coinops-redis` | Redis and Redis credentials |
 | `coinops-backend` | Go proxy, history API, history consumer |
 | `coinops-frontend` | React UI, frontend Ingress, TLS Secret |
 
@@ -89,12 +91,14 @@ PostgreSQL is managed by CloudNativePG. The application connects to the CNPG
 read/write service:
 
 ```text
-coinops-postgres-rw.coinops-data.svc
+coinops-postgres-rw.coinops-postgres.svc
 ```
 
 ### RabbitMQ And Redis
 
-RabbitMQ and Redis are installed with Helm into `coinops-data`.
+RabbitMQ and Redis are installed with Helm into separate data namespaces:
+`coinops-rabbitmq` and `coinops-redis`. This keeps the data services ready for
+future NetworkPolicy isolation.
 
 - RabbitMQ is the async queue between proxy and consumer.
 - Redis stores short-lived UI session state.

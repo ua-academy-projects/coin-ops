@@ -9,6 +9,16 @@
 # history consumer, UI, ingress + middlewares). The data layer
 # (PostgreSQL, RabbitMQ, Redis) stays in `coinops_data`.
 
+- name: Read CoinOps backend runtime environment secret
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ coinops_app_chart_kubeconfig }}"
+    api_version: v1
+    kind: Secret
+    namespace: "{{ coinops_app_chart_backend_namespace }}"
+    name: "{{ coinops_app_chart_backend_env_secret_name }}"
+  register: coinops_app_chart_backend_env_secret
+  no_log: true
+
 - name: Build CoinOps chart value overrides
   ansible.builtin.set_fact:
     coinops_app_chart_values: >-
@@ -16,7 +26,9 @@
         {
           'global': (
             ({'backendNamespace': coinops_app_chart_backend_namespace,
-              'frontendNamespace': coinops_app_chart_frontend_namespace})
+              'frontendNamespace': coinops_app_chart_frontend_namespace,
+              'backendEnvSecret': coinops_app_chart_backend_env_secret_name,
+              'backendEnvSecretVersion': coinops_app_chart_backend_env_secret.resources[0].metadata.resourceVersion})
             | combine(
                 {'imageTag': coinops_app_chart_image_tag}
                 if coinops_app_chart_image_tag | length > 0 else {}
