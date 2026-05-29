@@ -17,6 +17,9 @@ variable "ssh_public_key_path" {
   default = "~/.ssh/coinops_gcp.pub"
 }
 
+
+# cloud specific
+
 variable "azure_resource_group_name" {
   type    = string
   default = null
@@ -37,7 +40,7 @@ variable "azure_location" {
 
 variable "networks" {
   type = map(object({
-    cloud = string
+    cloud = optional(string)
     name  = string
     cidr  = string
     subnets = map(object({
@@ -49,7 +52,7 @@ variable "networks" {
 
   validation {
     condition = alltrue([
-      for _, network in var.networks : contains(["gcp", "aws", "azure"], network.cloud)
+      for _, network in var.networks : network.cloud == null || contains(["gcp", "aws", "azure"], network.cloud)
     ])
     error_message = "Each network cloud must be one of: gcp, azure, aws."
   }

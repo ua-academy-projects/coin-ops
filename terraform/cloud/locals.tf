@@ -8,21 +8,24 @@ locals {
     })
   }
 
-  # for now we support only one network per cloud
-  network_names_by_cloud = {
+  # add default cloud value, if no one specified
+  networks = {
+    for name, network in var.networks : name => merge(network, {
+      cloud = coalesce(network.cloud, var.cloud)
+    })
+  }
+
+  networks_grouped_by_cloud = {
     for cloud in local.supported_clouds : cloud => [
-      for name, network in var.networks : name
+      for _, network in local.networks : network
       if network.cloud == cloud
     ]
   }
 
   # quick lookup: azure network, gcp network, aws network
   networks_by_cloud = {
-    for cloud in local.supported_clouds : cloud => (
-      length(local.network_names_by_cloud[cloud]) == 1
-      ? var.networks[local.network_names_by_cloud[cloud][0]]
-      : null
-    )
+    for cloud, networks in local.networks_grouped_by_cloud :
+    cloud => length(networks) == 1 ? networks[0] : null
   }
 
   # split workloads by cloud before sending them to cloud modules
@@ -35,8 +38,8 @@ locals {
 
   # validation helpers used by inventory.tf preconditions
   network_clouds_with_multiple_networks = [
-    for cloud in local.supported_clouds : cloud
-    if length(local.network_names_by_cloud[cloud]) > 1
+    for cloud, networks in local.networks_grouped_by_cloud : cloud
+    if length(networks) > 1
   ]
 
   workload_clouds_without_network = distinct([
