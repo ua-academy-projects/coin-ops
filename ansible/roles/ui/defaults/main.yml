@@ -3,3 +3,19 @@
 # defaults file for /tmp/role_skeleton
 ui_proxy_upstream_port: 8080
 ui_history_upstream_port: 8000
+
+# Browser-facing domain served by the UI gateway.
+ui_app_domain: "{{ lookup('env', 'APP_DOMAIN') | default('coinops.test', true) }}"
+
+# Supported modes:
+#   selfsigned - Ansible creates a local self-signed cert on the UI node
+#   provided   - cert/key already exist on the UI node under /etc/cognitor/tls
+#   letsencrypt - Ansible obtains/renews a Let's Encrypt cert on the UI node
+#   off        - HTTP only, useful for quick internal debugging
+ui_tls_mode: "{{ lookup('env', 'TLS_MODE') | default('selfsigned', true) }}"
+ui_tls_enabled: "{{ ui_tls_mode != 'off' }}"
+ui_tls_cert_dir: /etc/cognitor/tls
+ui_tls_cert_path: "{{ ui_tls_cert_dir }}/coinops.crt"
+ui_tls_key_path: "{{ ui_tls_cert_dir }}/coinops.key"
+ui_tls_acme_webroot: /var/lib/letsencrypt
+ui_tls_letsencrypt_email: "{{ lookup('env', 'LETSENCRYPT_EMAIL') | default('', true) }}"

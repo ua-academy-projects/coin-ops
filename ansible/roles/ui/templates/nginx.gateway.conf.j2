@@ -1,10 +1,10 @@
 {% if ui_tls_enabled | bool %}
 server {
     listen 80;
-    server_name {{ app_domain }};
+    server_name {{ ui_app_domain }};
 
     location /.well-known/acme-challenge/ {
-        root {{ tls_acme_webroot }};
+        root {{ ui_tls_acme_webroot }};
     }
 
     location = /health {
@@ -21,7 +21,7 @@ server {
 server {
     listen 443 ssl;
     http2 on;
-    server_name {{ app_domain }};
+    server_name {{ ui_app_domain }};
 
     ssl_certificate /etc/nginx/tls/coinops.crt;
     ssl_certificate_key /etc/nginx/tls/coinops.key;
@@ -33,15 +33,15 @@ server {
 {% else %}
 server {
     listen 80;
-    server_name {{ app_domain }} _;
+    server_name {{ ui_app_domain }} _;
 
 {% endif %}
     root /usr/share/nginx/html;
     index index.html;
 
-{% if tls_mode == 'letsencrypt' %}
+{% if ui_tls_mode == 'letsencrypt' %}
     location /.well-known/acme-challenge/ {
-        root {{ tls_acme_webroot }};
+        root {{ ui_tls_acme_webroot }};
     }
 {% endif %}
 

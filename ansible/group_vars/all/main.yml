@@ -28,24 +28,6 @@ external_db_enabled: "{{ external_db_host | length > 0 }}"
 # postgres_bind_ip: 0.0.0.0
 # postgres_bind_ip: "{{ hostvars[groups['history'][0]].ansible_host }}"
 
-# Public entrypoint / TLS
-# Browser-facing domain served by node-03. For local labs, add this to hosts:
-#   172.31.1.12 coinops.test
-app_domain: "{{ lookup('env', 'APP_DOMAIN') | default('coinops.test', true) }}"
-
-# Supported modes:
-#   selfsigned - Ansible creates a local self-signed cert on node-03
-#   provided   - cert/key already exist on node-03 under /etc/cognitor/tls
-#   letsencrypt - Ansible obtains/renews a Let's Encrypt cert on node-03
-#   off        - HTTP only, useful for quick internal debugging
-tls_mode: "{{ lookup('env', 'TLS_MODE') | default('selfsigned', true) }}"
-tls_enabled: "{{ tls_mode != 'off' }}"
-tls_cert_dir: /etc/cognitor/tls
-tls_cert_path: "{{ tls_cert_dir }}/coinops.crt"
-tls_key_path: "{{ tls_cert_dir }}/coinops.key"
-tls_acme_webroot: /var/lib/letsencrypt
-tls_letsencrypt_email: "{{ lookup('env', 'LETSENCRYPT_EMAIL') | default('', true) }}"
-
 # ── Container images ─────────────────────────────────────────
 # GitHub Actions publishes these images to GHCR.
 # Override IMAGE_TAG for immutable deploys, for example:

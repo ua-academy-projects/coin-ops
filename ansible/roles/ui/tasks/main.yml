@@ -9,7 +9,7 @@
 - name: Validate TLS mode
   assert:
     that:
-      - tls_mode in ['selfsigned', 'provided', 'letsencrypt', 'off']
+      - ui_tls_mode in ['selfsigned', 'provided', 'letsencrypt', 'off']
     fail_msg: "TLS_MODE must be one of: selfsigned, provided, letsencrypt, off."
 
 - name: Create secrets directory
@@ -22,7 +22,7 @@
 
 - name: Create TLS certificate directory
   file:
-    path: "{{ tls_cert_dir }}"
+    path: "{{ ui_tls_cert_dir }}"
     state: directory
     owner: root
     group: root
@@ -30,19 +30,19 @@
 
 - name: Create Let's Encrypt webroot directory
   file:
-    path: "{{ tls_acme_webroot }}"
+    path: "{{ ui_tls_acme_webroot }}"
     state: directory
     owner: root
     group: root
     mode: '0755'
-  when: tls_mode == 'letsencrypt'
+  when: ui_tls_mode == 'letsencrypt'
 
 - name: Install local TLS tooling
   apt:
     name: openssl
     state: present
     update_cache: yes
-  when: tls_mode == 'selfsigned'
+  when: ui_tls_mode == 'selfsigned'
 
 - name: Install Let's Encrypt tooling
   apt:
@@ -50,77 +50,77 @@
       - certbot
     state: present
     update_cache: yes
-  when: tls_mode == 'letsencrypt'
+  when: ui_tls_mode == 'letsencrypt'
 
 - name: Inspect existing self-signed certificate SAN
-  command: "openssl x509 -in {{ tls_cert_path }} -noout -ext subjectAltName"
+  command: "openssl x509 -in {{ ui_tls_cert_path }} -noout -ext subjectAltName"
   register: selfsigned_cert_san
   changed_when: false
   failed_when: false
-  when: tls_mode == 'selfsigned'
+  when: ui_tls_mode == 'selfsigned'
 
 - name: Remove stale self-signed certificate after domain change
   file:
     path: "{{ item }}"
     state: absent
   loop:
-    - "{{ tls_cert_path }}"
-    - "{{ tls_key_path }}"
+    - "{{ ui_tls_cert_path }}"
+    - "{{ ui_tls_key_path }}"
   when:
-    - tls_mode == 'selfsigned'
+    - ui_tls_mode == 'selfsigned'
     - selfsigned_cert_san.rc == 0
-    - ("DNS:" ~ app_domain) not in selfsigned_cert_san.stdout
+    - ("DNS:" ~ ui_app_domain) not in selfsigned_cert_san.stdout
 
 - name: Generate self-signed gateway certificate
   command:
     cmd: >-
       openssl req -x509 -nodes -newkey rsa:2048
-      -keyout {{ tls_key_path }}
-      -out {{ tls_cert_path }}
+      -keyout {{ ui_tls_key_path }}
+      -out {{ ui_tls_cert_path }}
       -days 365
-      -subj /CN={{ app_domain }}
-      -addext subjectAltName=DNS:{{ app_domain }}
-    creates: "{{ tls_cert_path }}"
-  when: tls_mode == 'selfsigned'
+      -subj /CN={{ ui_app_domain }}
+      -addext subjectAltName=DNS:{{ ui_app_domain }}
+    creates: "{{ ui_tls_cert_path }}"
+  when: ui_tls_mode == 'selfsigned'
 
 - name: Restrict self-signed gateway private key
   file:
-    path: "{{ tls_key_path }}"
+    path: "{{ ui_tls_key_path }}"
     owner: root
     group: root
     mode: '0600'
-  when: tls_mode == 'selfsigned'
+  when: ui_tls_mode == 'selfsigned'
 
 - name: Check provided TLS certificate
   stat:
-    path: "{{ tls_cert_path }}"
+    path: "{{ ui_tls_cert_path }}"
   register: provided_tls_cert
-  when: tls_mode == 'provided'
+  when: ui_tls_mode == 'provided'
 
 - name: Check provided TLS private key
   stat:
-    path: "{{ tls_key_path }}"
+    path: "{{ ui_tls_key_path }}"
   register: provided_tls_key
-  when: tls_mode == 'provided'
+  when: ui_tls_mode == 'provided'
 
 - name: Validate provided TLS files
   assert:
     that:
       - provided_tls_cert.stat.exists
       - provided_tls_key.stat.exists
-    fail_msg: "TLS_MODE=provided requires {{ tls_cert_path }} and {{ tls_key_path }} on the UI node."
-  when: tls_mode == 'provided'
+    fail_msg: "TLS_MODE=provided requires {{ ui_tls_cert_path }} and {{ ui_tls_key_path }} on the UI node."
+  when: ui_tls_mode == 'provided'
 
 - name: Validate Let's Encrypt email
   assert:
     that:
-      - tls_letsencrypt_email | length > 0
+      - ui_tls_letsencrypt_email | length > 0
     fail_msg: "TLS_MODE=letsencrypt requires LETSENCRYPT_EMAIL to be exported."
-  when: tls_mode == 'letsencrypt'
+  when: ui_tls_mode == 'letsencrypt'
 
 - name: Decide initial nginx TLS state
   set_fact:
-    ui_tls_enabled: "{{ tls_mode in ['selfsigned', 'provided'] }}"
+    ui_tls_enabled: "{{ ui_tls_mode in ['selfsigned', 'provided'] }}"
 
 - name: Write ui runtime environment file
   copy:
@@ -181,53 +181,53 @@
 
 - name: Check existing Let's Encrypt certificate
   stat:
-    path: "/etc/letsencrypt/live/{{ app_domain }}/fullchain.pem"
+    path: "/etc/letsencrypt/live/{{ ui_app_domain }}/fullchain.pem"
   register: letsencrypt_live_cert
-  when: tls_mode == 'letsencrypt'
+  when: ui_tls_mode == 'letsencrypt'
 
 - name: Request Let's Encrypt certificate
   command:
     cmd: >-
       certbot certonly --webroot
-      -w {{ tls_acme_webroot }}
-      -d {{ app_domain }}
-      --email {{ tls_letsencrypt_email }}
+      -w {{ ui_tls_acme_webroot }}
+      -d {{ ui_app_domain }}
+      --email {{ ui_tls_letsencrypt_email }}
       --agree-tos
       --non-interactive
   when:
-    - tls_mode == 'letsencrypt'
+    - ui_tls_mode == 'letsencrypt'
     - not letsencrypt_live_cert.stat.exists
 
 - name: Renew Let's Encrypt certificate if needed
   command:
-    cmd: certbot renew --webroot -w {{ tls_acme_webroot }} --non-interactive
+    cmd: certbot renew --webroot -w {{ ui_tls_acme_webroot }} --non-interactive
   changed_when: false
-  when: tls_mode == 'letsencrypt'
+  when: ui_tls_mode == 'letsencrypt'
 
 - name: Copy active Let's Encrypt certificate
   copy:
-    src: "/etc/letsencrypt/live/{{ app_domain }}/fullchain.pem"
-    dest: "{{ tls_cert_path }}"
+    src: "/etc/letsencrypt/live/{{ ui_app_domain }}/fullchain.pem"
+    dest: "{{ ui_tls_cert_path }}"
     owner: root
     group: root
     mode: '0644'
     remote_src: true
-  when: tls_mode == 'letsencrypt'
+  when: ui_tls_mode == 'letsencrypt'
 
 - name: Copy active Let's Encrypt private key
   copy:
-    src: "/etc/letsencrypt/live/{{ app_domain }}/privkey.pem"
-    dest: "{{ tls_key_path }}"
+    src: "/etc/letsencrypt/live/{{ ui_app_domain }}/privkey.pem"
+    dest: "{{ ui_tls_key_path }}"
     owner: root
     group: root
     mode: '0600'
     remote_src: true
-  when: tls_mode == 'letsencrypt'
+  when: ui_tls_mode == 'letsencrypt'
 
 - name: Enable TLS in nginx after Let's Encrypt certificate install
   set_fact:
     ui_tls_enabled: true
-  when: tls_mode == 'letsencrypt'
+  when: ui_tls_mode == 'letsencrypt'
 
 - name: Render nginx gateway config with Let's Encrypt TLS
   template:
@@ -236,13 +236,13 @@
     owner: root
     group: root
     mode: '0644'
-  when: tls_mode == 'letsencrypt'
+  when: ui_tls_mode == 'letsencrypt'
 
 - name: Restart Docker Compose after Let's Encrypt certificate install
   command: docker compose -f /opt/cognitor/ui/compose.yaml up -d --force-recreate --remove-orphans
   args:
     chdir: /opt/cognitor/ui
-  when: tls_mode == 'letsencrypt'
+  when: ui_tls_mode == 'letsencrypt'
 
 - name: Wait for nginx TLS availability
   uri:
@@ -254,7 +254,7 @@
   delay: 5
   register: tls_result
   until: tls_result.status == 200
-  when: tls_mode == 'letsencrypt'
+  when: ui_tls_mode == 'letsencrypt'
 
 - name: Remove dangling Docker images
   command: docker image prune -f
