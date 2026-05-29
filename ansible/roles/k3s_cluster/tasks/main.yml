@@ -8,6 +8,12 @@
     upgrade: dist
   become: true
 
+- name: Allow all traffic from private subnet
+  community.general.ufw:
+    rule: allow
+    src: "{{ nat_private_cidr }}"
+  notify: Reload UFW
+
 - name: Check if k3s is installed
   ansible.builtin.stat:
     path: /usr/local/bin/k3s
