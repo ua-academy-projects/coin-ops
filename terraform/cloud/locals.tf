@@ -2,19 +2,24 @@ locals {
 
   supported_clouds = ["gcp", "azure", "aws"]
 
+  default_cloud  = var.cloud
+  security_rules = coalesce(var.security_rules, {})
+  secrets        = coalesce(var.secrets, {})
+
+  # add default cloud values, if no one specified
+  networks = {
+    for name, network in var.networks : name => merge(network, {
+      cloud = coalesce(network.cloud, var.cloud)
+    })
+  }
   workloads = {
     for name, workload in var.workloads : name => merge(workload, {
       cloud = coalesce(workload.cloud, var.cloud)
     })
   }
 
-  # add default cloud value, if no one specified
-  networks = {
-    for name, network in var.networks : name => merge(network, {
-      cloud = coalesce(network.cloud, var.cloud)
-    })
-  }
 
+  # puts networks in cloud buckets
   networks_grouped_by_cloud = {
     for cloud in local.supported_clouds : cloud => [
       for _, network in local.networks : network
@@ -22,11 +27,13 @@ locals {
     ]
   }
 
-  # quick lookup: azure network, gcp network, aws network
+
+  # turns networks lists per cloud into network objects
   networks_by_cloud = {
     for cloud, networks in local.networks_grouped_by_cloud :
     cloud => length(networks) == 1 ? networks[0] : null
   }
+
 
   # split workloads by cloud before sending them to cloud modules
   workloads_by_cloud = {
@@ -36,7 +43,6 @@ locals {
     }
   }
 
-  # validation helpers used by inventory.tf preconditions
   network_clouds_with_multiple_networks = [
     for cloud, networks in local.networks_grouped_by_cloud : cloud
     if length(networks) > 1
@@ -52,18 +58,6 @@ locals {
     if try(local.networks_by_cloud[workload.cloud].subnets[workload.subnet], null) == null
   ]
 
-  active_workload_clouds = distinct([for _, workload in local.workloads : workload.cloud])
-  mixed_cloud_enabled    = length(local.active_workload_clouds) > 1
-
-  # top-level cloud owns shared resources like sql, nat, and security rules
-  default_cloud = var.cloud
-
-  default_cloud_network   = local.networks_by_cloud[local.default_cloud]
-  default_cloud_workloads = local.workloads_by_cloud[local.default_cloud]
-
-  default_cloud_security_rules = coalesce(var.security_rules, {})
-  default_cloud_sql            = var.sql
-  default_cloud_nat_route      = var.nat_route
 
   # shared instance outputs from all enabled clouds
   private_ips = merge(
@@ -138,7 +132,7 @@ locals {
         "ansible_ssh_private_key_file={{ lookup(\"env\", \"SSH_KEY_PATH\") | expanduser }}",
         "ansible_ssh_common_args=-o StrictHostKeyChecking=accept-new -o ForwardAgent=yes -o IdentitiesOnly=yes",
         "ansible_python_interpreter=/usr/bin/python3",
-        "nat_private_cidr=${local.default_cloud_network.subnets[local.workloads[local.inventory_bastion_host].subnet].cidr}"
+        "nat_private_cidr=${local.networks_by_cloud[local.default_cloud].subnets[local.workloads[local.inventory_bastion_host].subnet].cidr}"
       ])
     ],
     [
