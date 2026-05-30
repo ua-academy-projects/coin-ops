@@ -1,5 +1,5 @@
-# variables.tf
-
+# shared-variables.tf
+# -> contains all variables needed for cloud-agnostic configuration
 
 # general
 
@@ -16,25 +16,6 @@ variable "ssh_public_key_path" {
   type    = string
   default = "~/.ssh/coinops_gcp.pub"
 }
-
-
-# cloud specific
-
-variable "azure_resource_group_name" {
-  type    = string
-  default = null
-}
-
-variable "azure_key_vault_name" {
-  type    = string
-  default = null
-}
-
-variable "azure_location" {
-  type    = string
-  default = null
-}
-
 
 # network
 
