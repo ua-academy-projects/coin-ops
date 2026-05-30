@@ -1,3 +1,5 @@
+# locals.tf
+
 locals {
   mappings = jsondecode(file("${path.module}/mappings.json"))
 
