@@ -1,4 +1,12 @@
 {
+  "subnet_exposure": {
+    "public": {
+      "is_public": true
+    },
+    "private": {
+      "is_public": false
+    }
+  },
   "placement": {
     "primary": {
       "subnet_location": "europe-west1"

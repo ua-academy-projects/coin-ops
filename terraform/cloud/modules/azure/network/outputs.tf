@@ -1,3 +1,5 @@
+# outputs.tf
+
 output "network_name" {
   value = azurerm_virtual_network.this.name
 }

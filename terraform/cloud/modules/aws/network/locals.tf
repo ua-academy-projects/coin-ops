@@ -10,4 +10,9 @@ locals {
       map_public_ip_on_launch = local.mappings.subnet_exposure[subnet.exposure].map_public_ip_on_launch
     }
   }
+
+  private_subnets = {
+    for key, subnet in local.subnets : key => subnet
+    if !subnet.map_public_ip_on_launch
+  }
 }

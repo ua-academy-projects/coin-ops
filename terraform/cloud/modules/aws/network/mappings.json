@@ -5,15 +5,6 @@
     },
     "private": {
       "map_public_ip_on_launch": false
-    },
-    "internal": {
-      "map_public_ip_on_launch": false
-    },
-    "isolated": {
-      "map_public_ip_on_launch": false
-    },
-    "edge": {
-      "map_public_ip_on_launch": true
     }
   },
   "placement": {

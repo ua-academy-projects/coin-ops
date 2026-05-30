@@ -5,6 +5,16 @@
     },
     "private": {
       "is_public": false
+    },
+    "internal": {
+      "is_public": false
+    },
+    "isolated": {
+      "is_public": false
+    },
+    "edge": {
+      "is_public": true
     }
-  }
+  },
+    "_comment": "Azure subnets inherit location from the virtual network/resource group, so network placement is not mapped here."
 }
