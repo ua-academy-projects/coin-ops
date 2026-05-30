@@ -1,4 +1,5 @@
-#SPDX-License-Identifier: MIT-0
+# SPDX-License-Identifier: MIT-0
+
 ---
 # handlers file for roles/k3s_cluster
 - name: Reload UFW

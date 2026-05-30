@@ -1,4 +1,5 @@
-#SPDX-License-Identifier: MIT-0
+# SPDX-License-Identifier: MIT-0
+
 ---
 # defaults file for /tmp/role_skeleton
 azure_key_vault_name: "{{ lookup('env', 'AZ_KEYVAULT_NAME') | default('', true) }}"
