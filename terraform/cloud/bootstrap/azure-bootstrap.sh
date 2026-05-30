@@ -10,7 +10,7 @@
 #   6) Register the storage resource provider
 #   7) Create backend storage for Terraform state
 #   8) Assign storage blob access to the service principal
-#   9) Create a credentials file
+#   9) Create backend config and credentials files
 #
 # Usage:
 #   1. Fill in the variables block below
@@ -18,6 +18,7 @@
 #   3. az login
 #   4. ./azure-bootstrap.sh
 #   5. Open Azure Portal and replace placeholder secret values
+#   6. Run: terraform init -backend-config=backend.azure.hcl
 
 set -euo pipefail
 # -e -> exit on error
@@ -32,10 +33,13 @@ AZ_GROUP_LOCATION="austriaeast"
 
 AZ_SP_NAME="coin-ops-sp"
 
+CREATE_BACKEND="${CREATE_BACKEND:-true}"
 AZ_STORAGE_ACCOUNT_NAME="coinopstfstate"
 AZ_CONTAINER_NAME="tfstate"
+BACKEND_CONFIG_FILE="${BACKEND_CONFIG_FILE:-./backend.azure.hcl}"
 
 AZ_KEYVAULT_NAME="coin-ops-keyvault-98123"
+CREDENTIALS_FILE="${CREDENTIALS_FILE:-./terraform.env}"
 SECRET_PLACEHOLDER_VALUE="CHANGE_ME_IN_AZURE_PORTAL"
 REQUIRED_SECRETS=(
   "ghcr-username"
@@ -51,9 +55,12 @@ for var in \
   AZ_GROUP_NAME \
   AZ_GROUP_LOCATION \
   AZ_SP_NAME \
+  CREATE_BACKEND \
   AZ_STORAGE_ACCOUNT_NAME \
   AZ_CONTAINER_NAME \
+  BACKEND_CONFIG_FILE \
   AZ_KEYVAULT_NAME \
+  CREDENTIALS_FILE \
   SECRET_PLACEHOLDER_VALUE; do
   if [[ -z "${!var}" ]]; then
     echo "ERROR: $var is not set. Fill in the variables block before running."
@@ -207,28 +214,40 @@ echo "Microsoft.Storage provider registered"
 echo ""
 echo "==> Step 7: Storage Account & Blob Container"
 
-if az storage account show --name $AZ_STORAGE_ACCOUNT_NAME --resource-group $AZ_GROUP_NAME &>/dev/null; then
-  echo "Storage Account already exists: $AZ_STORAGE_ACCOUNT_NAME"
-else
-  az storage account create \
-    --name $AZ_STORAGE_ACCOUNT_NAME \
-    --resource-group $AZ_GROUP_NAME \
-    --location $AZ_GROUP_LOCATION \
-    --sku Standard_LRS
-  echo "Storage Account created: $AZ_STORAGE_ACCOUNT_NAME"
-fi
+if [[ "$CREATE_BACKEND" == "true" ]]; then
+  if az storage account show --name $AZ_STORAGE_ACCOUNT_NAME --resource-group $AZ_GROUP_NAME &>/dev/null; then
+    echo "Storage Account already exists: $AZ_STORAGE_ACCOUNT_NAME"
+  else
+    az storage account create \
+      --name $AZ_STORAGE_ACCOUNT_NAME \
+      --resource-group $AZ_GROUP_NAME \
+      --location $AZ_GROUP_LOCATION \
+      --sku Standard_LRS
+    echo "Storage Account created: $AZ_STORAGE_ACCOUNT_NAME"
+  fi
 
-if az storage container show \
-  --name $AZ_CONTAINER_NAME \
-  --account-name $AZ_STORAGE_ACCOUNT_NAME \
-  --auth-mode login &>/dev/null; then
-  echo "Blob Container already exists: $AZ_CONTAINER_NAME"
-else
-  az storage container create \
+  if az storage container show \
     --name $AZ_CONTAINER_NAME \
     --account-name $AZ_STORAGE_ACCOUNT_NAME \
-    --auth-mode login
-  echo "Blob Container created: $AZ_CONTAINER_NAME"
+    --auth-mode login &>/dev/null; then
+    echo "Blob Container already exists: $AZ_CONTAINER_NAME"
+  else
+    az storage container create \
+      --name $AZ_CONTAINER_NAME \
+      --account-name $AZ_STORAGE_ACCOUNT_NAME \
+      --auth-mode login
+    echo "Blob Container created: $AZ_CONTAINER_NAME"
+  fi
+
+  cat > "$BACKEND_CONFIG_FILE" <<EOF
+resource_group_name  = "$AZ_GROUP_NAME"
+storage_account_name = "$AZ_STORAGE_ACCOUNT_NAME"
+container_name       = "$AZ_CONTAINER_NAME"
+key                  = "cloud/terraform.tfstate"
+EOF
+  chmod 600 "$BACKEND_CONFIG_FILE"
+else
+  echo "CREATE_BACKEND is false, skipping Azure storage backend"
 fi
 
 # ------------------------------------------------------------
@@ -236,24 +255,26 @@ fi
 # ------------------------------------------------------------
 echo ""
 echo "==> Step 8: Storage Blob Role"
-AZ_STORAGE_ID=$(az storage account show \
-  --name $AZ_STORAGE_ACCOUNT_NAME \
-  --resource-group $AZ_GROUP_NAME \
-  --query id --output tsv)
+if [[ "$CREATE_BACKEND" == "true" ]]; then
+  AZ_STORAGE_ID=$(az storage account show \
+    --name $AZ_STORAGE_ACCOUNT_NAME \
+    --resource-group $AZ_GROUP_NAME \
+    --query id --output tsv)
 
-az role assignment create \
-  --assignee $AZ_CLIENT_ID \
-  --role "Storage Blob Data Contributor" \
-  --scope $AZ_STORAGE_ID
-echo "Role assigned: Storage Blob Data Contributor"
+  az role assignment create \
+    --assignee $AZ_CLIENT_ID \
+    --role "Storage Blob Data Contributor" \
+    --scope $AZ_STORAGE_ID
+  echo "Role assigned: Storage Blob Data Contributor"
+else
+  echo "CREATE_BACKEND is false, skipping storage role assignment"
+fi
 
 # ------------------------------------------------------------
 # 9) Create credentials file
 # ------------------------------------------------------------
 echo ""
 echo "==> Step 9: Credentials File"
-
-CREDENTIALS_FILE=".env"
 
 cat > $CREDENTIALS_FILE <<EOF
 ARM_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
@@ -263,6 +284,7 @@ ARM_CLIENT_SECRET=$AZ_CLIENT_SECRET
 TF_BACKEND_RESOURCE_GROUP=$AZ_GROUP_NAME
 TF_BACKEND_STORAGE_ACCOUNT=$AZ_STORAGE_ACCOUNT_NAME
 TF_BACKEND_CONTAINER=$AZ_CONTAINER_NAME
+TF_CREATE_BACKEND=$CREATE_BACKEND
 AZ_KEYVAULT_NAME=$AZ_KEYVAULT_NAME
 EOF
 
@@ -271,7 +293,8 @@ printf "\nDone!\n"
 printf "  %-20s %s\n" "Resource group:" "$AZ_GROUP_NAME"
 printf "  %-20s %s\n" "Key Vault:"      "$AZ_KEYVAULT_NAME"
 printf "  %-20s %s\n" "Service principal:" "$AZ_SP_NAME"
-printf "  %-20s %s\n" "State storage:"  "$AZ_STORAGE_ACCOUNT_NAME/$AZ_CONTAINER_NAME"
+printf "  %-20s %s\n" "State storage:"  "$([[ "$CREATE_BACKEND" == "true" ]] && echo "$AZ_STORAGE_ACCOUNT_NAME/$AZ_CONTAINER_NAME" || echo "skipped")"
+printf "  %-20s %s\n" "Backend config:" "$([[ "$CREATE_BACKEND" == "true" ]] && echo "$BACKEND_CONFIG_FILE" || echo "skipped")"
 printf "  %-20s %s\n" "Env file:"       "$CREDENTIALS_FILE"
 printf "\nNext steps:\n"
 printf "  update placeholder secrets in Azure Key Vault\n"

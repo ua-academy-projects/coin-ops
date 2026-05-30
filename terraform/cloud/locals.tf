@@ -126,14 +126,14 @@ locals {
           ])))
         ]
       )),
-      join("\n", [
+      join("\n", compact([
         "[all:vars]",
         "ansible_user=deployer",
         "ansible_ssh_private_key_file={{ lookup(\"env\", \"SSH_KEY_PATH\") | expanduser }}",
         "ansible_ssh_common_args=-o StrictHostKeyChecking=accept-new -o ForwardAgent=yes -o IdentitiesOnly=yes",
         "ansible_python_interpreter=/usr/bin/python3",
-        "nat_private_cidr=${local.networks_by_cloud[local.default_cloud].subnets[local.workloads[local.inventory_bastion_host].subnet].cidr}"
-      ])
+        local.inventory_bastion_host != null ? "nat_private_cidr=${local.networks_by_cloud[local.default_cloud].subnets[local.workloads[local.inventory_bastion_host].subnet].cidr}" : null
+      ]))
     ],
     [
       for role in sort(keys(local.inventory_role_members)) : join("\n", concat(

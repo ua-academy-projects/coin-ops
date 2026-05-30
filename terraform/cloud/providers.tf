@@ -19,6 +19,7 @@ terraform {
       version = "2.5.3"
     }
   }
+  backend "s3" {}
 }
 
 provider "google" {}

@@ -10,13 +10,16 @@
 #   6) Assign required IAM roles
 #   7) Create backend storage for Terraform state
 #   8) Create a service account key
-#   9) Create an environment file
+#   9) Create required secret entries with placeholder values
+#   10) Create backend config and environment files
 #
 # Usage:
 #   1. Export the required variables before running
 #   2. chmod +x gcp-bootstrap.sh
 #   3. gcloud auth login
 #   4. ./gcp-bootstrap.sh
+#   5. Replace placeholder secret values in Secret Manager
+#   6. Run: terraform init -backend-config=backend.gcp.hcl
 
 set -euo pipefail
 # -e -> exit on error
@@ -33,7 +36,9 @@ BILLING_ACCOUNT="${BILLING_ACCOUNT}"
 
 # Stable bootstrap defaults.
 SA_NAME="${SA_NAME:-coin-ops-terraform}"
+CREATE_BACKEND="${CREATE_BACKEND:-true}"
 BUCKET_NAME="${BUCKET_NAME:-${PROJECT_ID}-tfstate}"
+BACKEND_CONFIG_FILE="${BACKEND_CONFIG_FILE:-./backend.gcp.hcl}"
 KEY_FILE="${KEY_FILE:-./terraform-sa-key.json}"
 ENV_FILE="${ENV_FILE:-./terraform.env}"
 SECRET_PLACEHOLDER_VALUE="${SECRET_PLACEHOLDER_VALUE:-CHANGE_ME_IN_SECRET_MANAGER}"
@@ -60,7 +65,9 @@ SA_ROLES=(
 for var in \
   PROJECT_ID \
   REGION \
-  BILLING_ACCOUNT; do
+  BILLING_ACCOUNT \
+  CREATE_BACKEND \
+  BACKEND_CONFIG_FILE; do
   if [[ -z "${!var}" ]]; then
     echo "ERROR: $var is not set. Export it before running."
     exit 1
@@ -170,19 +177,29 @@ done
 # ------------------------------------------------------------
 echo ""
 echo "==> Step 7: State Bucket"
-if gsutil ls -b "gs://${BUCKET_NAME}" >/dev/null 2>&1; then
-  echo "Bucket gs://${BUCKET_NAME} already exists, skipping"
-else
-  echo "Creating bucket gs://${BUCKET_NAME}..."
-  gsutil mb -p "${PROJECT_ID}" -l "${REGION}" -b on "gs://${BUCKET_NAME}"
-fi
+if [[ "${CREATE_BACKEND}" == "true" ]]; then
+  if gsutil ls -b "gs://${BUCKET_NAME}" >/dev/null 2>&1; then
+    echo "Bucket gs://${BUCKET_NAME} already exists, skipping"
+  else
+    echo "Creating bucket gs://${BUCKET_NAME}..."
+    gsutil mb -p "${PROJECT_ID}" -l "${REGION}" -b on "gs://${BUCKET_NAME}"
+  fi
 
-# Enable bucket versioning for safer Terraform state recovery.
-gsutil versioning set on "gs://${BUCKET_NAME}" >/dev/null
-# Allow the Terraform service account to manage objects in the state bucket.
-gsutil iam ch \
-  "serviceAccount:${SA_EMAIL}:roles/storage.objectAdmin" \
-  "gs://${BUCKET_NAME}" >/dev/null
+  # Enable bucket versioning for safer Terraform state recovery.
+  gsutil versioning set on "gs://${BUCKET_NAME}" >/dev/null
+  # Allow the Terraform service account to manage objects in the state bucket.
+  gsutil iam ch \
+    "serviceAccount:${SA_EMAIL}:roles/storage.objectAdmin" \
+    "gs://${BUCKET_NAME}" >/dev/null
+
+  cat > "${BACKEND_CONFIG_FILE}" <<EOF
+bucket = "${BUCKET_NAME}"
+prefix = "cloud"
+EOF
+  chmod 600 "${BACKEND_CONFIG_FILE}"
+else
+  echo "CREATE_BACKEND is false, skipping GCS state bucket"
+fi
 
 # ------------------------------------------------------------
 # 8) Create service account key
@@ -247,13 +264,15 @@ export TF_VAR_region="${REGION}"
 export TF_VAR_service_account_email="${SA_EMAIL}"
 
 export TF_STATE_BUCKET="${BUCKET_NAME}"
+export TF_CREATE_BACKEND="${CREATE_BACKEND}"
 EOF
 chmod 600 "${ENV_FILE}"
 
 printf "\nDone!\n"
 printf "  %-20s %s\n" "Project:"         "${PROJECT_ID}"
 printf "  %-20s %s\n" "Service account:" "${SA_EMAIL}"
-printf "  %-20s %s\n" "State storage:"   "gs://${BUCKET_NAME}"
+printf "  %-20s %s\n" "State storage:"   "$([[ "${CREATE_BACKEND}" == "true" ]] && echo "gs://${BUCKET_NAME}" || echo "skipped")"
+printf "  %-20s %s\n" "Backend config:" "$([[ "${CREATE_BACKEND}" == "true" ]] && echo "${BACKEND_CONFIG_FILE}" || echo "skipped")"
 printf "  %-20s %s\n" "Key file:"        "${ABS_KEY_PATH}"
 printf "  %-20s %s\n" "Env file:"        "${ENV_FILE}"
 printf "\nNext steps:\n"
