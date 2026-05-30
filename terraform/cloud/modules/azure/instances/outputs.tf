@@ -1,3 +1,5 @@
+# outputs.tf
+
 output "instance_names" {
   value = { for key, instance in azurerm_linux_virtual_machine.this : key => instance.name }
 }
@@ -11,6 +13,10 @@ output "public_ips" {
     { for key, _ in var.workloads : key => null },
     { for key, pip in azurerm_public_ip.this : key => pip.ip_address }
   )
+}
+
+output "workload_tags" {
+  value = { for key, instance in local.instances : key => instance.tags }
 }
 
 output "managed_identity_principal_ids" {
