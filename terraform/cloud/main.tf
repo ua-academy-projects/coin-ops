@@ -153,3 +153,17 @@ module "aws_instances" {
   security_group_ids = try(module.aws_security[0].security_group_ids, {})
   workloads          = local.workloads_by_cloud.aws
 }
+
+module "aws_sql" {
+  source = "./modules/aws/sql"
+  count  = local.networks_by_cloud.aws != null && var.sql != null && local.default_cloud == "aws" ? 1 : 0
+
+  network_id            = module.aws_network[0].network_id
+  private_subnet_ids    = module.aws_network[0].private_subnet_ids
+  placement             = var.sql.placement
+  db_password_secret_id = var.secrets["db_password"].secret_id
+
+  instance = var.sql.instance
+  database = var.sql.database
+  user     = var.sql.user
+}
