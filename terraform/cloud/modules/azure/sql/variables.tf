@@ -1,32 +1,10 @@
-variable "resource_group_name" {
-  type = string
-}
+# variables.tf
 
-variable "location" {
-  type = string
-}
-
-variable "network_name" {
-  type = string
-}
-
-variable "network_id" {
-  type = string
-}
-
-variable "network_cidr" {
-  type = string
-}
-
-variable "key_vault_name" {
+variable "placement" {
   type = string
 }
 
 variable "db_password_secret_id" {
-  type = string
-}
-
-variable "placement" {
   type = string
 }
 
@@ -58,4 +36,28 @@ variable "user" {
   type = object({
     name = string
   })
+}
+
+variable "resource_group_name" {
+  type = string
+}
+
+variable "location" {
+  type = string
+}
+
+variable "network_name" {
+  type = string
+}
+
+variable "network_id" {
+  type = string
+}
+
+variable "network_cidr" {
+  type = string
+}
+
+variable "key_vault_name" {
+  type = string
 }

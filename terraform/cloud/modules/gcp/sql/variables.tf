@@ -2,10 +2,6 @@ variable "placement" {
   type = string
 }
 
-variable "network_name" {
-  type = string
-}
-
 variable "db_password_secret_id" {
   type = string
 }
@@ -38,4 +34,8 @@ variable "user" {
   type = object({
     name = string
   })
+}
+
+variable "network_name" {
+  type = string
 }
