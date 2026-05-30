@@ -35,14 +35,14 @@ output "cloud_sql_instance_name" {
 }
 
 output "external_db_host" {
-  value = var.cloud == "gcp" ? try(module.gcp_sql[0].private_ip, null) : (
-    var.cloud == "azure" ? try(module.azure_sql[0].private_fqdn, null) : null
+  value = var.cloud == "gcp" ? try(module.gcp_sql[0].private_endpoint, null) : (
+    var.cloud == "azure" ? try(module.azure_sql[0].private_endpoint, null) : null
   )
 }
 
 output "cloud_sql_connection_name" {
   value = var.cloud == "gcp" ? try(module.gcp_sql[0].connection_name, null) : (
-    var.cloud == "azure" ? try(module.azure_sql[0].private_fqdn, null) : null
+    var.cloud == "azure" ? try(module.azure_sql[0].connection_name, null) : null
   )
 }
 

@@ -2,7 +2,11 @@ output "instance_name" {
   value = azurerm_postgresql_flexible_server.this.name
 }
 
-output "private_fqdn" {
+output "private_endpoint" {
+  value = azurerm_postgresql_flexible_server.this.fqdn
+}
+
+output "connection_name" {
   value = azurerm_postgresql_flexible_server.this.fqdn
 }
 
