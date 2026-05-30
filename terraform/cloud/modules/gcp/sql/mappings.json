@@ -1,4 +1,18 @@
 {
+  "database_version": {
+    "postgres_16": "POSTGRES_16"
+  },
+  "instance_type": {
+    "economical": "db-g1-small"
+  },
+  "availability_type": {
+    "single_zone": "ZONAL",
+    "regional": "REGIONAL"
+  },
+  "disk_type": {
+    "hdd": "PD_HDD",
+    "ssd": "PD_SSD"
+  },
   "placement": {
     "primary": {
       "region": "europe-west1"
@@ -16,19 +30,5 @@
   "edition": {
     "enterprise": "ENTERPRISE",
     "enterprise_plus": "ENTERPRISE_PLUS"
-  },
-  "database_version": {
-    "postgres_16": "POSTGRES_16"
-  },
-  "instance_type": {
-    "economical": "db-g1-small"
-  },
-  "availability_type": {
-    "single_zone": "ZONAL",
-    "regional": "REGIONAL"
-  },
-  "disk_type": {
-    "hdd": "PD_HDD",
-    "ssd": "PD_SSD"
   }
 }

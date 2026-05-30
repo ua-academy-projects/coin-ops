@@ -1,0 +1,16 @@
+{
+  "database_version": {
+    "postgres_16": "16"
+  },
+  "instance_type": {
+    "economical": "db.t4g.micro"
+  },
+  "availability_type": {
+    "single_zone": false,
+    "regional": true
+  },
+  "disk_type": {
+    "hdd": "standard",
+    "ssd": "gp3"
+  }
+}
