@@ -49,6 +49,6 @@
     - k3s_tools         # helm + python kubernetes client on the first node
     - k3s_cert_manager  # cert-manager + Let's Encrypt DNS-01 issuer (Cloudflare)
     - k3s_cloudflared   # in-cluster cloudflared (apps tunnel) — public edge, no Tailscale
-    - k3s_hello         # hello-world learning workload
-    - k3s_headlamp      # in-cluster Kubernetes dashboard
-    - k3s_homepage      # deploy-and-expose example (links dashboard)
+    - k3s_kyverno       # policy-as-code: enforce netpol/SA/label conventions
+    - k3s_argocd        # GitOps: install ArgoCD + apply the app-of-apps root
+    # hello / headlamp / homepage are now GitOps-managed by ArgoCD (gitops/apps/*).
