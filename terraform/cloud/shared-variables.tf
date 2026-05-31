@@ -63,6 +63,7 @@ variable "nat_route" {
 # instances
 
 variable "workloads" {
+  default = {}
   type = map(object({
     roles          = list(string)
     cloud          = optional(string)
