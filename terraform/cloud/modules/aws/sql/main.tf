@@ -20,10 +20,7 @@ resource "aws_db_instance" "this" {
   multi_az               = local.instance.multi_az
   db_name                = local.instance.database_name
   username               = local.instance.username
-
-  # FIXME: we should use password from secrets here
-  password               = "CHANGE_ME_TEMP"
-
+  password               = data.aws_secretsmanager_secret_version.db_password.secret_string
   db_subnet_group_name   = aws_db_subnet_group.this.name
   vpc_security_group_ids = [aws_security_group.this.id]
   publicly_accessible    = false

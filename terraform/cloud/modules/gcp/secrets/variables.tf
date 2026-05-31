@@ -1,3 +1,5 @@
+# variables.tf
+
 variable "secrets" {
   type = map(object({
     secret_id = string
@@ -15,5 +17,4 @@ variable "service_accounts" {
   type = map(object({
     email = string
   }))
-  default = {}
 }
