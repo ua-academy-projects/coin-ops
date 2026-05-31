@@ -1,0 +1,29 @@
+---
+# k3s_argocd — install ArgoCD via Helm, seed a read-only repo credential, expose
+# the UI behind Traefik+TLS (gated by Cloudflare Access at the edge), and apply
+# the app-of-apps root. Native modules only. Self-contained defaults.
+
+k3s_first_node: "{{ ansible_play_hosts_all[0] }}"
+k3s_kubeconfig: /etc/rancher/k3s/k3s.yaml
+
+# Helm chart coordinates.
+k3s_argocd_chart_repo_name: argo
+k3s_argocd_chart_repo_url: https://argoproj.github.io/argo-helm
+k3s_argocd_chart_ref: argo/argo-cd
+k3s_argocd_chart_version: "7.7.7"
+k3s_argocd_namespace: argocd
+k3s_argocd_release: argocd
+
+# Ingress / TLS — shared with k3s_cert_manager. Exposed at argocd.<domain>.
+k3s_ingress_domain: "{{ coinops_k3s_ingress_domain | default('coinops.pp.ua', true) }}"
+cert_manager_cluster_issuer: letsencrypt-cloudflare
+k3s_argocd_host: "argocd.{{ k3s_ingress_domain }}"
+
+# Git repo ArgoCD reconciles from. The credential reuses the GHCR GitHub token
+# (it must carry repo-read / contents:read scope on ua-academy-projects/coin-ops).
+k3s_argocd_repo_url: "https://github.com/ua-academy-projects/coin-ops.git"
+k3s_argocd_repo_username: "{{ coinops_ghcr_username | default('', true) }}"
+k3s_argocd_repo_password: "{{ coinops_ghcr_token | default('') }}"
+
+# The app-of-apps root manifest on the controller (applied via lookup).
+k3s_argocd_root_manifest: "{{ playbook_dir }}/../gitops/root.yaml"

@@ -1,0 +1,85 @@
+---
+# Install ArgoCD on the first node, seed a private-repo credential, expose the UI
+# through Traefik with a cert-manager cert, and apply the app-of-apps root.
+# Native modules only (helm_repository + helm + k8s). Joiner nodes exit.
+
+- name: Skip k3s_argocd (not the first node)
+  ansible.builtin.meta: end_host
+  when: inventory_hostname != k3s_first_node
+
+- name: Add the Argo Helm repository
+  kubernetes.core.helm_repository:
+    name: "{{ k3s_argocd_chart_repo_name }}"
+    repo_url: "{{ k3s_argocd_chart_repo_url }}"
+
+# server.insecure=true: Traefik terminates TLS at the ingress, so argocd-server
+# serves plain HTTP behind it (the standard ingress topology).
+- name: Install ArgoCD via Helm
+  kubernetes.core.helm:
+    name: "{{ k3s_argocd_release }}"
+    chart_ref: "{{ k3s_argocd_chart_ref }}"
+    chart_version: "{{ k3s_argocd_chart_version }}"
+    release_namespace: "{{ k3s_argocd_namespace }}"
+    create_namespace: true
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    wait: true
+    wait_timeout: 10m
+    values:
+      configs:
+        params:
+          server.insecure: true
+      server:
+        ingress:
+          enabled: true
+          ingressClassName: traefik
+          hostname: "{{ k3s_argocd_host }}"
+          annotations:
+            cert-manager.io/cluster-issuer: "{{ cert_manager_cluster_issuer }}"
+          tls: true
+          extraTls:
+            - hosts:
+                - "{{ k3s_argocd_host }}"
+              secretName: argocd-server-tls
+
+- name: Seed the ArgoCD repository credential (private repo, read-only token)
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: coinops-repo
+        namespace: "{{ k3s_argocd_namespace }}"
+        labels:
+          argocd.argoproj.io/secret-type: repository
+      type: Opaque
+      stringData:
+        type: git
+        url: "{{ k3s_argocd_repo_url }}"
+        username: "{{ k3s_argocd_repo_username }}"
+        password: "{{ k3s_argocd_repo_password }}"
+  no_log: true
+  when: k3s_argocd_repo_password | length > 0
+
+# Retried: the argo-cd chart registers the Application CRD during install, but
+# the admission webhook can briefly refuse the first apply right after the
+# release reports ready (same race k3s_cnpg / k3s_cert_manager guard against).
+- name: Apply the app-of-apps root Application
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition: "{{ lookup('file', k3s_argocd_root_manifest) | from_yaml }}"
+  register: k3s_argocd_root_apply
+  retries: 10
+  delay: 6
+  until: k3s_argocd_root_apply is not failed
+
+- name: Report ArgoCD wiring
+  ansible.builtin.debug:
+    msg:
+      - "ArgoCD {{ k3s_argocd_chart_version }} installed in {{ k3s_argocd_namespace }}."
+      - "UI: https://{{ k3s_argocd_host }} (gated by Cloudflare Access at the edge)."
+      - "Initial admin password:"
+      - "  k3s kubectl -n {{ k3s_argocd_namespace }} get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d"
+      - "app-of-apps root applied; children: coinops-app, homepage, headlamp, hello."
