@@ -1,4 +1,4 @@
-{{- range $ns := list .Values.proxy.namespace .Values.historyApi.namespace .Values.historyConsumer.namespace .Values.ui.namespace }}
+{{- range $ns := list .Values.proxy.namespace .Values.historyApi.namespace .Values.historyConsumer.namespace .Values.ui.namespace .Values.gateway.namespace }}
 ---
 apiVersion: v1
 kind: Namespace

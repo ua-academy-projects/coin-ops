@@ -13,8 +13,9 @@ k3s_kyverno_chart_version: "3.3.7"
 k3s_kyverno_namespace: kyverno
 k3s_kyverno_release: kyverno
 
-# validationFailureAction for the validate policies: Enforce (block) or Audit
-# (report). Start Audit on the live cluster, flip to Enforce once clean.
+# validationFailureAction for the validate policies: Enforce (block) by default —
+# the coinops-app chart complies, so its workloads sync cleanly. Override to Audit
+# (report-only) for a dry-run first roll-out on an unverified cluster.
 k3s_kyverno_validation_action: Enforce
 
 # Namespaces exempt from all policies (platform + control planes).
