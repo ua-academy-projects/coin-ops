@@ -1,0 +1,50 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: headlamp
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://kubernetes-sigs.github.io/headlamp/
+    chart: headlamp
+    targetRevision: 0.42.0
+    helm:
+      valuesObject:
+        serviceAccount:
+          create: true
+        clusterRoleBinding:
+          create: true
+          clusterRoleName: cluster-admin
+        ingress:
+          enabled: true
+          ingressClassName: traefik
+          annotations:
+            cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+          hosts:
+            - host: headlamp.coinops.pp.ua
+              paths:
+                - path: /
+                  type: Prefix
+          tls:
+            - secretName: headlamp-tls
+              hosts:
+                - headlamp.coinops.pp.ua
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 300m
+            memory: 256Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: headlamp
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

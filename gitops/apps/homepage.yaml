@@ -1,0 +1,87 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: homepage
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://jameswynn.github.io/helm-charts
+    chart: homepage
+    targetRevision: 2.1.0
+    helm:
+      valuesObject:
+        env:
+          - name: HOMEPAGE_ALLOWED_HOSTS
+            value: homepage.coinops.pp.ua
+        config:
+          settings:
+            title: Coin-Ops Lab
+            theme: dark
+            headerStyle: clean
+          kubernetes:
+            mode: disable
+          docker: {}
+          widgets:
+            - resources:
+                cpu: true
+                memory: true
+            - search:
+                provider: duckduckgo
+                target: _blank
+          services:
+            - Coin-Ops:
+                - Production site:
+                    href: https://coinops.pp.ua
+                    description: AWS compose stack (customer-facing)
+                - Headlamp:
+                    href: https://headlamp.coinops.pp.ua
+                    description: Kubernetes dashboard for this k3s cluster
+                - ArgoCD:
+                    href: https://argocd.coinops.pp.ua
+                    description: GitOps delivery for this cluster
+          bookmarks:
+            - Watch:
+                - YouTube:
+                    - abbr: YT
+                      href: https://www.youtube.com
+            - Lab:
+                - Hello workload:
+                    - abbr: HI
+                      href: https://hello.coinops.pp.ua
+                - Headlamp:
+                    - abbr: HL
+                      href: https://headlamp.coinops.pp.ua
+        ingress:
+          main:
+            enabled: true
+            ingressClassName: traefik
+            annotations:
+              cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+            hosts:
+              - host: homepage.coinops.pp.ua
+                paths:
+                  - path: /
+                    pathType: Prefix
+            tls:
+              - secretName: homepage-tls
+                hosts:
+                  - homepage.coinops.pp.ua
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 512Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: homepage
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
