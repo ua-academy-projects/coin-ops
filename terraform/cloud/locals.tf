@@ -43,6 +43,24 @@ locals {
     }
   }
 
+  # module enablement
+  enable_azure_network   = local.networks_by_cloud.azure != null
+  enable_azure_workloads = local.enable_azure_network && length(local.workloads_by_cloud.azure) > 0
+  enable_azure_security  = local.enable_azure_workloads && length(local.security_rules) > 0 && local.default_cloud == "azure"
+  enable_azure_sql       = local.enable_azure_network && var.sql != null && local.default_cloud == "azure"
+  enable_azure_routing   = local.azure_nat_route != null
+
+  enable_gcp_network   = local.networks_by_cloud.gcp != null
+  enable_gcp_workloads = local.enable_gcp_network && length(local.workloads_by_cloud.gcp) > 0
+  enable_gcp_security  = local.enable_gcp_workloads && length(local.security_rules) > 0 && local.default_cloud == "gcp"
+  enable_gcp_secrets   = local.enable_gcp_workloads && length(local.secrets) > 0 && local.default_cloud == "gcp"
+  enable_gcp_sql       = local.enable_gcp_network && var.sql != null && local.default_cloud == "gcp"
+
+  enable_aws_network   = local.networks_by_cloud.aws != null
+  enable_aws_workloads = local.enable_aws_network && length(local.workloads_by_cloud.aws) > 0
+  enable_aws_security  = local.enable_aws_workloads && length(local.security_rules) > 0 && local.default_cloud == "aws"
+  enable_aws_sql       = local.enable_aws_network && var.sql != null && local.default_cloud == "aws"
+
   network_clouds_with_multiple_networks = [
     for cloud, networks in local.networks_grouped_by_cloud : cloud
     if length(networks) > 1
