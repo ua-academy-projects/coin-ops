@@ -13,6 +13,7 @@ locals {
       tags                 = distinct(concat(cfg.tags, [name]))
       disk_size_gb         = cfg.disk_size_gb
       public_ip            = cfg.public_ip
+      can_ip_forward       = cfg.can_ip_forward
       iam_instance_profile = try(cfg.identity, null) != null ? "coinops-${cfg.identity}" : null
     }
   }

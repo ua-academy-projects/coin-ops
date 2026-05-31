@@ -10,6 +10,7 @@ resource "aws_instance" "this" {
   associate_public_ip_address = each.value.public_ip
   vpc_security_group_ids      = lookup(var.security_group_ids, each.key, null) != null ? [var.security_group_ids[each.key]] : null
   iam_instance_profile        = each.value.iam_instance_profile
+  source_dest_check           = !each.value.can_ip_forward
 
   root_block_device {
     volume_size = each.value.disk_size_gb

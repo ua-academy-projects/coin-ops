@@ -15,6 +15,16 @@ output "public_ips" {
   )
 }
 
+output "workload_identities" {
+  value = {
+    for key, vm in azurerm_linux_virtual_machine.this : key => {
+      type         = "azure_managed_identity"
+      principal_id = vm.identity[0].principal_id
+    }
+    if try(vm.identity[0].principal_id, null) != null
+  }
+}
+
 output "workload_tags" {
   value = { for key, instance in local.instances : key => instance.tags }
 }

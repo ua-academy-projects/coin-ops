@@ -134,6 +134,12 @@ module "aws_network" {
   count  = local.networks_by_cloud.aws != null ? 1 : 0
 
   network = local.networks_by_cloud.aws
+
+  nat_route = local.default_cloud == "aws" && length(local.workloads_by_cloud.aws) > 0 && var.nat_route != null ? {
+    name              = var.nat_route.name
+    destination_range = var.nat_route.destination_range
+    next_hop_instance = module.aws_instances[0].network_interface_ids[var.nat_route.instance_workload]
+  } : null
 }
 
 module "aws_security" {

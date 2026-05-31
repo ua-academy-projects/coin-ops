@@ -1,3 +1,5 @@
+# outputs.tf
+
 output "instance_name" {
   value = azurerm_postgresql_flexible_server.this.name
 }

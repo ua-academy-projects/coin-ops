@@ -16,6 +16,17 @@ output "workload_tags" {
   value = { for key, instance in local.instances : key => instance.tags }
 }
 
+output "workload_identities" {
+  value = {
+    for key, account in google_service_account.this : key => {
+      type  = "gcp_service_account"
+      name  = account.account_id
+      email = account.email
+      id    = account.id
+    }
+  }
+}
+
 output "instance_self_links" {
   value = { for key, instance in google_compute_instance.this : key => instance.self_link }
 }
