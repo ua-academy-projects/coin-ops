@@ -1,0 +1,28 @@
+---
+# k3s_kyverno — install Kyverno via Helm and apply ClusterPolicies that ENFORCE
+# the cluster's own conventions (default-deny baseline + no auto-mounted SA token
+# + required label). Native modules only. Self-contained defaults.
+
+k3s_first_node: "{{ ansible_play_hosts_all[0] }}"
+k3s_kubeconfig: /etc/rancher/k3s/k3s.yaml
+
+k3s_kyverno_chart_repo_name: kyverno
+k3s_kyverno_chart_repo_url: https://kyverno.github.io/kyverno/
+k3s_kyverno_chart_ref: kyverno/kyverno
+k3s_kyverno_chart_version: "3.3.7"
+k3s_kyverno_namespace: kyverno
+k3s_kyverno_release: kyverno
+
+# validationFailureAction for the validate policies: Enforce (block) or Audit
+# (report). Start Audit on the live cluster, flip to Enforce once clean.
+k3s_kyverno_validation_action: Enforce
+
+# Namespaces exempt from all policies (platform + control planes).
+k3s_kyverno_exempt_namespaces:
+  - kube-system
+  - kube-public
+  - kube-node-lease
+  - kyverno
+  - argocd
+  - cnpg-system
+  - cert-manager

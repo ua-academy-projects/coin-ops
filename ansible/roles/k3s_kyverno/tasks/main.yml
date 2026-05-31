@@ -1,0 +1,51 @@
+---
+# Install Kyverno from its Helm chart on the first node, then apply the
+# ClusterPolicies. Native modules only (helm_repository + helm + k8s). Joiners exit.
+
+- name: Skip k3s_kyverno (not the first node)
+  ansible.builtin.meta: end_host
+  when: inventory_hostname != k3s_first_node
+
+- name: Add the Kyverno Helm repository
+  kubernetes.core.helm_repository:
+    name: "{{ k3s_kyverno_chart_repo_name }}"
+    repo_url: "{{ k3s_kyverno_chart_repo_url }}"
+
+- name: Install Kyverno via Helm
+  kubernetes.core.helm:
+    name: "{{ k3s_kyverno_release }}"
+    chart_ref: "{{ k3s_kyverno_chart_ref }}"
+    chart_version: "{{ k3s_kyverno_chart_version }}"
+    release_namespace: "{{ k3s_kyverno_namespace }}"
+    create_namespace: true
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    wait: true
+    wait_timeout: 10m
+
+- name: Wait for the Kyverno ClusterPolicy CRD to be established
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    api_version: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    name: clusterpolicies.kyverno.io
+    wait: true
+    wait_condition:
+      type: Established
+      status: "True"
+    wait_timeout: 120
+
+- name: Apply the Kyverno ClusterPolicies
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition: "{{ item }}"
+    wait: true
+  loop: "{{ lookup('template', 'policies.yaml.j2') | from_yaml_all | list }}"
+  loop_control:
+    label: "{{ item.kind }}/{{ item.metadata.name }}"
+
+- name: Report Kyverno wiring
+  ansible.builtin.debug:
+    msg:
+      - "Kyverno {{ k3s_kyverno_chart_version }} installed; 3 ClusterPolicies applied."
+      - "validate action: {{ k3s_kyverno_validation_action }} (exempt ns: {{ k3s_kyverno_exempt_namespaces | join(', ') }})."

@@ -1,0 +1,97 @@
+---
+# 1. GENERATE: every namespace labelled coinops-tier=app gets a baseline
+# deny-all NetworkPolicy. Distinct name from the chart's own "default-deny" so
+# the two never fight over ownership (two deny-alls are harmlessly equivalent).
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: generate-baseline-deny
+spec:
+  rules:
+    - name: add-baseline-deny-netpol
+      match:
+        any:
+          - resources:
+              kinds:
+                - Namespace
+              selector:
+                matchLabels:
+                  coinops-tier: app
+      generate:
+        apiVersion: networking.k8s.io/v1
+        kind: NetworkPolicy
+        name: kyverno-baseline-deny
+        namespace: "{{ '{{request.object.metadata.name}}' }}"
+        synchronize: true
+        data:
+          spec:
+            podSelector: {}
+            policyTypes:
+              - Ingress
+              - Egress
+---
+# 2. VALIDATE: deny pods in app namespaces that auto-mount a ServiceAccount
+# token (the chart sets automountServiceAccountToken: false, so it complies).
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-sa-token-automount
+spec:
+  validationFailureAction: {{ k3s_kyverno_validation_action }}
+  background: true
+  rules:
+    - name: require-no-automount
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaceSelector:
+                matchLabels:
+                  coinops-tier: app
+      exclude:
+        any:
+          - resources:
+              namespaces:
+{% for ns in k3s_kyverno_exempt_namespaces %}
+                - {{ ns }}
+{% endfor %}
+      validate:
+        message: "ServiceAccount token auto-mount is not allowed in app namespaces; set automountServiceAccountToken: false."
+        pattern:
+          spec:
+            =(automountServiceAccountToken): "false"
+---
+# 3. VALIDATE: require the app.kubernetes.io/name label on workloads in app
+# namespaces (the chart's common labels set it, so it complies).
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-app-name-label
+spec:
+  validationFailureAction: {{ k3s_kyverno_validation_action }}
+  background: true
+  rules:
+    - name: check-app-name-label
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+                - StatefulSet
+              namespaceSelector:
+                matchLabels:
+                  coinops-tier: app
+      exclude:
+        any:
+          - resources:
+              namespaces:
+{% for ns in k3s_kyverno_exempt_namespaces %}
+                - {{ ns }}
+{% endfor %}
+      validate:
+        message: "Workloads must carry the app.kubernetes.io/name label."
+        pattern:
+          metadata:
+            labels:
+              app.kubernetes.io/name: "?*"
