@@ -39,6 +39,7 @@ locals {
   # Hostnames served through the tunnels (<name>.<k3s_ingress_domain>).
   cf_apps_hostnames = {
     app      = "app.${local.k3s_ingress_domain}"
+    argocd   = "argocd.${local.k3s_ingress_domain}"
     headlamp = "headlamp.${local.k3s_ingress_domain}"
     homepage = "homepage.${local.k3s_ingress_domain}"
     hello    = "hello.${local.k3s_ingress_domain}"
