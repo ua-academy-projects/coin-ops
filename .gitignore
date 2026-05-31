@@ -2,6 +2,7 @@ DASHBOARD_PROJECT.md
 
 # Environment file — passwords and local paths, never commit
 .env
+terraform.env
 
 # Worktrees created by agent runs
 .claude/worktrees/
@@ -27,6 +28,7 @@ terraform/terraform.tfstate.*.backup
 terraform/terraform.tfvars
 terraform/keys/
 terraform/keys/
+terraform/*.md
 
 # React build output
 ui-react/dist/
