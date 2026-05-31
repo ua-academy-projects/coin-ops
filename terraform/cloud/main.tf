@@ -158,6 +158,7 @@ module "aws_instances" {
   subnetworks        = module.aws_network[0].subnetwork_ids
   security_group_ids = try(module.aws_security[0].security_group_ids, {})
   workloads          = local.workloads_by_cloud.aws
+  secrets            = local.secrets
 }
 
 module "aws_sql" {

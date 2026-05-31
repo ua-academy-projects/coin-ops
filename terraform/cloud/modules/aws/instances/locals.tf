@@ -27,4 +27,20 @@ locals {
     }
   }
 
+  secret_access_bindings = {
+    for binding in flatten([
+      for identity, identity_cfg in local.workload_identities : [
+        for workload_name, cfg in var.workloads : [
+          for secret in try(cfg.secrets, []) : {
+            key         = "${identity}-${secret}"
+            identity    = identity
+            secret_key  = secret
+            secret_name = var.secrets[secret].secret_id
+          }
+          if try(cfg.identity, null) == identity
+        ]
+      ]
+    ]) : binding.key => binding
+  }
+
 }

@@ -47,3 +47,22 @@ resource "aws_iam_instance_profile" "this" {
   name = each.value.name
   role = aws_iam_role.this[each.key].name
 }
+
+resource "aws_iam_role_policy" "secret_access" {
+  for_each = local.secret_access_bindings
+
+  name = "${each.value.identity}-${each.value.secret_name}-secret-access"
+  role = aws_iam_role.this[each.value.identity].id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret"
+      ]
+      Resource = data.aws_secretsmanager_secret.this[each.value.secret_key].arn
+    }]
+  })
+}

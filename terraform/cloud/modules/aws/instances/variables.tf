@@ -34,3 +34,10 @@ variable "workloads" {
     secrets        = optional(list(string))
   }))
 }
+
+variable "secrets" {
+  type = map(object({
+    secret_id = string
+  }))
+  default = {}
+}
