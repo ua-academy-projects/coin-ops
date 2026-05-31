@@ -1,5 +1,11 @@
-variable "resource_group_name" {
+# variables.tf
+
+variable "network_id" {
   type = string
+}
+
+variable "private_subnet_ids" {
+  type = map(string)
 }
 
 variable "route" {
@@ -11,10 +17,6 @@ variable "route" {
   })
 }
 
-variable "next_hop_private_ips" {
-  type = map(string)
-}
-
-variable "private_subnet_ids" {
+variable "next_hop_interface_ids" {
   type = map(string)
 }

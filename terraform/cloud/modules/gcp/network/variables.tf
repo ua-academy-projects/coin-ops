@@ -11,14 +11,3 @@ variable "network" {
     }))
   })
 }
-
-variable "nat_route" {
-  type = object({
-    name              = string
-    destination_range = string
-    target_tags       = list(string)
-    next_hop_instance = string
-  })
-  default  = null
-  nullable = true
-}

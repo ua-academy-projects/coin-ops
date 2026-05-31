@@ -46,40 +46,20 @@ locals {
   enable_azure_workloads = local.enable_azure_network && length(local.workloads_by_cloud.azure) > 0
   enable_azure_security  = local.enable_azure_workloads && length(var.security_rules) > 0 && local.default_cloud == "azure"
   enable_azure_sql       = local.enable_azure_network && var.sql != null && local.default_cloud == "azure"
-  enable_azure_routing   = local.azure_nat_route != null
+  enable_azure_routing   = local.enable_azure_workloads && var.nat_route != null && local.default_cloud == "azure"
 
   enable_gcp_network   = local.networks_by_cloud.gcp != null
   enable_gcp_workloads = local.enable_gcp_network && length(local.workloads_by_cloud.gcp) > 0
   enable_gcp_security  = local.enable_gcp_workloads && length(var.security_rules) > 0 && local.default_cloud == "gcp"
   enable_gcp_secrets   = local.enable_gcp_workloads && length(var.secrets) > 0 && local.default_cloud == "gcp"
   enable_gcp_sql       = local.enable_gcp_network && var.sql != null && local.default_cloud == "gcp"
+  enable_gcp_routing   = local.enable_gcp_workloads && var.nat_route != null && local.default_cloud == "gcp"
 
   enable_aws_network   = local.networks_by_cloud.aws != null
   enable_aws_workloads = local.enable_aws_network && length(local.workloads_by_cloud.aws) > 0
   enable_aws_security  = local.enable_aws_workloads && length(var.security_rules) > 0 && local.default_cloud == "aws"
   enable_aws_sql       = local.enable_aws_network && var.sql != null && local.default_cloud == "aws"
-
-  # ------------------------------------------------------------
-  # NAT Route Shapes
-  # ------------------------------------------------------------
-  azure_nat_route = local.default_cloud == "azure" && length(local.workloads_by_cloud.azure) > 0 && var.nat_route != null ? {
-    name              = var.nat_route.name
-    destination_range = var.nat_route.destination_range
-    next_hop_ip       = module.azure_instances[0].private_ips[var.nat_route.instance_workload]
-  } : null
-
-  gcp_nat_route = local.default_cloud == "gcp" && length(local.workloads_by_cloud.gcp) > 0 && var.nat_route != null ? {
-    name              = var.nat_route.name
-    destination_range = var.nat_route.destination_range
-    target_tags       = var.nat_route.target_tags
-    next_hop_instance = module.gcp_instances[0].instance_self_links[var.nat_route.instance_workload]
-  } : null
-
-  aws_nat_route = local.default_cloud == "aws" && length(local.workloads_by_cloud.aws) > 0 && var.nat_route != null ? {
-    name              = var.nat_route.name
-    destination_range = var.nat_route.destination_range
-    next_hop_instance = module.aws_instances[0].network_interface_ids[var.nat_route.instance_workload]
-  } : null
+  enable_aws_routing   = local.enable_aws_workloads && var.nat_route != null && local.default_cloud == "aws"
 
   # ------------------------------------------------------------
   # Shared Instance Outputs

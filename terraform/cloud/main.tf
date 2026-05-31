@@ -56,9 +56,10 @@ module "azure_routing" {
   source = "./modules/azure/routing"
   count  = local.enable_azure_routing ? 1 : 0
 
-  resource_group_name = var.azure_resource_group_name
-  route               = local.azure_nat_route
-  private_subnet_ids  = module.azure_network[0].private_subnet_ids
+  resource_group_name  = var.azure_resource_group_name
+  route                = var.nat_route
+  next_hop_private_ips = module.azure_instances[0].private_ips
+  private_subnet_ids   = module.azure_network[0].private_subnet_ids
 }
 
 
@@ -71,8 +72,7 @@ module "gcp_network" {
   source = "./modules/gcp/network"
   count  = local.enable_gcp_network ? 1 : 0
 
-  network   = local.networks_by_cloud.gcp
-  nat_route = local.gcp_nat_route
+  network = local.networks_by_cloud.gcp
 }
 
 module "gcp_instances" {
@@ -118,6 +118,15 @@ module "gcp_sql" {
   user     = var.sql.user
 }
 
+module "gcp_routing" {
+  source = "./modules/gcp/routing"
+  count  = local.enable_gcp_routing ? 1 : 0
+
+  network_name       = module.gcp_network[0].network_name
+  route              = var.nat_route
+  next_hop_instances = module.gcp_instances[0].instance_self_links
+}
+
 
 
 # ------------------------------------------------------------
@@ -128,8 +137,7 @@ module "aws_network" {
   source = "./modules/aws/network"
   count  = local.enable_aws_network ? 1 : 0
 
-  network   = local.networks_by_cloud.aws
-  nat_route = local.aws_nat_route
+  network = local.networks_by_cloud.aws
 }
 
 module "aws_security" {
@@ -163,4 +171,14 @@ module "aws_sql" {
   instance = var.sql.instance
   database = var.sql.database
   user     = var.sql.user
+}
+
+module "aws_routing" {
+  source = "./modules/aws/routing"
+  count  = local.enable_aws_routing ? 1 : 0
+
+  network_id             = module.aws_network[0].network_id
+  private_subnet_ids     = module.aws_network[0].private_subnet_ids
+  route                  = var.nat_route
+  next_hop_interface_ids = module.aws_instances[0].network_interface_ids
 }
