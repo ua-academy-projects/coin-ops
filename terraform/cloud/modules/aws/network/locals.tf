@@ -15,4 +15,9 @@ locals {
     for key, subnet in local.subnets : key => subnet
     if !subnet.map_public_ip_on_launch
   }
+
+  public_subnets = {
+    for key, subnet in local.subnets : key => subnet
+    if subnet.map_public_ip_on_launch
+  }
 }
