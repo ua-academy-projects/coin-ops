@@ -4,14 +4,24 @@ Packages the Coin-Ops application workloads — proxy, history-api, history-cons
 
 ## What it deploys
 
-- 4 Namespaces (proxy / history-api / history-consumer / ui; gateway is the release namespace, created by `--create-namespace`)
+- 4 Namespaces (proxy / history-api / history-consumer / ui), labelled `coinops-tier: app`; gateway is the release namespace, created by `--create-namespace`
 - 5 ServiceAccounts, 5 Deployments, 4 Services
-- 3 cross-namespace ConfigMaps (`coinops-app-config`) and 3 Secrets (`coinops-app-secrets`)
-- 4 image-pull Secrets (`ghcr-pull`) for private GHCR images
+- 3 cross-namespace ConfigMaps (`coinops-app-config`)
 - 1 nginx ConfigMap + Ingress for the gateway
 - 18 NetworkPolicies: 5 default-deny + 5 allow-dns + 8 flow policies
 
+The chart does NOT create any Secret.
+
 Data-tier NetworkPolicies (rabbitmq, redis, postgres) are owned by the `k3s_netpol` Ansible role.
+
+## Secrets (provided externally)
+
+The workloads reference two Secrets BY NAME, but the chart never creates them:
+
+- `coinops-app-secrets` — supplies `DATABASE_URL`, `RABBITMQ_URL`, `REDIS_URL` via `envFrom.secretRef`
+- `ghcr-pull` — GHCR auth, referenced via `imagePullSecrets`
+
+Their values are seeded by the Ansible `k3s_coinops` role from the cloud secret manager, into the app namespaces. They are intentionally absent from this chart and from git. ArgoCD ignores them during reconciliation.
 
 ## Prerequisites
 
@@ -20,36 +30,20 @@ Data-tier NetworkPolicies (rabbitmq, redis, postgres) are owned by the `k3s_netp
 - RabbitMQ StatefulSet in `coinops-rabbitmq`; Redis StatefulSet in `coinops-redis`
 - cert-manager `ClusterIssuer` matching `ingress.certManagerClusterIssuer`
 - Traefik ingress controller
+- The `coinops-app-secrets` and `ghcr-pull` Secrets pre-seeded in the app namespaces (Ansible `k3s_coinops` role)
 
-## Install
+## Install / management
 
-The connection URLs and image pull secret are required. A minimum `my-values.yaml`:
+The chart is reconciled by ArgoCD via `gitops/apps/coinops-app.yaml`. The non-secret values live in that Application's `helm.valuesObject` — there is no manual `helm install` in the normal flow.
 
-```yaml
-image:
-  tag: dev-latest
-  pullSecretDockerconfigjson: <base64 of {"auths":{"ghcr.io":{"auth":"..."}}}>
-ingress:
-  host: app.coinops.pp.ua
-app:
-  databaseUrl: postgresql://user:pass@coinops-pg-rw.coinops-postgres.svc.cluster.local:5432/cognitor
-  rabbitmqUrl: amqp://user:pass@rabbitmq.coinops-rabbitmq.svc.cluster.local:5672/
-  redisUrl: redis://redis.coinops-redis.svc.cluster.local:6379/0
-```
-
-Then:
+To render and inspect the manifests locally:
 
 ```bash
-helm upgrade --install coinops-app ./charts/coinops-app \
-  -n coinops-gateway --create-namespace \
-  --values my-values.yaml
+helm template charts/coinops-app
 ```
-
-Forgetting any of the `app.*` URLs makes `helm install` fail immediately with `app.<key> must be set` — no half-deployed state.
 
 ## Roll back
 
-```bash
-helm history coinops-app -n coinops-gateway
-helm rollback coinops-app <revision> -n coinops-gateway
-```
+Under GitOps, rollback is a `git revert` of the offending gitops change (ArgoCD re-syncs to the reverted state) or a sync to a previous revision from the ArgoCD UI history.
+
+`helm history` / `helm rollback` apply only if the chart was installed manually outside ArgoCD.

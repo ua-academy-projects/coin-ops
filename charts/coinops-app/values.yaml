@@ -3,9 +3,6 @@ image:
   registry: ghcr.io/ua-academy-projects
   tag: dev-latest
   pullPolicy: IfNotPresent
-  # The ghcr-pull dockerconfigjson, base64-encoded JSON. Ansible builds and passes
-  # this; the chart materialises one Secret per image-pull namespace.
-  pullSecretDockerconfigjson: ""
 
 # Hostnames + TLS.
 ingress:
@@ -37,14 +34,6 @@ gateway:
   namespace: coinops-gateway
   image: nginx:alpine
   replicas: 1
-
-# Connection URLs (Ansible fills these from the cluster's CNPG/rabbitmq/redis).
-# Empty defaults — the `required` template guards in app-secrets.yaml will fail
-# `helm install` fast with a clear message if these aren't overridden.
-app:
-  databaseUrl: ""
-  rabbitmqUrl: ""
-  redisUrl: ""
 
 # Backing-tier namespaces (used only to author NetworkPolicy egress/ingress allows).
 backingNamespaces:
