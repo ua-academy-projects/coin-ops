@@ -30,8 +30,9 @@ spec:
               - Ingress
               - Egress
 ---
-# 2. VALIDATE: deny pods in app namespaces that auto-mount a ServiceAccount
-# token (the chart sets automountServiceAccountToken: false, so it complies).
+# 2. VALIDATE: require pods in app namespaces to set automountServiceAccountToken:
+# false at the pod level (the chart sets it on both the ServiceAccount AND the Pod
+# template, so chart pods comply; any pod that omits it or sets true is blocked).
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
@@ -57,10 +58,10 @@ spec:
                 - {{ ns }}
 {% endfor %}
       validate:
-        message: "ServiceAccount token auto-mount is not allowed in app namespaces; set automountServiceAccountToken: false."
+        message: "Pods in app namespaces must set automountServiceAccountToken: false."
         pattern:
           spec:
-            =(automountServiceAccountToken): "false"
+            automountServiceAccountToken: "false"
 ---
 # 3. VALIDATE: require the app.kubernetes.io/name label on workloads in app
 # namespaces (the chart's common labels set it, so it complies).

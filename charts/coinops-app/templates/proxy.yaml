@@ -27,6 +27,7 @@ spec:
         app: proxy
     spec:
       serviceAccountName: coinops-proxy
+      automountServiceAccountToken: false
       imagePullSecrets:
         - name: ghcr-pull
       containers:

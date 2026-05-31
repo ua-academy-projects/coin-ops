@@ -28,6 +28,7 @@ spec:
         app: history-consumer
     spec:
       serviceAccountName: coinops-history-consumer
+      automountServiceAccountToken: false
       imagePullSecrets:
         - name: ghcr-pull
       containers:

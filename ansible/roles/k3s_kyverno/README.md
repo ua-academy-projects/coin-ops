@@ -5,8 +5,9 @@ enforce the cluster's own conventions:
 
 1. `generate-baseline-deny` — auto-creates a `kyverno-baseline-deny` deny-all
    NetworkPolicy in every namespace labelled `coinops-tier=app`.
-2. `disallow-sa-token-automount` — blocks pods that auto-mount a ServiceAccount
-   token in app namespaces.
+2. `disallow-sa-token-automount` — requires pods in app namespaces to set
+   `automountServiceAccountToken: false` at the pod level (blocks pods that omit
+   it or set it true).
 3. `require-app-name-label` — requires `app.kubernetes.io/name` on workloads.
 
 Policies 2–3 honour `k3s_kyverno_validation_action` (default `Enforce`; set to

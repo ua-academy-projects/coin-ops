@@ -27,6 +27,7 @@ spec:
         app: ui
     spec:
       serviceAccountName: coinops-ui
+      automountServiceAccountToken: false
       imagePullSecrets:
         - name: ghcr-pull
       containers:

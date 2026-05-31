@@ -27,6 +27,7 @@ spec:
         app: history-api
     spec:
       serviceAccountName: coinops-history-api
+      automountServiceAccountToken: false
       imagePullSecrets:
         - name: ghcr-pull
       containers:

@@ -74,6 +74,7 @@ spec:
         app: gateway
     spec:
       serviceAccountName: coinops-gateway
+      automountServiceAccountToken: false
       containers:
         - name: gateway
           image: {{ .Values.gateway.image }}
