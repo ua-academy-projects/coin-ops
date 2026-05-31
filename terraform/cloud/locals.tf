@@ -6,22 +6,20 @@ locals {
   default_cloud    = var.cloud
 
   # ------------------------------------------------------------
-  # Cloud-Normalized Inputs
+  # Cloud-Specific Resource Selection
   # ------------------------------------------------------------
   networks = {
     for name, network in var.networks : name => merge(network, {
       cloud = coalesce(network.cloud, var.cloud)
     })
   }
+
   workloads = {
     for name, workload in var.workloads : name => merge(workload, {
       cloud = coalesce(workload.cloud, var.cloud)
     })
   }
 
-  # ------------------------------------------------------------
-  # Per-Cloud Buckets
-  # ------------------------------------------------------------
   networks_grouped_by_cloud = {
     for cloud in local.supported_clouds : cloud => [
       for _, network in local.networks : network
@@ -60,24 +58,6 @@ locals {
   enable_aws_workloads = local.enable_aws_network && length(local.workloads_by_cloud.aws) > 0
   enable_aws_security  = local.enable_aws_workloads && length(var.security_rules) > 0 && local.default_cloud == "aws"
   enable_aws_sql       = local.enable_aws_network && var.sql != null && local.default_cloud == "aws"
-
-  # ------------------------------------------------------------
-  # Validation Helpers
-  # ------------------------------------------------------------
-  network_clouds_with_multiple_networks = [
-    for cloud, networks in local.networks_grouped_by_cloud : cloud
-    if length(networks) > 1
-  ]
-
-  workload_clouds_without_network = distinct([
-    for _, workload in local.workloads : workload.cloud
-    if try(local.networks_by_cloud[workload.cloud], null) == null
-  ])
-
-  invalid_workload_subnet_refs = [
-    for name, workload in local.workloads : name
-    if try(local.networks_by_cloud[workload.cloud].subnets[workload.subnet], null) == null
-  ]
 
   # ------------------------------------------------------------
   # NAT Route Shapes
