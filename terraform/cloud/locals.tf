@@ -93,7 +93,13 @@ locals {
   }
 
   inventory_bastion_host_public_ip = local.inventory_bastion_host != null ? try(local.inventory_public_ips[local.inventory_bastion_host], null) : null
-  inventory_nat_private_cidr       = local.inventory_bastion_host != null ? local.networks_by_cloud[local.default_cloud].subnets[local.workloads[local.inventory_bastion_host].subnet].cidr : null
+
+  inventory_nat_target_workloads = var.nat_route != null ? [
+    for name, workload in local.workloads : name
+    if length(setintersection(toset(workload.tags), toset(var.nat_route.target_tags))) > 0
+  ] : []
+
+  inventory_nat_private_cidr = length(local.inventory_nat_target_workloads) > 0 ? local.networks_by_cloud[local.default_cloud].subnets[local.workloads[local.inventory_nat_target_workloads[0]].subnet].cidr : null
 
   inventory_default_ssh_args = "-o StrictHostKeyChecking=accept-new -o ForwardAgent=yes -o IdentitiesOnly=yes"
   inventory_proxy_ssh_args   = local.inventory_bastion_host_public_ip != null ? "${local.inventory_default_ssh_args} -o ProxyCommand=\"ssh -i {{ lookup(\"env\", \"SSH_KEY_PATH\") | expanduser }} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -W %h:%p ${var.ssh_user}@${local.inventory_bastion_host_public_ip}\"" : null
@@ -143,5 +149,5 @@ locals {
     }
   }
 
-  inventory_content = jsonencode(local.inventory)
+  inventory_content = yamlencode(local.inventory)
 }
