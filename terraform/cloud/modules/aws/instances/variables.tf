@@ -18,6 +18,14 @@ variable "security_group_ids" {
 
 # instances
 
+variable "ssh_user" {
+  type = string
+}
+
+variable "ssh_public_key_path" {
+  type = string
+}
+
 variable "workloads" {
   type = map(object({
     roles          = list(string)

@@ -28,6 +28,7 @@ module "azure_instances" {
 
   resource_group_name            = var.azure_resource_group_name
   location                       = var.azure_location
+  ssh_user                       = var.ssh_user
   ssh_public_key_path            = pathexpand(var.ssh_public_key_path)
   key_vault_name                 = var.azure_key_vault_name
   subnet_ids                     = module.azure_network[0].subnetwork_ids
@@ -79,7 +80,7 @@ module "gcp_instances" {
   source = "./modules/gcp/instances"
   count  = local.enable_gcp_workloads ? 1 : 0
 
-  ssh_user            = "deployer"
+  ssh_user            = var.ssh_user
   ssh_public_key_path = pathexpand(var.ssh_public_key_path)
   network_name        = module.gcp_network[0].network_name
   subnetworks         = module.gcp_network[0].subnetwork_names
@@ -153,10 +154,12 @@ module "aws_instances" {
   source = "./modules/aws/instances"
   count  = local.enable_aws_workloads ? 1 : 0
 
-  subnetworks        = module.aws_network[0].subnetwork_ids
-  security_group_ids = try(module.aws_security[0].security_group_ids, {})
-  workloads          = local.workloads_by_cloud.aws
-  secrets            = var.secrets
+  ssh_user            = var.ssh_user
+  ssh_public_key_path = pathexpand(var.ssh_public_key_path)
+  subnetworks         = module.aws_network[0].subnetwork_ids
+  security_group_ids  = try(module.aws_security[0].security_group_ids, {})
+  workloads           = local.workloads_by_cloud.aws
+  secrets             = var.secrets
 }
 
 module "aws_sql" {

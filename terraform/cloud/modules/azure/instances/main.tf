@@ -56,13 +56,13 @@ resource "azurerm_linux_virtual_machine" "this" {
   resource_group_name             = var.resource_group_name
   location                        = var.location
   size                            = each.value.vm_size
-  admin_username                  = "deployer"
+  admin_username                  = var.ssh_user
   zone                            = each.value.zone
   network_interface_ids           = [azurerm_network_interface.this[each.key].id]
   disable_password_authentication = true
 
   admin_ssh_key {
-    username   = "deployer"
+    username   = var.ssh_user
     public_key = trimspace(file(var.ssh_public_key_path))
   }
 

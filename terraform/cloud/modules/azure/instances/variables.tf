@@ -10,6 +10,10 @@ variable "ssh_public_key_path" {
   type = string
 }
 
+variable "ssh_user" {
+  type = string
+}
+
 variable "subnet_ids" {
   type = map(string)
 }

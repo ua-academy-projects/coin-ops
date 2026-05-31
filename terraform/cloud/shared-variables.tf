@@ -17,6 +17,11 @@ variable "ssh_public_key_path" {
   default = "~/.ssh/coinops_gcp.pub"
 }
 
+variable "ssh_user" {
+  type    = string
+  default = "deployer"
+}
+
 # network
 
 variable "networks" {

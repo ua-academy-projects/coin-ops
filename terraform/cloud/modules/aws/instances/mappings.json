@@ -12,11 +12,10 @@
     "memory_medium": "r7i.xlarge"
   },
   "image_family": {
-    "ubuntu_22": "ami-0a1234567890abcde",
-    "ubuntu_24": "ami-0123456789abcdef0",
-    "debian_12": "ami-0b1234567890abcde",
-    "rocky_9": "ami-0c1234567890abcde",
-    "al2023": "ami-0d1234567890abcde"
+    "ubuntu_22": "/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp3/ami-id",
+    "ubuntu_24": "/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id",
+    "ubuntu_26": "ami-051eaec1417c5d4ae",
+    "debian_13": "ami-0da1f66573556d917"
   },
   "placement": {
     "primary": {
