@@ -40,8 +40,8 @@ locals {
             type            = rule.type
             protocol        = rule.protocol
             port            = port
-            from_port       = port == "*" ? null : tonumber(split("-", port)[0])
-            to_port         = port == "*" ? null : tonumber(element(split("-", port), length(split("-", port)) - 1))
+            from_port       = port == "*" && rule.protocol == "icmp" ? -1 : port == "*" ? 0 : tonumber(split("-", port)[0])
+            to_port         = port == "*" && rule.protocol == "icmp" ? -1 : port == "*" ? 65535 : tonumber(element(split("-", port), length(split("-", port)) - 1))
             cidr_block      = cidr
           }
         ]
@@ -76,8 +76,8 @@ locals {
             type            = rule.type
             protocol        = rule.protocol
             port            = port
-            from_port       = port == "*" ? null : tonumber(split("-", port)[0])
-            to_port         = port == "*" ? null : tonumber(element(split("-", port), length(split("-", port)) - 1))
+            from_port       = port == "*" && rule.protocol == "icmp" ? -1 : port == "*" ? 0 : tonumber(split("-", port)[0])
+            to_port         = port == "*" && rule.protocol == "icmp" ? -1 : port == "*" ? 65535 : tonumber(element(split("-", port), length(split("-", port)) - 1))
             source_workload = rule.source_workload
           }
         ]

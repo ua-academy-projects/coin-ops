@@ -12,6 +12,15 @@ resource "aws_security_group" "workload" {
   }
 }
 
+resource "aws_vpc_security_group_egress_rule" "default" {
+  for_each = aws_security_group.workload
+
+  security_group_id = each.value.id
+  description       = "Allow all outbound traffic"
+  ip_protocol       = "-1"
+  cidr_ipv4         = "0.0.0.0/0"
+}
+
 resource "aws_vpc_security_group_ingress_rule" "cidr" {
   for_each = {
     for key, rule in local.cidr_rules : key => rule
