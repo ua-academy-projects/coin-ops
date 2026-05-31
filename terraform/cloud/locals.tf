@@ -1,12 +1,13 @@
 locals {
-
+  # ------------------------------------------------------------
+  # Shared Defaults
+  # ------------------------------------------------------------
   supported_clouds = ["gcp", "azure", "aws"]
+  default_cloud    = var.cloud
 
-  default_cloud  = var.cloud
-  security_rules = coalesce(var.security_rules, {})
-  secrets        = coalesce(var.secrets, {})
-
-  # add default cloud values, if no one specified
+  # ------------------------------------------------------------
+  # Cloud-Normalized Inputs
+  # ------------------------------------------------------------
   networks = {
     for name, network in var.networks : name => merge(network, {
       cloud = coalesce(network.cloud, var.cloud)
@@ -18,8 +19,9 @@ locals {
     })
   }
 
-
-  # puts networks in cloud buckets
+  # ------------------------------------------------------------
+  # Per-Cloud Buckets
+  # ------------------------------------------------------------
   networks_grouped_by_cloud = {
     for cloud in local.supported_clouds : cloud => [
       for _, network in local.networks : network
@@ -27,15 +29,11 @@ locals {
     ]
   }
 
-
-  # turns networks lists per cloud into network objects
   networks_by_cloud = {
     for cloud, networks in local.networks_grouped_by_cloud :
     cloud => length(networks) == 1 ? networks[0] : null
   }
 
-
-  # split workloads by cloud before sending them to cloud modules
   workloads_by_cloud = {
     for cloud in local.supported_clouds : cloud => {
       for name, workload in local.workloads : name => workload
@@ -43,24 +41,29 @@ locals {
     }
   }
 
-  # module enablement
+  # ------------------------------------------------------------
+  # Module Enablement
+  # ------------------------------------------------------------
   enable_azure_network   = local.networks_by_cloud.azure != null
   enable_azure_workloads = local.enable_azure_network && length(local.workloads_by_cloud.azure) > 0
-  enable_azure_security  = local.enable_azure_workloads && length(local.security_rules) > 0 && local.default_cloud == "azure"
+  enable_azure_security  = local.enable_azure_workloads && length(var.security_rules) > 0 && local.default_cloud == "azure"
   enable_azure_sql       = local.enable_azure_network && var.sql != null && local.default_cloud == "azure"
   enable_azure_routing   = local.azure_nat_route != null
 
   enable_gcp_network   = local.networks_by_cloud.gcp != null
   enable_gcp_workloads = local.enable_gcp_network && length(local.workloads_by_cloud.gcp) > 0
-  enable_gcp_security  = local.enable_gcp_workloads && length(local.security_rules) > 0 && local.default_cloud == "gcp"
-  enable_gcp_secrets   = local.enable_gcp_workloads && length(local.secrets) > 0 && local.default_cloud == "gcp"
+  enable_gcp_security  = local.enable_gcp_workloads && length(var.security_rules) > 0 && local.default_cloud == "gcp"
+  enable_gcp_secrets   = local.enable_gcp_workloads && length(var.secrets) > 0 && local.default_cloud == "gcp"
   enable_gcp_sql       = local.enable_gcp_network && var.sql != null && local.default_cloud == "gcp"
 
   enable_aws_network   = local.networks_by_cloud.aws != null
   enable_aws_workloads = local.enable_aws_network && length(local.workloads_by_cloud.aws) > 0
-  enable_aws_security  = local.enable_aws_workloads && length(local.security_rules) > 0 && local.default_cloud == "aws"
+  enable_aws_security  = local.enable_aws_workloads && length(var.security_rules) > 0 && local.default_cloud == "aws"
   enable_aws_sql       = local.enable_aws_network && var.sql != null && local.default_cloud == "aws"
 
+  # ------------------------------------------------------------
+  # Validation Helpers
+  # ------------------------------------------------------------
   network_clouds_with_multiple_networks = [
     for cloud, networks in local.networks_grouped_by_cloud : cloud
     if length(networks) > 1
@@ -76,7 +79,9 @@ locals {
     if try(local.networks_by_cloud[workload.cloud].subnets[workload.subnet], null) == null
   ]
 
-  # normalize provider-specific NAT route shapes
+  # ------------------------------------------------------------
+  # NAT Route Shapes
+  # ------------------------------------------------------------
   azure_nat_route = local.default_cloud == "azure" && length(local.workloads_by_cloud.azure) > 0 && var.nat_route != null ? {
     name              = var.nat_route.name
     destination_range = var.nat_route.destination_range
@@ -96,8 +101,9 @@ locals {
     next_hop_instance = module.aws_instances[0].network_interface_ids[var.nat_route.instance_workload]
   } : null
 
-
-  # shared instance outputs from all enabled clouds
+  # ------------------------------------------------------------
+  # Shared Instance Outputs
+  # ------------------------------------------------------------
   private_ips = merge(
     try(module.gcp_instances[0].private_ips, {}),
     try(module.azure_instances[0].private_ips, {}),
@@ -109,12 +115,13 @@ locals {
     try(module.aws_instances[0].public_ips, {})
   )
 
-  # inventory roles
+  # ------------------------------------------------------------
+  # Inventory Model
+  # ------------------------------------------------------------
   inventory_role_names = sort(distinct(flatten([
     for _, workload in local.workloads : workload.roles
   ])))
 
-  # private hosts connect through the public bastion when it exists
   inventory_bastion_host = try(one([
     for name, workload in local.workloads : name
     if contains(workload.roles, "bastion")
@@ -122,7 +129,6 @@ locals {
 
   inventory_bastion_host_public_ip = local.inventory_bastion_host != null ? try(local.public_ips[local.inventory_bastion_host], null) : null
 
-  # inventory hosts
   inventory_hosts = {
     for name, workload in local.workloads : name => {
       cloud                   = workload.cloud
@@ -136,7 +142,6 @@ locals {
     }
   }
 
-  # inventory groups
   inventory_role_members = {
     for role in local.inventory_role_names :
     role => [
@@ -145,7 +150,9 @@ locals {
     ]
   }
 
-  # rendered inventory file for ansible
+  # ------------------------------------------------------------
+  # Rendered Ansible Inventory
+  # ------------------------------------------------------------
   inventory_content = join("\n\n", concat(
     [
       join("\n", concat(

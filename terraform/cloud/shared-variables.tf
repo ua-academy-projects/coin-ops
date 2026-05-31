@@ -63,7 +63,8 @@ variable "nat_route" {
 # instances
 
 variable "workloads" {
-  default = {}
+  default  = {}
+  nullable = false
   type = map(object({
     roles          = list(string)
     cloud          = optional(string)
@@ -92,7 +93,8 @@ variable "workloads" {
 # security 
 
 variable "security_rules" {
-  default = {}
+  default  = {}
+  nullable = false
   type = map(object({
     description      = string
     direction        = string
@@ -106,10 +108,11 @@ variable "security_rules" {
 }
 
 variable "secrets" {
+  default  = {}
+  nullable = false
   type = map(object({
     secret_id = string
   }))
-  default = {}
 }
 
 

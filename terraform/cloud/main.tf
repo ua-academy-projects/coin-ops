@@ -19,7 +19,7 @@ module "azure_security" {
   subnet_ids          = module.azure_network[0].subnetwork_ids
   subnets             = local.networks_by_cloud.azure.subnets
   workloads           = local.workloads_by_cloud.azure
-  rules               = local.security_rules
+  rules               = var.security_rules
 }
 
 module "azure_instances" {
@@ -61,6 +61,8 @@ module "azure_routing" {
   private_subnet_ids  = module.azure_network[0].private_subnet_ids
 }
 
+
+
 # ------------------------------------------------------------
 # GCP
 # ------------------------------------------------------------
@@ -91,14 +93,14 @@ module "gcp_security" {
 
   network_name       = module.gcp_network[0].network_name
   workload_selectors = module.gcp_instances[0].workload_selectors
-  rules              = local.security_rules
+  rules              = var.security_rules
 }
 
 module "gcp_secrets" {
   source = "./modules/gcp/secrets"
   count  = local.enable_gcp_secrets ? 1 : 0
 
-  secrets          = local.secrets
+  secrets          = var.secrets
   workloads        = local.workloads_by_cloud.gcp
   service_accounts = module.gcp_instances[0].service_accounts
 }
@@ -115,6 +117,8 @@ module "gcp_sql" {
   database = var.sql.database
   user     = var.sql.user
 }
+
+
 
 # ------------------------------------------------------------
 # AWS
@@ -134,7 +138,7 @@ module "aws_security" {
 
   network_id     = module.aws_network[0].network_id
   workload_names = keys(local.workloads_by_cloud.aws)
-  rules          = local.security_rules
+  rules          = var.security_rules
 }
 
 module "aws_instances" {
@@ -144,7 +148,7 @@ module "aws_instances" {
   subnetworks        = module.aws_network[0].subnetwork_ids
   security_group_ids = try(module.aws_security[0].security_group_ids, {})
   workloads          = local.workloads_by_cloud.aws
-  secrets            = local.secrets
+  secrets            = var.secrets
 }
 
 module "aws_sql" {
