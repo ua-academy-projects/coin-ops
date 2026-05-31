@@ -54,15 +54,11 @@ module "azure_sql" {
 
 module "azure_routing" {
   source = "./modules/azure/routing"
-  count  = local.networks_by_cloud.azure != null && length(local.workloads_by_cloud.azure) > 0 && var.nat_route != null && local.default_cloud == "azure" ? 1 : 0
+  count  = local.azure_nat_route != null ? 1 : 0
 
   resource_group_name = var.azure_resource_group_name
-  route = {
-    name              = var.nat_route.name
-    destination_range = var.nat_route.destination_range
-    next_hop_ip       = module.azure_instances[0].private_ips[var.nat_route.instance_workload]
-  }
-  private_subnet_ids = module.azure_network[0].private_subnet_ids
+  route               = local.azure_nat_route
+  private_subnet_ids  = module.azure_network[0].private_subnet_ids
 }
 
 # ------------------------------------------------------------
@@ -73,13 +69,8 @@ module "gcp_network" {
   source = "./modules/gcp/network"
   count  = local.networks_by_cloud.gcp != null ? 1 : 0
 
-  network = local.networks_by_cloud.gcp
-  nat_route = local.default_cloud == "gcp" && length(local.workloads_by_cloud.gcp) > 0 && var.nat_route != null ? {
-    name              = var.nat_route.name
-    destination_range = var.nat_route.destination_range
-    target_tags       = var.nat_route.target_tags
-    next_hop_instance = module.gcp_instances[0].instance_self_links[var.nat_route.instance_workload]
-  } : null
+  network   = local.networks_by_cloud.gcp
+  nat_route = local.gcp_nat_route
 }
 
 module "gcp_instances" {
@@ -133,13 +124,8 @@ module "aws_network" {
   source = "./modules/aws/network"
   count  = local.networks_by_cloud.aws != null ? 1 : 0
 
-  network = local.networks_by_cloud.aws
-
-  nat_route = local.default_cloud == "aws" && length(local.workloads_by_cloud.aws) > 0 && var.nat_route != null ? {
-    name              = var.nat_route.name
-    destination_range = var.nat_route.destination_range
-    next_hop_instance = module.aws_instances[0].network_interface_ids[var.nat_route.instance_workload]
-  } : null
+  network   = local.networks_by_cloud.aws
+  nat_route = local.aws_nat_route
 }
 
 module "aws_security" {

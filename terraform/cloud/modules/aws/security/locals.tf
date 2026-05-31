@@ -33,13 +33,15 @@ locals {
     for item in flatten([
       for key, rule in local.rules_by_target : [
         for cidr in rule.cidr_blocks : [
-          for port in rule.ports : {
+          for port in length(rule.ports) > 0 ? rule.ports : ["*"] : {
             key             = "${key}:${cidr}:${port}"
             target_workload = rule.target_workload
             description     = rule.description
             type            = rule.type
             protocol        = rule.protocol
             port            = port
+            from_port       = port == "*" ? null : tonumber(split("-", port)[0])
+            to_port         = port == "*" ? null : tonumber(element(split("-", port), length(split("-", port)) - 1))
             cidr_block      = cidr
           }
         ]
@@ -67,13 +69,15 @@ locals {
     for item in flatten([
       for key, rules in local.source_workload_rules : flatten([
         for rule in rules : [
-          for port in rule.ports : {
+          for port in length(rule.ports) > 0 ? rule.ports : ["*"] : {
             key             = "${key}:${rule.source_workload}:${port}"
             target_workload = rule.target_workload
             description     = rule.description
             type            = rule.type
             protocol        = rule.protocol
             port            = port
+            from_port       = port == "*" ? null : tonumber(split("-", port)[0])
+            to_port         = port == "*" ? null : tonumber(element(split("-", port), length(split("-", port)) - 1))
             source_workload = rule.source_workload
           }
         ]

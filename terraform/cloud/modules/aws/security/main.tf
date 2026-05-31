@@ -21,8 +21,8 @@ resource "aws_vpc_security_group_ingress_rule" "cidr" {
   security_group_id = aws_security_group.workload[each.value.target_workload].id
   description       = each.value.description
   ip_protocol       = each.value.protocol
-  from_port         = tonumber(each.value.port)
-  to_port           = tonumber(each.value.port)
+  from_port         = each.value.from_port
+  to_port           = each.value.to_port
   cidr_ipv4         = each.value.cidr_block
 }
 
@@ -35,8 +35,8 @@ resource "aws_vpc_security_group_egress_rule" "cidr" {
   security_group_id = aws_security_group.workload[each.value.target_workload].id
   description       = each.value.description
   ip_protocol       = each.value.protocol
-  from_port         = tonumber(each.value.port)
-  to_port           = tonumber(each.value.port)
+  from_port         = each.value.from_port
+  to_port           = each.value.to_port
   cidr_ipv4         = each.value.cidr_block
 }
 
@@ -49,8 +49,8 @@ resource "aws_vpc_security_group_ingress_rule" "source_sg" {
   security_group_id            = aws_security_group.workload[each.value.target_workload].id
   description                  = each.value.description
   ip_protocol                  = each.value.protocol
-  from_port                    = tonumber(each.value.port)
-  to_port                      = tonumber(each.value.port)
+  from_port                    = each.value.from_port
+  to_port                      = each.value.to_port
   referenced_security_group_id = aws_security_group.workload[each.value.source_workload].id
 }
 
@@ -63,7 +63,7 @@ resource "aws_vpc_security_group_egress_rule" "source_sg" {
   security_group_id            = aws_security_group.workload[each.value.target_workload].id
   description                  = each.value.description
   ip_protocol                  = each.value.protocol
-  from_port                    = tonumber(each.value.port)
-  to_port                      = tonumber(each.value.port)
+  from_port                    = each.value.from_port
+  to_port                      = each.value.to_port
   referenced_security_group_id = aws_security_group.workload[each.value.source_workload].id
 }

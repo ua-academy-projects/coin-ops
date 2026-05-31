@@ -58,6 +58,26 @@ locals {
     if try(local.networks_by_cloud[workload.cloud].subnets[workload.subnet], null) == null
   ]
 
+  # normalize provider-specific NAT route shapes
+  azure_nat_route = local.default_cloud == "azure" && length(local.workloads_by_cloud.azure) > 0 && var.nat_route != null ? {
+    name              = var.nat_route.name
+    destination_range = var.nat_route.destination_range
+    next_hop_ip       = module.azure_instances[0].private_ips[var.nat_route.instance_workload]
+  } : null
+
+  gcp_nat_route = local.default_cloud == "gcp" && length(local.workloads_by_cloud.gcp) > 0 && var.nat_route != null ? {
+    name              = var.nat_route.name
+    destination_range = var.nat_route.destination_range
+    target_tags       = var.nat_route.target_tags
+    next_hop_instance = module.gcp_instances[0].instance_self_links[var.nat_route.instance_workload]
+  } : null
+
+  aws_nat_route = local.default_cloud == "aws" && length(local.workloads_by_cloud.aws) > 0 && var.nat_route != null ? {
+    name              = var.nat_route.name
+    destination_range = var.nat_route.destination_range
+    next_hop_instance = module.aws_instances[0].network_interface_ids[var.nat_route.instance_workload]
+  } : null
+
 
   # shared instance outputs from all enabled clouds
   private_ips = merge(
