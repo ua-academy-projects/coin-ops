@@ -1,0 +1,25 @@
+# app-of-apps: ArgoCD watches gitops/apps/ and adopts every child Application it
+# finds there. Ansible (k3s_argocd role) applies ONLY this object; ArgoCD fans
+# out to coinops-app + homepage + headlamp + hello.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ua-academy-projects/coin-ops.git
+    targetRevision: dev-Shabat-cloud
+    path: gitops/apps
+    directory:
+      recurse: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
