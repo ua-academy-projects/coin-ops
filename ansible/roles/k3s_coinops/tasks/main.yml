@@ -1,14 +1,15 @@
 ---
-# k3s_coinops — deploy the Coin-Ops app via the coinops-app Helm chart.
-# Backing services (CNPG / rabbitmq / redis) and the data-tier NetworkPolicies
-# remain in their own roles. Native modules only. Runs once on the first node.
+# k3s_coinops — under GitOps, ArgoCD owns the coinops-app Helm release. This role
+# no longer installs the chart. Its sole remaining job is to seed the two Secrets
+# the chart references by name but no longer manufactures (GitOps keeps secret
+# VALUES out of git): the GHCR image-pull Secret and the app connection-string
+# Secret. Native modules only. Runs once on the first node; joiners exit.
 
 - name: Skip k3s_coinops (not the first node)
   ansible.builtin.meta: end_host
   when: inventory_hostname != k3s_first_node
 
-# Assemble the GHCR dockerconfigjson (same shape as before — the chart materialises
-# the per-namespace Secrets from this base64 value).
+# --- GHCR dockerconfigjson (same assembly as before the GitOps move) ----------
 - name: Build the GHCR registry auth entry
   ansible.builtin.set_fact:
     coinops_ghcr_auth:
@@ -24,81 +25,73 @@
   no_log: true
   when: coinops_image_pull_token | length > 0
 
-# kubernetes.core.helm invokes `helm` on the target node, which reads the chart
-# from the local filesystem there. The chart files live on the controller
-# (under {{ playbook_dir }}/../charts), so stage them on the node first.
-- name: Ensure chart staging directory exists on the node
-  ansible.builtin.file:
-    path: "{{ coinops_chart_stage_dir }}"
-    state: directory
-    mode: '0755'
-
-- name: Copy the coinops-app chart to the node
-  ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../charts/coinops-app/"
-    dest: "{{ coinops_chart_stage_dir }}/coinops-app/"
-    mode: '0644'
-    directory_mode: '0755'
-
-- name: Deploy the coinops-app Helm chart
-  kubernetes.core.helm:
-    name: coinops-app
-    chart_ref: "{{ coinops_chart_stage_dir }}/coinops-app"
-    release_namespace: "{{ coinops_gateway_namespace }}"
-    create_namespace: true
+# --- Ensure the app namespaces exist before seeding Secrets into them ----------
+# ArgoCD also manages these namespaces (the chart creates them with the
+# coinops-tier=app label). Creating them here first is idempotent; ArgoCD adopts
+# them and reconciles the label on sync.
+- name: Ensure app namespaces exist
+  kubernetes.core.k8s:
+    state: present
     kubeconfig: "{{ k3s_kubeconfig }}"
-    wait: true
-    wait_timeout: 5m
-    atomic: true
-    values:
-      image:
-        registry: "{{ coinops_image_registry }}"
-        tag: "{{ coinops_image_tag }}"
-        pullSecretDockerconfigjson: "{{ coinops_dockerconfig_b64 | default('') }}"
-      ingress:
-        host: "{{ coinops_app_host }}"
-        className: traefik
-        tlsSecretName: coinops-app-tls
-        certManagerClusterIssuer: "{{ cert_manager_cluster_issuer }}"
-      proxy:
-        namespace: "{{ coinops_proxy_namespace }}"
-        image: coin-ops-proxy
-        port: "{{ coinops_proxy_port }}"
-        replicas: 1
-      historyApi:
-        namespace: "{{ coinops_history_api_namespace }}"
-        image: coin-ops-history-api
-        port: "{{ coinops_history_port }}"
-        replicas: 1
-      historyConsumer:
-        namespace: "{{ coinops_history_consumer_namespace }}"
-        image: coin-ops-history-consumer
-        replicas: 1
-      ui:
-        namespace: "{{ coinops_ui_namespace }}"
-        image: coin-ops-ui
-        replicas: 1
-      gateway:
-        namespace: "{{ coinops_gateway_namespace }}"
-        image: nginx:alpine
-        replicas: 1
-      app:
-        databaseUrl: "{{ coinops_app_database_url }}"
-        rabbitmqUrl: "{{ coinops_app_rabbitmq_url }}"
-        redisUrl: "{{ coinops_app_redis_url }}"
-      backingNamespaces:
-        postgres: "{{ coinops_postgres_namespace }}"
-        rabbitmq: "{{ coinops_rabbitmq_namespace }}"
-        redis: "{{ coinops_redis_namespace }}"
-      networkPolicy:
-        enabled: true
-        podCidr: 10.42.0.0/16
-        serviceCidr: 10.43.0.0/16
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ item }}"
+        labels:
+          coinops-tier: app
+  loop:
+    - "{{ coinops_proxy_namespace }}"
+    - "{{ coinops_history_api_namespace }}"
+    - "{{ coinops_history_consumer_namespace }}"
+    - "{{ coinops_ui_namespace }}"
+
+# --- Seed the GHCR image-pull Secret into every image-pull namespace -----------
+- name: Seed the ghcr-pull image-pull Secret
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: ghcr-pull
+        namespace: "{{ item }}"
+      type: kubernetes.io/dockerconfigjson
+      data:
+        .dockerconfigjson: "{{ coinops_dockerconfig_b64 }}"
+  loop:
+    - "{{ coinops_proxy_namespace }}"
+    - "{{ coinops_history_api_namespace }}"
+    - "{{ coinops_history_consumer_namespace }}"
+    - "{{ coinops_ui_namespace }}"
+  no_log: true
+  when: coinops_image_pull_token | length > 0
+
+# --- Seed the app connection-string Secret into the three backend namespaces ---
+- name: Seed the coinops-app-secrets connection Secret
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: coinops-app-secrets
+        namespace: "{{ item }}"
+      type: Opaque
+      stringData:
+        DATABASE_URL: "{{ coinops_app_database_url }}"
+        RABBITMQ_URL: "{{ coinops_app_rabbitmq_url }}"
+        REDIS_URL: "{{ coinops_app_redis_url }}"
+  loop:
+    - "{{ coinops_proxy_namespace }}"
+    - "{{ coinops_history_api_namespace }}"
+    - "{{ coinops_history_consumer_namespace }}"
   no_log: true
 
-- name: Report deployed release
+- name: Report secret seeding
   ansible.builtin.debug:
     msg:
-      - "coinops-app Helm release deployed to {{ coinops_gateway_namespace }}."
-      - "App served at https://{{ coinops_app_host }} (cert via {{ cert_manager_cluster_issuer }})."
-      - "History/rollback: helm history coinops-app -n {{ coinops_gateway_namespace }} | helm rollback coinops-app <rev> -n {{ coinops_gateway_namespace }}"
+      - "Seeded ghcr-pull (4 ns) + coinops-app-secrets (3 ns). ArgoCD owns the rest of coinops-app."
+      - "ArgoCD ignores these Secrets (see gitops/apps/coinops-app.yaml ignoreDifferences)."
