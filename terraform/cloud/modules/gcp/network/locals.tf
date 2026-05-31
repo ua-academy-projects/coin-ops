@@ -5,9 +5,9 @@ locals {
 
   subnets = {
     for key, subnet in var.network.subnets : key => {
-      cidr     = subnet.cidr
-      location = local.mappings.placement[subnet.placement].subnet_location
-      exposure = subnet.exposure
+      cidr      = subnet.cidr
+      location  = local.mappings.placement[subnet.placement].subnet_location
+      exposure  = subnet.exposure
       is_public = local.mappings.subnet_exposure[subnet.exposure].is_public
     }
   }

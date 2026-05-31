@@ -3,15 +3,27 @@
 locals {
   mappings = jsondecode(file("${path.module}/mappings.json"))
 
+
   instances = {
     for name, cfg in var.workloads : name => {
-      instance_type     = local.mappings.instance_type[cfg.instance_type]
-      ami               = local.mappings.image_family[cfg.image_family]
-      availability_zone = local.mappings.placement[cfg.placement].instance_zone
-      subnet_id         = var.subnetworks[cfg.subnet]
-      tags              = distinct(concat(cfg.tags, [name]))
-      disk_size_gb      = cfg.disk_size_gb
-      public_ip         = cfg.public_ip
+      instance_type        = local.mappings.instance_type[cfg.instance_type]
+      ami                  = local.mappings.image_family[cfg.image_family]
+      availability_zone    = local.mappings.placement[cfg.placement].instance_zone
+      subnet_id            = var.subnetworks[cfg.subnet]
+      tags                 = distinct(concat(cfg.tags, [name]))
+      disk_size_gb         = cfg.disk_size_gb
+      public_ip            = cfg.public_ip
+      iam_instance_profile = try(cfg.identity, null) != null ? "coinops-${cfg.identity}" : null
     }
   }
+
+  workload_identities = {
+    for identity in distinct([
+      for _, cfg in var.workloads : cfg.identity
+      if try(cfg.identity, null) != null
+      ]) : identity => {
+      name = "coinops-${identity}"
+    }
+  }
+
 }
