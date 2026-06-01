@@ -1,0 +1,114 @@
+---
+- name: Check gcloud availability when GCP secrets are needed
+  ansible.builtin.command:
+    argv:
+      - gcloud
+      - --version
+  register: gcp_secret_values_gcloud
+  changed_when: false
+  when:
+    - gcp_secret_values_enabled
+    - gcp_secret_values_load_db_password
+      or gcp_secret_values_load_rabbitmq_password
+      or gcp_secret_values_load_ghcr_token
+      or gcp_secret_values_load_cloudflare_token
+
+- name: Read DB password from GCP Secret Manager
+  ansible.builtin.command:
+    argv:
+      - gcloud
+      - secrets
+      - versions
+      - access
+      - latest
+      - --secret={{ gcp_secret_db_password_id }}
+      - --project={{ gcp_secret_values_project_id }}
+  register: gcp_secret_values_db_password
+  changed_when: false
+  when:
+    - gcp_secret_values_enabled
+    - gcp_secret_values_load_db_password
+    - (lookup('env', 'DB_PASSWORD') | default('', true)) | length == 0
+
+- name: Publish DB password fact
+  ansible.builtin.set_fact:
+    gcp_secret_db_password: "{{ gcp_secret_values_db_password.stdout | trim }}"
+  when:
+    - gcp_secret_values_enabled
+    - gcp_secret_values_load_db_password
+    - (lookup('env', 'DB_PASSWORD') | default('', true)) | length == 0
+
+- name: Read RabbitMQ password from GCP Secret Manager
+  ansible.builtin.command:
+    argv:
+      - gcloud
+      - secrets
+      - versions
+      - access
+      - latest
+      - --secret={{ gcp_secret_rabbitmq_password_id }}
+      - --project={{ gcp_secret_values_project_id }}
+  register: gcp_secret_values_rabbitmq_password
+  changed_when: false
+  when:
+    - gcp_secret_values_enabled
+    - gcp_secret_values_load_rabbitmq_password
+    - (lookup('env', 'RABBITMQ_PASSWORD') | default('', true)) | length == 0
+
+- name: Publish RabbitMQ password fact
+  ansible.builtin.set_fact:
+    gcp_secret_rabbitmq_password: "{{ gcp_secret_values_rabbitmq_password.stdout | trim }}"
+  when:
+    - gcp_secret_values_enabled
+    - gcp_secret_values_load_rabbitmq_password
+    - (lookup('env', 'RABBITMQ_PASSWORD') | default('', true)) | length == 0
+
+- name: Read GHCR token from GCP Secret Manager
+  ansible.builtin.command:
+    argv:
+      - gcloud
+      - secrets
+      - versions
+      - access
+      - latest
+      - --secret={{ gcp_secret_ghcr_token_id }}
+      - --project={{ gcp_secret_values_project_id }}
+  register: gcp_secret_values_ghcr_token
+  changed_when: false
+  when:
+    - gcp_secret_values_enabled
+    - gcp_secret_values_load_ghcr_token
+    - (lookup('env', 'GHCR_TOKEN') | default('', true)) | length == 0
+
+- name: Publish GHCR token fact
+  ansible.builtin.set_fact:
+    gcp_secret_ghcr_token: "{{ gcp_secret_values_ghcr_token.stdout | trim }}"
+  when:
+    - gcp_secret_values_enabled
+    - gcp_secret_values_load_ghcr_token
+    - (lookup('env', 'GHCR_TOKEN') | default('', true)) | length == 0
+
+- name: Read Cloudflare token from GCP Secret Manager
+  ansible.builtin.command:
+    argv:
+      - gcloud
+      - secrets
+      - versions
+      - access
+      - latest
+      - --secret={{ gcp_secret_cloudflare_token_id }}
+      - --project={{ gcp_secret_values_project_id }}
+  register: gcp_secret_values_cloudflare_token
+  changed_when: false
+  when:
+    - gcp_secret_values_enabled
+    - gcp_secret_values_load_cloudflare_token
+    - (lookup('env', 'CLOUDFLARE_API_TOKEN') | default('', true)) | length == 0
+
+- name: Publish Cloudflare token fact
+  ansible.builtin.set_fact:
+    gcp_secret_cloudflare_api_token: "{{ gcp_secret_values_cloudflare_token.stdout | trim }}"
+  when:
+    - gcp_secret_values_enabled
+    - gcp_secret_values_load_cloudflare_token
+    - (lookup('env', 'CLOUDFLARE_API_TOKEN') | default('', true)) | length == 0

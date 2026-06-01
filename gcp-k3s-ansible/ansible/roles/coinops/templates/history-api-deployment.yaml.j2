@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coinops-history-api
+  namespace: {{ coinops_namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: coinops-history-api
+  template:
+    metadata:
+      labels:
+        app: coinops-history-api
+    spec:
+      imagePullSecrets:
+        - name: {{ coinops_registry_pull_secret_name }}
+      containers:
+        - name: history-api
+          image: {{ coinops_history_api_image }}
+          imagePullPolicy: Always
+          env:
+            - name: RUNTIME_BACKEND
+              value: {{ coinops_runtime_backend | quote }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: coinops-runtime-secret
+                  key: DATABASE_URL
+            - name: PORT
+              value: "{{ coinops_history_port }}"
+          ports:
+            - containerPort: {{ coinops_history_port }}
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20

@@ -1,0 +1,51 @@
+---
+- name: Update apt cache
+  apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install base packages
+  apt:
+    name: "{{ base_packages }}"
+    state: present
+
+- name: Create disk-backed Ansible remote temp directory
+  file:
+    path: /var/tmp/ansible
+    state: directory
+    owner: root
+    group: root
+    mode: "1777"
+
+- name: Disable swap immediately
+  command: swapoff -a
+  changed_when: false
+  failed_when: false
+
+- name: Remove swap entries from fstab
+  mount:
+    name: none
+    fstype: swap
+    state: absent
+
+- name: Enable IPv4 forwarding
+  sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    state: present
+    reload: true
+
+- name: Ensure br_netfilter kernel module is loaded
+  community.general.modprobe:
+    name: br_netfilter
+    state: present
+
+- name: Enable bridge traffic to iptables
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: true
+  loop:
+    - { name: "net.bridge.bridge-nf-call-iptables", value: "1" }
+    - { name: "net.bridge.bridge-nf-call-ip6tables", value: "1" }

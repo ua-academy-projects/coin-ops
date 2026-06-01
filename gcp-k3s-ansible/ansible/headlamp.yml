@@ -1,0 +1,7 @@
+---
+- name: Deploy Headlamp into K3s
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - headlamp

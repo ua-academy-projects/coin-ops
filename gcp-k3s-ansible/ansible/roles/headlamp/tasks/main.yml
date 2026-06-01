@@ -1,0 +1,79 @@
+---
+- name: Check kubectl access
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ headlamp_kubeconfig }}"
+      - get
+      - nodes
+  changed_when: false
+
+- name: Create temporary manifest directory
+  ansible.builtin.tempfile:
+    state: directory
+    prefix: headlamp-
+  register: headlamp_tmpdir
+
+- name: Render Headlamp manifests
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "{{ headlamp_tmpdir.path }}/{{ item }}"
+    mode: "0644"
+  loop:
+    - namespace.yaml
+    - rbac.yaml
+    - deployment.yaml
+    - service.yaml
+
+- name: Apply Headlamp manifests
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ headlamp_kubeconfig }}"
+      - apply
+      - -f
+      - "{{ item }}"
+  loop:
+    - "{{ headlamp_tmpdir.path }}/namespace.yaml"
+    - "{{ headlamp_tmpdir.path }}/rbac.yaml"
+    - "{{ headlamp_tmpdir.path }}/deployment.yaml"
+    - "{{ headlamp_tmpdir.path }}/service.yaml"
+  register: headlamp_apply
+  changed_when: "'created' in headlamp_apply.stdout or 'configured' in headlamp_apply.stdout"
+
+- name: Restart Headlamp deployment
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ headlamp_kubeconfig }}"
+      - rollout
+      - restart
+      - "deployment/{{ headlamp_name }}"
+      - -n
+      - "{{ headlamp_namespace }}"
+
+- name: Wait for Headlamp rollout
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ headlamp_kubeconfig }}"
+      - rollout
+      - status
+      - "deployment/{{ headlamp_name }}"
+      - -n
+      - "{{ headlamp_namespace }}"
+      - --timeout=180s
+  changed_when: false
+
+- name: Print Headlamp summary
+  ansible.builtin.debug:
+    msg:
+      - "Headlamp deployed"
+      - "Namespace: {{ headlamp_namespace }}"
+      - "NodePort: {{ headlamp_nodeport }}"
+      - "Create a token with: kubectl create token {{ headlamp_name }} -n {{ headlamp_namespace }}"
+      - "Open through a private SSH tunnel to node port {{ headlamp_nodeport }}"

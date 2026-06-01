@@ -1,0 +1,197 @@
+---
+- name: Validate Homepage host
+  ansible.builtin.assert:
+    that:
+      - homepage_host | length > 0
+    fail_msg: "Set homepage_host or HOMEPAGE_HOST before running homepage.yml"
+
+- name: Validate Cloudflare configuration when enabled
+  ansible.builtin.assert:
+    that:
+      - homepage_cloudflare_api_token | length > 0
+      - homepage_cloudflare_zone_name | length > 0
+      - homepage_host == homepage_cloudflare_zone_name or homepage_host.endswith('.' ~ homepage_cloudflare_zone_name)
+    fail_msg: "Cloudflare is enabled, but token/zone/host settings are incomplete"
+  when: homepage_cloudflare_enabled
+
+- name: Check kubectl access
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ homepage_kubeconfig }}"
+      - get
+      - nodes
+  changed_when: false
+
+- name: Create temporary manifest directory
+  ansible.builtin.tempfile:
+    state: directory
+    prefix: homepage-
+  register: homepage_tmpdir
+
+- name: Render Homepage manifests
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "{{ homepage_tmpdir.path }}/{{ item }}"
+    mode: "0644"
+  loop:
+    - namespace.yaml
+    - rbac.yaml
+    - middleware.yaml
+    - configmap.yaml
+    - deployment.yaml
+    - service.yaml
+    - ingress.yaml
+
+- name: Apply Homepage manifests
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ homepage_kubeconfig }}"
+      - apply
+      - -f
+      - "{{ item }}"
+  loop:
+    - "{{ homepage_tmpdir.path }}/namespace.yaml"
+    - "{{ homepage_tmpdir.path }}/rbac.yaml"
+    - "{{ homepage_tmpdir.path }}/middleware.yaml"
+    - "{{ homepage_tmpdir.path }}/configmap.yaml"
+    - "{{ homepage_tmpdir.path }}/deployment.yaml"
+    - "{{ homepage_tmpdir.path }}/service.yaml"
+    - "{{ homepage_tmpdir.path }}/ingress.yaml"
+  register: homepage_apply
+  changed_when: "'created' in homepage_apply.stdout or 'configured' in homepage_apply.stdout"
+
+- name: Restart Homepage deployment
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ homepage_kubeconfig }}"
+      - rollout
+      - restart
+      - "deployment/{{ homepage_name }}"
+      - -n
+      - "{{ homepage_namespace }}"
+
+- name: Wait for Homepage rollout
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ homepage_kubeconfig }}"
+      - rollout
+      - status
+      - "deployment/{{ homepage_name }}"
+      - -n
+      - "{{ homepage_namespace }}"
+      - --timeout=180s
+  changed_when: false
+
+- name: Read Traefik public IP from Terraform
+  ansible.builtin.command:
+    argv:
+      - terraform
+      - -chdir={{ homepage_terraform_dir }}
+      - output
+      - -raw
+      - traefik_public_ip
+  register: homepage_ingress_endpoint
+  changed_when: false
+  when: homepage_cloudflare_enabled
+
+- name: Validate public ingress address
+  ansible.builtin.assert:
+    that:
+      - homepage_ingress_endpoint.stdout | trim | length > 0
+    fail_msg: "Terraform did not return traefik_public_ip"
+  when: homepage_cloudflare_enabled
+
+- name: Normalize public ingress address
+  ansible.builtin.set_fact:
+    homepage_cloudflare_target: "{{ homepage_ingress_endpoint.stdout | trim }}"
+  when: homepage_cloudflare_enabled
+
+- name: Determine Cloudflare record type
+  ansible.builtin.set_fact:
+    homepage_cloudflare_effective_record_type: "{{ homepage_cloudflare_record_type }}"
+  when: homepage_cloudflare_enabled
+
+- name: Lookup Cloudflare zone
+  ansible.builtin.uri:
+    url: "https://api.cloudflare.com/client/v4/zones?name={{ homepage_cloudflare_zone_name }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ homepage_cloudflare_api_token }}"
+      Content-Type: application/json
+    return_content: true
+  register: homepage_cloudflare_zone
+  when: homepage_cloudflare_enabled
+
+- name: Set Cloudflare zone id
+  ansible.builtin.set_fact:
+    homepage_cloudflare_zone_id: "{{ homepage_cloudflare_zone.json.result[0].id }}"
+  when: homepage_cloudflare_enabled
+
+- name: Lookup existing Cloudflare record
+  ansible.builtin.uri:
+    url: "https://api.cloudflare.com/client/v4/zones/{{ homepage_cloudflare_zone_id }}/dns_records?name={{ homepage_host }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ homepage_cloudflare_api_token }}"
+      Content-Type: application/json
+    return_content: true
+  register: homepage_cloudflare_record
+  when: homepage_cloudflare_enabled
+
+- name: Create Cloudflare record
+  ansible.builtin.uri:
+    url: "https://api.cloudflare.com/client/v4/zones/{{ homepage_cloudflare_zone_id }}/dns_records"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ homepage_cloudflare_api_token }}"
+      Content-Type: application/json
+    body_format: json
+    body:
+      type: "{{ homepage_cloudflare_effective_record_type }}"
+      name: "{{ homepage_host }}"
+      content: "{{ homepage_cloudflare_target }}"
+      ttl: 1
+      proxied: "{{ homepage_cloudflare_proxied }}"
+    status_code: 200
+    return_content: true
+  when:
+    - homepage_cloudflare_enabled
+    - (homepage_cloudflare_record.json.result | default([])) | length == 0
+
+- name: Update Cloudflare record
+  ansible.builtin.uri:
+    url: "https://api.cloudflare.com/client/v4/zones/{{ homepage_cloudflare_zone_id }}/dns_records/{{ homepage_cloudflare_record.json.result[0].id }}"
+    method: PUT
+    headers:
+      Authorization: "Bearer {{ homepage_cloudflare_api_token }}"
+      Content-Type: application/json
+    body_format: json
+    body:
+      type: "{{ homepage_cloudflare_effective_record_type }}"
+      name: "{{ homepage_host }}"
+      content: "{{ homepage_cloudflare_target }}"
+      ttl: 1
+      proxied: "{{ homepage_cloudflare_proxied }}"
+    status_code: 200
+    return_content: true
+  when:
+    - homepage_cloudflare_enabled
+    - (homepage_cloudflare_record.json.result | default([])) | length > 0
+
+- name: Print Homepage summary
+  ansible.builtin.debug:
+    msg:
+      - "Homepage deployed"
+      - "Host: {{ homepage_host }}"
+      - "Namespace: {{ homepage_namespace }}"
+      - "Traefik endpoint: {{ homepage_cloudflare_target | default('n/a') }}"
+      - "Cloudflare record type: {{ homepage_cloudflare_effective_record_type | default('disabled') }}"
+      - "Cloudflare proxied: {{ homepage_cloudflare_proxied if homepage_cloudflare_enabled else 'disabled' }}"

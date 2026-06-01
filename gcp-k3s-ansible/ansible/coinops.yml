@@ -1,0 +1,13 @@
+---
+- name: Deploy Coin-Ops into K3s
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - role: gcp_secret_values
+      vars:
+        gcp_secret_values_load_db_password: true
+        gcp_secret_values_load_rabbitmq_password: true
+        gcp_secret_values_load_ghcr_token: true
+        gcp_secret_values_load_cloudflare_token: true
+    - coinops

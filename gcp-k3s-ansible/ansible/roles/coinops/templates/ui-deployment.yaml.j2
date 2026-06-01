@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coinops-ui
+  namespace: {{ coinops_namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: coinops-ui
+  template:
+    metadata:
+      labels:
+        app: coinops-ui
+    spec:
+      imagePullSecrets:
+        - name: {{ coinops_registry_pull_secret_name }}
+      containers:
+        - name: ui
+          image: {{ coinops_ui_image }}
+          imagePullPolicy: Always
+          env:
+            - name: PROXY_URL
+              value: /api
+            - name: HISTORY_URL
+              value: /history-api
+          ports:
+            - containerPort: {{ coinops_ui_port }}
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          volumeMounts:
+            - name: ui-nginx
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+      volumes:
+        - name: ui-nginx
+          configMap:
+            name: coinops-ui-nginx

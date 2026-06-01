@@ -1,0 +1,6 @@
+---
+- name: Base OS preparation for K3s nodes
+  hosts: k3s_servers
+  become: true
+  roles:
+    - k3s_common

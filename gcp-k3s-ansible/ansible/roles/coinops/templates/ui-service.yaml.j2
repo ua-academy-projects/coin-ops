@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: coinops-ui
+  namespace: {{ coinops_namespace }}
+spec:
+  selector:
+    app: coinops-ui
+  ports:
+    - name: http
+      port: {{ coinops_ui_port }}
+      targetPort: http

@@ -1,0 +1,52 @@
+---
+coinops_namespace: coinops
+coinops_name: coinops
+coinops_host: >-
+  {{
+    lookup('env', 'COINOPS_HOST')
+    | default(lookup('env', 'APP_DOMAIN') | default('app.smolyakov-devops.pp.ua', true), true)
+  }}
+coinops_kubeconfig: "{{ lookup('env', 'KUBECONFIG') | default(lookup('env', 'HOME') ~ '/.kube/config', true) }}"
+coinops_repo_root: "{{ playbook_dir ~ '/../..' }}"
+
+coinops_runtime_backend: external
+coinops_db_name: cognitor
+coinops_db_user: cognitor
+coinops_db_password: "{{ lookup('env', 'DB_PASSWORD') | default(gcp_secret_db_password | default('', true), true) }}"
+coinops_rabbitmq_user: coinops
+coinops_rabbitmq_password: "{{ lookup('env', 'RABBITMQ_PASSWORD') | default(gcp_secret_rabbitmq_password | default('', true), true) }}"
+coinops_registry_server: ghcr.io
+coinops_registry_username: "{{ lookup('env', 'GHCR_USERNAME') | default('g00blin', true) }}"
+coinops_registry_token: "{{ lookup('env', 'GHCR_TOKEN') | default(gcp_secret_ghcr_token | default('', true), true) }}"
+coinops_registry_pull_secret_name: coinops-ghcr
+
+coinops_image_registry: ghcr.io/ua-academy-projects
+coinops_image_tag: "{{ lookup('env', 'IMAGE_TAG') | default('dev-latest', true) }}"
+coinops_ui_image: "{{ coinops_image_registry }}/coin-ops-ui:{{ coinops_image_tag }}"
+coinops_proxy_image: "{{ coinops_image_registry }}/coin-ops-proxy:{{ coinops_image_tag }}"
+coinops_history_api_image: "{{ coinops_image_registry }}/coin-ops-history-api:{{ coinops_image_tag }}"
+coinops_history_consumer_image: "{{ coinops_image_registry }}/coin-ops-history-consumer:{{ coinops_image_tag }}"
+coinops_postgres_image: "{{ coinops_image_registry }}/coin-ops-postgres-runtime:{{ coinops_image_tag }}"
+coinops_rabbitmq_image: rabbitmq:3-alpine
+coinops_redis_image: redis:7-alpine
+
+coinops_proxy_port: 8080
+coinops_history_port: 8000
+coinops_ui_port: 80
+coinops_postgres_port: 5432
+coinops_rabbitmq_port: 5672
+coinops_redis_port: 6379
+
+coinops_ingress_class_name: traefik
+coinops_tls_enabled: true
+coinops_tls_cluster_issuer: letsencrypt-prod
+coinops_tls_secret_name: "{{ coinops_name }}-tls"
+coinops_https_redirect_enabled: true
+coinops_https_redirect_middleware_name: "{{ coinops_name }}-https-redirect"
+
+coinops_cloudflare_enabled: true
+coinops_cloudflare_api_token: "{{ lookup('env', 'CLOUDFLARE_API_TOKEN') | default(gcp_secret_cloudflare_api_token | default('', true), true) }}"
+coinops_cloudflare_zone_name: "{{ lookup('env', 'TF_VAR_cloudflare_zone_name') | default('smolyakov-devops.pp.ua', true) }}"
+coinops_cloudflare_proxied: "{{ (lookup('env', 'TF_VAR_cloudflare_proxied') | default('false', true)) | bool }}"
+coinops_cloudflare_record_type: A
+coinops_terraform_dir: "{{ lookup('env', 'COINOPS_TERRAFORM_DIR') | default(playbook_dir ~ '/../terraform', true) }}"

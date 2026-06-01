@@ -1,0 +1,7 @@
+---
+cluster_issuer_name: letsencrypt-prod
+cluster_issuer_email: "{{ lookup('env', 'LETSENCRYPT_EMAIL') | default('val.don.ua@gmail.com', true) }}"
+cluster_issuer_server: https://acme-v02.api.letsencrypt.org/directory
+cluster_issuer_private_key_secret_name: "{{ cluster_issuer_name }}-account-key"
+cluster_issuer_ingress_class_name: traefik
+cluster_issuer_kubeconfig: "{{ lookup('env', 'KUBECONFIG') | default(lookup('env', 'HOME') ~ '/.kube/config', true) }}"

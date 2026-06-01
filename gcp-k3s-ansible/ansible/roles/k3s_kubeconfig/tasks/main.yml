@@ -1,0 +1,39 @@
+---
+- name: Ensure local kubeconfig directory exists
+  delegate_to: localhost
+  become: false
+  file:
+    path: "{{ lookup('env', 'HOME') }}/.kube"
+    state: directory
+    mode: "0700"
+
+- name: Fetch K3s kubeconfig
+  fetch:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: /tmp/k3s.yaml
+    flat: true
+
+- name: Rewrite kubeconfig server address locally
+  delegate_to: localhost
+  become: false
+  replace:
+    path: /tmp/k3s.yaml
+    regexp: 'https://127\.0\.0\.1:6443'
+    replace: 'https://127.0.0.1:6443'
+
+- name: Install local kubeconfig
+  delegate_to: localhost
+  become: false
+  copy:
+    src: /tmp/k3s.yaml
+    dest: "{{ lookup('env', 'HOME') }}/.kube/config"
+    mode: "0600"
+
+- name: Print kubectl tunnel hint
+  delegate_to: localhost
+  become: false
+  debug:
+    msg: >-
+      Run:
+      terraform -chdir=/home/valentyn/Test/coin-ops/gcp-k3s-ansible/terraform output -raw kubectl_tunnel_command
+      and keep that tunnel open before using kubectl.

@@ -218,6 +218,22 @@ Equivalent direct Compose command:
 docker compose up --build
 ```
 
+For the Kubespray-based Kubernetes lab, the repo also contains a simple
+`gethomepage/homepage` deployment under `k8s/homepage/`. After ingress-nginx is
+installed in the cluster, deploy it with:
+
+```bash
+HOMEPAGE_HOST=homepage.example.com ./scripts/deploy-homepage.sh
+```
+
+The script applies the Kubernetes manifests and then creates or updates the
+matching Cloudflare `CNAME` record so the chosen host points at the AWS ALB
+from `terraform.kubespray.aws`. It expects `CLOUDFLARE_API_TOKEN` and
+`TF_VAR_cloudflare_zone_name` to be available in the environment or `.env`.
+
+The full AWS + Kubespray + ingress-nginx + Homepage + Headlamp lab runbook
+lives in [terraform.kubespray.aws/README.md](terraform.kubespray.aws/README.md).
+
 This local flow is a developer convenience stack for the default root Compose setup. It does not replace the VM-based Terraform + Ansible deployment flow.
 
 Install pinned Ansible collections:

@@ -1,0 +1,32 @@
+region              = "eu-central-1"
+cluster_name        = "kubespray-aws"
+allowed_source_cidr = "176.119.114.72/32"
+ssh_public_key_path = "~/.ssh/id_rsa.pub"
+
+# Example: Ubuntu 22.04 LTS in eu-central-1
+ami_id                = "ami-051eaec1417c5d4ae"
+instance_type         = "t3.medium"
+bastion_instance_type = "t3.micro"
+
+subnet_cidrs = {
+  public_a  = "10.42.0.0/24"
+  public_b  = "10.42.1.0/24"
+  private_a = "10.42.10.0/24"
+  private_b = "10.42.11.0/24"
+}
+
+availability_zones = {
+  public_a  = "eu-central-1a"
+  public_b  = "eu-central-1b"
+  private_a = "eu-central-1a"
+  private_b = "eu-central-1b"
+}
+
+node_private_ips = {
+  cp_1     = "10.42.10.10"
+  worker_1 = "10.42.10.11"
+  worker_2 = "10.42.11.12"
+}
+
+# Optional HTTPS on the ALB if you already have an ACM certificate.
+# tls_certificate_arn = "arn:aws:acm:eu-central-1:123456789012:certificate/..."

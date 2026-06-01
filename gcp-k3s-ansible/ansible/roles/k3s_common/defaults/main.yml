@@ -1,0 +1,7 @@
+---
+base_packages:
+  - curl
+  - jq
+  - acl
+  - ca-certificates
+  - apt-transport-https

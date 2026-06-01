@@ -1,0 +1,31 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ homepage_name }}
+  namespace: {{ homepage_namespace }}
+{% if homepage_tls_enabled %}
+  annotations:
+    cert-manager.io/cluster-issuer: {{ homepage_tls_cluster_issuer }}
+{% if homepage_https_redirect_enabled %}
+    traefik.ingress.kubernetes.io/router.middlewares: {{ homepage_namespace }}-{{ homepage_https_redirect_middleware_name }}@kubernetescrd
+{% endif %}
+{% endif %}
+spec:
+  ingressClassName: {{ homepage_ingress_class_name }}
+{% if homepage_tls_enabled %}
+  tls:
+    - hosts:
+        - {{ homepage_host }}
+      secretName: {{ homepage_tls_secret_name }}
+{% endif %}
+  rules:
+    - host: {{ homepage_host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ homepage_name }}
+                port:
+                  number: {{ homepage_service_port }}

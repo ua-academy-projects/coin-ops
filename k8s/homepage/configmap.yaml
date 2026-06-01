@@ -1,0 +1,74 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: homepage-config
+  namespace: homepage
+data:
+  kubernetes.yaml: |
+    mode: cluster
+    ingress: true
+  settings.yaml: |
+    title: Coin-Ops Home
+    theme: dark
+    color: slate
+    headerStyle: boxed
+    statusStyle: dot
+    layout:
+      Infrastructure:
+        style: row
+        columns: 2
+      Application:
+        style: row
+        columns: 2
+  custom.css: ""
+  custom.js: ""
+  bookmarks.yaml: |
+    - Quick Links:
+        - Repository:
+            - abbr: GH
+              href: https://github.com/
+        - Kubespray:
+            - abbr: KS
+              href: https://github.com/kubernetes-sigs/kubespray
+    - Media:
+        - YouTube:
+            - abbr: YT
+              href: https://youtube.com/
+  services.yaml: |
+    - Infrastructure:
+        - Kubernetes API:
+            href: https://kubernetes.default.svc
+            description: Cluster API endpoint
+        - Ingress:
+            href: http://ingress-nginx-controller.ingress-nginx.svc.cluster.local
+            description: Internal ingress-nginx service
+    - Application:
+        - Coin-Ops UI:
+            href: http://coinops-ui.default.svc.cluster.local
+            description: Update after the app is deployed into Kubernetes
+        - History API:
+            href: http://coinops-history.default.svc.cluster.local
+            description: Update after the API is deployed into Kubernetes
+  widgets.yaml: |
+    - kubernetes:
+        cluster:
+          show: true
+          cpu: true
+          memory: true
+          showLabel: true
+          label: cluster
+        nodes:
+          show: true
+          cpu: true
+          memory: true
+          showLabel: true
+    - resources:
+        backend: resources
+        expanded: true
+        cpu: true
+        memory: true
+        network: default
+    - search:
+        provider: duckduckgo
+        target: _blank
+  docker.yaml: ""

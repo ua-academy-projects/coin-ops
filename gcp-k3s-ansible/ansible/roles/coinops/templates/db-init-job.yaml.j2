@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: coinops-db-init
+  namespace: {{ coinops_namespace }}
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app: coinops-db-init
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: {{ coinops_registry_pull_secret_name }}
+      containers:
+        - name: db-init
+          image: {{ coinops_postgres_image }}
+          imagePullPolicy: Always
+          env:
+            - name: POSTGRES_DB
+              value: {{ coinops_db_name | quote }}
+            - name: POSTGRES_USER
+              value: {{ coinops_db_user | quote }}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: coinops-runtime-secret
+                  key: DB_PASSWORD
+          command:
+            - /bin/bash
+            - -lc
+            - |
+              set -euo pipefail
+              until pg_isready -h coinops-postgres -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do
+                sleep 2
+              done
+              psql -v ON_ERROR_STOP=1 -h coinops-postgres -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /bootstrap/schema.sql
+          volumeMounts:
+            - name: db-bootstrap
+              mountPath: /bootstrap
+      volumes:
+        - name: db-bootstrap
+          configMap:
+            name: coinops-db-bootstrap

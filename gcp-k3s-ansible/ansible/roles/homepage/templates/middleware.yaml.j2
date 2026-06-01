@@ -1,0 +1,15 @@
+{% if homepage_https_redirect_enabled %}
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ homepage_https_redirect_middleware_name }}
+  namespace: {{ homepage_namespace }}
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+{% else %}
+apiVersion: v1
+kind: List
+items: []
+{% endif %}

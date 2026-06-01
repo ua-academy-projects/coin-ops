@@ -1,0 +1,22 @@
+---
+homepage_namespace: homepage
+homepage_name: homepage
+homepage_host: "{{ lookup('env', 'HOMEPAGE_HOST') | default('homepage.smolyakov-devops.pp.ua', true) }}"
+homepage_image: ghcr.io/gethomepage/homepage:latest
+homepage_image_pull_policy: Always
+homepage_service_port: 80
+homepage_container_port: 3000
+homepage_ingress_class_name: traefik
+homepage_kubeconfig: "{{ lookup('env', 'KUBECONFIG') | default(lookup('env', 'HOME') ~ '/.kube/config', true) }}"
+homepage_tls_enabled: true
+homepage_tls_cluster_issuer: letsencrypt-prod
+homepage_tls_secret_name: "{{ homepage_name }}-tls"
+homepage_https_redirect_enabled: true
+homepage_https_redirect_middleware_name: "{{ homepage_name }}-https-redirect"
+
+homepage_cloudflare_enabled: true
+homepage_cloudflare_api_token: "{{ lookup('env', 'CLOUDFLARE_API_TOKEN') | default(gcp_secret_cloudflare_api_token | default('', true), true) }}"
+homepage_cloudflare_zone_name: "{{ lookup('env', 'TF_VAR_cloudflare_zone_name') | default('smolyakov-devops.pp.ua', true) }}"
+homepage_cloudflare_proxied: "{{ (lookup('env', 'TF_VAR_cloudflare_proxied') | default('false', true)) | bool }}"
+homepage_cloudflare_record_type: A
+homepage_terraform_dir: "{{ lookup('env', 'HOMEPAGE_TERRAFORM_DIR') | default(playbook_dir ~ '/../terraform', true) }}"

@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: coinops-redis
+  namespace: {{ coinops_namespace }}
+spec:
+  selector:
+    app: coinops-redis
+  ports:
+    - name: redis
+      port: {{ coinops_redis_port }}
+      targetPort: redis

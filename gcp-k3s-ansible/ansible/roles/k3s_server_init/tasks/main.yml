@@ -1,0 +1,33 @@
+---
+- name: Ensure K3s manifests directory exists
+  ansible.builtin.file:
+    path: /var/lib/rancher/k3s/server/manifests
+    state: directory
+    mode: "0755"
+
+- name: Pin Traefik NodePorts before first server bootstrap
+  ansible.builtin.template:
+    src: traefik-config.yaml.j2
+    dest: "{{ k3s_traefik_helmchart_config_path }}"
+    mode: "0644"
+
+- name: Install first K3s control-plane node
+  shell: |
+    set -euo pipefail
+    curl -sfL https://get.k3s.io | \
+      INSTALL_K3S_VERSION="{{ k3s_version }}" \
+      INSTALL_K3S_CHANNEL="{{ k3s_channel }}" \
+      sh -s - server \
+      --cluster-init \
+      --write-kubeconfig-mode {{ k3s_config_mode }} \
+      {% for item in k3s_disable_components %} --disable {{ item }}{% endfor %} \
+      {% for item in k3s_server_extra_args %} {{ item }}{% endfor %}
+  args:
+    creates: /etc/systemd/system/k3s.service
+    executable: /bin/bash
+
+- name: Wait for K3s API on first server
+  wait_for:
+    host: 127.0.0.1
+    port: "{{ k3s_api_port }}"
+    timeout: 180

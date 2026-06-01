@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coinops-postgres
+  namespace: {{ coinops_namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: coinops-postgres
+  template:
+    metadata:
+      labels:
+        app: coinops-postgres
+    spec:
+      imagePullSecrets:
+        - name: {{ coinops_registry_pull_secret_name }}
+      containers:
+        - name: postgres
+          image: {{ coinops_postgres_image }}
+          imagePullPolicy: Always
+          args:
+            - -c
+            - listen_addresses=*
+          ports:
+            - containerPort: {{ coinops_postgres_port }}
+              name: postgres
+          env:
+            - name: POSTGRES_DB
+              value: {{ coinops_db_name | quote }}
+            - name: POSTGRES_USER
+              value: {{ coinops_db_user | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: coinops-runtime-secret
+                  key: DB_PASSWORD
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -ec
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -ec
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: postgres-data
+          emptyDir: {}

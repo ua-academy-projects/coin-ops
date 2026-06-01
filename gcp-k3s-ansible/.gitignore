@@ -1,0 +1,10 @@
+.codex
+ansible/.codex
+terraform/.codex
+ansible/127.0.0.1:6443:
+terraform/terraform.tfvars
+terraform/backend.hcl
+terraform/.terraform/
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+ansible/inventory.gcp.generated

@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coinops-rabbitmq
+  namespace: {{ coinops_namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: coinops-rabbitmq
+  template:
+    metadata:
+      labels:
+        app: coinops-rabbitmq
+    spec:
+      imagePullSecrets:
+        - name: {{ coinops_registry_pull_secret_name }}
+      containers:
+        - name: rabbitmq
+          image: {{ coinops_rabbitmq_image }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: {{ coinops_rabbitmq_port }}
+              name: amqp
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              value: {{ coinops_rabbitmq_user | quote }}
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: coinops-runtime-secret
+                  key: RABBITMQ_PASSWORD
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -ec
+                - rabbitmq-diagnostics -q ping
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -ec
+                - rabbitmq-diagnostics -q ping
+            initialDelaySeconds: 40
+            periodSeconds: 20
+          volumeMounts:
+            - name: rabbitmq-data
+              mountPath: /var/lib/rabbitmq
+      volumes:
+        - name: rabbitmq-data
+          emptyDir: {}

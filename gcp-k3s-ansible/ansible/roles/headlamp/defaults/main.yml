@@ -1,0 +1,9 @@
+---
+headlamp_namespace: headlamp
+headlamp_name: headlamp
+headlamp_image: ghcr.io/headlamp-k8s/headlamp:latest
+headlamp_image_pull_policy: Always
+headlamp_nodeport: 30082
+headlamp_service_port: 80
+headlamp_container_port: 4466
+headlamp_kubeconfig: "{{ lookup('env', 'KUBECONFIG') | default(lookup('env', 'HOME') ~ '/.kube/config', true) }}"

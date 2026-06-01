@@ -1,0 +1,68 @@
+---
+- name: Initialize first K3s control-plane node
+  hosts: k3s_servers
+  become: true
+  tasks:
+    - name: Run initial K3s server bootstrap on first control-plane node
+      include_role:
+        name: k3s_server_init
+      when: inventory_hostname == groups['k3s_servers'][0]
+
+- name: Read cluster join token from first server
+  hosts: k3s_servers
+  become: true
+  tasks:
+    - name: Read K3s node token
+      command: cat /var/lib/rancher/k3s/server/node-token
+      register: k3s_token_raw
+      changed_when: false
+      when: inventory_hostname == groups['k3s_servers'][0]
+
+    - name: Publish K3s token for the rest of the play
+      set_fact:
+        k3s_cluster_token: "{{ k3s_token_raw.stdout }}"
+      when: inventory_hostname == groups['k3s_servers'][0]
+
+- name: Join remaining K3s control-plane nodes
+  hosts: k3s_servers
+  become: true
+  vars:
+    k3s_cluster_token: "{{ hostvars[groups['k3s_servers'][0]].k3s_cluster_token }}"
+  tasks:
+    - name: Join remaining control-plane nodes to the K3s cluster
+      include_role:
+        name: k3s_server_join
+      when: inventory_hostname != groups['k3s_servers'][0]
+
+- name: Fetch kubeconfig locally
+  hosts: k3s_servers
+  become: true
+  vars:
+    k3s_traefik_http_nodeport: 31222
+    k3s_traefik_https_nodeport: 30191
+  tasks:
+    - name: Wait for Traefik service to use fixed NodePorts
+      ansible.builtin.command:
+        argv:
+          - k3s
+          - kubectl
+          - get
+          - svc
+          - traefik
+          - -n
+          - kube-system
+          - -o
+          - yaml
+      register: k3s_traefik_service
+      changed_when: false
+      until:
+        - "k3s_traefik_service.stdout is search('nodePort: ' ~ (k3s_traefik_http_nodeport | string))"
+        - "k3s_traefik_service.stdout is search('nodePort: ' ~ (k3s_traefik_https_nodeport | string))"
+      retries: 30
+      delay: 10
+      when: inventory_hostname == groups['k3s_servers'][0]
+
+    - name: Fetch kubeconfig from first control-plane node
+      include_role:
+        name: k3s_kubeconfig
+      when: inventory_hostname == groups['k3s_servers'][0]

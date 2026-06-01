@@ -1,0 +1,389 @@
+---
+- name: Validate Coin-Ops host
+  ansible.builtin.assert:
+    that:
+      - coinops_host | length > 0
+    fail_msg: "Set COINOPS_HOST or APP_DOMAIN before running coinops.yml"
+
+- name: Validate database password
+  ansible.builtin.assert:
+    that:
+      - coinops_db_password | length > 0
+    fail_msg: "Set DB_PASSWORD before running coinops.yml"
+
+- name: Validate RabbitMQ password
+  ansible.builtin.assert:
+    that:
+      - coinops_rabbitmq_password | length > 0
+    fail_msg: "Set RABBITMQ_PASSWORD before running coinops.yml"
+
+- name: Validate GHCR credentials
+  ansible.builtin.assert:
+    that:
+      - coinops_registry_username | length > 0
+      - coinops_registry_token | length > 0
+    fail_msg: "Set GHCR_USERNAME and GHCR_TOKEN before running coinops.yml"
+
+- name: Validate Cloudflare configuration when enabled
+  ansible.builtin.assert:
+    that:
+      - coinops_cloudflare_api_token | length > 0
+      - coinops_cloudflare_zone_name | length > 0
+      - coinops_host == coinops_cloudflare_zone_name or coinops_host.endswith('.' ~ coinops_cloudflare_zone_name)
+    fail_msg: "Cloudflare is enabled, but token/zone/host settings are incomplete"
+  when: coinops_cloudflare_enabled
+
+- name: Validate runtime backend
+  ansible.builtin.assert:
+    that:
+      - coinops_runtime_backend == 'external'
+    fail_msg: "This first K3s Coin-Ops role currently supports only coinops_runtime_backend=external"
+
+- name: Check kubectl access
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ coinops_kubeconfig }}"
+      - get
+      - nodes
+  changed_when: false
+
+- name: Create temporary manifest directory
+  ansible.builtin.tempfile:
+    state: directory
+    prefix: coinops-
+  register: coinops_tmpdir
+
+- name: Render Coin-Ops manifests
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "{{ coinops_tmpdir.path }}/{{ item }}"
+    mode: "0644"
+  loop:
+    - namespace.yaml
+    - secret.yaml
+    - middleware.yaml
+    - ui-nginx-configmap.yaml
+    - db-init-job.yaml
+    - postgres-service.yaml
+    - postgres-deployment.yaml
+    - rabbitmq-service.yaml
+    - rabbitmq-deployment.yaml
+    - redis-service.yaml
+    - redis-deployment.yaml
+    - history-api-service.yaml
+    - history-api-deployment.yaml
+    - history-consumer-deployment.yaml
+    - proxy-service.yaml
+    - proxy-deployment.yaml
+    - ui-service.yaml
+    - ui-deployment.yaml
+    - ingress.yaml
+
+- name: Apply namespace
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ coinops_kubeconfig }}"
+      - apply
+      - -f
+      - "{{ coinops_tmpdir.path }}/namespace.yaml"
+  changed_when: false
+
+- name: Apply GHCR image pull secret
+  ansible.builtin.shell: |
+    set -euo pipefail
+    kubectl --kubeconfig "{{ coinops_kubeconfig }}" -n "{{ coinops_namespace }}" create secret docker-registry "{{ coinops_registry_pull_secret_name }}" \
+      --docker-server="{{ coinops_registry_server }}" \
+      --docker-username="{{ coinops_registry_username }}" \
+      --docker-password="{{ coinops_registry_token }}" \
+      --dry-run=client -o yaml \
+      | kubectl --kubeconfig "{{ coinops_kubeconfig }}" apply -f -
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Apply database bootstrap ConfigMap
+  ansible.builtin.shell: |
+    set -euo pipefail
+    kubectl --kubeconfig "{{ coinops_kubeconfig }}" -n "{{ coinops_namespace }}" create configmap coinops-db-bootstrap \
+      --from-file=schema.sql="{{ coinops_repo_root }}/history/schema.sql" \
+      --dry-run=client -o yaml \
+      | kubectl --kubeconfig "{{ coinops_kubeconfig }}" apply -f -
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Apply core manifests before DB init
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ coinops_kubeconfig }}"
+      - apply
+      - -f
+      - "{{ item }}"
+  loop:
+    - "{{ coinops_tmpdir.path }}/secret.yaml"
+    - "{{ coinops_tmpdir.path }}/middleware.yaml"
+    - "{{ coinops_tmpdir.path }}/ui-nginx-configmap.yaml"
+    - "{{ coinops_tmpdir.path }}/postgres-service.yaml"
+    - "{{ coinops_tmpdir.path }}/postgres-deployment.yaml"
+    - "{{ coinops_tmpdir.path }}/rabbitmq-service.yaml"
+    - "{{ coinops_tmpdir.path }}/rabbitmq-deployment.yaml"
+    - "{{ coinops_tmpdir.path }}/redis-service.yaml"
+    - "{{ coinops_tmpdir.path }}/redis-deployment.yaml"
+  changed_when: false
+
+- name: Wait for Postgres rollout
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ coinops_kubeconfig }}"
+      - rollout
+      - status
+      - deployment/coinops-postgres
+      - -n
+      - "{{ coinops_namespace }}"
+      - --timeout=240s
+  changed_when: false
+
+- name: Wait for RabbitMQ rollout
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ coinops_kubeconfig }}"
+      - rollout
+      - status
+      - deployment/coinops-rabbitmq
+      - -n
+      - "{{ coinops_namespace }}"
+      - --timeout=240s
+  changed_when: false
+
+- name: Wait for Redis rollout
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ coinops_kubeconfig }}"
+      - rollout
+      - status
+      - deployment/coinops-redis
+      - -n
+      - "{{ coinops_namespace }}"
+      - --timeout=240s
+  changed_when: false
+
+- name: Delete previous DB init job
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ coinops_kubeconfig }}"
+      - delete
+      - job
+      - coinops-db-init
+      - -n
+      - "{{ coinops_namespace }}"
+      - --ignore-not-found=true
+  changed_when: false
+
+- name: Apply DB init job
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ coinops_kubeconfig }}"
+      - apply
+      - -f
+      - "{{ coinops_tmpdir.path }}/db-init-job.yaml"
+  changed_when: false
+
+- name: Wait for DB init job completion
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ coinops_kubeconfig }}"
+      - wait
+      - --for=condition=complete
+      - job/coinops-db-init
+      - -n
+      - "{{ coinops_namespace }}"
+      - --timeout=300s
+  changed_when: false
+
+- name: Apply application manifests
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ coinops_kubeconfig }}"
+      - apply
+      - -f
+      - "{{ item }}"
+  loop:
+    - "{{ coinops_tmpdir.path }}/history-api-service.yaml"
+    - "{{ coinops_tmpdir.path }}/history-api-deployment.yaml"
+    - "{{ coinops_tmpdir.path }}/history-consumer-deployment.yaml"
+    - "{{ coinops_tmpdir.path }}/proxy-service.yaml"
+    - "{{ coinops_tmpdir.path }}/proxy-deployment.yaml"
+    - "{{ coinops_tmpdir.path }}/ui-service.yaml"
+    - "{{ coinops_tmpdir.path }}/ui-deployment.yaml"
+    - "{{ coinops_tmpdir.path }}/ingress.yaml"
+  changed_when: false
+
+- name: Wait for History API rollout
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ coinops_kubeconfig }}"
+      - rollout
+      - status
+      - deployment/coinops-history-api
+      - -n
+      - "{{ coinops_namespace }}"
+      - --timeout=240s
+  changed_when: false
+
+- name: Wait for Proxy rollout
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ coinops_kubeconfig }}"
+      - rollout
+      - status
+      - deployment/coinops-proxy
+      - -n
+      - "{{ coinops_namespace }}"
+      - --timeout=240s
+  changed_when: false
+
+- name: Wait for UI rollout
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ coinops_kubeconfig }}"
+      - rollout
+      - status
+      - deployment/coinops-ui
+      - -n
+      - "{{ coinops_namespace }}"
+      - --timeout=240s
+  changed_when: false
+
+- name: Read Traefik public IP from Terraform
+  ansible.builtin.command:
+    argv:
+      - terraform
+      - -chdir={{ coinops_terraform_dir }}
+      - output
+      - -raw
+      - traefik_public_ip
+  register: coinops_ingress_endpoint
+  changed_when: false
+  when: coinops_cloudflare_enabled
+
+- name: Validate public ingress address
+  ansible.builtin.assert:
+    that:
+      - coinops_ingress_endpoint.stdout | trim | length > 0
+    fail_msg: "Terraform did not return traefik_public_ip"
+  when: coinops_cloudflare_enabled
+
+- name: Normalize public ingress address
+  ansible.builtin.set_fact:
+    coinops_cloudflare_target: "{{ coinops_ingress_endpoint.stdout | trim }}"
+  when: coinops_cloudflare_enabled
+
+- name: Determine Cloudflare record type
+  ansible.builtin.set_fact:
+    coinops_cloudflare_effective_record_type: "{{ coinops_cloudflare_record_type }}"
+  when: coinops_cloudflare_enabled
+
+- name: Lookup Cloudflare zone
+  ansible.builtin.uri:
+    url: "https://api.cloudflare.com/client/v4/zones?name={{ coinops_cloudflare_zone_name }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ coinops_cloudflare_api_token }}"
+      Content-Type: application/json
+    return_content: true
+  register: coinops_cloudflare_zone
+  when: coinops_cloudflare_enabled
+
+- name: Set Cloudflare zone id
+  ansible.builtin.set_fact:
+    coinops_cloudflare_zone_id: "{{ coinops_cloudflare_zone.json.result[0].id }}"
+  when: coinops_cloudflare_enabled
+
+- name: Lookup existing Cloudflare record
+  ansible.builtin.uri:
+    url: "https://api.cloudflare.com/client/v4/zones/{{ coinops_cloudflare_zone_id }}/dns_records?name={{ coinops_host }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ coinops_cloudflare_api_token }}"
+      Content-Type: application/json
+    return_content: true
+  register: coinops_cloudflare_record
+  when: coinops_cloudflare_enabled
+
+- name: Create Cloudflare record
+  ansible.builtin.uri:
+    url: "https://api.cloudflare.com/client/v4/zones/{{ coinops_cloudflare_zone_id }}/dns_records"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ coinops_cloudflare_api_token }}"
+      Content-Type: application/json
+    body_format: json
+    body:
+      type: "{{ coinops_cloudflare_effective_record_type }}"
+      name: "{{ coinops_host }}"
+      content: "{{ coinops_cloudflare_target }}"
+      ttl: 1
+      proxied: "{{ coinops_cloudflare_proxied }}"
+    status_code: 200
+    return_content: true
+  when:
+    - coinops_cloudflare_enabled
+    - (coinops_cloudflare_record.json.result | default([])) | length == 0
+
+- name: Update Cloudflare record
+  ansible.builtin.uri:
+    url: "https://api.cloudflare.com/client/v4/zones/{{ coinops_cloudflare_zone_id }}/dns_records/{{ coinops_cloudflare_record.json.result[0].id }}"
+    method: PUT
+    headers:
+      Authorization: "Bearer {{ coinops_cloudflare_api_token }}"
+      Content-Type: application/json
+    body_format: json
+    body:
+      type: "{{ coinops_cloudflare_effective_record_type }}"
+      name: "{{ coinops_host }}"
+      content: "{{ coinops_cloudflare_target }}"
+      ttl: 1
+      proxied: "{{ coinops_cloudflare_proxied }}"
+    status_code: 200
+    return_content: true
+  when:
+    - coinops_cloudflare_enabled
+    - (coinops_cloudflare_record.json.result | default([])) | length > 0
+
+- name: Print Coin-Ops summary
+  ansible.builtin.debug:
+    msg:
+      - "Coin-Ops deployed"
+      - "Namespace: {{ coinops_namespace }}"
+      - "Host: {{ coinops_host }}"
+      - "Runtime backend: {{ coinops_runtime_backend }}"
+      - "Traefik endpoint: {{ coinops_cloudflare_target | default('n/a') }}"
+      - "Cloudflare record type: {{ coinops_cloudflare_effective_record_type | default('disabled') }}"
+      - "Cloudflare proxied: {{ coinops_cloudflare_proxied if coinops_cloudflare_enabled else 'disabled' }}"
+      - "Verify with: curl -H 'Host: {{ coinops_host }}' http://$(cd ../terraform && terraform output -raw traefik_public_ip)"

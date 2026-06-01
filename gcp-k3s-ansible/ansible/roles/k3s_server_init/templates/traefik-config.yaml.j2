@@ -1,0 +1,14 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    service:
+      type: LoadBalancer
+    ports:
+      web:
+        nodePort: {{ k3s_traefik_http_nodeport }}
+      websecure:
+        nodePort: {{ k3s_traefik_https_nodeport }}

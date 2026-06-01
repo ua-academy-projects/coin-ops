@@ -1,0 +1,11 @@
+---
+gcp_secret_values_enabled: true
+gcp_secret_values_load_db_password: false
+gcp_secret_values_load_rabbitmq_password: false
+gcp_secret_values_load_ghcr_token: false
+gcp_secret_values_load_cloudflare_token: false
+gcp_secret_values_project_id: "{{ lookup('env', 'GOOGLE_CLOUD_PROJECT') | default('brave-framework-494704-e6', true) }}"
+gcp_secret_db_password_id: coinops-db-password
+gcp_secret_rabbitmq_password_id: coinops-rabbitmq-password
+gcp_secret_ghcr_token_id: coinops-ghcr-token
+gcp_secret_cloudflare_token_id: coinops-cloudflare-api-token

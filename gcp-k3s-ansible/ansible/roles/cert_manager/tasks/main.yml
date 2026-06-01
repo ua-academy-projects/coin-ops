@@ -1,0 +1,46 @@
+---
+- name: Check kubectl access
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ cert_manager_kubeconfig }}"
+      - get
+      - nodes
+  changed_when: false
+
+- name: Install cert-manager manifest
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ cert_manager_kubeconfig }}"
+      - apply
+      - -f
+      - "{{ cert_manager_manifest_url }}"
+  changed_when: false
+
+- name: Wait for cert-manager deployments
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ cert_manager_kubeconfig }}"
+      - wait
+      - --for=condition=Available
+      - "{{ item }}"
+      - -n
+      - "{{ cert_manager_namespace }}"
+      - --timeout=300s
+  loop:
+    - deployment/cert-manager
+    - deployment/cert-manager-cainjector
+    - deployment/cert-manager-webhook
+  changed_when: false
+
+- name: Print cert-manager summary
+  ansible.builtin.debug:
+    msg:
+      - "cert-manager installed"
+      - "Namespace: {{ cert_manager_namespace }}"
+      - "Version: {{ cert_manager_version }}"

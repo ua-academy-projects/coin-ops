@@ -1,0 +1,7 @@
+---
+- name: Configure ACME ClusterIssuer in K3s
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - cluster_issuer

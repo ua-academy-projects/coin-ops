@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ homepage_name }}
+  namespace: {{ homepage_namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ homepage_name }}
+  template:
+    metadata:
+      labels:
+        app: {{ homepage_name }}
+    spec:
+      serviceAccountName: {{ homepage_name }}
+      automountServiceAccountToken: true
+      containers:
+        - name: {{ homepage_name }}
+          image: {{ homepage_image }}
+          imagePullPolicy: {{ homepage_image_pull_policy }}
+          env:
+            - name: HOMEPAGE_ALLOWED_HOSTS
+              value: "{{ homepage_host }}"
+          ports:
+            - containerPort: {{ homepage_container_port }}
+              name: http
+          volumeMounts:
+            - name: homepage-config
+              mountPath: /app/config/settings.yaml
+              subPath: settings.yaml
+            - name: homepage-config
+              mountPath: /app/config/bookmarks.yaml
+              subPath: bookmarks.yaml
+            - name: homepage-config
+              mountPath: /app/config/services.yaml
+              subPath: services.yaml
+            - name: homepage-config
+              mountPath: /app/config/widgets.yaml
+              subPath: widgets.yaml
+            - name: homepage-config
+              mountPath: /app/config/docker.yaml
+              subPath: docker.yaml
+            - name: homepage-config
+              mountPath: /app/config/kubernetes.yaml
+              subPath: kubernetes.yaml
+            - name: homepage-config
+              mountPath: /app/config/custom.css
+              subPath: custom.css
+            - name: homepage-config
+              mountPath: /app/config/custom.js
+              subPath: custom.js
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+      volumes:
+        - name: homepage-config
+          configMap:
+            name: homepage-config

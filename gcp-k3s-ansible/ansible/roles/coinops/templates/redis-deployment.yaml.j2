@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coinops-redis
+  namespace: {{ coinops_namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: coinops-redis
+  template:
+    metadata:
+      labels:
+        app: coinops-redis
+    spec:
+      imagePullSecrets:
+        - name: {{ coinops_registry_pull_secret_name }}
+      containers:
+        - name: redis
+          image: {{ coinops_redis_image }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: {{ coinops_redis_port }}
+              name: redis
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -ec
+                - redis-cli ping
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -ec
+                - redis-cli ping
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+      volumes:
+        - name: redis-data
+          emptyDir: {}

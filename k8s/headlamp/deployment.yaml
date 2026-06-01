@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: headlamp
+  namespace: headlamp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: headlamp
+  template:
+    metadata:
+      labels:
+        app: headlamp
+    spec:
+      serviceAccountName: headlamp
+      automountServiceAccountToken: true
+      containers:
+        - name: headlamp
+          image: ghcr.io/headlamp-k8s/headlamp:latest
+          imagePullPolicy: Always
+          command:
+            - /headlamp/headlamp-server
+          args:
+            - -in-cluster
+            - -plugins-dir=/headlamp/plugins
+            - -watch-plugins-changes=false
+            - -html-static-dir=/headlamp/frontend
+          ports:
+            - containerPort: 4466
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
