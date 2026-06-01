@@ -25,6 +25,16 @@
     wait: true
     wait_timeout: 10m
     values:
+      # Trimmed for the e2-small (2GB) control plane: disable the components this
+      # lab doesn't use so the install create-storm and steady-state footprint
+      # stay small. Auth is gated by Cloudflare Access (no Dex SSO); no ApplicationSet
+      # or notifications in use. Leaves: server, repo-server, application-controller, redis.
+      dex:
+        enabled: false
+      notifications:
+        enabled: false
+      applicationSet:
+        enabled: false
       configs:
         params:
           server.insecure: true
