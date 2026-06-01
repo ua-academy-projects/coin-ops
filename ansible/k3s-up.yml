@@ -49,6 +49,11 @@
     - k3s_tools         # helm + python kubernetes client on the first node
     - k3s_cert_manager  # cert-manager + Let's Encrypt DNS-01 issuer (Cloudflare)
     - k3s_cloudflared   # in-cluster cloudflared (apps tunnel) — public edge, no Tailscale
-    - k3s_kyverno       # policy-as-code: enforce netpol/SA/label conventions
     - k3s_argocd        # GitOps: install ArgoCD + apply the app-of-apps root
+    # k3s_kyverno (policy-as-code) is intentionally NOT enabled on this lab: on the
+    # e2-small (2GB) control-plane nodes its admission controller + background/reports/
+    # cleanup controllers add too much pressure (the install alone destabilised the
+    # apiserver), and a webhook in the write path is a fragility risk if a Kyverno pod
+    # is OOM-killed. The role + ClusterPolicies stay in the repo (ansible/roles/k3s_kyverno,
+    # reviewed and ready) to enable once the cluster has headroom (larger nodes).
     # hello / headlamp / homepage are now GitOps-managed by ArgoCD (gitops/apps/*).
