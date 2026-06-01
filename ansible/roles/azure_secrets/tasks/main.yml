@@ -1,6 +1,6 @@
 ---
 - name: Validate Azure Key Vault name is set for secret fetch
-  assert:
+  ansible.builtin.assert:
     that:
       - azure_key_vault_name | length > 0
     fail_msg: "AZ_KEYVAULT_NAME must be exported to fetch secrets from Azure Key Vault."
@@ -8,7 +8,7 @@
     - required_secrets | default([]) | length > 0
 
 - name: Request Azure IMDS access token for Key Vault
-  uri:
+  ansible.builtin.uri:
     url: "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://vault.azure.net"
     method: GET
     headers:
@@ -21,7 +21,7 @@
     - required_secrets | default([]) | length > 0
 
 - name: Read secrets from Azure Key Vault
-  uri:
+  ansible.builtin.uri:
     url: "https://{{ azure_key_vault_name }}.vault.azure.net/secrets/{{ gsm_secret_ids[item] }}?api-version=7.4"
     method: GET
     headers:
@@ -35,7 +35,7 @@
     - required_secrets | default([]) | length > 0
 
 - name: Store fetched Azure secrets as host facts
-  set_fact:
+  ansible.builtin.set_fact:
     fetched_gsm_secrets: >-
       {{
         fetched_gsm_secrets | default({}) |

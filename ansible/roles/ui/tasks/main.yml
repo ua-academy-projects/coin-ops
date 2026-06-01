@@ -1,19 +1,19 @@
 ---
 - name: Stop and disable legacy host nginx
-  service:
+  ansible.builtin.service:
     name: nginx
     state: stopped
-    enabled: no
+    enabled: false
   failed_when: false
 
 - name: Validate TLS mode
-  assert:
+  ansible.builtin.assert:
     that:
       - ui_tls_mode in ['selfsigned', 'provided', 'letsencrypt', 'off']
     fail_msg: "TLS_MODE must be one of: selfsigned, provided, letsencrypt, off."
 
 - name: Create secrets directory
-  file:
+  ansible.builtin.file:
     path: /etc/cognitor
     state: directory
     owner: root
@@ -21,7 +21,7 @@
     mode: '0750'
 
 - name: Create TLS certificate directory
-  file:
+  ansible.builtin.file:
     path: "{{ ui_tls_cert_dir }}"
     state: directory
     owner: root
@@ -29,7 +29,7 @@
     mode: '0750'
 
 - name: Create Let's Encrypt webroot directory
-  file:
+  ansible.builtin.file:
     path: "{{ ui_tls_acme_webroot }}"
     state: directory
     owner: root
@@ -38,29 +38,29 @@
   when: ui_tls_mode == 'letsencrypt'
 
 - name: Install local TLS tooling
-  apt:
+  ansible.builtin.apt:
     name: openssl
     state: present
-    update_cache: yes
+    update_cache: true
   when: ui_tls_mode == 'selfsigned'
 
 - name: Install Let's Encrypt tooling
-  apt:
+  ansible.builtin.apt:
     name:
       - certbot
     state: present
-    update_cache: yes
+    update_cache: true
   when: ui_tls_mode == 'letsencrypt'
 
 - name: Inspect existing self-signed certificate SAN
-  command: "openssl x509 -in {{ ui_tls_cert_path }} -noout -ext subjectAltName"
+  ansible.builtin.command: "openssl x509 -in {{ ui_tls_cert_path }} -noout -ext subjectAltName"
   register: selfsigned_cert_san
   changed_when: false
   failed_when: false
   when: ui_tls_mode == 'selfsigned'
 
 - name: Remove stale self-signed certificate after domain change
-  file:
+  ansible.builtin.file:
     path: "{{ item }}"
     state: absent
   loop:
@@ -72,7 +72,7 @@
     - ("DNS:" ~ ui_app_domain) not in selfsigned_cert_san.stdout
 
 - name: Generate self-signed gateway certificate
-  command:
+  ansible.builtin.command:
     cmd: >-
       openssl req -x509 -nodes -newkey rsa:2048
       -keyout {{ ui_tls_key_path }}
@@ -84,7 +84,7 @@
   when: ui_tls_mode == 'selfsigned'
 
 - name: Restrict self-signed gateway private key
-  file:
+  ansible.builtin.file:
     path: "{{ ui_tls_key_path }}"
     owner: root
     group: root
@@ -92,19 +92,19 @@
   when: ui_tls_mode == 'selfsigned'
 
 - name: Check provided TLS certificate
-  stat:
+  ansible.builtin.stat:
     path: "{{ ui_tls_cert_path }}"
   register: provided_tls_cert
   when: ui_tls_mode == 'provided'
 
 - name: Check provided TLS private key
-  stat:
+  ansible.builtin.stat:
     path: "{{ ui_tls_key_path }}"
   register: provided_tls_key
   when: ui_tls_mode == 'provided'
 
 - name: Validate provided TLS files
-  assert:
+  ansible.builtin.assert:
     that:
       - provided_tls_cert.stat.exists
       - provided_tls_key.stat.exists
@@ -112,18 +112,18 @@
   when: ui_tls_mode == 'provided'
 
 - name: Validate Let's Encrypt email
-  assert:
+  ansible.builtin.assert:
     that:
       - ui_tls_letsencrypt_email | length > 0
     fail_msg: "TLS_MODE=letsencrypt requires LETSENCRYPT_EMAIL to be exported."
   when: ui_tls_mode == 'letsencrypt'
 
 - name: Decide initial nginx TLS state
-  set_fact:
+  ansible.builtin.set_fact:
     ui_tls_enabled: "{{ ui_tls_mode in ['selfsigned', 'provided'] }}"
 
 - name: Write ui runtime environment file
-  copy:
+  ansible.builtin.copy:
     content: |
       PROXY_URL=/api
       HISTORY_URL=/history-api
@@ -133,7 +133,7 @@
     mode: '0640'
 
 - name: Create ui deploy directory
-  file:
+  ansible.builtin.file:
     path: /opt/cognitor/ui
     state: directory
     owner: root
@@ -141,12 +141,12 @@
     mode: '0755'
 
 - name: Remove legacy synced ui source
-  file:
+  ansible.builtin.file:
     path: /opt/cognitor/ui/ui-react
     state: absent
 
 - name: Render nginx gateway config
-  template:
+  ansible.builtin.template:
     src: nginx.gateway.conf.j2
     dest: /opt/cognitor/ui/nginx.conf
     owner: root
@@ -154,39 +154,39 @@
     mode: '0644'
 
 - name: Render compose file
-  template:
+  ansible.builtin.template:
     src: "{{ playbook_dir }}/../deploy/compose/node-03.compose.yaml"
     dest: /opt/cognitor/ui/compose.yaml
 
 - name: Pull ui container images
-  command: docker compose -f /opt/cognitor/ui/compose.yaml pull
+  ansible.builtin.command: docker compose -f /opt/cognitor/ui/compose.yaml pull
   args:
     chdir: /opt/cognitor/ui
 
 - name: Run Docker Compose
-  command: docker compose -f /opt/cognitor/ui/compose.yaml up -d --remove-orphans
+  ansible.builtin.command: docker compose -f /opt/cognitor/ui/compose.yaml up -d --remove-orphans
   args:
     chdir: /opt/cognitor/ui
 
 - name: Wait for nginx availability
-  uri:
+  ansible.builtin.uri:
     url: "{{ 'https://localhost/health' if ui_tls_enabled | bool else 'http://localhost:80/health' }}"
     method: GET
     status_code: 200
-    validate_certs: no
+    validate_certs: false
   retries: 12
   delay: 5
   register: result
   until: result.status == 200
 
 - name: Check existing Let's Encrypt certificate
-  stat:
+  ansible.builtin.stat:
     path: "/etc/letsencrypt/live/{{ ui_app_domain }}/fullchain.pem"
   register: letsencrypt_live_cert
   when: ui_tls_mode == 'letsencrypt'
 
 - name: Request Let's Encrypt certificate
-  command:
+  ansible.builtin.command:
     cmd: >-
       certbot certonly --webroot
       -w {{ ui_tls_acme_webroot }}
@@ -199,13 +199,13 @@
     - not letsencrypt_live_cert.stat.exists
 
 - name: Renew Let's Encrypt certificate if needed
-  command:
+  ansible.builtin.command:
     cmd: certbot renew --webroot -w {{ ui_tls_acme_webroot }} --non-interactive
   changed_when: false
   when: ui_tls_mode == 'letsencrypt'
 
 - name: Copy active Let's Encrypt certificate
-  copy:
+  ansible.builtin.copy:
     src: "/etc/letsencrypt/live/{{ ui_app_domain }}/fullchain.pem"
     dest: "{{ ui_tls_cert_path }}"
     owner: root
@@ -215,7 +215,7 @@
   when: ui_tls_mode == 'letsencrypt'
 
 - name: Copy active Let's Encrypt private key
-  copy:
+  ansible.builtin.copy:
     src: "/etc/letsencrypt/live/{{ ui_app_domain }}/privkey.pem"
     dest: "{{ ui_tls_key_path }}"
     owner: root
@@ -225,12 +225,12 @@
   when: ui_tls_mode == 'letsencrypt'
 
 - name: Enable TLS in nginx after Let's Encrypt certificate install
-  set_fact:
+  ansible.builtin.set_fact:
     ui_tls_enabled: true
   when: ui_tls_mode == 'letsencrypt'
 
 - name: Render nginx gateway config with Let's Encrypt TLS
-  template:
+  ansible.builtin.template:
     src: nginx.gateway.conf.j2
     dest: /opt/cognitor/ui/nginx.conf
     owner: root
@@ -239,17 +239,17 @@
   when: ui_tls_mode == 'letsencrypt'
 
 - name: Restart Docker Compose after Let's Encrypt certificate install
-  command: docker compose -f /opt/cognitor/ui/compose.yaml up -d --force-recreate --remove-orphans
+  ansible.builtin.command: docker compose -f /opt/cognitor/ui/compose.yaml up -d --force-recreate --remove-orphans
   args:
     chdir: /opt/cognitor/ui
   when: ui_tls_mode == 'letsencrypt'
 
 - name: Wait for nginx TLS availability
-  uri:
+  ansible.builtin.uri:
     url: https://localhost/health
     method: GET
     status_code: 200
-    validate_certs: no
+    validate_certs: false
   retries: 12
   delay: 5
   register: tls_result
@@ -257,5 +257,5 @@
   when: ui_tls_mode == 'letsencrypt'
 
 - name: Remove dangling Docker images
-  command: docker image prune -f
+  ansible.builtin.command: docker image prune -f
   changed_when: false

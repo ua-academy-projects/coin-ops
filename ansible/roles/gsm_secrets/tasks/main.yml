@@ -1,6 +1,6 @@
 ---
 - name: Validate Google project is set for GSM secret fetch
-  assert:
+  ansible.builtin.assert:
     that:
       - google_project | length > 0
     fail_msg: "GOOGLE_PROJECT must be exported to fetch secrets from Google Secret Manager."
@@ -8,7 +8,7 @@
     - required_secrets | default([]) | length > 0
 
 - name: Request GCP metadata access token
-  uri:
+  ansible.builtin.uri:
     url: http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token
     method: GET
     headers:
@@ -21,7 +21,7 @@
     - required_secrets | default([]) | length > 0
 
 - name: Read secrets from Google Secret Manager
-  uri:
+  ansible.builtin.uri:
     url: "https://secretmanager.googleapis.com/v1/projects/{{ google_project }}/secrets/{{ gsm_secret_ids[item] }}/versions/latest:access"
     method: GET
     headers:
@@ -35,7 +35,7 @@
     - required_secrets | default([]) | length > 0
 
 - name: Store fetched GSM secrets as host facts
-  set_fact:
+  ansible.builtin.set_fact:
     fetched_gsm_secrets: >-
       {{
         fetched_gsm_secrets | default({}) |

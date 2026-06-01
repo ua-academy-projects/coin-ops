@@ -1,15 +1,15 @@
 ---
 - name: Update apt cache
-  apt:
-    update_cache: yes
+  ansible.builtin.apt:
+    update_cache: true
     cache_valid_time: 3600
 
 - name: Upgrade all packages
-  apt:
+  ansible.builtin.apt:
     upgrade: safe
 
 - name: Install base packages
-  apt:
+  ansible.builtin.apt:
     name:
       - curl
       - htop
@@ -19,21 +19,21 @@
     state: present
 
 - name: Set timezone to UTC
-  timezone:
+  community.general.timezone:
     name: UTC
 
 - name: Gather service facts
-  service_facts:
+  ansible.builtin.service_facts:
 
 - name: Ensure systemd-timesyncd is running
-  systemd:
+  ansible.builtin.systemd:
     name: systemd-timesyncd
-    enabled: yes
+    enabled: true
     state: started
   when: "'systemd-timesyncd.service' in ansible_facts.services"
 
 - name: Install UFW
-  apt:
+  ansible.builtin.apt:
     name: ufw
     state: present
 
