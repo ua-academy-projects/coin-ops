@@ -48,3 +48,13 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+  # The headlamp chart sets spec.template.spec.hostUsers: true, but `true` is the
+  # field default so the apiserver doesn't persist it — ArgoCD would otherwise
+  # report perpetual OutOfSync trying to re-add a field the server keeps dropping.
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: headlamp
+      namespace: headlamp
+      jsonPointers:
+        - /spec/template/spec/hostUsers
