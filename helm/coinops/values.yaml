@@ -35,3 +35,10 @@ tls:
 # Network policies — restrict pod-to-pod communication
 networkPolicy:
   enabled: true
+
+# Secrets — override at install time via --set, never commit real values
+secrets:
+  dbPassword: ""
+  rabbitmqPassword: ""
+  ghcrToken: ""
+  ghcrUsername: ""
