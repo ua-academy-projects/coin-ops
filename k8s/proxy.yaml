@@ -17,6 +17,8 @@ spec:
         app.kubernetes.io/name: proxy
         app.kubernetes.io/part-of: coin-ops
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: proxy
           image: ghcr.io/ua-academy-projects/coin-ops-proxy:shabat-latest

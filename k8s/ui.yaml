@@ -17,6 +17,8 @@ spec:
         app.kubernetes.io/name: ui
         app.kubernetes.io/part-of: coin-ops
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: ui
           image: ghcr.io/ua-academy-projects/coin-ops-ui:shabat-latest
