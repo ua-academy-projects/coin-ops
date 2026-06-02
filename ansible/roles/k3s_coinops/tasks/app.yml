@@ -3,7 +3,7 @@
 # Deploys backend application layer into coinops-app namespace.
 #
 # Execution order inside Kubernetes:
-#   1. schema-init Job    → creates tables in CloudSQL (runs once)
+#   1. schema-init Job    → creates tables in CNPG (runs once)
 #   2. history-api        → Python REST API for market history data
 #   3. history-consumer   → Python worker consuming RabbitMQ messages
 #   4. proxy              → Go service, central API hub
@@ -13,7 +13,7 @@
 
 # ── Schema Init Job ───────────────────────────────────────────────────────
 # Job = runs a container once to completion.
-# Applies history/schema.sql to CloudSQL to create all tables.
+# Applies history/schema.sql to CNPG to create all tables.
 # Other services must not start until this completes.
 
 - name: Copy schema.sql to k3s-server-1 for schema init Job
@@ -66,11 +66,11 @@
                 command:
                   - sh
                   - -c
-                  # Wait for CloudSQL to accept connections, then apply schema
+                  # Wait for CNPG to accept connections, then apply schema
                   # ON_ERROR_STOP=1 = fail immediately if any SQL statement fails
                   - |
-                    until pg_isready -h {{ cloudsql_ip }} -U {{ db_user }} -d {{ db_name }}; do
-                      echo "Waiting for CloudSQL..."; sleep 3;
+                    until pg_isready -h {{ cnpg_db_host }} -U {{ db_user }} -d {{ db_name }}; do
+                      echo "Waiting for CNPG..."; sleep 3;
                     done
                     psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f /schema/schema.sql
                     echo "Schema applied successfully"
@@ -113,7 +113,7 @@
 
 # ── History API ───────────────────────────────────────────────────────────
 # Python REST API — serves market history data to the UI via proxy.
-# Reads from CloudSQL. Exposes /health endpoint for readiness checks.
+# Reads from CNPG. Exposes /health endpoint for readiness checks.
 
 - name: Deploy history-api
   kubernetes.core.k8s:
@@ -176,7 +176,7 @@
             targetPort: 8000
 
 # ── History Consumer ──────────────────────────────────────────────────────
-# Python background worker — reads events from RabbitMQ, writes to CloudSQL.
+# Python background worker — reads events from RabbitMQ, writes to CNPG.
 # No HTTP port — it only consumes messages, never serves requests.
 
 - name: Deploy history-consumer
