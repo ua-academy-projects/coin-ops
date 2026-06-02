@@ -1,0 +1,9 @@
+---
+- name: Apply CoinOps NetworkPolicies
+  kubernetes.core.k8s:
+    kubeconfig: "{{ coinops_network_policy_kubeconfig }}"
+    state: present
+    definition: "{{ item }}"
+  loop: "{{ lookup('template', 'networkpolicies.yml.j2') | from_yaml_all | list }}"
+  loop_control:
+    label: "{{ item.metadata.namespace }}/{{ item.metadata.name }}"

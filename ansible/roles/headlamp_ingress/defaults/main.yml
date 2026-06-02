@@ -1,0 +1,15 @@
+---
+# Public DNS/TLS entrypoint for the existing in-cluster Headlamp service.
+# Role variables are prefixed with headlamp_ingress_ by convention.
+
+platform_kubeconfig: "{{ lookup('env', 'KUBECONFIG') | default(lookup('env', 'HOME') ~ '/.kube/config', true) }}"
+
+headlamp_ingress_namespace: kube-system
+headlamp_ingress_name: headlamp
+headlamp_ingress_class_name: traefik
+headlamp_ingress_domain: headlamp.kazachuk-k3s.pp.ua
+headlamp_ingress_tls_secret_name: headlamp-tls
+headlamp_ingress_cluster_issuer_name: letsencrypt-cloudflare-production
+
+headlamp_ingress_service_name: headlamp
+headlamp_ingress_service_port: 80

@@ -9,6 +9,7 @@
 #   ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml
 #   ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags data
 #   ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags app
+#   ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags network-policy
 #
 # Note: the application layer (proxy, history API, history consumer, UI,
 # ingress + middlewares) is deployed via a single Helm release `coinops`
@@ -40,3 +41,9 @@
         - proxy
         - history
         - ui
+
+    - role: coinops_network_policy
+      tags:
+        - network-policy
+        - netpol
+        - security

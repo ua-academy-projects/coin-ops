@@ -218,7 +218,20 @@ kubectl -n kube-system get svc | grep headlamp
 kubectl -n kube-system rollout status deployment/headlamp
 ```
 
-Open Headlamp locally:
+Headlamp can be opened through the public DNS ingress:
+
+```text
+https://headlamp.kazachuk-k3s.pp.ua/
+```
+
+The DNS record must point to the same GCP L4 load balancer as the other
+Ingress-backed apps:
+
+```text
+headlamp.kazachuk-k3s.pp.ua -> 34.133.206.188
+```
+
+For local-only access, port-forward still works:
 
 ```bash
 kubectl -n kube-system port-forward service/headlamp 8080:80
@@ -229,6 +242,10 @@ Then open:
 ```text
 http://localhost:8080
 ```
+
+Headlamp is an administrative Kubernetes UI. Do not expose or share admin
+tokens. For real shared access, put Cloudflare Access or an OAuth proxy in front
+of this ingress.
 
 Create an admin token for lab access:
 

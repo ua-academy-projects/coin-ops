@@ -2,6 +2,7 @@
 #   ansible-playbook -i ansible/inventory.k3s.gcp ansible/k3s-platform.yml --tags issuer
 #   ansible-playbook -i ansible/inventory.k3s.gcp ansible/k3s-platform.yml --tags homepage
 #   ansible-playbook -i ansible/inventory.k3s.gcp ansible/k3s-platform.yml --tags ingress
+#   ansible-playbook -i ansible/inventory.k3s.gcp ansible/k3s-platform.yml --tags headlamp-ingress
 
 - name: Install k3s platform components
   hosts: localhost
@@ -27,6 +28,12 @@
         - ingress
         - homepage
 
+    - role: headlamp_ingress
+      tags:
+        - ingress
+        - headlamp
+        - headlamp-ingress
+
   post_tasks:
     - name: Read homepage ingress
       kubernetes.core.k8s_info:
@@ -44,4 +51,3 @@
         msg: "Homepage ingress should be available at https://{{ homepage_domain }}"
       tags:
         - verify
-

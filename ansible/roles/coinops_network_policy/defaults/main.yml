@@ -1,0 +1,22 @@
+---
+# Network isolation for CoinOps namespaces.
+# Role variables are prefixed with coinops_network_policy_ by convention.
+
+coinops_network_policy_kubeconfig: "{{ lookup('env', 'KUBECONFIG') | default('~/.kube/config', true) | expanduser }}"
+
+coinops_network_policy_backend_namespace: coinops-backend
+coinops_network_policy_frontend_namespace: coinops-frontend
+coinops_network_policy_postgres_namespace: coinops-postgres
+coinops_network_policy_rabbitmq_namespace: coinops-rabbitmq
+coinops_network_policy_redis_namespace: coinops-redis
+coinops_network_policy_ingress_namespace: kube-system
+coinops_network_policy_cnpg_namespace: cnpg-system
+
+coinops_network_policy_release_name: coinops
+
+coinops_network_policy_ui_port: 80
+coinops_network_policy_proxy_port: 8080
+coinops_network_policy_history_api_port: 8000
+coinops_network_policy_postgres_port: 5432
+coinops_network_policy_rabbitmq_port: 5672
+coinops_network_policy_redis_port: 6379

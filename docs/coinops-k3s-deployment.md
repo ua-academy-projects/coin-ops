@@ -90,6 +90,7 @@ Run only one layer:
 ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags cnpg
 ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags data
 ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags app
+ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags network-policy
 ```
 
 Tags are used because each layer has a different lifecycle. For example,
@@ -106,6 +107,7 @@ release.
 | `cnpg_operator` | Installs the CloudNativePG operator with Helm |
 | `coinops_data` | Creates namespaces, reads GCP secrets, creates Kubernetes secrets, creates PostgreSQL, installs RabbitMQ and Redis |
 | `coinops_app_chart` | Installs the CoinOps application Helm chart from `charts/coinops/` (proxy, history API, history consumer, UI, public Ingress, Traefik strip-prefix middlewares) |
+| `coinops_network_policy` | Applies ingress-only NetworkPolicies between CoinOps namespaces |
 
 All role variables live in `roles/<role>/defaults/main.yml` and are prefixed
 with the role name, for example `coinops_data_*` and `coinops_app_chart_*`.
@@ -200,6 +202,31 @@ kubectl -n coinops-frontend describe certificate coinops-tls
 kubectl -n coinops-frontend get secret coinops-tls
 ```
 
+## Network Policies
+
+CoinOps namespaces use ingress-only NetworkPolicies. In plain language: pods
+can still call out, but incoming traffic is allowed only from the namespaces
+that actually need it.
+
+| Target namespace | Allowed incoming traffic |
+| --- | --- |
+| `coinops-frontend` | Traefik from `kube-system` to UI port `80` |
+| `coinops-backend` | Traefik from `kube-system` to API ports `8080` and `8000` |
+| `coinops-postgres` | backend namespace to PostgreSQL port `5432`, plus internal Postgres/CNPG traffic |
+| `coinops-rabbitmq` | backend namespace to RabbitMQ port `5672`, plus internal RabbitMQ traffic |
+| `coinops-redis` | backend namespace to Redis port `6379`, plus internal Redis traffic |
+
+Egress is intentionally not denied yet because the proxy calls external APIs
+and all pods need DNS/system access. This is the first safe isolation step.
+
+Check policies:
+
+```bash
+kubectl get networkpolicy -A
+kubectl -n coinops-backend describe networkpolicy allow-traefik-to-backend-http
+kubectl -n coinops-postgres describe networkpolicy allow-postgres-clients
+```
+
 ## Verification Commands
 
 DNS:
@@ -231,6 +258,7 @@ Ingress and certificate:
 kubectl -n coinops-frontend get ingress
 kubectl -n coinops-backend get ingress
 kubectl -n coinops-frontend get certificate
+kubectl get networkpolicy -A
 ```
 
 HTTP checks:
@@ -276,6 +304,7 @@ helm -n coinops-backend list
 | `ansible/roles/coinops_data/tasks/main.yml` | Secrets, namespaces, CNPG, RabbitMQ, Redis |
 | `ansible/roles/coinops_data/templates/postgres-cluster.yml.j2` | PostgreSQL cluster CR |
 | `ansible/roles/coinops_app_chart/tasks/main.yml` | Calls `helm install/upgrade` for the app chart |
+| `ansible/roles/coinops_network_policy/templates/networkpolicies.yml.j2` | Namespace ingress isolation rules |
 | `charts/coinops/Chart.yaml` | Helm chart metadata |
 | `charts/coinops/values.yaml` | Default values for the app chart |
 | `charts/coinops/values.schema.json` | JSON Schema validation for values |
@@ -289,8 +318,10 @@ helm -n coinops-backend list
 
 - The GCP load balancer is L4. TLS is terminated inside Kubernetes by Traefik
   using the cert-manager certificate.
-- Headlamp is not exposed publicly. It remains accessible through local
-  `kubectl port-forward`.
+- Headlamp has a dedicated Traefik Ingress at
+  `https://headlamp.kazachuk-k3s.pp.ua/`. It still requires a Kubernetes login
+  token. For real shared access, protect it with Cloudflare Access or an OAuth
+  proxy.
 - RabbitMQ and Redis are installed with Bitnami charts. Their images are pinned
   to `bitnamilegacy/*` because the chart-selected Docker Hub image tags were not
   available in the current registry path during deployment.

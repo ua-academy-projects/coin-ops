@@ -34,6 +34,7 @@ CoinOps.
 | `cert_manager_issuer` | Creates Cloudflare DNS-01 ClusterIssuers |
 | `homepage` | Deploys the Homepage dashboard app |
 | `homepage_ingress` | Exposes Homepage through Traefik Ingress |
+| `headlamp_ingress` | Exposes the existing Headlamp service through Traefik Ingress |
 
 ## CoinOps App Roles
 
@@ -42,6 +43,7 @@ CoinOps.
 | `cnpg_operator` | Installs the CloudNativePG operator with Helm |
 | `coinops_data` | Creates namespaces, secrets, CNPG PostgreSQL, RabbitMQ, and Redis |
 | `coinops_app_chart` | Installs the CoinOps application Helm chart from `charts/coinops/` (proxy, history API, history consumer, UI, ingress + Traefik middlewares) |
+| `coinops_network_policy` | Applies namespace ingress isolation for frontend, backend, Postgres, RabbitMQ, and Redis |
 
 The application layer is packaged as a single local Helm chart located at the
 repository root in `charts/coinops/`. The Ansible role `coinops_app_chart` is a
@@ -57,6 +59,7 @@ Use tags when only one layer needs to be changed.
 ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags cnpg
 ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags data
 ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags app
+ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags network-policy
 ```
 
 The legacy tags `backend`, `frontend`, `ingress`, `proxy`, `history`, and `ui`
@@ -72,6 +75,7 @@ role name. Examples:
 coinops_data_postgres_cluster_name
 coinops_app_chart_image_tag
 coinops_app_chart_ingress_domain
+coinops_network_policy_backend_namespace
 cnpg_operator_chart_version
 ```
 
