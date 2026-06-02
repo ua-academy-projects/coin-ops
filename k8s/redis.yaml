@@ -37,8 +37,13 @@ spec:
           image: redis:7-alpine
           command:
             - redis-server
+          args:
             - --appendonly
             - "yes"
+            - "--maxmemory"
+            - 192mb
+            - --maxmemory-policy
+            - allkeys-lru
           resources:
             requests:
               cpu: 50m
