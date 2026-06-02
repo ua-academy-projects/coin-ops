@@ -40,6 +40,8 @@ spec:
       containers:
         - name: redis
           image: redis:7-alpine
+          securityContext:
+            allowPrivilegeEscalation: false
           command:
             - redis-server
           args:
