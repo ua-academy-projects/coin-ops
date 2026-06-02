@@ -2,7 +2,7 @@
 # CloudSQL uses this range to get a private IP — no public internet exposure.
 # VPC_PEERING means CloudSQL "peers" into your VPC network privately.
 resource "google_compute_global_address" "private_ip" {
-  count         = contains(["gcp", "hybrid"], var.config.general.cloud) ? 1 : 0
+  count         = var.config.general.database == "gcp" ? 1 : 0
   name          = "coinops-private-ip"
   purpose       = "VPC_PEERING"
   address_type  = "INTERNAL"
@@ -14,7 +14,7 @@ resource "google_compute_global_address" "private_ip" {
 # Google's managed services network. Without this, CloudSQL has no
 # private IP and your k3s pods cannot reach it internally.
 resource "google_service_networking_connection" "private_vpc" {
-  count                   = contains(["gcp", "hybrid"], var.config.general.cloud) ? 1 : 0
+  count                   = var.config.general.database == "gcp" ? 1 : 0
   network                 = var.network_id
   service                 = "servicenetworking.googleapis.com"
   reserved_peering_ranges = [google_compute_global_address.private_ip[0].name]
@@ -25,7 +25,7 @@ resource "google_service_networking_connection" "private_vpc" {
 # ipv4_enabled=false = no public IP, private VPC only — correct secure approach.
 # depends_on ensures private networking exists before instance is created.
 resource "google_sql_database_instance" "postgres" {
-  count               = contains(["gcp", "hybrid"], var.config.general.cloud) ? 1 : 0
+  count               = var.config.general.database == "gcp" ? 1 : 0
   name                = "coinops-db"
   database_version    = "POSTGRES_16"
   region              = var.config.locations[var.config.general.location].gcp.region
@@ -45,7 +45,7 @@ resource "google_sql_database_instance" "postgres" {
 
 # Creates the "cognitor" database inside the CloudSQL instance.
 resource "google_sql_database" "main" {
-  count    = contains(["gcp", "hybrid"], var.config.general.cloud) ? 1 : 0
+  count    = var.config.general.database == "gcp" ? 1 : 0
   name     = "cognitor"
   instance = google_sql_database_instance.postgres[0].name
 }
@@ -53,7 +53,7 @@ resource "google_sql_database" "main" {
 # Creates the "cognitor" user with password from .env DB_PASSWORD variable.
 # Password comes through terraform.tfvars → var.db_password → config.general.db_password.
 resource "google_sql_user" "main" {
-  count    = contains(["gcp", "hybrid"], var.config.general.cloud) ? 1 : 0
+  count    = var.config.general.database == "gcp" ? 1 : 0
   name     = "cognitor"
   instance = google_sql_database_instance.postgres[0].name
   password = var.config.general.db_password

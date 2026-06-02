@@ -1,0 +1,21 @@
+---
+# CNPG (CloudNativePG) operator and PostgreSQL cluster settings.
+# CNPG replaces CloudSQL — runs PostgreSQL inside k3s cluster.
+
+# Helm chart version for CNPG operator
+cnpg_version: "0.22.0"
+
+# PostgreSQL cluster settings — matches existing db credentials
+cnpg_cluster_name: "coinops-db"
+cnpg_namespace: "coinops-app"
+cnpg_instances: 1          # single instance — enough for learning
+cnpg_storage_size: "5Gi"   # PersistentVolumeClaim size
+
+# Database credentials — same as CloudSQL, come from group_vars
+cnpg_db_name: "{{ db_name }}"
+cnpg_db_user: "{{ db_user }}"
+
+# DNS name CNPG creates automatically for read-write access.
+# Format: <cluster-name>-rw.<namespace>.svc.cluster.local
+# This replaces cloudsql_ip in secrets.yml
+cnpg_db_host: "{{ cnpg_cluster_name }}-rw.{{ cnpg_namespace }}.svc.cluster.local"

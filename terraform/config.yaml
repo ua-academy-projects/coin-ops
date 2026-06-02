@@ -10,7 +10,7 @@ general:
   disk_size: 30
   ssh_port: "9922"
   ops_user: "marta_ops"
-  database: "gcp"        # changed from "aws" — use CloudSQL not RDS
+  database: "cnpg"        # cnpg = PostgreSQL runs inside k3s cluster via CNPG operator
 
 locations:
   europe:

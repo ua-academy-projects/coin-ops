@@ -33,4 +33,4 @@ coinops_redis_port:    "6379"
 coinops_rabbitmq_port: "5672"
 
 # CloudSQL private IP — read from environment, set via: export CLOUDSQL_IP=$(terraform output -raw gcp_db_endpoint)
-cloudsql_ip: "{{ lookup('env', 'CLOUDSQL_IP') }}"
+cnpg_db_host: "coinops-db-rw.coinops-app.svc.cluster.local"
