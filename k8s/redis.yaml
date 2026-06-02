@@ -119,6 +119,7 @@ metadata:
     app.kubernetes.io/name: redis
     app.kubernetes.io/part-of: coin-ops
 spec:
+  clusterIP: None
   selector:
     app.kubernetes.io/name: redis
   ports:
