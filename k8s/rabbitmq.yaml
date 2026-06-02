@@ -33,6 +33,7 @@ spec:
         app.kubernetes.io/name: rabbitmq
         app.kubernetes.io/part-of: coin-ops
     spec:
+      terminationGracePeriodSeconds: 60
       securityContext:
         runAsNonRoot: true
         runAsUser: 999
