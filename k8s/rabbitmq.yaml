@@ -40,6 +40,8 @@ spec:
       containers:
         - name: rabbitmq
           image: rabbitmq:3.13.7-alpine
+          securityContext:
+            allowPrivilegeEscalation: false
           ports:
             - name: amqp
               containerPort: 5672
