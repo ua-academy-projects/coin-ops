@@ -14,7 +14,7 @@ spec:
       storage: 2Gi
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: rabbitmq
   namespace: coin-ops
@@ -22,6 +22,7 @@ metadata:
     app.kubernetes.io/name: rabbitmq
     app.kubernetes.io/part-of: coin-ops
 spec:
+  serviceName: rabbitmq
   replicas: 1
   selector:
     matchLabels:
