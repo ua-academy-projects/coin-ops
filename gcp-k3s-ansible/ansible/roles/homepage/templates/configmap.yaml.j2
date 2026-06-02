@@ -36,15 +36,15 @@ data:
               href: https://youtube.com/
   services.yaml: |
     - Infrastructure:
-        - Kubernetes API:
-            href: https://kubernetes.default.svc
-            description: Cluster API endpoint
+        - Headlamp:
+            href: http://127.0.0.1:30082
+            description: Cluster UI
         - Traefik:
             href: http://traefik.kube-system.svc.cluster.local
             description: Internal Traefik service
     - Application:
         - Coin-Ops UI:
-            href: http://coinops-ui.default.svc.cluster.local
+            href: https://app.smolyakov-devops.pp.ua
             description: Update after the app is deployed into Kubernetes
         - History API:
             href: http://coinops-history.default.svc.cluster.local
