@@ -1,0 +1,61 @@
+---
+# Single role for all k3s server nodes.
+# Bootstrap node runs --cluster-init.
+# Join nodes connect to the bootstrap node using token saved as hostvars.
+
+- name: Download k3s install script
+  get_url:
+    url: https://get.k3s.io
+    dest: /tmp/k3s-install.sh
+    mode: '0755'
+
+# --- Bootstrap node only (k3s-server-1) ---
+
+- name: Initialize k3s cluster (bootstrap node only)
+  shell: >
+    INSTALL_K3S_EXEC="server --cluster-init --tls-san {{ ansible_host }}"
+    /tmp/k3s-install.sh
+  environment:
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
+  args:
+    creates: /usr/local/bin/k3s
+  when: inventory_hostname in groups['k3s_bootstrap']
+
+- name: Wait for k3s API on bootstrap node
+  wait_for:
+    port: "{{ k3s_api_port }}"
+    host: 127.0.0.1
+    timeout: 120
+  when: inventory_hostname in groups['k3s_bootstrap']
+
+- name: Read join token (bootstrap node only)
+  slurp:
+    src: /var/lib/rancher/k3s/server/node-token
+  register: k3s_token_raw
+  when: inventory_hostname in groups['k3s_bootstrap']
+
+- name: Save token and IP as facts (available to all nodes via hostvars)
+  set_fact:
+    k3s_token: "{{ k3s_token_raw.content | b64decode | trim }}"
+    k3s_server_ip: "{{ ansible_default_ipv4.address }}"
+  when: inventory_hostname in groups['k3s_bootstrap']
+
+# --- Join nodes only (k3s-server-2, k3s-server-3) ---
+
+- name: Join k3s cluster (non-bootstrap nodes)
+  shell: >
+    INSTALL_K3S_EXEC="server --server https://{{ hostvars[groups['k3s_bootstrap'][0]]['k3s_server_ip'] }}:{{ k3s_api_port }}"
+    K3S_TOKEN="{{ hostvars[groups['k3s_bootstrap'][0]]['k3s_token'] }}"
+    /tmp/k3s-install.sh
+  environment:
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
+  args:
+    creates: /usr/local/bin/k3s
+  when: inventory_hostname not in groups['k3s_bootstrap']
+
+- name: Wait for k3s API on join node
+  wait_for:
+    port: "{{ k3s_api_port }}"
+    host: 127.0.0.1
+    timeout: 120
+  when: inventory_hostname not in groups['k3s_bootstrap']
