@@ -34,7 +34,7 @@ spec:
     spec:
       containers:
         - name: rabbitmq
-          image: rabbitmq:3-alpine
+          image: rabbitmq:3.13.7-alpine
           ports:
             - name: amqp
               containerPort: 5672
@@ -57,17 +57,19 @@ spec:
                 - rabbitmq-diagnostics
                 - -q
                 - ping
-            initialDelaySeconds: 10
+            initialDelaySeconds: 30
             periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 6
           livenessProbe:
             exec:
               command:
                 - rabbitmq-diagnostics
                 - -q
                 - ping
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            timeoutSeconds: 5
+            initialDelaySeconds: 180
+            periodSeconds: 20
+            timeoutSeconds: 10
             failureThreshold: 3
       volumes:
         - name: rabbitmq-data
