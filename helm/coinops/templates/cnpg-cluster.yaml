@@ -1,0 +1,21 @@
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: coinops-db
+  namespace: {{ .Values.namespaces.db }}
+  labels:
+    {{- include "coinops.labels" . | nindent 4 }}
+spec:
+  instances: {{ .Values.database.instances }}
+  storage:
+    size: {{ .Values.database.storage }}
+  bootstrap:
+    initdb:
+      database: {{ .Values.database.name }}
+      owner: {{ .Values.database.user }}
+      secret:
+        name: cnpg-db-secret
+  postgresql:
+    parameters:
+      max_connections: "100"

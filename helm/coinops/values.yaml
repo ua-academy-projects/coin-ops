@@ -1,0 +1,37 @@
+namespaces:
+  rabbitmq: coinops-rabbitmq
+  redis: coinops-redis
+  proxy: coinops-proxy
+  history: coinops-history
+  ui: coinops-ui
+  db: coinops-db
+
+domain: "coinops-softserve-penina.pp.ua"
+
+image:
+  registry: "ghcr.io/ua-academy-projects"
+  tag: "shabat-latest"
+  pullSecret: "ghcr-pull-secret"
+
+ports:
+  proxy: 8080
+  historyApi: 8000
+  rabbitmq: 5672
+  redis: 6379
+
+rabbitmq:
+  user: cognitor
+
+database:
+  name: cognitor
+  user: cognitor
+  instances: 1
+  storage: "5Gi"
+  host: "coinops-db-rw.coinops-db.svc.cluster.local"
+
+tls:
+  clusterIssuer: "letsencrypt-prod"
+
+# Network policies — restrict pod-to-pod communication
+networkPolicy:
+  enabled: true

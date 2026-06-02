@@ -1,0 +1,39 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: {{ .Values.namespaces.redis }}
+  labels:
+    app: redis
+    {{- include "coinops.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: {{ .Values.ports.redis }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: {{ .Values.namespaces.redis }}
+  labels:
+    {{- include "coinops.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: {{ .Values.ports.redis }}
+      targetPort: {{ .Values.ports.redis }}

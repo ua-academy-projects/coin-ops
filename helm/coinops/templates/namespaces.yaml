@@ -1,0 +1,12 @@
+# Creates isolated namespaces for each CoinOps component.
+# Each service runs in its own namespace — no cross-contamination.
+{{- range $key, $name := .Values.namespaces }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $name }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: coinops
+{{- end }}
