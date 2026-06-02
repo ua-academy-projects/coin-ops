@@ -32,6 +32,11 @@ spec:
         app.kubernetes.io/name: redis
         app.kubernetes.io/part-of: coin-ops
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
       containers:
         - name: redis
           image: redis:7-alpine
