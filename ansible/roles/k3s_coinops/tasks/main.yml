@@ -10,15 +10,9 @@
 #   3. queue       — rabbitmq + redis before app services
 #   4. app         — backend services + schema init Job
 #   5. frontend    — ui last, depends on app layer being ready
+#
+# Database: CNPG PostgreSQL inside k3s cluster (coinops-db-rw.coinops-app.svc.cluster.local)
 
-# CloudSQL IP comes from CLOUDSQL_IP environment variable (set in .env)
-# Value: 10.113.0.3 — get fresh value with: terraform output -raw gcp_db_endpoint
-- name: Set CloudSQL IP fact
-  set_fact:
-    cloudsql_ip: "{{ cloudsql_ip }}"
-
-# Step 3: Call sub-task files in correct order.
-# include_tasks = run another task file as if its contents were pasted here.
 - name: Create namespaces
   include_tasks: namespaces.yml
 
