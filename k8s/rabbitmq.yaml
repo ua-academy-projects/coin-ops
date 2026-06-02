@@ -32,6 +32,11 @@ spec:
         app.kubernetes.io/name: rabbitmq
         app.kubernetes.io/part-of: coin-ops
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
       containers:
         - name: rabbitmq
           image: rabbitmq:3.13.7-alpine
