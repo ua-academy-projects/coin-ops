@@ -1,0 +1,32 @@
+---
+- name: Install k3s Helm dependencies
+  hosts: k3s-node-01
+  become: true
+  roles:
+    - role: k3s_helm
+      tags:
+        - helm
+        - cert-manager
+        - headlamp
+        - coin-ops
+
+- name: Deploy cert-manager
+  hosts: k3s-node-01
+  become: true
+  roles:
+    - role: k3s_cert_manager
+      tags: cert-manager
+
+- name: Deploy Headlamp
+  hosts: k3s-node-01
+  become: true
+  roles:
+    - role: k3s_headlamp
+      tags: headlamp
+
+- name: Deploy Coin Ops
+  hosts: k3s-node-01
+  become: true
+  roles:
+    - role: k3s_coin_ops
+      tags: coin-ops
