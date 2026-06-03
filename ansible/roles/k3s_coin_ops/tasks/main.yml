@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT-0
 ---
 # tasks file for k3s_coin_ops
-- name: Ensure app namespace exists
+- name: Ensure Coin Ops namespaces exist
   kubernetes.core.k8s:
     state: present
     kubeconfig: "{{ k3s_coin_ops_kubeconfig }}"
@@ -9,6 +9,10 @@
       apiVersion: v1
       kind: Namespace
       metadata:
-        name: "{{ k3s_coin_ops_namespaces.app }}"
+        name: "{{ item }}"
         labels:
           app.kubernetes.io/part-of: coin-ops
+  loop:
+    - "{{ k3s_coin_ops_namespaces.app }}"
+    - "{{ k3s_coin_ops_namespaces.workers }}"
+    - "{{ k3s_coin_ops_namespaces.data }}"
