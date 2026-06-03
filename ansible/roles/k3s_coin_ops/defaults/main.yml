@@ -6,7 +6,7 @@ k3s_coin_ops_chart_path: "{{ playbook_dir }}/../charts/coin-ops"
 k3s_coin_ops_remote_chart_path: /opt/coin-ops-chart
 k3s_coin_ops_values_file: /tmp/coin-ops-values.yaml
 k3s_coin_ops_kubeconfig: /etc/rancher/k3s/k3s.yaml
-k3s_ansible_venv_path: /opt/k3s-ansible-venv
+k3s_coin_ops_ansible_venv_path: /opt/k3s-ansible-venv
 
 k3s_coin_ops_namespaces:
   app: coin-ops-app
