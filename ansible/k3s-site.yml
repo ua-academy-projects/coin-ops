@@ -1,3 +1,5 @@
+# provision k3s cluster with coin-ops application
+
 ---
 - name: Provision k3s gateway
   hosts: bastion
@@ -51,6 +53,30 @@
   roles:
     - role: k3s_cnpg
       tags: cnpg
+
+- name: Fetch deploy secrets from Azure Key Vault
+  hosts: k3s-node-01
+  become: true
+  roles:
+    - role: azure_secrets
+      tags:
+        - secrets
+        - coin-ops
+      when:
+        - cloud == 'azure'
+
+- name: Fetch deploy secrets from Google Secret Manager
+  hosts: k3s-node-01
+  become: true
+  roles:
+    - role: gsm_secrets
+      tags:
+        - secrets
+        - coin-ops
+      when:
+        - cloud == 'gcp'
+
+#NOTE: There should be an AWS role caller
 
 - name: Deploy Coin Ops
   hosts: k3s-node-01
