@@ -16,3 +16,35 @@
     - "{{ k3s_coin_ops_namespaces.app }}"
     - "{{ k3s_coin_ops_namespaces.workers }}"
     - "{{ k3s_coin_ops_namespaces.data }}"
+
+- name: Create GHCR pull secret
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_coin_ops_kubeconfig }}"
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: "{{ k3s_coin_ops_pull_secret_name }}"
+        namespace: "{{ item }}"
+        labels:
+          app.kubernetes.io/part-of: coin-ops
+      type: kubernetes.io/dockerconfigjson
+      stringData:
+        .dockerconfigjson: >-
+          {{
+            {
+              "auths": {
+                k3s_coin_ops_ghcr_server: {
+                  "username": k3s_coin_ops_ghcr_username,
+                  "password": k3s_coin_ops_ghcr_token,
+                  "email": k3s_coin_ops_ghcr_email,
+                  "auth": (k3s_coin_ops_ghcr_username ~ ":" ~ k3s_coin_ops_ghcr_token) | b64encode
+                }
+              }
+            } | to_json
+          }}
+  loop:
+    - "{{ k3s_coin_ops_namespaces.app }}"
+    - "{{ k3s_coin_ops_namespaces.workers }}"
+  no_log: true
