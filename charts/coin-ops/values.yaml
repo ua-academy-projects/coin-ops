@@ -1,6 +1,8 @@
-namespace:
+namespaces:
   create: false
-  name: coin-ops
+  app: coin-ops-app
+  workers: coin-ops-workers
+  data: coin-ops-data
 
 app:
   name: coin-ops
@@ -24,11 +26,11 @@ secret:
     POSTGRES_USER: cognitor
     POSTGRES_PASSWORD: changeme
     POSTGRES_DB: cognitor
-    DATABASE_URL: postgresql://app:changeme@postgres:5432/app
+    DATABASE_URL: postgresql://app:changeme@postgres.{{ .Values.namespaces.data }}.svc.cluster.local:5432/app
     RABBITMQ_DEFAULT_USER: cognitor
     RABBITMQ_DEFAULT_PASS: changeme
-    RABBITMQ_URL: amqp://cognitor:changeme@rabbitmq:5672/
-    REDIS_URL: redis://redis:6379/0
+    RABBITMQ_URL: amqp://cognitor:changeme@rabbitmq.{{ .Values.namespaces.data }}.svc.cluster.local:5672/
+    REDIS_URL: redis://redis.{{ .Values.namespaces.data }}.svc.cluster.local:6379/0
 
 ingress:
   enabled: true

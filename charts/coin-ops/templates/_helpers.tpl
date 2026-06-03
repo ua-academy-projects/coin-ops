@@ -1,5 +1,17 @@
 {{- define "coin-ops.namespace" -}}
-{{- .Values.namespace.name | default .Release.Namespace -}}
+{{- .Values.namespaces.app | default .Release.Namespace -}}
+{{- end -}}
+
+{{- define "coin-ops.appNamespace" -}}
+{{- .Values.namespaces.app | default .Release.Namespace -}}
+{{- end -}}
+
+{{- define "coin-ops.workersNamespace" -}}
+{{- .Values.namespaces.workers | default (include "coin-ops.appNamespace" .) -}}
+{{- end -}}
+
+{{- define "coin-ops.dataNamespace" -}}
+{{- .Values.namespaces.data | default (include "coin-ops.appNamespace" .) -}}
 {{- end -}}
 
 {{- define "coin-ops.partOf" -}}

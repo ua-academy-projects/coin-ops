@@ -1,9 +1,12 @@
-{{- if .Values.namespace.create }}
+{{- if .Values.namespaces.create }}
+{{- $root := . }}
+{{- range $namespace := list (include "coin-ops.appNamespace" $root) (include "coin-ops.workersNamespace" $root) (include "coin-ops.dataNamespace" $root) | uniq }}
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: {{ include "coin-ops.namespace" . }}
+  name: {{ $namespace }}
   labels:
-    {{- include "coin-ops.commonLabels" . | nindent 4 }}
+    {{- include "coin-ops.commonLabels" $root | nindent 4 }}
+---
 {{- end }}
-
+{{- end }}

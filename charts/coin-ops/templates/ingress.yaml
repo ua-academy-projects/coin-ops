@@ -3,7 +3,7 @@ apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
   name: {{ .Values.ingress.middlewares.api.name }}
-  namespace: {{ include "coin-ops.namespace" . }}
+  namespace: {{ include "coin-ops.appNamespace" . }}
   labels:
     {{- include "coin-ops.nameLabels" (dict "root" . "name" .Values.app.name) | nindent 4 }}
 spec:
@@ -17,7 +17,7 @@ apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
   name: {{ .Values.ingress.middlewares.history.name }}
-  namespace: {{ include "coin-ops.namespace" . }}
+  namespace: {{ include "coin-ops.appNamespace" . }}
   labels:
     {{- include "coin-ops.nameLabels" (dict "root" . "name" .Values.app.name) | nindent 4 }}
 spec:
@@ -33,13 +33,13 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ .Values.ingress.name }}
-  namespace: {{ include "coin-ops.namespace" . }}
+  namespace: {{ include "coin-ops.appNamespace" . }}
   labels:
     {{- include "coin-ops.nameLabels" (dict "root" . "name" .Values.app.name) | nindent 4 }}
   {{- if or .Values.ingress.middlewares.enabled .Values.ingress.annotations }}
   annotations:
     {{- if .Values.ingress.middlewares.enabled }}
-    traefik.ingress.kubernetes.io/router.middlewares: {{ printf "%s-%s@kubernetescrd,%s-%s@kubernetescrd" (include "coin-ops.namespace" .) .Values.ingress.middlewares.api.name (include "coin-ops.namespace" .) .Values.ingress.middlewares.history.name | quote }}
+    traefik.ingress.kubernetes.io/router.middlewares: {{ printf "%s-%s@kubernetescrd,%s-%s@kubernetescrd" (include "coin-ops.appNamespace" .) .Values.ingress.middlewares.api.name (include "coin-ops.appNamespace" .) .Values.ingress.middlewares.history.name | quote }}
     {{- end }}
     {{- with .Values.ingress.annotations }}
 {{ toYaml . | indent 4 }}

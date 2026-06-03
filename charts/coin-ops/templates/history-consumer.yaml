@@ -3,7 +3,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ .Values.historyConsumer.name }}
-  namespace: {{ include "coin-ops.namespace" . }}
+  namespace: {{ include "coin-ops.workersNamespace" . }}
   labels:
     {{- include "coin-ops.nameLabels" (dict "root" . "name" .Values.historyConsumer.name) | nindent 4 }}
 spec:

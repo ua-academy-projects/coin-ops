@@ -7,7 +7,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: {{ .Values.rabbitmq.name }}-data
-  namespace: {{ include "coin-ops.namespace" . }}
+  namespace: {{ include "coin-ops.dataNamespace" . }}
   labels:
     {{- include "coin-ops.nameLabels" (dict "root" . "name" .Values.rabbitmq.name) | nindent 4 }}
 spec:
@@ -24,7 +24,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: {{ .Values.rabbitmq.name }}
-  namespace: {{ include "coin-ops.namespace" . }}
+  namespace: {{ include "coin-ops.dataNamespace" . }}
   labels:
     {{- include "coin-ops.nameLabels" (dict "root" . "name" .Values.rabbitmq.name) | nindent 4 }}
 spec:
@@ -86,7 +86,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{ .Values.rabbitmq.name }}
-  namespace: {{ include "coin-ops.namespace" . }}
+  namespace: {{ include "coin-ops.dataNamespace" . }}
   labels:
     {{- include "coin-ops.nameLabels" (dict "root" . "name" .Values.rabbitmq.name) | nindent 4 }}
 spec:

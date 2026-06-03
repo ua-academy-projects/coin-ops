@@ -1,7 +1,9 @@
 Coin Ops has been installed.
 
-Namespace:
-  {{ include "coin-ops.namespace" . }}
+Namespaces:
+  app: {{ include "coin-ops.appNamespace" . }}
+  workers: {{ include "coin-ops.workersNamespace" . }}
+  data: {{ include "coin-ops.dataNamespace" . }}
 
 Ingress host:
   {{- if .Values.ingress.enabled }}
@@ -11,5 +13,8 @@ Ingress host:
   {{- end }}
 
 Useful checks:
-  kubectl -n {{ include "coin-ops.namespace" . }} get pods
-  kubectl -n {{ include "coin-ops.namespace" . }} get svc
+  kubectl -n {{ include "coin-ops.appNamespace" . }} get pods
+  kubectl -n {{ include "coin-ops.workersNamespace" . }} get pods
+  kubectl -n {{ include "coin-ops.dataNamespace" . }} get pods
+  kubectl -n {{ include "coin-ops.appNamespace" . }} get svc
+  kubectl -n {{ include "coin-ops.dataNamespace" . }} get svc

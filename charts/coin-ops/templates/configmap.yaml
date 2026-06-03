@@ -1,11 +1,15 @@
+{{- $root := . -}}
+{{- range $namespace := list (include "coin-ops.appNamespace" $root) (include "coin-ops.workersNamespace" $root) | uniq }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ .Values.config.name }}
-  namespace: {{ include "coin-ops.namespace" . }}
+  name: {{ $root.Values.config.name }}
+  namespace: {{ $namespace }}
   labels:
-    {{- include "coin-ops.commonLabels" . | nindent 4 }}
+    {{- include "coin-ops.commonLabels" $root | nindent 4 }}
 data:
-{{- range $key, $value := .Values.config.data }}
+{{- range $key, $value := $root.Values.config.data }}
   {{ $key }}: {{ $value | quote }}
+{{- end }}
+---
 {{- end }}
