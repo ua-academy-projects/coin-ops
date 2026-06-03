@@ -8,7 +8,7 @@ metadata:
   namespace: {{ .Values.namespaces.infra }}
   name: coin-ops-db
 spec:
-  instances: 3
+  instances: 1
   imageName: ghcr.io/cloudnative-pg/postgresql:16.2
 
   storage:

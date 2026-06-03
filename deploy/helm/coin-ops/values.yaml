@@ -51,10 +51,12 @@ database:
   password: "changeme"
 
 rabbitmq:
+  replicaCount: 1
   auth:
     password: "changeme"
 
 redis:
+  architecture: standalone
   auth:
     password: "changeme"
 
