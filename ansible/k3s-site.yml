@@ -1,4 +1,4 @@
-# -> provision k3s cluster with coin-ops application
+# –> provision k3s cluster with coin-ops application
 
 ---
 - name: Provision k3s gateway

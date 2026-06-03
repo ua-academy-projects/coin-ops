@@ -1,10 +1,6 @@
----
-# vm-provision.yml — install system packages on all VMs.
-# Run once (or re-run: idempotent).
-#
-#   source .env
-#   ansible-playbook -i ansible/inventory ansible/vm-provision.yml
+# –> install system packages on all VMs.
 
+---
 - name: Validate required environment variables
   hosts: localhost
   connection: local

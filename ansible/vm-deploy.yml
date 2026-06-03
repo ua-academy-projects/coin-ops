@@ -1,10 +1,6 @@
----
-# vm-deploy.yml — deploy all VM services.
-# Safe to re-run on every code push.
-#
-#   source .env
-#   ansible-playbook -i ansible/inventory ansible/vm-deploy.yml
+# –> deploy all VM services.
 
+---
 - name: Validate required environment variables
   hosts: localhost
   connection: local

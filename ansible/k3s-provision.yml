@@ -1,4 +1,4 @@
-# provision k3s cluter without any application
+# –> provision k3s cluter without any application
 
 ---
 - name: Provision k3s gateway
