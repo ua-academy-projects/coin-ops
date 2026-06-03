@@ -16,6 +16,8 @@
     - "{{ k3s_coin_ops_namespaces.app }}"
     - "{{ k3s_coin_ops_namespaces.workers }}"
     - "{{ k3s_coin_ops_namespaces.data }}"
+  vars:
+    ansible_python_interpreter: "{{ k3s_ansible_venv_path }}/bin/python"
 
 - name: Create GHCR pull secret
   kubernetes.core.k8s:
@@ -35,6 +37,8 @@
   loop:
     - "{{ k3s_coin_ops_namespaces.app }}"
     - "{{ k3s_coin_ops_namespaces.workers }}"
+  vars:
+    ansible_python_interpreter: "{{ k3s_ansible_venv_path }}/bin/python"
   no_log: true
 
 - name: Build Helm values file
