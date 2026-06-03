@@ -48,3 +48,12 @@
     - "{{ k3s_coin_ops_namespaces.app }}"
     - "{{ k3s_coin_ops_namespaces.workers }}"
   no_log: true
+
+- name: Build Helm values file
+  ansible.builtin.template:
+    src: values.yaml.j2
+    dest: "{{ k3s_coin_ops_values_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true

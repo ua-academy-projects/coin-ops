@@ -1,0 +1,43 @@
+namespaces:
+  create: false
+  app: {{ k3s_coin_ops_namespaces.app | to_json }}
+  workers: {{ k3s_coin_ops_namespaces.workers | to_json }}
+  data: {{ k3s_coin_ops_namespaces.data | to_json }}
+
+imagePullSecrets:
+  - name: {{ k3s_coin_ops_pull_secret_name | to_json }}
+
+config:
+  name: {{ k3s_coin_ops_config_name | to_json }}
+
+secret:
+  create: true
+  name: {{ k3s_coin_ops_secret_name | to_json }}
+  stringData:
+    POSTGRES_USER: {{ k3s_coin_ops_postgres_user | to_json }}
+    POSTGRES_PASSWORD: {{ k3s_coin_ops_postgres_password | to_json }}
+    POSTGRES_DB: {{ k3s_coin_ops_postgres_db | to_json }}
+    DATABASE_URL: {{ ("postgresql://" ~ k3s_coin_ops_postgres_user ~ ":" ~ k3s_coin_ops_postgres_password ~ "@" ~ k3s_coin_ops_postgres_host ~ ":" ~ k3s_coin_ops_postgres_port ~ "/" ~ k3s_coin_ops_postgres_db) | to_json }}
+    RABBITMQ_DEFAULT_USER: {{ k3s_coin_ops_rabbitmq_user | to_json }}
+    RABBITMQ_DEFAULT_PASS: {{ k3s_coin_ops_rabbitmq_password | to_json }}
+    RABBITMQ_URL: {{ ("amqp://" ~ k3s_coin_ops_rabbitmq_user ~ ":" ~ k3s_coin_ops_rabbitmq_password ~ "@rabbitmq." ~ k3s_coin_ops_namespaces.data ~ ".svc.cluster.local:5672/") | to_json }}
+    REDIS_URL: {{ ("redis://redis." ~ k3s_coin_ops_namespaces.data ~ ".svc.cluster.local:6379/0") | to_json }}
+
+ingress:
+  host: {{ k3s_coin_ops_ingress_host | to_json }}
+
+proxy:
+  image:
+    tag: {{ k3s_coin_ops_image_tag | to_json }}
+
+historyApi:
+  image:
+    tag: {{ k3s_coin_ops_image_tag | to_json }}
+
+historyConsumer:
+  image:
+    tag: {{ k3s_coin_ops_image_tag | to_json }}
+
+ui:
+  image:
+    tag: {{ k3s_coin_ops_image_tag | to_json }}
