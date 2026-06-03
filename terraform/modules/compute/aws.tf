@@ -1,6 +1,54 @@
 # ═════════════════════════════════════════════════════════════════════════════
-# AWS EC2 INSTANCES
+# AWS EC2 INSTANCES & IAM
 # ═════════════════════════════════════════════════════════════════════════════
+
+resource "aws_iam_role" "k3s_node_role" {
+  count = var.cloud_provider == "aws" ? 1 : 0
+  name  = "coinops-k3s-node-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_policy" "secrets_access" {
+  count = var.cloud_provider == "aws" ? 1 : 0
+  name  = "coinops-secrets-access"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Effect   = "Allow"
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "secrets_access_attach" {
+  count      = var.cloud_provider == "aws" ? 1 : 0
+  role       = aws_iam_role.k3s_node_role[0].name
+  policy_arn = aws_iam_policy.secrets_access[0].arn
+}
+
+resource "aws_iam_instance_profile" "k3s_node_profile" {
+  count = var.cloud_provider == "aws" ? 1 : 0
+  name  = "coinops-k3s-node-profile"
+  role  = aws_iam_role.k3s_node_role[0].name
+}
 
 # ── AMI lookup (Debian 12) ───────────────────────────────────────────────────
 data "aws_ami" "default" {
@@ -57,6 +105,7 @@ resource "aws_instance" "this" {
 
   key_name               = var.ssh_public_key != "" ? aws_key_pair.this[0].key_name : null
   vpc_security_group_ids = var.security_group_ids
+  iam_instance_profile   = aws_iam_instance_profile.k3s_node_profile[0].name
 
   root_block_device {
     volume_size           = each.value.disk_size_gb

@@ -1,6 +1,20 @@
 # ═════════════════════════════════════════════════════════════════════════════
-# GCP COMPUTE INSTANCES
+# GCP COMPUTE INSTANCES & IAM
 # ═════════════════════════════════════════════════════════════════════════════
+
+resource "google_service_account" "k3s_node_sa" {
+  count        = var.cloud_provider == "gcp" ? 1 : 0
+  account_id   = "coinops-k3s-node-sa"
+  display_name = "K3s Node Service Account"
+  project      = var.gcp_project_id
+}
+
+resource "google_project_iam_member" "k3s_node_secrets_accessor" {
+  count   = var.cloud_provider == "gcp" ? 1 : 0
+  project = var.gcp_project_id
+  role    = "roles/secretmanager.secretAccessor"
+  member  = "serviceAccount:${google_service_account.k3s_node_sa[0].email}"
+}
 
 data "google_compute_image" "packer" {
   count = (var.cloud_provider == "gcp" && var.use_packer_image) ? 1 : 0
@@ -38,6 +52,11 @@ resource "google_compute_instance" "this" {
 
   labels = merge(var.common_tags, each.value.tags)
   tags   = each.value.network_tags
+
+  service_account {
+    email  = google_service_account.k3s_node_sa[0].email
+    scopes = ["cloud-platform"]
+  }
 
   metadata = merge(
     local.ssh_key_metadata != "" ? { ssh-keys = local.ssh_key_metadata } : {},

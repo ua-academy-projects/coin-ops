@@ -84,7 +84,7 @@
     kubeconfig: "{{ kubeconfig_path }}"
     state: present
     definition:
-      apiVersion: external-secrets.io/v1beta1
+      apiVersion: external-secrets.io/v1
       kind: ClusterSecretStore
       metadata:
         name: cloud-secret-store
@@ -99,7 +99,7 @@
     kubeconfig: "{{ kubeconfig_path }}"
     state: present
     definition:
-      apiVersion: external-secrets.io/v1beta1
+      apiVersion: external-secrets.io/v1
       kind: ClusterSecretStore
       metadata:
         name: cloud-secret-store-aws

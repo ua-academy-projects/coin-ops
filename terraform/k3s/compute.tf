@@ -42,6 +42,12 @@ resource "google_project_iam_member" "k3s_node_artifact_reader" {
   member  = "serviceAccount:${google_service_account.k3s_node.email}"
 }
 
+resource "google_project_iam_member" "k3s_node_secret_accessor" {
+  project = local.project_id
+  role    = "roles/secretmanager.secretAccessor"
+  member  = "serviceAccount:${google_service_account.k3s_node.email}"
+}
+
 # ─── Pre-allocate static private IP for node-0 ───────────────────────────────
 # Allocated BEFORE the VM exists so the join cloud-init template for nodes 1+
 # can reference a concrete IP without creating a Terraform dependency cycle.
