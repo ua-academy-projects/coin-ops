@@ -57,3 +57,26 @@
     group: root
     mode: "0600"
   no_log: true
+
+- name: Copy Coin Ops Helm chart
+  ansible.builtin.copy:
+    src: "{{ k3s_coin_ops_chart_path }}/"
+    dest: "{{ k3s_coin_ops_remote_chart_path }}/"
+    owner: root
+    group: root
+    mode: preserve
+
+- name: Deploy Coin Ops Helm release
+  kubernetes.core.helm:
+    name: "{{ k3s_coin_ops_release_name }}"
+    chart_ref: "{{ k3s_coin_ops_remote_chart_path }}"
+    release_namespace: "{{ k3s_coin_ops_namespaces.app }}"
+    create_namespace: false
+    kubeconfig: "{{ k3s_coin_ops_kubeconfig }}"
+    values_files:
+      - "{{ k3s_coin_ops_values_file }}"
+    wait: true
+    timeout: 10m0s
+  vars:
+    ansible_python_interpreter: "{{ k3s_ansible_venv_path }}/bin/python"
+  no_log: true
