@@ -12,7 +12,7 @@ locals {
   iam_bindings = {
     for binding in flatten([
       for workload_name, cfg in var.workloads : [
-        for secret in try(cfg.secrets, []) : {
+        for secret in coalesce(try(cfg.secrets, null), []) : {
           key                = "${cfg.identity}-${secret}"
           secret_resource_id = google_secret_manager_secret.this[secret].id
           service_account    = var.service_accounts[cfg.identity].email

@@ -15,7 +15,7 @@ locals {
       tags             = distinct(concat(cfg.tags, [name]))
       disk_size_gb     = max(cfg.disk_size_gb, 30)
       managed_identity = try(cfg.identity, null) != null
-      secrets          = try(cfg.secrets, null)
+      secrets          = coalesce(try(cfg.secrets, null), [])
 
       # from other modules
       application_sg_ids = lookup(var.application_security_group_ids, name, null) != null ? [var.application_security_group_ids[name]] : []
@@ -25,7 +25,7 @@ locals {
 
   access_bindings = {
     for name, cfg in local.instances : name => cfg
-    if cfg.managed_identity &&       # managed Identity is enabled in config
-    length(try(cfg.secrets, [])) > 0 # instance has at least one secret to access
+    if cfg.managed_identity && # managed Identity is enabled in config
+    length(cfg.secrets) > 0    # instance has at least one secret to access
   }
 }
