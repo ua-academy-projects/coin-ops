@@ -1,0 +1,15 @@
+Coin Ops has been installed.
+
+Namespace:
+  {{ include "coin-ops.namespace" . }}
+
+Ingress host:
+  {{- if .Values.ingress.enabled }}
+  {{ .Values.ingress.host }}
+  {{- else }}
+  ingress disabled
+  {{- end }}
+
+Useful checks:
+  kubectl -n {{ include "coin-ops.namespace" . }} get pods
+  kubectl -n {{ include "coin-ops.namespace" . }} get svc

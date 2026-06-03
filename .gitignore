@@ -3,6 +3,8 @@ DASHBOARD_PROJECT.md
 # Environment file — passwords and local paths, never commit
 .env
 terraform.env
+k8s/secret.local.yaml
+charts/coin-ops/private-values*.yaml
 
 # Worktrees created by agent runs
 .claude/worktrees/

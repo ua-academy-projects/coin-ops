@@ -1,0 +1,35 @@
+{{- if .Values.historyConsumer.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.historyConsumer.name }}
+  namespace: {{ include "coin-ops.namespace" . }}
+  labels:
+    {{- include "coin-ops.nameLabels" (dict "root" . "name" .Values.historyConsumer.name) | nindent 4 }}
+spec:
+  replicas: {{ .Values.historyConsumer.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Values.historyConsumer.name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Values.historyConsumer.name }}
+        app.kubernetes.io/part-of: {{ include "coin-ops.partOf" . }}
+    spec:
+      terminationGracePeriodSeconds: {{ .Values.historyConsumer.terminationGracePeriodSeconds }}
+      {{- include "coin-ops.imagePullSecrets" . | nindent 6 }}
+      containers:
+        - name: {{ .Values.historyConsumer.name }}
+          image: {{ include "coin-ops.image" .Values.historyConsumer.image }}
+          imagePullPolicy: {{ .Values.historyConsumer.image.pullPolicy }}
+          securityContext:
+{{ toYaml .Values.historyConsumer.securityContext | indent 12 }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.secret.name }}
+            - configMapRef:
+                name: {{ .Values.config.name }}
+          resources:
+{{ toYaml .Values.historyConsumer.resources | indent 12 }}
+{{- end }}

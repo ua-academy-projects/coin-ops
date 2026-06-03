@@ -1,0 +1,73 @@
+{{- if .Values.historyApi.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.historyApi.name }}
+  namespace: {{ include "coin-ops.namespace" . }}
+  labels:
+    {{- include "coin-ops.nameLabels" (dict "root" . "name" .Values.historyApi.name) | nindent 4 }}
+spec:
+  replicas: {{ .Values.historyApi.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Values.historyApi.name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Values.historyApi.name }}
+        app.kubernetes.io/part-of: {{ include "coin-ops.partOf" . }}
+    spec:
+      terminationGracePeriodSeconds: {{ .Values.historyApi.terminationGracePeriodSeconds }}
+      {{- include "coin-ops.imagePullSecrets" . | nindent 6 }}
+      containers:
+        - name: {{ .Values.historyApi.name }}
+          image: {{ include "coin-ops.image" .Values.historyApi.image }}
+          imagePullPolicy: {{ .Values.historyApi.image.pullPolicy }}
+          securityContext:
+{{ toYaml .Values.historyApi.securityContext | indent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.historyApi.containerPort }}
+          env:
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.config.name }}
+                  key: HISTORY_API_PORT
+          envFrom:
+            - secretRef:
+                name: {{ .Values.secret.name }}
+            - configMapRef:
+                name: {{ .Values.config.name }}
+          resources:
+{{ toYaml .Values.historyApi.resources | indent 12 }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.historyApi.readinessProbe.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.historyApi.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.historyApi.readinessProbe.periodSeconds }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.historyApi.livenessProbe.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.historyApi.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.historyApi.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.historyApi.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.historyApi.livenessProbe.failureThreshold }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.historyApi.name }}
+  namespace: {{ include "coin-ops.namespace" . }}
+  labels:
+    {{- include "coin-ops.nameLabels" (dict "root" . "name" .Values.historyApi.name) | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: {{ .Values.historyApi.name }}
+  ports:
+    - name: http
+      port: {{ .Values.historyApi.service.port }}
+      targetPort: http
+{{- end }}

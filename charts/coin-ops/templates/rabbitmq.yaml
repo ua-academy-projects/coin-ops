@@ -1,0 +1,102 @@
+{{- if .Values.rabbitmq.enabled }}
+{{- if ne (int .Values.rabbitmq.replicas) 1 }}
+{{- fail "rabbitmq.replicas must be 1 because this chart uses one RabbitMQ data volume, not per-replica volumeClaimTemplates" }}
+{{- end }}
+{{- if and .Values.rabbitmq.persistence.enabled (not .Values.rabbitmq.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.rabbitmq.name }}-data
+  namespace: {{ include "coin-ops.namespace" . }}
+  labels:
+    {{- include "coin-ops.nameLabels" (dict "root" . "name" .Values.rabbitmq.name) | nindent 4 }}
+spec:
+  accessModes:
+{{- range .Values.rabbitmq.persistence.accessModes }}
+    - {{ . }}
+{{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.rabbitmq.persistence.size }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Values.rabbitmq.name }}
+  namespace: {{ include "coin-ops.namespace" . }}
+  labels:
+    {{- include "coin-ops.nameLabels" (dict "root" . "name" .Values.rabbitmq.name) | nindent 4 }}
+spec:
+  serviceName: {{ .Values.rabbitmq.name }}
+  replicas: {{ .Values.rabbitmq.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Values.rabbitmq.name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Values.rabbitmq.name }}
+        app.kubernetes.io/part-of: {{ include "coin-ops.partOf" . }}
+    spec:
+      terminationGracePeriodSeconds: {{ .Values.rabbitmq.terminationGracePeriodSeconds }}
+      securityContext:
+{{ toYaml .Values.rabbitmq.podSecurityContext | indent 8 }}
+      containers:
+        - name: {{ .Values.rabbitmq.name }}
+          image: {{ include "coin-ops.image" .Values.rabbitmq.image }}
+          imagePullPolicy: {{ .Values.rabbitmq.image.pullPolicy }}
+          securityContext:
+{{ toYaml .Values.rabbitmq.securityContext | indent 12 }}
+          ports:
+            - name: amqp
+              containerPort: {{ .Values.rabbitmq.service.port }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.secret.name }}
+          resources:
+{{ toYaml .Values.rabbitmq.resources | indent 12 }}
+          volumeMounts:
+            - name: rabbitmq-data
+              mountPath: /var/lib/rabbitmq
+          readinessProbe:
+            tcpSocket:
+              port: amqp
+            initialDelaySeconds: {{ .Values.rabbitmq.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.rabbitmq.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.rabbitmq.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.rabbitmq.readinessProbe.failureThreshold }}
+          livenessProbe:
+            tcpSocket:
+              port: amqp
+            initialDelaySeconds: {{ .Values.rabbitmq.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.rabbitmq.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.rabbitmq.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.rabbitmq.livenessProbe.failureThreshold }}
+      volumes:
+        - name: rabbitmq-data
+{{- if .Values.rabbitmq.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ default (printf "%s-data" .Values.rabbitmq.name) .Values.rabbitmq.persistence.existingClaim }}
+{{- else }}
+          emptyDir: {}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.rabbitmq.name }}
+  namespace: {{ include "coin-ops.namespace" . }}
+  labels:
+    {{- include "coin-ops.nameLabels" (dict "root" . "name" .Values.rabbitmq.name) | nindent 4 }}
+spec:
+{{- if .Values.rabbitmq.service.headless }}
+  clusterIP: None
+{{- end }}
+  selector:
+    app.kubernetes.io/name: {{ .Values.rabbitmq.name }}
+  ports:
+    - name: amqp
+      port: {{ .Values.rabbitmq.service.port }}
+      targetPort: amqp
+{{- end }}

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: coin-ops
+description: Distributed Polymarket dashboard for k3s
+type: application
+version: 0.1.0
+appVersion: shabat-latest

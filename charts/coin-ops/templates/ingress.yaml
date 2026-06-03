@@ -1,0 +1,81 @@
+{{- if and .Values.ingress.enabled .Values.ingress.middlewares.enabled }}
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ .Values.ingress.middlewares.api.name }}
+  namespace: {{ include "coin-ops.namespace" . }}
+  labels:
+    {{- include "coin-ops.nameLabels" (dict "root" . "name" .Values.app.name) | nindent 4 }}
+spec:
+  stripPrefix:
+    prefixes:
+{{- range .Values.ingress.middlewares.api.prefixes }}
+      - {{ . }}
+{{- end }}
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ .Values.ingress.middlewares.history.name }}
+  namespace: {{ include "coin-ops.namespace" . }}
+  labels:
+    {{- include "coin-ops.nameLabels" (dict "root" . "name" .Values.app.name) | nindent 4 }}
+spec:
+  stripPrefix:
+    prefixes:
+{{- range .Values.ingress.middlewares.history.prefixes }}
+      - {{ . }}
+{{- end }}
+---
+{{- end }}
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.ingress.name }}
+  namespace: {{ include "coin-ops.namespace" . }}
+  labels:
+    {{- include "coin-ops.nameLabels" (dict "root" . "name" .Values.app.name) | nindent 4 }}
+  {{- if or .Values.ingress.middlewares.enabled .Values.ingress.annotations }}
+  annotations:
+    {{- if .Values.ingress.middlewares.enabled }}
+    traefik.ingress.kubernetes.io/router.middlewares: {{ printf "%s-%s@kubernetescrd,%s-%s@kubernetescrd" (include "coin-ops.namespace" .) .Values.ingress.middlewares.api.name (include "coin-ops.namespace" .) .Values.ingress.middlewares.history.name | quote }}
+    {{- end }}
+    {{- with .Values.ingress.annotations }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls:
+{{ toYaml . | indent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host }}
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.proxy.name }}
+                port:
+                  number: {{ .Values.proxy.service.port }}
+          - path: /history-api
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.historyApi.name }}
+                port:
+                  number: {{ .Values.historyApi.service.port }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.ui.name }}
+                port:
+                  number: {{ .Values.ui.service.port }}
+{{- end }}

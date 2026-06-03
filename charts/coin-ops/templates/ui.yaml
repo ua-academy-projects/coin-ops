@@ -1,0 +1,73 @@
+{{- if .Values.ui.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.ui.name }}
+  namespace: {{ include "coin-ops.namespace" . }}
+  labels:
+    {{- include "coin-ops.nameLabels" (dict "root" . "name" .Values.ui.name) | nindent 4 }}
+spec:
+  replicas: {{ .Values.ui.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Values.ui.name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Values.ui.name }}
+        app.kubernetes.io/part-of: {{ include "coin-ops.partOf" . }}
+    spec:
+      terminationGracePeriodSeconds: {{ .Values.ui.terminationGracePeriodSeconds }}
+      {{- include "coin-ops.imagePullSecrets" . | nindent 6 }}
+      containers:
+        - name: {{ .Values.ui.name }}
+          image: {{ include "coin-ops.image" .Values.ui.image }}
+          imagePullPolicy: {{ .Values.ui.image.pullPolicy }}
+          securityContext:
+{{ toYaml .Values.ui.securityContext | indent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.ui.containerPort }}
+          env:
+            - name: PROXY_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.config.name }}
+                  key: PROXY_URL
+            - name: HISTORY_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.config.name }}
+                  key: HISTORY_URL
+          resources:
+{{ toYaml .Values.ui.resources | indent 12 }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.ui.readinessProbe.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.ui.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.ui.readinessProbe.periodSeconds }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.ui.livenessProbe.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.ui.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.ui.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.ui.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.ui.livenessProbe.failureThreshold }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.ui.name }}
+  namespace: {{ include "coin-ops.namespace" . }}
+  labels:
+    {{- include "coin-ops.nameLabels" (dict "root" . "name" .Values.ui.name) | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: {{ .Values.ui.name }}
+  ports:
+    - name: http
+      port: {{ .Values.ui.service.port }}
+      targetPort: http
+{{- end }}
