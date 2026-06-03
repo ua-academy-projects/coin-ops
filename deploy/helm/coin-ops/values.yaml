@@ -33,31 +33,21 @@ cloudflare:
     repository: "cloudflare/cloudflared"
     tag: "latest"
 
-database:
-  user: "cognitor"
-  password: "changeme"
-  name: "cognitor"
-  instances: 3
-  storageSize: "1Gi"
+serviceAccount:
+  create: true
+  name: "coin-ops-sa"
+  annotations: {}
+    # Example for GCP Workload Identity:
+    # iam.gke.io/gcp-service-account: "coin-ops-sa@YOUR_PROJECT.iam.gserviceaccount.com"
+    # Example for AWS IRSA:
+    # eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/coin-ops-secrets-role"
 
-redis:
+externalSecrets:
   enabled: true
-  fullnameOverride: "redis"
-  architecture: standalone
-  auth:
-    enabled: false
-  image:
-    registry: public.ecr.aws/bitnami
+  secretStoreName: "cloud-secret-store"
 
-rabbitmq:
-  enabled: true
-  fullnameOverride: "rabbitmq"
-  auth:
-    username: "cognitor"
-    password: "changeme"
-  image:
-    registry: public.ecr.aws/bitnami
-
+# Legacy local credentials and in-cluster infrastructure have been removed for production.
+# Infrastructure is managed by Terraform.
 features:
-  deployInfra: true
+  deployInfra: false
   deployApp: true

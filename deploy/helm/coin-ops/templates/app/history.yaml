@@ -2,11 +2,6 @@
 # =============================================================================
 # deploy/k3s/app/history.yaml
 # =============================================================================
-# history-api  — Python/FastAPI REST service (port 8000)
-# history-consumer — Python worker that consumes from RabbitMQ
-#
-# Both share the same image (built from Dockerfile.api / Dockerfile.consumer).
-# =============================================================================
 
 # ── history-api ───────────────────────────────────────────────────────────────
 apiVersion: apps/v1
@@ -17,7 +12,7 @@ metadata:
   labels:
     app: history-api
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: history-api
@@ -25,9 +20,29 @@ spec:
     metadata:
       labels:
         app: history-api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
     spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
       imagePullSecrets:
         - name: ghcr-secret
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values: [history-api]
+                topologyKey: kubernetes.io/hostname
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 2000
       containers:
         - name: history-api
           image: "{{ .Values.image.registry }}/coin-ops-history-api:{{ .Values.image.tag }}"
@@ -35,6 +50,12 @@ spec:
           ports:
             - name: http
               containerPort: 8000
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           env:
             - name: PORT
               value: "8000"
@@ -78,8 +99,19 @@ spec:
       targetPort: http
 
 ---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  namespace: {{ .Values.namespaces.app }}
+  name: history-api-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: history-api
+
+---
 # ── history-consumer ──────────────────────────────────────────────────────────
-# Worker — no HTTP port, no Service needed.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -88,7 +120,7 @@ metadata:
   labels:
     app: history-consumer
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: history-consumer
@@ -96,13 +128,39 @@ spec:
     metadata:
       labels:
         app: history-consumer
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
     spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
       imagePullSecrets:
         - name: ghcr-secret
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values: [history-consumer]
+                topologyKey: kubernetes.io/hostname
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 2000
       containers:
         - name: history-consumer
           image: "{{ .Values.image.registry }}/coin-ops-history-consumer:{{ .Values.image.tag }}"
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           env:
             - name: RUNTIME_BACKEND
               value: "external"
@@ -123,5 +181,17 @@ spec:
             limits:
               cpu: "200m"
               memory: "128Mi"
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  namespace: {{ .Values.namespaces.app }}
+  name: history-consumer-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: history-consumer
 
 {{- end }}

@@ -2,12 +2,6 @@
 # =============================================================================
 # deploy/k3s/app/proxy.yaml
 # =============================================================================
-# Proxy — Go service. Acts as the main API gateway.
-# Image: pulled directly from GHCR using your existing token.
-#
-# Env vars mapped from docker-compose:
-#   RABBITMQ_URL, REDIS_URL, PORT, DATABASE_URL, RUNTIME_BACKEND
-# =============================================================================
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -16,7 +10,7 @@ metadata:
   labels:
     app: proxy
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: proxy
@@ -24,10 +18,29 @@ spec:
     metadata:
       labels:
         app: proxy
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
     spec:
-      # Pull the image from GHCR using the imagePullSecret created by Ansible/bash
+      serviceAccountName: {{ .Values.serviceAccount.name }}
       imagePullSecrets:
         - name: ghcr-secret
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values: [proxy]
+                topologyKey: kubernetes.io/hostname
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 2000
       containers:
         - name: proxy
           image: "{{ .Values.image.registry }}/coin-ops-proxy:{{ .Values.image.tag }}"
@@ -35,6 +48,12 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           env:
             - name: PORT
               value: "8080"
@@ -87,4 +106,15 @@ spec:
       port: 8080
       targetPort: http
 
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  namespace: {{ .Values.namespaces.app }}
+  name: proxy-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: proxy
 {{- end }}

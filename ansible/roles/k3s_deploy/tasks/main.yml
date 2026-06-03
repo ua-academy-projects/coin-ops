@@ -55,31 +55,60 @@
     - ghcr_token | length > 0
   no_log: true
 
-# ── 5. Setup App connection strings ─────────────────────────────────────────────
-- name: Apply Connection Secrets across namespaces
-  kubernetes.core.k8s:
-    kubeconfig: "{{ kubeconfig_path }}"
-    state: present
-    namespace: "{{ item }}"
-    template: "{{ playbook_dir }}/../../deploy/k3s/app/secrets.yaml"
-  loop:
-    - "{{ app_namespace }}"
-    - "{{ infra_namespace }}"
+# ── 5. Install External Secrets Operator ───────────────────────────────────────
+- name: Install External Secrets Operator via Helm
+  ansible.builtin.command: >
+    helm upgrade --install external-secrets external-secrets
+    -n external-secrets --create-namespace
+    --set installCRDs=true
+    --repo https://charts.external-secrets.io
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  changed_when: false
 
-# ── 6. Setup Network Policies ──────────────────────────────────────────────────
-- name: Apply Network Policies for Infra namespace
-  kubernetes.core.k8s:
+- name: Wait for External Secrets Operator to be ready
+  kubernetes.core.k8s_info:
     kubeconfig: "{{ kubeconfig_path }}"
-    state: present
-    namespace: "{{ infra_namespace }}"
-    template: "{{ playbook_dir }}/../../deploy/k3s/infra/network-policy.yaml"
+    kind: Deployment
+    namespace: external-secrets
+    name: external-secrets
+  register: eso_deploy_info
+  until:
+    - eso_deploy_info.resources | length > 0
+    - eso_deploy_info.resources[0].status.readyReplicas | default(0) > 0
+  retries: 24
+  delay: 5
 
-- name: Apply Network Policies for App namespace
+- name: Create ClusterSecretStore for GCP Secret Manager
   kubernetes.core.k8s:
     kubeconfig: "{{ kubeconfig_path }}"
     state: present
-    namespace: "{{ app_namespace }}"
-    template: "{{ playbook_dir }}/../../deploy/k3s/app/network-policy.yaml"
+    definition:
+      apiVersion: external-secrets.io/v1beta1
+      kind: ClusterSecretStore
+      metadata:
+        name: cloud-secret-store
+      spec:
+        provider:
+          gcpsm:
+            projectID: "coinops"
+  ignore_errors: true # Fails gracefully if not on GCP
+
+- name: Create ClusterSecretStore for AWS Secrets Manager
+  kubernetes.core.k8s:
+    kubeconfig: "{{ kubeconfig_path }}"
+    state: present
+    definition:
+      apiVersion: external-secrets.io/v1beta1
+      kind: ClusterSecretStore
+      metadata:
+        name: cloud-secret-store-aws
+      spec:
+        provider:
+          aws:
+            service: SecretsManager
+            region: us-east-1
+  ignore_errors: true # Fails gracefully if not on AWS
 
 # ── 6.5 Deploy CloudNativePG Operator ──────────────────────────────────────────
 - name: Download CloudNativePG Operator manifest
@@ -106,109 +135,6 @@
   retries: 24
   delay: 5
 
-# ── 7. Deploy Stateful Services (Infra) ────────────────────────────────────────
-
-
-- name: Deploy CNPG Secrets
-  kubernetes.core.k8s:
-    kubeconfig: "{{ kubeconfig_path }}"
-    state: present
-    namespace: "{{ infra_namespace }}"
-    template: "{{ playbook_dir }}/../../deploy/k3s/infra/cnpg-secrets.yaml"
-
-- name: Deploy CloudNativePG Cluster
-  kubernetes.core.k8s:
-    kubeconfig: "{{ kubeconfig_path }}"
-    state: present
-    namespace: "{{ infra_namespace }}"
-    template: "{{ playbook_dir }}/../../deploy/k3s/infra/cnpg.yaml"
-
-- name: Deploy Redis and RabbitMQ Message Brokering
-  kubernetes.core.k8s:
-    kubeconfig: "{{ kubeconfig_path }}"
-    state: present
-    namespace: "{{ infra_namespace }}"
-    template: "{{ playbook_dir }}/../../deploy/k3s/infra/infra.yaml"
-
-# ── 8. Wait for Stateful Services ──────────────────────────────────────────────
-- name: Wait for Redis and RabbitMQ to become active
-  kubernetes.core.k8s_info:
-    kubeconfig: "{{ kubeconfig_path }}"
-    kind: Deployment
-    namespace: "{{ infra_namespace }}"
-    name: "{{ item }}"
-  register: deploy_info
-  until:
-    - deploy_info.resources | length > 0
-    - deploy_info.resources[0].status.readyReplicas | default(0) == deploy_info.resources[0].status.replicas | default(1)
-  retries: 24
-  delay: 5
-  loop:
-    - rabbitmq
-    - redis
-
-- name: Wait for CloudNativePG Cluster to become active
-  kubernetes.core.k8s_info:
-    kubeconfig: "{{ kubeconfig_path }}"
-    kind: Cluster
-    api_version: postgresql.cnpg.io/v1
-    namespace: "{{ infra_namespace }}"
-    name: coin-ops-db
-  register: cnpg_cluster_info
-  until:
-    - cnpg_cluster_info.resources | length > 0
-    - cnpg_cluster_info.resources[0].status.phase | default('') == 'Cluster in healthy state'
-  retries: 30
-  delay: 5
-
-# ── 9. Deploy Stateless Applications (App) ──────────────────────────────────────
-- name: Deploy Go Proxy Gateway
-  kubernetes.core.k8s:
-    kubeconfig: "{{ kubeconfig_path }}"
-    state: present
-    namespace: "{{ app_namespace }}"
-    template: "{{ playbook_dir }}/../../deploy/k3s/app/proxy.yaml"
-
-- name: Deploy FastAPI and RabbitMQ History Worker
-  kubernetes.core.k8s:
-    kubeconfig: "{{ kubeconfig_path }}"
-    state: present
-    namespace: "{{ app_namespace }}"
-    template: "{{ playbook_dir }}/../../deploy/k3s/app/history.yaml"
-
-- name: Deploy Web UI SPA
-  kubernetes.core.k8s:
-    kubeconfig: "{{ kubeconfig_path }}"
-    state: present
-    namespace: "{{ app_namespace }}"
-    template: "{{ playbook_dir }}/../../deploy/k3s/app/ui.yaml"
-
-# ── 10. Wait for Stateless Applications ──────────────────────────────────────────
-- name: Wait for App Deployments to become active
-  kubernetes.core.k8s_info:
-    kubeconfig: "{{ kubeconfig_path }}"
-    kind: Deployment
-    namespace: "{{ app_namespace }}"
-    name: "{{ item }}"
-  register: app_deploy_info
-  until:
-    - app_deploy_info.resources | length > 0
-    - app_deploy_info.resources[0].status.readyReplicas | default(0) == app_deploy_info.resources[0].status.replicas | default(1)
-  retries: 24
-  delay: 5
-  loop:
-    - proxy
-    - history-api
-    - history-consumer
-    - ui
-
-# ── 11. Deploy Ingress routing ──────────────────────────────────────────────────
-- name: Deploy Nginx Ingress Controller Routing Rules
-  kubernetes.core.k8s:
-    kubeconfig: "{{ kubeconfig_path }}"
-    state: present
-    namespace: "{{ app_namespace }}"
-    template: "{{ playbook_dir }}/../../deploy/k3s/ingress/ingress.yaml"
 
 # ── 12. Deploy ArgoCD (GitOps Bootstrapping) ────────────────────────────────────
 - name: Create argocd namespace
@@ -222,9 +148,9 @@
         name: argocd
 
 - name: Download ArgoCD stable manifest
-  ansible.builtin.get_url:
-    url: https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-    dest: /tmp/argocd-install.yaml
+  ansible.builtin.command:
+    cmd: curl -sL https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml -o /tmp/argocd-install.yaml
+  changed_when: false
 
 - name: Install ArgoCD (Server-Side Apply to avoid conflicts)
   ansible.builtin.command:
