@@ -76,7 +76,16 @@
       when:
         - cloud == 'gcp'
 
-#NOTE: There should be an AWS role caller
+- name: Fetch deploy secrets from AWS Secrets Manager
+  hosts: k3s-node-01
+  become: true
+  roles:
+    - role: aws_secrets
+      tags:
+        - secrets
+        - coin-ops
+      when:
+        - cloud == 'aws'
 
 - name: Deploy Coin Ops
   hosts: k3s-node-01

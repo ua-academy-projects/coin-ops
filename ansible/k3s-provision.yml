@@ -1,3 +1,5 @@
+# provision k3s cluter without any application
+
 ---
 - name: Provision k3s gateway
   hosts: bastion

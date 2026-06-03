@@ -1,3 +1,41 @@
-#SPDX-License-Identifier: MIT-0
+# SPDX-License-Identifier: MIT-0
 ---
 # tasks file for ansible/roles/aws_secrets
+- name: Fetch AWS Secrets Manager values when requested
+  when:
+    - required_secrets | default([]) | length > 0
+  block:
+    - name: Validate AWS region is set for Secrets Manager fetch
+      ansible.builtin.assert:
+        that:
+          - aws_secrets_region | length > 0
+        fail_msg: "AWS_REGION or AWS_DEFAULT_REGION must be exported to fetch secrets from AWS Secrets Manager."
+
+    - name: Read secrets from AWS Secrets Manager
+      ansible.builtin.command:
+        argv:
+          - aws
+          - secretsmanager
+          - get-secret-value
+          - --secret-id
+          - "{{ aws_secrets_secret_ids[item] }}"
+          - --region
+          - "{{ aws_secrets_region }}"
+          - --query
+          - SecretString
+          - --output
+          - text
+      loop: "{{ required_secrets }}"
+      register: aws_secret_reads
+      changed_when: false
+      no_log: true
+
+    - name: Store fetched AWS secrets as host facts
+      ansible.builtin.set_fact:
+        fetched_gsm_secrets: >-
+          {{
+            fetched_gsm_secrets | default({}) |
+            combine({ item.item: item.stdout })
+          }}
+      loop: "{{ aws_secret_reads.results | default([]) }}"
+      no_log: true

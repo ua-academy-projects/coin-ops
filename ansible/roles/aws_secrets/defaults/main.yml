@@ -1,3 +1,10 @@
-#SPDX-License-Identifier: MIT-0
+# SPDX-License-Identifier: MIT-0
 ---
 # defaults file for ansible/roles/aws_secrets
+aws_secrets_region: "{{ lookup('env', 'AWS_REGION') | default(lookup('env', 'AWS_DEFAULT_REGION'), true) }}"
+
+aws_secrets_secret_ids:
+  ghcr_username: ghcr-username
+  ghcr_token: ghcr-token
+  rabbitmq_password: rabbitmq-password
+  db_password: db-password
