@@ -46,6 +46,10 @@ externalSecrets:
   enabled: true
   secretStoreName: "cloud-secret-store"
 
+database:
+  user: "cognitor"
+  password: "changeme"
+
 # Legacy local credentials and in-cluster infrastructure have been removed for production.
 # Infrastructure is managed by Terraform.
 features:
