@@ -1,5 +1,7 @@
+#NOTE: MAYBE ITS BETTER TO MAKE FILE FLATTEN
+
 namespaces:
-  create: false
+  create: false # bc ansible creates ns before helm runc
   app: coin-ops-app
   workers: coin-ops-workers
   data: coin-ops-data
@@ -20,22 +22,13 @@ config:
     HISTORY_URL: /history-api
 
 secret:
-  create: true
+  create: false
   name: coin-ops-secret
-  stringData:
-    POSTGRES_USER: cognitor
-    POSTGRES_PASSWORD: changeme
-    POSTGRES_DB: cognitor
-    DATABASE_URL: postgresql://app:changeme@postgres.{{ .Values.namespaces.data }}.svc.cluster.local:5432/app
-    RABBITMQ_DEFAULT_USER: cognitor
-    RABBITMQ_DEFAULT_PASS: changeme
-    RABBITMQ_URL: amqp://cognitor:changeme@rabbitmq.{{ .Values.namespaces.data }}.svc.cluster.local:5672/
-    REDIS_URL: redis://redis.{{ .Values.namespaces.data }}.svc.cluster.local:6379/0
 
 ingress:
   enabled: true
   name: coin-ops
-  host: coinops.test
+  host: coinops
   className: ""
   annotations: {}
   middlewares:

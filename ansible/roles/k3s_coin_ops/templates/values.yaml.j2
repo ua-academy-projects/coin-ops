@@ -11,17 +11,8 @@ config:
   name: {{ k3s_coin_ops_config_name | to_json }}
 
 secret:
-  create: true
+  create: false
   name: {{ k3s_coin_ops_secret_name | to_json }}
-  stringData:
-    POSTGRES_USER: {{ k3s_coin_ops_postgres_user | to_json }}
-    POSTGRES_PASSWORD: {{ k3s_coin_ops_postgres_password | to_json }}
-    POSTGRES_DB: {{ k3s_coin_ops_postgres_db | to_json }}
-    DATABASE_URL: {{ ("postgresql://" ~ k3s_coin_ops_postgres_user ~ ":" ~ k3s_coin_ops_postgres_password ~ "@" ~ k3s_coin_ops_postgres_host ~ ":" ~ k3s_coin_ops_postgres_port ~ "/" ~ k3s_coin_ops_postgres_db) | to_json }}
-    RABBITMQ_DEFAULT_USER: {{ k3s_coin_ops_rabbitmq_user | to_json }}
-    RABBITMQ_DEFAULT_PASS: {{ k3s_coin_ops_rabbitmq_password | to_json }}
-    RABBITMQ_URL: {{ ("amqp://" ~ k3s_coin_ops_rabbitmq_user ~ ":" ~ k3s_coin_ops_rabbitmq_password ~ "@rabbitmq." ~ k3s_coin_ops_namespaces.data ~ ".svc.cluster.local:5672/") | to_json }}
-    REDIS_URL: {{ ("redis://redis." ~ k3s_coin_ops_namespaces.data ~ ".svc.cluster.local:6379/0") | to_json }}
 
 ingress:
   host: {{ k3s_coin_ops_ingress_host | to_json }}

@@ -41,6 +41,36 @@
     ansible_python_interpreter: "{{ k3s_coin_ops_ansible_venv_path }}/bin/python"
   no_log: true
 
+- name: Create Coin Ops app secret
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_coin_ops_kubeconfig }}"
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: "{{ k3s_coin_ops_secret_name }}"
+        namespace: "{{ item }}"
+        labels:
+          app.kubernetes.io/part-of: coin-ops
+      type: Opaque
+      stringData:
+        POSTGRES_USER: "{{ k3s_coin_ops_postgres_user }}"
+        POSTGRES_PASSWORD: "{{ k3s_coin_ops_postgres_password }}"
+        POSTGRES_DB: "{{ k3s_coin_ops_postgres_db }}"
+        DATABASE_URL: "{{ k3s_coin_ops_database_url }}"
+        RABBITMQ_DEFAULT_USER: "{{ k3s_coin_ops_rabbitmq_user }}"
+        RABBITMQ_DEFAULT_PASS: "{{ k3s_coin_ops_rabbitmq_password }}"
+        RABBITMQ_URL: "{{ k3s_coin_ops_rabbitmq_url }}"
+        REDIS_URL: "redis://redis.{{ k3s_coin_ops_namespaces.data }}.svc.cluster.local:6379/0"
+  loop:
+    - "{{ k3s_coin_ops_namespaces.app }}"
+    - "{{ k3s_coin_ops_namespaces.workers }}"
+    - "{{ k3s_coin_ops_namespaces.data }}"
+  vars:
+    ansible_python_interpreter: "{{ k3s_coin_ops_ansible_venv_path }}/bin/python"
+  no_log: true
+
 - name: Build Helm values file
   ansible.builtin.template:
     src: values.yaml.j2
