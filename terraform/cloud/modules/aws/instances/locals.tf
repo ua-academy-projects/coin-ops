@@ -41,7 +41,7 @@ locals {
     for binding in flatten([
       for identity, identity_cfg in local.workload_identities : [
         for workload_name, cfg in var.workloads : [
-          for secret in try(cfg.secrets, []) : {
+          for secret in coalesce(try(cfg.secrets, null), []) : {
             key         = "${identity}-${secret}"
             identity    = identity
             secret_key  = secret

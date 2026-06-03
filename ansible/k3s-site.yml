@@ -47,13 +47,6 @@
     - role: k3s_headlamp
       tags: headlamp
 
-- name: Deploy CNPG
-  hosts: k3s-node-01
-  become: true
-  roles:
-    - role: k3s_cnpg
-      tags: cnpg
-
 - name: Fetch deploy secrets from Azure Key Vault
   hosts: k3s-node-01
   become: true
@@ -86,6 +79,13 @@
         - coin-ops
       when:
         - cloud == 'aws'
+
+- name: Deploy CNPG
+  hosts: k3s-node-01
+  become: true
+  roles:
+    - role: k3s_cnpg
+      tags: cnpg
 
 - name: Deploy Coin Ops
   hosts: k3s-node-01

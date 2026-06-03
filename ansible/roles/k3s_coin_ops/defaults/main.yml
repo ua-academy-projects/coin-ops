@@ -25,6 +25,7 @@ k3s_coin_ops_image_tag: "{{ lookup('env', 'IMAGE_TAG') | default('shabat-latest'
 k3s_coin_ops_ghcr_server: ghcr.io
 k3s_coin_ops_ghcr_username: "{{ fetched_gsm_secrets.ghcr_username | default(lookup('env', 'GHCR_USERNAME'), true) }}"
 k3s_coin_ops_ghcr_token: "{{ fetched_gsm_secrets.ghcr_token | default(lookup('env', 'GHCR_TOKEN'), true) }}"
+k3s_coin_ops_ghcr_email: "{{ lookup('env', 'GHCR_EMAIL') | default('', true) }}"
 k3s_coin_ops_postgres_password: "{{ fetched_gsm_secrets.db_password | default(lookup('env', 'POSTGRES_PASSWORD'), true) }}"
 k3s_coin_ops_rabbitmq_password: "{{ fetched_gsm_secrets.rabbitmq_password | default(lookup('env', 'RABBITMQ_PASSWORD'), true) }}"
 

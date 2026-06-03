@@ -19,4 +19,4 @@ k3s_cnpg_storage_size: 5Gi
 k3s_cnpg_app_secret_name: postgres-app
 k3s_cnpg_app_database: "{{ lookup('env', 'POSTGRES_DB') | default('app', true) }}"
 k3s_cnpg_app_user: "{{ lookup('env', 'POSTGRES_USER') | default('app', true) }}"
-k3s_cnpg_app_password: "{{ lookup('env', 'POSTGRES_PASSWORD') | default('changeme', true) }}"
+k3s_cnpg_app_password: "{{ fetched_gsm_secrets.db_password | default(lookup('env', 'POSTGRES_PASSWORD'), true) }}"
