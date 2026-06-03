@@ -1,9 +1,9 @@
 ---
-# provision.yml — install system packages on all VMs.
+# vm-provision.yml — install system packages on all VMs.
 # Run once (or re-run: idempotent).
 #
 #   source .env
-#   ansible-playbook -i ansible/inventory ansible/provision.yml
+#   ansible-playbook -i ansible/inventory ansible/vm-provision.yml
 
 - name: Validate required environment variables
   hosts: localhost
@@ -19,7 +19,7 @@
           Run:  source .env
           RUNTIME_BACKEND may be empty and will default to external.
           Supported explicit runtime backends: external, postgres.
-          Then retry: ansible-playbook -i ansible/inventory ansible/provision.yml
+          Then retry: ansible-playbook -i ansible/inventory ansible/vm-provision.yml
 
 - name: Common setup — public nodes
   hosts: bastion:ui:nat

@@ -1,9 +1,9 @@
 ---
-# deploy.yml — deploy all services.
+# vm-deploy.yml — deploy all VM services.
 # Safe to re-run on every code push.
 #
 #   source .env
-#   ansible-playbook -i ansible/inventory ansible/deploy.yml
+#   ansible-playbook -i ansible/inventory ansible/vm-deploy.yml
 
 - name: Validate required environment variables
   hosts: localhost
@@ -19,7 +19,7 @@
           Run:  source .env
           RUNTIME_BACKEND may be empty and will default to external.
           Supported explicit runtime backends: external, postgres.
-          Then retry: ansible-playbook -i ansible/inventory ansible/deploy.yml
+          Then retry: ansible-playbook -i ansible/inventory ansible/vm-deploy.yml
 
 - name: Fetch deploy secrets from Google Secret Manager
   hosts: history:proxy:ui

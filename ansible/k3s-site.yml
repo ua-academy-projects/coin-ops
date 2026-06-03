@@ -1,4 +1,24 @@
 ---
+- name: Provision k3s gateway
+  hosts: bastion
+  become: true
+  roles:
+    - role: common
+      tags: common
+    - role: nat
+      tags: nat
+    - role: k3s_gateway
+      tags: gateway
+
+- name: Provision k3s cluster
+  hosts: k3s
+  become: true
+  roles:
+    - role: common
+      tags: common
+    - role: k3s_cluster
+      tags: k3s
+
 - name: Install k3s Helm dependencies
   hosts: k3s-node-01
   become: true
