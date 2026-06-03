@@ -1,8 +1,7 @@
 {{- if .Values.networkPolicy.enabled }}
-{{- $appNs := list .Values.namespaces.proxy .Values.namespaces.historyApi .Values.namespaces.ui }}
+{{- $appNs := list .Values.namespaces.proxy .Values.namespaces.historyApi .Values.namespaces.historyConsumer .Values.namespaces.ui }}
 {{- range $ns := $appNs }}
 ---
-# Default deny all ingress+egress in app namespaces
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -12,7 +11,6 @@ spec:
   podSelector: {}
   policyTypes: [Ingress, Egress]
 ---
-# Allow DNS resolution from all app namespaces
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -36,7 +34,27 @@ spec:
           port: 53
 {{- end }}
 ---
-# proxy: allow ingress from ui namespace, egress to rabbitmq and redis
+# Allow Traefik ingress controller to reach UI
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-traefik
+  namespace: {{ .Values.namespaces.ui }}
+spec:
+  podSelector:
+    matchLabels:
+      app: ui
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+---
+# proxy: allow ingress from ui, egress to rabbitmq, redis, history
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -66,11 +84,11 @@ spec:
             matchLabels:
               kubernetes.io/metadata.name: {{ .Values.namespaces.historyApi }}
 ---
-# history: allow ingress from proxy, egress to db
+# history-api: allow ingress from proxy, egress to db
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-history
+  name: allow-history-api
   namespace: {{ .Values.namespaces.historyApi }}
 spec:
   podSelector: {}
@@ -85,8 +103,23 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: {{ .Values.namespaces.db }}
+---
+# history-consumer: egress to rabbitmq and db
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-history-consumer
+  namespace: {{ .Values.namespaces.historyConsumer }}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
     - to:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: {{ .Values.namespaces.rabbitmq }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.namespaces.db }}
 {{- end }}
