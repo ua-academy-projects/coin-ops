@@ -49,5 +49,5 @@ externalSecrets:
 # Legacy local credentials and in-cluster infrastructure have been removed for production.
 # Infrastructure is managed by Terraform.
 features:
-  deployInfra: false
+  deployInfra: true
   deployApp: true
