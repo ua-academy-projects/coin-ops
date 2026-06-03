@@ -17,13 +17,23 @@ spec:
         app.kubernetes.io/name: history-consumer
         app.kubernetes.io/part-of: coin-ops
     spec:
+      terminationGracePeriodSeconds: 30
       imagePullSecrets:
         - name: ghcr-pull-secret
       containers:
         - name: history-consumer
           image: ghcr.io/ua-academy-projects/coin-ops-history-consumer:shabat-latest
+          securityContext:
+            allowPrivilegeEscalation: false
           envFrom:
             - secretRef:
                 name: coin-ops-secret
             - configMapRef:
                 name: coin-ops-config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
