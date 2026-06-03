@@ -50,6 +50,14 @@ database:
   user: "cognitor"
   password: "changeme"
 
+rabbitmq:
+  auth:
+    password: "changeme"
+
+redis:
+  auth:
+    password: "changeme"
+
 # Legacy local credentials and in-cluster infrastructure have been removed for production.
 # Infrastructure is managed by Terraform.
 features:
