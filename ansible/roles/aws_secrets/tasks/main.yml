@@ -26,16 +26,16 @@
           - --output
           - text
       loop: "{{ required_secrets }}"
-      register: aws_secret_reads
+      register: aws_secrets_secret_reads
       changed_when: false
       no_log: true
 
-    - name: Store fetched AWS secrets as host facts
+    - name: Store fetched AWS secrets as host facts # noqa: var-naming[no-role-prefix]
       ansible.builtin.set_fact:
         fetched_gsm_secrets: >-
           {{
             fetched_gsm_secrets | default({}) |
             combine({ item.item: item.stdout })
           }}
-      loop: "{{ aws_secret_reads.results | default([]) }}"
+      loop: "{{ aws_secrets_secret_reads.results | default([]) }}"
       no_log: true
