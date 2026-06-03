@@ -8,245 +8,219 @@ Based on: `dev` branch of [ua-academy-projects/coin-ops](https://github.com/ua-a
 
 ## What This Branch Does
 
-Deploys the CoinOps application to AWS + Azure (hybrid multi-cloud) and a k3s Kubernetes cluster on GCP using:
-- **Terraform** — provisions cloud infrastructure across Azure + AWS + GCP
-- **Ansible** — configures VMs, deploys containers, installs k3s cluster and apps
-- **Docker Compose** — runs services on each VM (hybrid)
-- **Tailscale** — overlay VPN with subnet router pattern connecting VMs across clouds
-- **k3s** — lightweight Kubernetes cluster on GCP
-- **Helm** — installs Kubernetes apps (cert-manager, Headlamp, Homepage, CoinOps)
+Deploys the CoinOps application to a k3s Kubernetes cluster on GCP using:
+- **Terraform** — provisions GCP infrastructure (VMs, VPC, Regional NLB, firewall rules)
+- **Ansible** — configures VMs, installs k3s cluster, deploys infrastructure apps
+- **Helm** — deploys CoinOps application stack with per-service namespace isolation
+- **k3s** — lightweight Kubernetes cluster on GCP (3 nodes, all control plane + worker)
+- **CNPG (CloudNativePG)** — PostgreSQL running inside k3s cluster (replaces external Cloud SQL)
 - **cert-manager** — automatic TLS certificates via Let's Encrypt
+- **Traefik** — Ingress controller (built into k3s)
 - **Cloudflare** — DNS management
 - **GCP Regional NLB** — pass-through Network Load Balancer for k3s cluster
 
-## Application
+---
 
-Coin rates monitoring dashboard:
-- Live BTC, ETH prices from CoinGecko
-- USD/UAH rate from NBU
-- Historical data charts
-- Hybrid app: `https://coinops-softserve-penina.pp.ua` ✅
-- k3s CoinOps: `https://coinops-softserve-penina.pp.ua` ✅
-- k3s Homepage: `https://k3s.coinops-softserve-penina.pp.ua` ✅
-- k3s Headlamp: `kubectl port-forward -n headlamp svc/headlamp 8080:80` → `localhost:8080`
+## Application URLs
+
+| Service | URL | Access |
+|---------|-----|--------|
+| CoinOps | https://coinops-softserve-penina.pp.ua | Public ✅ |
+| Homepage | https://k3s.coinops-softserve-penina.pp.ua | Public ✅ |
+| Headlamp | http://localhost:8080 | Port-forward only (admin tool — not public by design) |
 
 ---
 
 ## Architecture
 
-### Hybrid Azure + AWS (Task 1)
-
 ```
 Internet
   │
   ▼
-Cloudflare (HTTPS proxy, coinops-softserve-penina.pp.ua)
+Cloudflare DNS (DNS only — no proxy)
   │
   ▼
-Azure Load Balancer (20.91.139.85)
-  │
-  ▼
-node-03 — nginx + React UI     (Azure swedencentral, private IP 10.0.4.4)
-  │
-  │  [Tailscale subnet router tunnel — gateway-aws ↔ gateway-azure]
-  │
-  ├── /api/         → node-02 — Go proxy + Redis   (AWS eu-central-1, 10.0.2.78)
-  │                     │
-  │                     └── publishes → node-01 — RabbitMQ + History API
-  │                                         │       (AWS eu-central-1, 10.0.2.100)
-  │                                         └── AWS RDS PostgreSQL (private subnet)
-  │
-  └── /history-api/ → node-01 — History API (AWS eu-central-1, 10.0.2.100)
-
-SSH: Your machine → jump-host (AWS, port 9922, 3.70.205.142) → nodes via ProxyJump
-Cross-cloud SSH:  jump-host → gateway-aws → Tailscale → node-03 (Azure)
-```
-
-### GCP k3s Cluster (Task 2 + Task 3 + Task 4)
-
-```
-Internet
-  │
-  ▼
-Cloudflare DNS only (grey cloud — no proxy)
-  │
-  ▼
-GCP Regional NLB 34.116.135.79 (pass-through — forwards TCP packets unchanged)
+GCP Regional NLB 34.116.208.65 (pass-through — forwards TCP packets unchanged)
   │
   ├── port 80  → k3s nodes → Traefik → HTTP routes
   └── port 443 → k3s nodes → Traefik → HTTPS routes (TLS terminated by Traefik)
                                   │
-                        ┌─────────┴──────────┐──────────────────┐
-                        ▼                    ▼                  ▼
-              coinops-frontend          homepage           headlamp
-              (coinops-softserve-    (k3s.coinops-      (port-forward only)
-               penina.pp.ua)          softserve-
-                                       penina.pp.ua)
+                        ┌─────────┴──────────┐
+                        ▼                    ▼
+              coinops-softserve-        k3s.coinops-
+               penina.pp.ua             softserve-penina.pp.ua
+               (coinops-ui ns)          (homepage ns)
 
 GCP k3s Cluster (europe-central2):
-  k3s-server-1  control plane + worker  34.116.142.103 (public) / 10.0.1.2 (private)
-  k3s-server-2  control plane + worker  10.0.1.4 (private)
+  k3s-server-1  control plane + worker  34.116.219.249 (public) / 10.0.1.4 (private)
+  k3s-server-2  control plane + worker  10.0.1.2 (private)
   k3s-server-3  control plane + worker  10.0.1.3 (private, zone-b)
-
-Namespaces:
-  coinops-queue     rabbitmq, redis
-  coinops-app       proxy, history-api, history-consumer, schema-init Job
-  coinops-frontend  ui + Ingress
-  homepage          Homepage dashboard + Ingress
-  headlamp          Headlamp UI (no public Ingress)
-  cert-manager      cert-manager + Let's Encrypt ClusterIssuer
-
-Database:
-  CloudSQL PostgreSQL (GCP managed, private IP 10.0.1.3, accessed via VPC peering)
 ```
 
 ---
 
-## Cloud Status
+## Kubernetes Namespaces
 
-| Cloud | Infrastructure | Ansible | App | URL |
-|-------|---------------|---------|-----|-----|
-| **Azure+AWS Hybrid** | ✅ Complete | ✅ Complete | ✅ Live | coinops-softserve-penina.pp.ua |
-| **GCP k3s** | ✅ Complete | ✅ Complete | ✅ Live | k3s.coinops-softserve-penina.pp.ua |
+Each service runs in its own isolated namespace:
 
----
-
-## Hybrid Azure + AWS (Task 1)
-
-### VM Distribution
-
-| VM | Cloud | Region | Role | IP |
-|----|-------|--------|------|----|
-| jump-host | AWS | eu-central-1 | SSH entry point | 3.70.205.142 (public) |
-| gateway-aws | AWS | eu-central-1 | Tailscale subnet router | 10.0.1.145 (private) |
-| node-01 | AWS | eu-central-1 | RabbitMQ + History API | 10.0.2.100 (private) |
-| node-02 | AWS | eu-central-1 | Go proxy + Redis | 10.0.2.78 (private) |
-| RDS PostgreSQL | AWS | eu-central-1 | Managed database | private subnet |
-| gateway-azure | Azure | swedencentral | Tailscale subnet router | 135.225.57.231 (public) |
-| node-03 | Azure | swedencentral | nginx + React UI | 10.0.4.4 (private, behind LB) |
-| Azure LB | Azure | swedencentral | Load Balancer | 20.91.139.85 (public) |
+| Namespace | Service | Purpose |
+|-----------|---------|---------|
+| `coinops-rabbitmq` | RabbitMQ | Message queue for async communication |
+| `coinops-redis` | Redis | Cache layer for proxy |
+| `coinops-proxy` | Go proxy | Central API hub, fetches market data |
+| `coinops-history-api` | Python history API | Serves historical data to UI |
+| `coinops-history-consumer` | Python worker | Consumes RabbitMQ, writes to DB |
+| `coinops-ui` | React + nginx | Frontend, public via Ingress |
+| `coinops-db` | CNPG PostgreSQL | In-cluster database |
+| `cert-manager` | cert-manager | TLS certificate automation |
+| `homepage` | Homepage | Cluster dashboard |
+| `headlamp` | Headlamp | Kubernetes UI (port-forward only) |
+| `cnpg-system` | CNPG operator | CloudNativePG operator |
 
 ---
 
-## GCP k3s Cluster (Task 2 + Task 3 + Task 4)
+## GCP Infrastructure
 
-### VM Distribution
-
-| VM | Zone | Role | Public IP | Private IP |
-|----|------|------|-----------|------------|
-| k3s-server-1 | europe-central2-a | control plane + worker | 34.116.142.103 | 10.0.1.2 |
-| k3s-server-2 | europe-central2-a | control plane + worker | — | 10.0.1.4 |
+| Resource | Zone | Role | Public IP | Private IP |
+|----------|------|------|-----------|------------|
+| k3s-server-1 | europe-central2-a | control plane + worker | 34.116.219.249 | 10.0.1.4 |
+| k3s-server-2 | europe-central2-a | control plane + worker | — | 10.0.1.2 |
 | k3s-server-3 | europe-central2-b | control plane + worker | — | 10.0.1.3 |
-| CloudSQL | europe-central2 | PostgreSQL managed DB | — | 10.113.0.3 |
-| Regional NLB | europe-central2 | Pass-through LB | 34.116.135.79 | — |
+| Regional NLB | europe-central2 | Pass-through LB | 34.116.208.65 | — |
 
-### Ansible Roles
+---
+
+## Deployment — How It Works
+
+### 1. Infrastructure (Terraform)
+```bash
+cd terraform
+terraform init -reconfigure
+terraform apply -auto-approve
+```
+
+### 2. k3s Cluster (Ansible)
+```bash
+# On k3s-server-1
+ansible-playbook -i ansible/inventory ansible/k3s-cluster.yml
+```
+
+### 3. Infrastructure Apps (Ansible)
+Deploys: cert-manager, Headlamp, Homepage, CNPG operator
+```bash
+ansible-playbook -i ansible/inventory ansible/k3s-apps.yml
+```
+
+### 4. CoinOps Application (Helm)
+```bash
+helm upgrade --install coinops helm/coinops \
+  --set secrets.dbPassword="$DB_PASSWORD" \
+  --set secrets.rabbitmqPassword="$RABBITMQ_PASSWORD" \
+  --set secrets.ghcrToken="$GHCR_TOKEN" \
+  --set secrets.ghcrUsername="$GHCR_USERNAME"
+```
+
+---
+
+## Ansible Roles
 
 | Role | Purpose |
 |------|---------|
 | `common` | UFW firewall, apt packages, timezone |
 | `k3s_prereqs` | curl, Helm, pip3, python kubernetes library |
-| `k3s_server_bootstrap` | initializes cluster on node-1, sets TLS SAN |
-| `k3s_server_join` | joins node-2 and node-3 to cluster |
+| `k3s_server` | initializes cluster on node-1, joins node-2 and node-3 (single role with `when` conditions) |
 | `k3s_postcheck` | verifies all nodes Ready, downloads kubeconfig |
 | `cert_manager` | installs cert-manager + Let's Encrypt ClusterIssuer |
-| `k3s_headlamp` | installs Headlamp UI (no public Ingress — port-forward only) |
+| `k3s_headlamp` | installs Headlamp UI + ServiceAccount (port-forward only) |
 | `k3s_homepage` | installs Homepage dashboard + Ingress + TLS |
-| `k3s_coinops` | deploys full CoinOps stack — namespaces, secrets, queue, app, frontend |
+| `k3s_cnpg` | installs CNPG operator + creates PostgreSQL cluster |
 
-### Playbooks
+---
 
-```bash
-# Bootstrap k3s cluster (run once)
-ansible-playbook -i ansible/inventory ansible/k3s-cluster.yml
+## Helm Chart Structure
 
-# Install all apps (cert-manager, Headlamp, Homepage, CoinOps)
-ansible-playbook -i ansible/inventory ansible/k3s-apps.yml
+```
+helm/coinops/
+  Chart.yaml              — chart metadata
+  values.yaml             — all configurable values (namespaces, images, ports)
+  templates/
+    _helpers.tpl          — common labels used by all resources
+    namespaces.yaml       — creates all per-service namespaces
+    secrets.yaml          — GHCR pull secrets + app credentials per namespace
+    rabbitmq.yaml         — RabbitMQ Deployment + Service
+    redis.yaml            — Redis Deployment + Service
+    proxy.yaml            — Go proxy Deployment + Service (with initContainers)
+    history.yaml          — history-api Deployment + Service
+    history-consumer.yaml — history-consumer Deployment
+    ui.yaml               — UI Deployment + Service + Ingress
+    cnpg-cluster.yaml     — CloudNativePG Cluster resource (PostgreSQL)
+    networkpolicies.yaml  — per-namespace NetworkPolicies (default-deny + allow rules)
 ```
 
-### kubectl Access
+---
+
+## Headlamp Access (port-forward only)
+
+```bash
+# On k3s-server-1 — open SSH tunnel first
+ssh -p 9922 -L 8080:localhost:8080 marta_ops@34.116.219.249
+
+# Then on k3s-server-1
+export KUBECONFIG=~/.kube/config
+kubectl port-forward -n headlamp svc/headlamp 8080:80
+
+# Get token
+kubectl create token headlamp-admin -n headlamp
+
+# Open in browser
+# http://localhost:8080
+```
+
+---
+
+## kubectl Access
 
 ```bash
 # Copy kubeconfig from k3s-server-1
-scp -P 9922 marta_ops@34.116.142.103:/tmp/k3s-config.yaml /d/.ssh/k3s-config.yaml
+scp -P 9922 marta_ops@34.116.219.249:~/.kube/config /d/.ssh/k3s-config.yaml
 
 export KUBECONFIG=/d/.ssh/k3s-config.yaml
 kubectl get nodes
 kubectl get pods -A
 ```
 
-### Headlamp Access (port-forward only — not public by design)
-
-```bash
-export KUBECONFIG=/d/.ssh/k3s-config.yaml
-kubectl port-forward -n headlamp svc/headlamp 8080:80
-# Open: http://localhost:8080
-# Token: kubectl create token headlamp-admin -n headlamp
-```
-
----
-
-## Quick Start — GCP k3s
-
-```bash
-# 1. Set GCP credentials
-export GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json
-source .env  # loads CLOUDSQL_IP, DB_PASSWORD, RABBITMQ_PASSWORD, GHCR_TOKEN etc.
-
-# 2. Provision infrastructure
-cd terraform
-terraform init -reconfigure
-terraform apply -auto-approve
-
-# 3. SSH to k3s-server-1
-eval $(ssh-agent)
-ssh-add /d/.ssh/id_ed25519_devops
-ssh -A -p 9922 marta_ops@34.116.142.103
-
-# 4. On k3s-server-1: clone repo, install k3s
-cd coin-ops
-git pull origin dev-penina-cloud
-source .env
-ansible-galaxy install -r ansible/requirements.yml
-ansible-playbook -i ansible/inventory ansible/k3s-cluster.yml
-
-# 5. Copy SSH key for Ansible ProxyJump to private nodes
-# From local machine:
-scp -P 9922 /d/.ssh/id_ed25519_devops marta_ops@34.116.142.103:~/.ssh/id_ed25519
-chmod 600 ~/.ssh/id_ed25519
-
-# 6. Deploy all apps
-ansible-playbook -i ansible/inventory ansible/k3s-apps.yml
-
-# 7. Get kubeconfig locally
-scp -P 9922 marta_ops@34.116.142.103:/tmp/k3s-config.yaml /d/.ssh/k3s-config.yaml
-```
-
 ---
 
 ## Problems & Solutions
 
-### Task 4 — CoinOps on k3s
-
-**Problem 1 — GCP Global LB TCP proxy did not pass Host header**
-Global TCP proxy forwarded raw TCP bytes. Traefik uses host-based routing and could not determine the domain → returned 404 for all HTTPS requests.
-Fix: replaced Global LB with Regional Network Load Balancer (pass-through mode). Regional NLB forwards TCP packets unchanged → Traefik receives original TLS connection with correct Host header.
+**Problem 1 — GCP Global LB did not pass Host header**
+Global TCP proxy forwarded raw TCP bytes. Traefik uses host-based routing → returned 404.
+Fix: replaced with Regional NLB (pass-through mode). Regional NLB forwards TCP packets unchanged.
 
 **Problem 2 — Health check returned 404, backends UNHEALTHY**
-HTTP health check sent `GET /health` without Host header → Traefik returned 404 → GCP marked all backends UNHEALTHY → 502 for all requests.
-Fix: TCP health check on port 80. TCP check verifies port is open without requiring HTTP response. Standard practice for Ingress controllers behind LB.
+HTTP health check sent GET /health without Host header → Traefik returned 404 → GCP marked backends UNHEALTHY.
+Fix: TCP health check on port 80. Verifies port is open without requiring HTTP response.
 
 **Problem 3 — cert-manager ACME solver Ingress had no IngressClass**
-cert-manager created solver Ingress with `class: <none>` → Traefik ignored it → ACME HTTP challenge returned 502.
-Fix: `ingressClassName: traefik` in ClusterIssuer solver config (replaces deprecated `class:` field for k8s 1.18+).
+cert-manager created solver Ingress with class: none → Traefik ignored it → ACME challenge returned 502.
+Fix: ingressClassName: traefik in ClusterIssuer solver config.
 
-**Problem 4 — CloudSQL IP not available on k3s-server-1**
-Playbook tried to run `terraform output` on jump-host where Terraform is not installed.
-Fix: `CLOUDSQL_IP` env variable loaded from `.env` via `lookup('env', 'CLOUDSQL_IP')`. Value set dynamically: `export CLOUDSQL_IP=$(terraform output -raw gcp_db_endpoint)`.
+**Problem 4 — NetworkPolicy blocked Traefik from reaching UI**
+Default-deny NetworkPolicy blocked all ingress including from Traefik.
+Fix: added allow-traefik NetworkPolicy in coinops-ui namespace allowing ingress from kube-system/traefik pod.
 
-**Problem 5 — Regional NLB requires regional health check**
-Global health check resource (`google_compute_health_check`) rejected by regional backend service.
-Fix: replaced with `google_compute_region_health_check` in the same region as the LB.
+**Problem 5 — VPC peering could not be deleted via Terraform**
+Cloud SQL was deleted but service networking connection remained due to GCP cache.
+Fix: manually deleted VPC peering in GCP Console → then terraform apply succeeded.
+
+---
+
+## Next Steps
+
+- [ ] **Cloudflare Tunnel (cloudflared)** — replace public NLB with Cloudflare Tunnel for zero-trust access. No public IP needed. Headlamp accessible via private tunnel without port-forward.
+- [ ] **ArgoCD / GitOps** — replace manual helm upgrade with GitOps-based continuous deployment
+- [ ] **Monitoring** — Prometheus + Grafana in separate namespace
+- [ ] **Logging** — Loki + Promtail
 
 ---
 
@@ -254,8 +228,8 @@ Fix: replaced with `google_compute_region_health_check` in the same region as th
 
 | File | Contains | Gitignored |
 |------|---------|-----------|
-| `.env` | RABBITMQ_PASSWORD, DB_PASSWORD, TAILSCALE_AUTH_KEY, CLOUDSQL_IP, GHCR_TOKEN | ✓ |
-| `terraform/terraform.tfvars` | cloud credentials, db_password, ssh_public_key_path | ✓ |
+| `.env` | DB_PASSWORD, RABBITMQ_PASSWORD, GHCR_TOKEN, GHCR_USERNAME | ✓ |
+| `terraform/terraform.tfvars` | GCP credentials, db_password, ssh_public_key_path | ✓ |
 | `terraform/terraform.tfstate` | live infrastructure state | ✓ |
 | `bootstrap/gcp/key.json` | GCP service account key | ✓ |
-| `/d/.ssh/k3s-config.yaml` | k3s cluster admin credentials | local only |
+| `~/.kube/config` | k3s cluster admin credentials | local only |
