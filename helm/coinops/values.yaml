@@ -6,6 +6,7 @@ namespaces:
   historyConsumer: coinops-history-consumer
   ui: coinops-ui
   db: coinops-db
+  gateway: coinops-gateway
 
 domain: "coinops-softserve-penina.pp.ua"
 

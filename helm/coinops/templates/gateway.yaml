@@ -1,0 +1,101 @@
+---
+# Gateway — nginx reverse proxy that routes all external traffic to the correct service.
+# UI talks only to the gateway — it does not know internal service addresses.
+# Pattern: API Gateway — single entry point for all backend communication.
+#
+# Routes:
+#   /api/*         → proxy service (Go, fetches market data)
+#   /history-api/* → history-api service (Python, serves historical data)
+#   /              → ui service (React frontend)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coinops-gateway-conf
+  namespace: {{ .Values.namespaces.gateway }}
+  labels:
+    {{- include "coinops.labels" . | nindent 4 }}
+data:
+  default.conf: |
+    server {
+      listen 80;
+      server_name _;
+
+      location /health {
+        access_log off;
+        add_header Content-Type application/json;
+        return 200 '{"status":"ok"}';
+      }
+
+      location /api/ {
+        proxy_pass http://proxy.{{ .Values.namespaces.proxy }}.svc.cluster.local:{{ .Values.ports.proxy }}/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+      }
+
+      location /history-api/ {
+        proxy_pass http://history-api.{{ .Values.namespaces.historyApi }}.svc.cluster.local:{{ .Values.ports.historyApi }}/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+      }
+
+      location / {
+        proxy_pass http://ui.{{ .Values.namespaces.ui }}.svc.cluster.local:80;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+      }
+    }
+---
+# Gateway Deployment — nginx:alpine, lightweight
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  namespace: {{ .Values.namespaces.gateway }}
+  labels:
+    app: gateway
+    {{- include "coinops.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: gateway
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nginx/conf.d
+      volumes:
+        - name: config
+          configMap:
+            name: coinops-gateway-conf
+---
+# Service — Ingress routes external traffic here first
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  namespace: {{ .Values.namespaces.gateway }}
+  labels:
+    {{- include "coinops.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: gateway
+  ports:
+    - port: 80
+      targetPort: 80
