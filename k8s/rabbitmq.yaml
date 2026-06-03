@@ -38,7 +38,6 @@ spec:
         runAsNonRoot: true
         runAsUser: 999
         runAsGroup: 999
-        fsGroup: 999
       containers:
         - name: rabbitmq
           image: rabbitmq:3.13.7-alpine
