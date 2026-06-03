@@ -2,6 +2,7 @@
 # Installs Headlamp Kubernetes UI via Helm.
 # NO public Ingress — admin tools must not be publicly exposed.
 # Access only via: kubectl port-forward -n headlamp svc/headlamp 8080:80
+# Token: kubectl create token headlamp-admin -n headlamp
 
 - name: Add Headlamp Helm repo
   kubernetes.core.helm_repository:
@@ -16,3 +17,32 @@
     create_namespace: true
     wait: true
     timeout: 5m
+
+# ServiceAccount with cluster-admin — allows Headlamp to read all cluster resources
+- name: Create Headlamp admin ServiceAccount
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: headlamp-admin
+        namespace: "{{ headlamp_namespace }}"
+
+# ClusterRoleBinding — binds headlamp-admin ServiceAccount to cluster-admin role
+- name: Create ClusterRoleBinding for Headlamp admin
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRoleBinding
+      metadata:
+        name: headlamp-admin
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: cluster-admin
+      subjects:
+        - kind: ServiceAccount
+          name: headlamp-admin
+          namespace: "{{ headlamp_namespace }}"
