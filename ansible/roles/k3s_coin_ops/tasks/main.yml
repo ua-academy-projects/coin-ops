@@ -31,19 +31,7 @@
           app.kubernetes.io/part-of: coin-ops
       type: kubernetes.io/dockerconfigjson
       stringData:
-        .dockerconfigjson: >-
-          {{
-            {
-              "auths": {
-                k3s_coin_ops_ghcr_server: {
-                  "username": k3s_coin_ops_ghcr_username,
-                  "password": k3s_coin_ops_ghcr_token,
-                  "email": k3s_coin_ops_ghcr_email,
-                  "auth": (k3s_coin_ops_ghcr_username ~ ":" ~ k3s_coin_ops_ghcr_token) | b64encode
-                }
-              }
-            } | to_json
-          }}
+        .dockerconfigjson: "{{ k3s_coin_ops_docker_config_json }}"
   loop:
     - "{{ k3s_coin_ops_namespaces.app }}"
     - "{{ k3s_coin_ops_namespaces.workers }}"
