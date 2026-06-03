@@ -12,7 +12,7 @@ metadata:
   labels:
     app: history-api
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: history-api
@@ -117,7 +117,7 @@ metadata:
   labels:
     app: history-consumer
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: history-consumer
