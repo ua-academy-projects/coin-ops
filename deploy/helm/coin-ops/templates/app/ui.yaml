@@ -33,10 +33,7 @@ spec:
                       operator: In
                       values: [ui]
                 topologyKey: kubernetes.io/hostname
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 101 # nginx user is typically 101
-        fsGroup: 101
+
       containers:
         - name: ui
           image: "{{ .Values.image.registry }}/coin-ops-ui:{{ .Values.image.tag }}"
@@ -44,12 +41,7 @@ spec:
           ports:
             - name: http
               containerPort: 80
-          securityContext:
-            allowPrivilegeEscalation: false
-            # readOnlyRootFilesystem: true is difficult for generic nginx images
-            capabilities:
-              drop:
-                - ALL
+
           env:
             - name: PROXY_URL
               value: "/api"
