@@ -25,6 +25,14 @@ secret:
 
 ingress:
   host: {{ k3s_coin_ops_ingress_host | to_json }}
+{% if k3s_coin_ops_tls_enabled %}
+  annotations:
+    cert-manager.io/cluster-issuer: {{ k3s_coin_ops_cluster_issuer | to_json }}
+  tls:
+    - secretName: {{ k3s_coin_ops_tls_secret_name | to_json }}
+      hosts:
+        - {{ k3s_coin_ops_ingress_host | to_json }}
+{% endif %}
 
 proxy:
   image:
