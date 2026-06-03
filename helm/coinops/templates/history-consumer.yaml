@@ -3,7 +3,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: history-consumer
-  namespace: {{ .Values.namespaces.history }}
+  namespace: {{ .Values.namespaces.historyConsumer }}
   labels:
     app: history-consumer
     {{- include "coinops.labels" . | nindent 4 }}

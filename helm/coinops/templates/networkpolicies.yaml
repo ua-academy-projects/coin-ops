@@ -1,5 +1,5 @@
 {{- if .Values.networkPolicy.enabled }}
-{{- $appNs := list .Values.namespaces.proxy .Values.namespaces.history .Values.namespaces.ui }}
+{{- $appNs := list .Values.namespaces.proxy .Values.namespaces.historyApi .Values.namespaces.ui }}
 {{- range $ns := $appNs }}
 ---
 # Default deny all ingress+egress in app namespaces
@@ -64,14 +64,14 @@ spec:
     - to:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: {{ .Values.namespaces.history }}
+              kubernetes.io/metadata.name: {{ .Values.namespaces.historyApi }}
 ---
 # history: allow ingress from proxy, egress to db
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-history
-  namespace: {{ .Values.namespaces.history }}
+  namespace: {{ .Values.namespaces.historyApi }}
 spec:
   podSelector: {}
   policyTypes: [Ingress, Egress]

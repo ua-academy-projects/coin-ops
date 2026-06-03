@@ -2,7 +2,8 @@ namespaces:
   rabbitmq: coinops-rabbitmq
   redis: coinops-redis
   proxy: coinops-proxy
-  history: coinops-history
+  historyApi: coinops-history-api
+  historyConsumer: coinops-history-consumer
   ui: coinops-ui
   db: coinops-db
 

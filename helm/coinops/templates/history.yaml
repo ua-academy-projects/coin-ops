@@ -3,7 +3,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: history-api
-  namespace: {{ .Values.namespaces.history }}
+  namespace: {{ .Values.namespaces.historyApi }}
   labels:
     app: history-api
     {{- include "coinops.labels" . | nindent 4 }}
@@ -43,7 +43,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: history-api
-  namespace: {{ .Values.namespaces.history }}
+  namespace: {{ .Values.namespaces.historyApi }}
   labels:
     {{- include "coinops.labels" . | nindent 4 }}
 spec:
