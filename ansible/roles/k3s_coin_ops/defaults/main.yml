@@ -30,7 +30,7 @@ k3s_coin_ops_ghcr_email: "{{ lookup('env', 'GHCR_EMAIL') | default('', true) }}"
 k3s_coin_ops_postgres_user: "{{ lookup('env', 'POSTGRES_USER') | default('app', true) }}"
 k3s_coin_ops_postgres_password: "{{ lookup('env', 'POSTGRES_PASSWORD') | default('changeme', true) }}"
 k3s_coin_ops_postgres_db: "{{ lookup('env', 'POSTGRES_DB') | default('app', true) }}"
-k3s_coin_ops_postgres_host: "{{ lookup('env', 'POSTGRES_HOST') | default('postgres.coin-ops-data.svc.cluster.local', true) }}"
+k3s_coin_ops_postgres_host: "{{ lookup('env', 'POSTGRES_HOST') | default('postgres-rw.coin-ops-data.svc.cluster.local', true) }}"
 k3s_coin_ops_postgres_port: "{{ lookup('env', 'POSTGRES_PORT') | default('5432', true) }}"
 
 k3s_coin_ops_rabbitmq_user: "{{ lookup('env', 'RABBITMQ_USER') | default('cognitor', true) }}"

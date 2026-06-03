@@ -1,0 +1,113 @@
+# SPDX-License-Identifier: MIT-0
+---
+# tasks file for ansible/roles/k3s_cnpg
+- name: Add CNPG Helm repo
+  kubernetes.core.helm_repository:
+    name: "{{ k3s_cnpg_chart_repo_name }}"
+    repo_url: "{{ k3s_cnpg_chart_repo_url }}"
+  vars:
+    ansible_python_interpreter: "{{ k3s_ansible_venv_path }}/bin/python"
+
+- name: Create CNPG operator namespace
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_cnpg_kubeconfig }}"
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ k3s_cnpg_operator_namespace }}"
+  vars:
+    ansible_python_interpreter: "{{ k3s_ansible_venv_path }}/bin/python"
+
+- name: Deploy CNPG operator via Helm
+  kubernetes.core.helm:
+    name: "{{ k3s_cnpg_release_name }}"
+    chart_ref: "{{ k3s_cnpg_chart_ref }}"
+    chart_version: "{{ k3s_cnpg_chart_version }}"
+    release_namespace: "{{ k3s_cnpg_operator_namespace }}"
+    create_namespace: false
+    kubeconfig: "{{ k3s_cnpg_kubeconfig }}"
+    wait: true
+    timeout: 10m0s
+  vars:
+    ansible_python_interpreter: "{{ k3s_ansible_venv_path }}/bin/python"
+
+- name: Wait for CNPG Cluster CRD
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ k3s_cnpg_kubeconfig }}"
+    api_version: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    name: clusters.postgresql.cnpg.io
+  register: k3s_cnpg_cluster_crd
+  until:
+    - k3s_cnpg_cluster_crd.resources | length > 0
+    - >-
+      k3s_cnpg_cluster_crd.resources[0].status.conditions
+      | selectattr('type', 'equalto', 'Established')
+      | selectattr('status', 'equalto', 'True')
+      | list
+      | length > 0
+  retries: 30
+  delay: 5
+  vars:
+    ansible_python_interpreter: "{{ k3s_ansible_venv_path }}/bin/python"
+
+- name: Create PostgreSQL namespace
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_cnpg_kubeconfig }}"
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ k3s_cnpg_cluster_namespace }}"
+        labels:
+          app.kubernetes.io/part-of: coin-ops
+  vars:
+    ansible_python_interpreter: "{{ k3s_ansible_venv_path }}/bin/python"
+
+- name: Create PostgreSQL app credentials
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_cnpg_kubeconfig }}"
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: "{{ k3s_cnpg_app_secret_name }}"
+        namespace: "{{ k3s_cnpg_cluster_namespace }}"
+        labels:
+          app.kubernetes.io/part-of: coin-ops
+      type: kubernetes.io/basic-auth
+      stringData:
+        username: "{{ k3s_cnpg_app_user }}"
+        password: "{{ k3s_cnpg_app_password }}"
+  vars:
+    ansible_python_interpreter: "{{ k3s_ansible_venv_path }}/bin/python"
+  no_log: true
+
+- name: Create PostgreSQL cluster
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_cnpg_kubeconfig }}"
+    definition:
+      apiVersion: postgresql.cnpg.io/v1
+      kind: Cluster
+      metadata:
+        name: "{{ k3s_cnpg_cluster_name }}"
+        namespace: "{{ k3s_cnpg_cluster_namespace }}"
+        labels:
+          app.kubernetes.io/part-of: coin-ops
+      spec:
+        instances: "{{ k3s_cnpg_instances | int }}"
+        bootstrap:
+          initdb:
+            database: "{{ k3s_cnpg_app_database }}"
+            owner: "{{ k3s_cnpg_app_user }}"
+            secret:
+              name: "{{ k3s_cnpg_app_secret_name }}"
+        storage:
+          size: "{{ k3s_cnpg_storage_size }}"
+  vars:
+    ansible_python_interpreter: "{{ k3s_ansible_venv_path }}/bin/python"

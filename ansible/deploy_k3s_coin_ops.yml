@@ -8,6 +8,7 @@
         - helm
         - cert-manager
         - headlamp
+        - cnpg
         - coin-ops
 
 - name: Deploy cert-manager
@@ -23,6 +24,13 @@
   roles:
     - role: k3s_headlamp
       tags: headlamp
+
+- name: Deploy CNPG
+  hosts: k3s-node-01
+  become: true
+  roles:
+    - role: k3s_cnpg
+      tags: cnpg
 
 - name: Deploy Coin Ops
   hosts: k3s-node-01
