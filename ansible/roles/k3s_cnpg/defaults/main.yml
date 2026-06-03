@@ -7,7 +7,7 @@ cnpg_version: "0.22.0"
 
 # PostgreSQL cluster settings — matches existing db credentials
 cnpg_cluster_name: "coinops-db"
-cnpg_namespace: "coinops-app"
+cnpg_namespace: "coinops-db"
 cnpg_instances: 1          # single instance — enough for learning
 cnpg_storage_size: "5Gi"   # PersistentVolumeClaim size
 
