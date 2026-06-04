@@ -65,3 +65,4 @@ ansible/group_vars/all/*.backup
 ansible/group_vars/all/secrets.yml
 runtime/__pycache__
 ansible/inventory*
+.ansible*
