@@ -1,7 +1,3 @@
-{{- define "coin-ops.namespace" -}}
-{{- .Values.namespaces.app | default .Release.Namespace -}}
-{{- end -}}
-
 {{- define "coin-ops.appNamespace" -}}
 {{- .Values.namespaces.app | default .Release.Namespace -}}
 {{- end -}}
