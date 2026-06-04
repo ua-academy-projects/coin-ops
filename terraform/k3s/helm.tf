@@ -363,27 +363,3 @@ resource "helm_release" "loki" {
   depends_on = [helm_release.prometheus]
 }
 
-# ─── Tailscale Operator ───────────────────────────────────────────────────────
-resource "helm_release" "tailscale" {
-  name             = "tailscale-operator"
-  repository       = "https://pkgs.tailscale.com/helmcharts"
-  chart            = "tailscale-operator"
-  version          = local.tailscale_version
-  namespace        = "tailscale"
-  create_namespace = true
-
-  wait    = true
-  timeout = 300
-
-  set {
-    name  = "oauth.clientId"
-    value = data.google_secret_manager_secret_version.tailscale_oauth_id.secret_data
-  }
-
-  set_sensitive {
-    name  = "oauth.clientSecret"
-    value = data.google_secret_manager_secret_version.tailscale_oauth_secret.secret_data
-  }
-
-  depends_on = [helm_release.cilium]
-}
