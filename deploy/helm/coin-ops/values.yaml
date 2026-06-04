@@ -48,17 +48,18 @@ externalSecrets:
 
 database:
   user: "cognitor"
-  password: "changeme"
+  # password is now dynamically fetched via ExternalSecrets
 
 rabbitmq:
   replicaCount: 1
   auth:
-    password: "changeme"
+    existingPasswordSecret: "rabbitmq-secret"
 
 redis:
   architecture: standalone
   auth:
-    password: "changeme"
+    existingSecret: "redis-secret"
+    existingSecretPasswordKey: "redis-password"
 
 # Legacy local credentials and in-cluster infrastructure have been removed for production.
 # Infrastructure is managed by Terraform.

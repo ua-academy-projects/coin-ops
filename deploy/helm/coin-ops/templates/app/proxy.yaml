@@ -60,11 +60,20 @@ spec:
             - name: RUNTIME_BACKEND
               value: "external"
             - name: RABBITMQ_URL
-              value: "amqp://user:{{ .Values.rabbitmq.auth.password }}@coin-ops-rabbitmq.coin-ops-infra.svc.cluster.local:5672/"
+              valueFrom:
+                secretKeyRef:
+                  name: coin-ops-credentials
+                  key: RABBITMQ_URL
             - name: REDIS_URL
-              value: "redis://:{{ .Values.redis.auth.password }}@coin-ops-redis-master.coin-ops-infra.svc.cluster.local:6379"
+              valueFrom:
+                secretKeyRef:
+                  name: coin-ops-credentials
+                  key: REDIS_URL
             - name: DATABASE_URL
-              value: "postgresql://{{ .Values.database.user }}:{{ .Values.database.password }}@coin-ops-db-rw.coin-ops-infra.svc.cluster.local:5432/cognitor"
+              valueFrom:
+                secretKeyRef:
+                  name: coin-ops-credentials
+                  key: DATABASE_URL
           readinessProbe:
             httpGet:
               path: /health
