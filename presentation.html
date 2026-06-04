@@ -87,25 +87,25 @@
           <thead>
             <tr>
               <th>Legacy (Imperative)</th>
-              <th>Modern (GitOps)</th>
+              <th>Modern (GitOps & Cloud-Native)</th>
             </tr>
           </thead>
           <tbody>
             <tr>
               <td>Manual Bash Scripts</td>
-              <td><span class="success">Ansible Bootstrapping</span></td>
+              <td><span class="success">Ansible Bootstrapping + Terraform</span></td>
             </tr>
             <tr>
-              <td>Manual Secret Injection</td>
-              <td><span class="success">Dynamic Helm Templates</span></td>
+              <td>Manual Secret Management</td>
+              <td><span class="success">External Secrets Operator (GCP Secret Manager)</span></td>
             </tr>
             <tr>
               <td>Terminal/kubectl Updates</td>
-              <td><span class="success">Git as Single Source of Truth</span></td>
+              <td><span class="success">Git as Single Source of Truth (ArgoCD)</span></td>
             </tr>
             <tr>
-              <td>Hope-based stability</td>
-              <td><span class="success">Continuous ArgoCD Reconciliation</span></td>
+              <td>Flannel & iptables</td>
+              <td><span class="success">Cilium eBPF CNI & Network Policies</span></td>
             </tr>
           </tbody>
         </table>
@@ -120,23 +120,24 @@
           <p style="text-align: center; color: #888;">👇 <em>Press the Down Arrow for details</em></p>
         </section>
         <section>
-          <h3>1. Compute</h3>
+          <h3>1. Core Networking & Add-ons</h3>
           <ul>
-            <li><strong>K3s on GCP:</strong> Lightweight, highly available Kubernetes.</li>
-            <li><strong>Zero Public IPs:</strong> Exclusively accessed via Google Identity-Aware Proxy (IAP) SSH tunnels.</li>
+            <li><strong>Cilium CNI:</strong> eBPF-based networking, routing, and high-performance policies.</li>
+            <li><strong>External Secrets Operator:</strong> Syncs secrets from GCP Secret Manager directly to K8s.</li>
+            <li><strong>Headlamp Dashboard:</strong> Real-time K8s visualization.</li>
           </ul>
         </section>
         <section>
           <h3>2. Data & State</h3>
           <ul>
-            <li><strong>CloudNativePG:</strong> Enterprise-grade PostgreSQL operator.</li>
+            <li><strong>CloudNativePG:</strong> Enterprise-grade PostgreSQL operator with automated backups/failover.</li>
             <li><strong>Redis & RabbitMQ:</strong> Scalable StatefulSets for message brokering and caching.</li>
           </ul>
         </section>
         <section>
           <h3>3. Application Layer</h3>
           <ul>
-            <li><strong>Go Proxy:</strong> High-performance API gateway.</li>
+            <li><strong>Go Proxy:</strong> High-performance API gateway with CoinGecko integrations.</li>
             <li><strong>History Worker:</strong> Asynchronous market data processing.</li>
             <li><strong>UI (SPA):</strong> Next-generation web interface.</li>
           </ul>
@@ -148,19 +149,19 @@
         <h2>Zero-Trust & Edge Security</h2>
         <div class="compare-grid">
           <div class="compare-box">
-            <h3 class="accent">Micro-Segmentation</h3>
-            <p>Strict <code>NetworkPolicy</code> rules across namespaces:</p>
+            <h3 class="accent">Identity & Access</h3>
             <ul>
-              <li><strong>Default Deny-All:</strong> No lateral movement.</li>
-              <li><strong>Explicit Allow:</strong> e.g., Proxy can talk to Redis, but not directly to DB.</li>
+              <li><strong>Cloudflare Access:</strong> SSO identity verification before hitting the Cloudflared tunnel.</li>
+              <li><strong>Tailscale Operator:</strong> Secure mesh VPN ingress directly to K8s services.</li>
             </ul>
           </div>
           <div class="compare-box">
-            <h3 class="accent">Cloudflare Tunnels</h3>
+            <h3 class="accent">Micro-Segmentation</h3>
+            <p>Strict <code>CiliumNetworkPolicy</code> rules:</p>
             <ul>
-              <li>Inbound traffic tunneled securely via <code>cloudflared</code>.</li>
-              <li>No exposed ports on nodes.</li>
-              <li>DDoS protection at the edge.</li>
+              <li><strong>Default Deny-All:</strong> No unauthorized lateral movement.</li>
+              <li><strong>eBPF Filtering:</strong> Extremely fast network dropping at the kernel level.</li>
+              <li><strong>Identity-based:</strong> Matches host and pod identities directly.</li>
             </ul>
           </div>
         </div>
@@ -188,9 +189,9 @@
       <section>
         <h2>Future Roadmap</h2>
         <ul>
-          <li style="margin-bottom: 1em;"><strong>Enterprise Secrets (ESO):</strong> Integrating Google Cloud Secret Manager to inject secrets dynamically without touching the UI or Git.</li>
-          <li style="margin-bottom: 1em;"><strong>Observability:</strong> Deploying Prometheus, Grafana, and Loki via GitOps for metrics and distributed tracing.</li>
-          <li style="margin-bottom: 1em;"><strong>Progressive Delivery:</strong> Argo Rollouts for zero-risk Blue/Green deployments.</li>
+          <li style="margin-bottom: 1em;"><strong>Full Observability (Hubble):</strong> Enabling Cilium Hubble for L7 network flow visualization and tracing.</li>
+          <li style="margin-bottom: 1em;"><strong>Monitoring Stack:</strong> Tuning Prometheus, Grafana, and Loki via GitOps for metrics and distributed log tracing.</li>
+          <li style="margin-bottom: 1em;"><strong>Progressive Delivery:</strong> Argo Rollouts for zero-risk Blue/Green and Canary deployments.</li>
         </ul>
       </section>
 

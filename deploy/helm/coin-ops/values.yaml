@@ -28,7 +28,7 @@ routing:
     clusterIssuer: "letsencrypt-prod"
 
 cloudflare:
-  tunnelToken: "eyJhIjoiZDQ1M2JiYWUxZjgyODExYTJmMzIxYTQxZWIyOWVkOGIiLCJ0IjoiZjE1NDlmOWQtN2YzNi00NWRlLTk4NDUtYjNkYjY3Mjk0MjQ3IiwicyI6IlltVXpOemswWWpjdE5USTFaUzAwT1RVM0xXSmpNR1V0TURVeE1qaGhZakEyWlRabCJ9"
+  # tunnelToken is now dynamically fetched via ExternalSecrets
   image:
     repository: "cloudflare/cloudflared"
     tag: "latest"
