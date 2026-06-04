@@ -115,7 +115,7 @@ spec:
   egress:
   - {}
 ---
-# history-api: allow ingress from proxy, egress to db
+# history-api: allow ingress from proxy and gateway, egress to db
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -129,6 +129,10 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: {{ .Values.namespaces.proxy }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.namespaces.gateway }}
   egress:
     - to:
         - namespaceSelector:
