@@ -17,7 +17,7 @@ k3s_coin_ops_config_name: coin-ops-config
 k3s_coin_ops_secret_name: coin-ops-secret
 k3s_coin_ops_pull_secret_name: ghcr-pull-secret
 k3s_coin_ops_ingress_host: coinops.arturvolynets.pp.ua
-k3s_coin_ops_tls_enabled: false
+k3s_coin_ops_tls_enabled: true
 k3s_coin_ops_tls_secret_name: coin-ops-tls
 k3s_coin_ops_cluster_issuer: letsencrypt
 k3s_coin_ops_image_tag: "{{ lookup('env', 'IMAGE_TAG') | default('shabat-latest', true) }}"

@@ -62,7 +62,8 @@
         name: letsencrypt # ingress referenced to it in annotations
       spec:
         acme:
-          server: https://acme-staging-v02.api.letsencrypt.org/directory
+          # server: https://acme-staging-v02.api.letsencrypt.org/directory
+          server: https://acme-v02.api.letsencrypt.org/directory
           email: "{{ k3s_cert_manager_email }}"
           privateKeySecretRef:
             name: letsencrypt-account-key # secret to store lets encrypt key
