@@ -18,6 +18,11 @@ variable "app_names" {
   type = list(string)
 }
 
+variable "k3s_names" {
+  type    = list(string)
+  default = []
+}
+
 variable "bastion_name" {
   type = string
 }

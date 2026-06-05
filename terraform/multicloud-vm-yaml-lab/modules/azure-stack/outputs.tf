@@ -31,5 +31,17 @@ output "secret_refs" {
 }
 
 output "api_endpoint" {
-  value = module.load_balancer.public_ip_address
+  value = local.k3s_only ? "" : module.load_balancer[0].public_ip_address
+}
+
+output "key_vault_id" {
+  value = module.secrets.key_vault_id
+}
+
+output "resource_group_name" {
+  value = module.network.resource_group_name
+}
+
+output "location" {
+  value = module.network.location
 }

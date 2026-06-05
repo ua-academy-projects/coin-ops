@@ -19,6 +19,10 @@ output "key_vault_name" {
   value = azurerm_key_vault.this.name
 }
 
+output "key_vault_id" {
+  value = azurerm_key_vault.this.id
+}
+
 output "app_gateway_identity_id" {
   value = azurerm_user_assigned_identity.app_gateway.id
 }

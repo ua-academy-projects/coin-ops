@@ -1,4 +1,4 @@
-cloud: gcp
+cloud: azure
 location: eu_central
 
 name_prefix: coinops-lab
@@ -21,15 +21,19 @@ clouds:
     app_instance_profile_name: coinops-lab-app-runtime-profile
   azure:
     subscription_id: ""
-    tenant_id: ""
-    location: canadacentral
+    tenant_id: "266e1f49-9265-4b5d-918f-bd82b627d456"
+    location: eastus2
     resource_group_name: coinops-lab-rg
     key_vault_name: coinopslabkv
-    state_location: canadacentral
+    state_location: eastus2
     state_resource_group_name: coinops-tfstate-rg
     state_storage_account_name: coinopslabtfstate
     state_container_name: tfstate
     state_key: multicloud-vm-yaml-lab/terraform.tfstate
+    # k3s_only: build ONLY network + bastion + k3s nodes on Azure — skip the
+    # managed app stack (Azure Database / Service Bus / Cache / app VMs / LB).
+    # Mirrors the GCP k3s sandbox; the cluster fits the subscription's 4-vCPU cap.
+    k3s_only: true
 
 
 secrets:
@@ -110,6 +114,14 @@ defaults:
   disk_size_gb: 10
   network: lab
 
+# Azure Monitor observability backend (observability.tf). Flip enabled:true ONLY
+# AFTER the k3s cluster is up and Arc-connected — it provisions Log Analytics,
+# managed Prometheus, Application Insights, Managed Grafana and the alert action
+# group. Left off so it never affects the initial provisioning apply.
+observability:
+  enabled: false
+  alert_email: andriy@netlife.com.ua
+
 runtime:
   mode: cloud-native
   database:
@@ -183,7 +195,7 @@ catalog:
           - eu-central-1a
           - eu-central-1b
       azure:
-        location: canadacentral
+        location: eastus2
         zones:
           - "1"
           - "2"
@@ -192,11 +204,13 @@ catalog:
     micro:
       gcp: e2-micro
       aws: t3.micro
-      azure: Standard_B2s_v2
+      # Azure: classic B-series is NotAvailableForSubscription on this sub, and
+      # the only x86 small SKUs in eastus2 are AMD F-series v7. micro = bastion.
+      azure: Standard_F1als_v7   # 1 vCPU / 2 GB (AMD x86, eastus2)
     small:
       gcp: e2-small
       aws: t3.small
-      azure: Standard_B2s
+      azure: Standard_F1as_v7    # 1 vCPU / 4 GB (AMD x86, eastus2) — k3s nodes
   database_sizes:
     micro:
       gcp: db-f1-micro
@@ -230,7 +244,8 @@ catalog:
       azure:
         publisher: Canonical
         offer: 0001-com-ubuntu-server-jammy
-        sku: 22_04-lts
+        # F-series v7 are Gen2-only VM SKUs, so the image must be the gen2 variant.
+        sku: 22_04-lts-gen2
         version: latest
 
 instances:

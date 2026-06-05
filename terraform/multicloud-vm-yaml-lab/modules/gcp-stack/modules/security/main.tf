@@ -122,6 +122,6 @@ resource "google_compute_firewall" "k3s_from_bastion" {
     protocol = "tcp"
     # 80/443: Traefik ingress — TLS terminates ON the k3s nodes (the bastion
     # only routes). 6443: kube API. Workloads are ingress-only (no NodePorts).
-    ports    = ["80", "443", "6443"]
+    ports = ["80", "443", "6443"]
   }
 }

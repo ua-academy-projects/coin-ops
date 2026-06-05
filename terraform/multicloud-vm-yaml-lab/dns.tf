@@ -1,5 +1,9 @@
 locals {
-  split_dns_enabled = try(local.config.domain.enabled, false) && try(local.config.domain.create_records, true) && local.is_azure
+  # Split-DNS ui/api records apply only to the Azure cloud-native VM mode (there
+  # is an app gateway / LB to point at). In k3s-only mode there is no LB and the
+  # Cloudflare zero-trust tunnels publish the per-app proxied CNAMEs instead, so
+  # skip these (they would otherwise point at an empty backend_endpoint).
+  split_dns_enabled = try(local.config.domain.enabled, false) && try(local.config.domain.create_records, true) && local.is_azure && !try(local.stack.azure.k3s_only, false)
   cloudflare_ttl    = try(local.config.domain.cloudflare_proxy, false) ? 1 : 60
 
   # Base domain for the GCP k3s ingress hosts (<app>.<this>). The Cloudflare

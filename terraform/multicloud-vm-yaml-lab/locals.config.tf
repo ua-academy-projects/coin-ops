@@ -306,6 +306,7 @@ locals {
       key_vault_name      = try(local.config.clouds.azure.key_vault_name, substr("${replace(local.config.name_prefix, "-", "")}kv", 0, 24))
       region              = local.azure_region
       zones               = local.azure_zones
+      k3s_only            = try(local.config.clouds.azure.k3s_only, false)
     }
 
     ui = {

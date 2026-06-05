@@ -16,10 +16,19 @@ locals {
       public_ip  = ""
     }
   }
+
+  k3s_outputs = {
+    for name, instance in azurerm_linux_virtual_machine.k3s : name => {
+      name       = var.instances[name].name
+      role       = "k3s"
+      private_ip = azurerm_network_interface.k3s[name].private_ip_address
+      public_ip  = ""
+    }
+  }
 }
 
 output "instances" {
-  value = merge(local.bastion_outputs, local.app_outputs)
+  value = merge(local.bastion_outputs, local.app_outputs, local.k3s_outputs)
 }
 
 output "app_instances" {

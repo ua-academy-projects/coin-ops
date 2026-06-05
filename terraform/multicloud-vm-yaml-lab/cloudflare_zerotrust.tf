@@ -1,4 +1,4 @@
-# Cloudflare Zero Trust — the GCP k3s edge, replacing Tailscale.
+# Cloudflare Zero Trust — the k3s edge (GCP or Azure), replacing Tailscale.
 #
 # Two cloudflared tunnels (a single tunnel load-balances across all its
 # connectors, so in-cluster and bastion routing cannot share one):
@@ -10,12 +10,13 @@
 #             Access — no public ports, no Tailscale.
 #
 # Terraform creates the tunnels, reads their tokens, defines the routing,
-# the proxied DNS, the Access policy/apps, and writes the tokens into GCP
-# Secret Manager so the existing cloud_secrets flow feeds cloudflared.
+# the proxied DNS, the Access policy/apps, and writes the tokens into the active
+# cloud's secret manager (GCP Secret Manager or Azure Key Vault) so the existing
+# cloud_secrets flow feeds cloudflared.
 #
-# Entirely inert unless: backend cloud is GCP, k3s nodes exist, an account_id
-# is set, and domain.zero_trust.enabled is true. So it is a no-op on the AWS
-# compose path (cloud: aws).
+# Entirely inert unless: backend cloud is GCP or Azure, k3s nodes exist, an
+# account_id is set, and domain.zero_trust.enabled is true. So it is a no-op on
+# the AWS compose path (cloud: aws).
 
 variable "github_oauth_client_id" {
   type        = string
@@ -33,8 +34,14 @@ variable "github_oauth_client_secret" {
 locals {
   cf_account_id      = try(local.config.domain.cloudflare_account_id, "")
   cf_access_emails   = try(local.config.domain.zero_trust.access_emails, [])
-  zero_trust_enabled = local.is_gcp && length(local.k3s_names) > 0 && try(local.config.domain.zero_trust.enabled, false) && local.cf_account_id != ""
+  zero_trust_enabled = (local.is_gcp || local.is_azure) && length(local.k3s_names) > 0 && try(local.config.domain.zero_trust.enabled, false) && local.cf_account_id != ""
   cf_github_enabled  = local.zero_trust_enabled && var.github_oauth_client_id != ""
+
+  # Tunnel tokens land in the ACTIVE cloud's secret manager — split the gate so
+  # only that provider's secret resources are created (GCP Secret Manager vs
+  # Azure Key Vault). cloud_secrets then fetches them like any other secret.
+  zt_gcp   = local.zero_trust_enabled && local.is_gcp
+  zt_azure = local.zero_trust_enabled && local.is_azure
 
   # Hostnames served through the tunnels (<name>.<k3s_ingress_domain>).
   cf_apps_hostnames = {
@@ -192,13 +199,14 @@ resource "cloudflare_zero_trust_access_application" "gated" {
   }]
 }
 
-# --- Tunnel tokens -> GCP Secret Manager -------------------------------------
+# --- Tunnel tokens -> active cloud's secret manager --------------------------
 # Terraform holds the tokens (from the data sources) and writes them as secret
 # versions, so cloud_secrets fetches them like every other secret — no manual
 # token handling. Deterministic names: <name_prefix>-cloudflare-tunnel-token-*.
+# GCP -> Secret Manager; Azure -> Key Vault (the one created by the azure stack).
 
 resource "google_secret_manager_secret" "cf_tunnel_apps" {
-  count     = local.zero_trust_enabled ? 1 : 0
+  count     = local.zt_gcp ? 1 : 0
   secret_id = "${local.config.name_prefix}-cloudflare-tunnel-token-apps"
   replication {
     auto {}
@@ -207,13 +215,13 @@ resource "google_secret_manager_secret" "cf_tunnel_apps" {
 }
 
 resource "google_secret_manager_secret_version" "cf_tunnel_apps" {
-  count       = local.zero_trust_enabled ? 1 : 0
+  count       = local.zt_gcp ? 1 : 0
   secret      = google_secret_manager_secret.cf_tunnel_apps[0].id
   secret_data = data.cloudflare_zero_trust_tunnel_cloudflared_token.apps[0].token
 }
 
 resource "google_secret_manager_secret" "cf_tunnel_admin" {
-  count     = local.zero_trust_enabled ? 1 : 0
+  count     = local.zt_gcp ? 1 : 0
   secret_id = "${local.config.name_prefix}-cloudflare-tunnel-token-admin"
   replication {
     auto {}
@@ -222,7 +230,21 @@ resource "google_secret_manager_secret" "cf_tunnel_admin" {
 }
 
 resource "google_secret_manager_secret_version" "cf_tunnel_admin" {
-  count       = local.zero_trust_enabled ? 1 : 0
+  count       = local.zt_gcp ? 1 : 0
   secret      = google_secret_manager_secret.cf_tunnel_admin[0].id
   secret_data = data.cloudflare_zero_trust_tunnel_cloudflared_token.admin[0].token
+}
+
+resource "azurerm_key_vault_secret" "cf_tunnel_apps" {
+  count        = local.zt_azure ? 1 : 0
+  name         = "${local.config.name_prefix}-cloudflare-tunnel-token-apps"
+  value        = data.cloudflare_zero_trust_tunnel_cloudflared_token.apps[0].token
+  key_vault_id = module.azure[0].key_vault_id
+}
+
+resource "azurerm_key_vault_secret" "cf_tunnel_admin" {
+  count        = local.zt_azure ? 1 : 0
+  name         = "${local.config.name_prefix}-cloudflare-tunnel-token-admin"
+  value        = data.cloudflare_zero_trust_tunnel_cloudflared_token.admin[0].token
+  key_vault_id = module.azure[0].key_vault_id
 }
