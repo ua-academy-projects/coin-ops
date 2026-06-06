@@ -307,6 +307,7 @@ locals {
       region              = local.azure_region
       zones               = local.azure_zones
       k3s_only            = try(local.config.clouds.azure.k3s_only, false)
+      operator_object_ids = try(local.config.clouds.azure.operator_object_ids, [])
     }
 
     ui = {

@@ -54,6 +54,28 @@ resource "azurerm_key_vault" "this" {
     ]
   }
 
+  dynamic "access_policy" {
+    for_each = toset(var.operator_object_ids)
+    content {
+      tenant_id = var.tenant_id
+      object_id = access_policy.value
+
+      secret_permissions = [
+        "Get",
+        "List",
+        "Set",
+        "Delete",
+        "Recover",
+        "Purge",
+      ]
+
+      certificate_permissions = [
+        "Get",
+        "List",
+      ]
+    }
+  }
+
   tags = {
     Name = var.key_vault_name
   }

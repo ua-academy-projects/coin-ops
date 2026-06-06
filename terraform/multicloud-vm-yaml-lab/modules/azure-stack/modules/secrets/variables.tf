@@ -22,6 +22,14 @@ variable "object_id" {
   type = string
 }
 
+# Extra principals (e.g. the human operator running `lab.sh secrets push` and the
+# ansible cloud_secrets reads via `az keyvault secret show`) that need data-plane
+# access to the vault. Managed in Terraform so it survives re-applies.
+variable "operator_object_ids" {
+  type    = list(string)
+  default = []
+}
+
 variable "api_domain" {
   type = string
 }

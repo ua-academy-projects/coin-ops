@@ -30,6 +30,11 @@ clouds:
     state_storage_account_name: coinopslabtfstate
     state_container_name: tfstate
     state_key: multicloud-vm-yaml-lab/terraform.tfstate
+    # Human operator(s) who run `lab.sh secrets push` and whose `az` identity the
+    # ansible cloud_secrets role uses to read the vault. Granted Key Vault data-plane
+    # access in Terraform so it survives re-applies (object id from `az ad signed-in-user show`).
+    operator_object_ids:
+      - "5026b5bc-4652-409d-afd9-f8e1072e1146"
     # k3s_only: build ONLY network + bastion + k3s nodes on Azure — skip the
     # managed app stack (Azure Database / Service Bus / Cache / app VMs / LB).
     # Mirrors the GCP k3s sandbox; the cluster fits the subscription's 4-vCPU cap.
