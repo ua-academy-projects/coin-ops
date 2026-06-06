@@ -35,19 +35,29 @@ az account set --subscription "<your sub id or name>"
 bash azure-bootstrap.sh
 source .env.azure
 
-export TF_VAR_db_password='<pick a strong password>'   # required even for k3s
+source .env                              # your secrets live here (DB_PASSWORD, etc.)
+export TF_VAR_db_password="$DB_PASSWORD"  # terraform needs this for the apply
 ```
 
-## STEP 3 — Put the app secrets in Azure Key Vault
-The Key Vault is created by the apply (STEP 5); easiest is to push these right
-after STEP 5 once it exists. Secret names must match `lab.yaml secrets.items`:
+## STEP 3 — Push the app secrets into Key Vault (from .env)
+The repo has a helper that loads `.env`, creates the Key Vault, and pushes the
+secrets to the active cloud's manager. With `cloud: azure` it targets Key Vault
+`coinopslabkv` with the correct names automatically — no hand-typed values:
 ```bash
-KV=coinopslabkv   # clouds.azure.key_vault_name
-az keyvault secret set --vault-name $KV --name db-password        --value "$TF_VAR_db_password"
-az keyvault secret set --vault-name $KV --name rabbitmq-password  --value "<rabbit pw>"
-az keyvault secret set --vault-name $KV --name ghcr-token         --value "<ghcr PAT>"
-az keyvault secret set --vault-name $KV --name cloudflare-token   --value "<cloudflare API token>"
+./scripts/lab.sh secrets push
 ```
+It reads these from `.env`: `DB_PASSWORD`, `GHCR_TOKEN`, `CLOUDFLARE_TOKEN`
+(and `RABBITMQ_PASSWORD` only when `runtime.mode != cloud-native`). The helper
+also runs `terraform apply -target=module.azure[0].module.secrets` first, so it
+**creates the Key Vault itself** — run it right after bootstrap (no need to wait
+for the full STEP 5 apply).
+
+> Our `runtime.mode` is `cloud-native`, so the helper SKIPS `rabbitmq-password`.
+> The in-cluster RabbitMQ still needs it, but `cloud_secrets` falls back to the
+> `RABBITMQ_PASSWORD` env var at deploy time — so keep `.env` sourced during the
+> ansible run (STEP 5). To also store it in the vault:
+> `az keyvault secret set --vault-name coinopslabkv --name rabbitmq-password --value "$RABBITMQ_PASSWORD" --only-show-errors`
+> The Cloudflare *tunnel* tokens are created + stored by `terraform apply`, not here.
 
 ## STEP 4 — Destroy the GCP stack
 The repo's `lab.yaml` is already switched to `cloud: azure`, so flip it back just
