@@ -492,7 +492,15 @@ terraform_init() {
   fi
   cd "$ROOT_DIR"
   render_backend_files
-  terraform init -backend-config="$ACTIVE_BACKEND_CONFIG" -migrate-state -force-copy
+  # Default: migrate state when the backend changes. Set RECONFIGURE=true to init
+  # the backend fresh WITHOUT migrating — use when switching clouds and you do NOT
+  # want to copy another cloud's state (e.g. leave the AWS s3 state alone while
+  # standing up the Azure azurerm backend).
+  if [ "${RECONFIGURE:-false}" = "true" ]; then
+    terraform init -backend-config="$ACTIVE_BACKEND_CONFIG" -reconfigure
+  else
+    terraform init -backend-config="$ACTIVE_BACKEND_CONFIG" -migrate-state -force-copy
+  fi
   terraform workspace select "$LAB_WORKSPACE" || terraform workspace new "$LAB_WORKSPACE"
   if [ "$CLOUD" = "azure" ] && terraform state list 2>/dev/null | grep -qx 'module.azure[0].module.network.azurerm_resource_group.this'; then
     echo "Removing bootstrap-owned Azure resource group from Terraform state"
