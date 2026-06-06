@@ -13,9 +13,12 @@
 
 locals {
   obs_enabled = local.is_azure && length(local.k3s_names) > 0 && try(local.config.observability.enabled, false)
-  obs_rg      = local.obs_enabled ? module.azure[0].resource_group_name : ""
-  obs_loc     = local.azure_region
-  obs_email   = try(local.config.observability.alert_email, "andriy@netlife.com.ua")
+  # Resolve to the real RG when on Azure (gives the dependency on module.azure)
+  # and to a non-blank placeholder otherwise — azurerm validates resource_group_name
+  # as non-empty even for count=0 resources, so it must never be "".
+  obs_rg    = local.is_azure ? module.azure[0].resource_group_name : "n-a"
+  obs_loc   = local.azure_region
+  obs_email = try(local.config.observability.alert_email, "andriy@netlife.com.ua")
 }
 
 # --- Logs ---------------------------------------------------------------------

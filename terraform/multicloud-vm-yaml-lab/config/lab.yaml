@@ -20,7 +20,7 @@ clouds:
     terraform_iam_user: terraform-coinops-lab
     app_instance_profile_name: coinops-lab-app-runtime-profile
   azure:
-    subscription_id: ""
+    subscription_id: "d3b3e628-b7a2-40cc-aa61-748e5eada88b"
     tenant_id: "266e1f49-9265-4b5d-918f-bd82b627d456"
     location: eastus2
     resource_group_name: coinops-lab-rg
