@@ -84,8 +84,11 @@ AUTO_APPROVE=true ./scripts/lab.sh apply
 
 # now do STEP 3 (Key Vault secrets) if you haven't — the vault exists now
 
-ansible-playbook -i <generated-inventory> ansible/k3s-up.yml    # cluster + platform + edge
-ansible-playbook -i <generated-inventory> ansible/k3s-app.yml   # the Coin-Ops app
+# deploy via the lab.sh wrappers (they regen the inventory + set env; need
+# SSH_KEY_PATH set, e.g. in .env, pointing at the ssh.private_key_path):
+export SSH_KEY_PATH=~/.ssh/coinops_gcp_jump
+./scripts/lab.sh k3s         # k3s HA + cert-manager + cloudflared + ArgoCD (ansible/k3s-up.yml)
+./scripts/lab.sh k3s-app     # the Coin-Ops app (ansible/k3s-app.yml)
 ```
 
 ## STEP 6 — Confirm the cluster is healthy

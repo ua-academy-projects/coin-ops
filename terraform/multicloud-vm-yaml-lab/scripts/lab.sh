@@ -543,9 +543,9 @@ ansible_deploy() {
 ansible_k3s() {
   load_env_file
   : "${SSH_KEY_PATH:?Set SSH_KEY_PATH or put it in .env}"
-  if [ "$CLOUD" != "gcp" ]; then
-    echo "k3s is a GCP-only learning cluster; config/lab.yaml has cloud=$CLOUD." >&2
-    echo "Set 'cloud: gcp' in config/lab.yaml, apply, then re-run." >&2
+  if [ "$CLOUD" != "gcp" ] && [ "$CLOUD" != "azure" ]; then
+    echo "k3s runs only on the k3s clouds (gcp or azure); config/lab.yaml has cloud=$CLOUD." >&2
+    echo "Set 'cloud: gcp' or 'cloud: azure' in config/lab.yaml, apply, then re-run." >&2
     exit 2
   fi
   export RUNTIME_BACKEND="$RUNTIME_MODE"
@@ -556,9 +556,9 @@ ansible_k3s() {
 ansible_k3s_app() {
   load_env_file
   : "${SSH_KEY_PATH:?Set SSH_KEY_PATH or put it in .env}"
-  if [ "$CLOUD" != "gcp" ]; then
-    echo "k3s-app is a GCP-only deployment; config/lab.yaml has cloud=$CLOUD." >&2
-    echo "Set 'cloud: gcp' in config/lab.yaml, then apply + k3s, then re-run." >&2
+  if [ "$CLOUD" != "gcp" ] && [ "$CLOUD" != "azure" ]; then
+    echo "k3s-app runs only on the k3s clouds (gcp or azure); config/lab.yaml has cloud=$CLOUD." >&2
+    echo "Set 'cloud: gcp' or 'cloud: azure' in config/lab.yaml, then apply + k3s, then re-run." >&2
     exit 2
   fi
   export RUNTIME_BACKEND="$RUNTIME_MODE"
