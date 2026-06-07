@@ -2,7 +2,7 @@
 
 ---
 # defaults file for roles/registry_auth
-registry_auth_image_registry: "{{ lookup('env', 'IMAGE_REGISTRY') | default('ghcr.io/ua-academy-projects', true) }}"
+registry_auth_image_registry: "{{ deploy_config_deploy.image_registry | default('ghcr.io/ua-academy-projects') }}"
 registry_auth_image_registry_host: "{{ registry_auth_image_registry.split('/')[0] }}"
 registry_auth_username: "{{ fetched_gsm_secrets.ghcr_username | default(lookup('env', 'GHCR_USERNAME'), true) }}"
 registry_auth_token: "{{ fetched_gsm_secrets.ghcr_token | default(lookup('env', 'GHCR_TOKEN'), true) }}"

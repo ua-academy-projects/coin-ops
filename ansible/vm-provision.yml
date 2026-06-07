@@ -1,21 +1,11 @@
 # –> install system packages on all VMs.
 
 ---
-- name: Validate required environment variables
-  hosts: localhost
-  connection: local
-  tasks:
-    - name: Check .env vars are exported
-      assert:
-        that:
-          - lookup('env', 'SSH_KEY_PATH') != ''
-          - lookup('env', 'RUNTIME_BACKEND') in ['', 'external', 'postgres']
-        fail_msg: |
-          Required environment variables are not set or RUNTIME_BACKEND is invalid.
-          Run:  source .env
-          RUNTIME_BACKEND may be empty and will default to external.
-          Supported explicit runtime backends: external, postgres.
-          Then retry: ansible-playbook -i ansible/inventory ansible/vm-provision.yml
+- name: Load shared deployment config
+  hosts: all
+  gather_facts: false
+  roles:
+    - shared_config
 
 - name: Common setup — public nodes
   hosts: bastion:ui:nat

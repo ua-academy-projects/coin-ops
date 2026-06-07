@@ -1,3 +1,32 @@
-#SPDX-License-Identifier: MIT-0
 ---
-# tasks file for ansible/roles/shared_config
+- name: Load shared config
+  ansible.builtin.include_vars:
+    file: "{{ shared_config_path }}"
+    name: shared_config
+
+- name: Store shared config facts
+  ansible.builtin.set_fact:
+    deploy_config_cloud: "{{ shared_config.cloud }}"
+    deploy_config_networks: "{{ shared_config.networks }}"
+    deploy_config_workloads: "{{ shared_config.workloads | default({}) }}"
+    deploy_config_nat_route: "{{ shared_config.nat_route | default({}) }}"
+    deploy_config_secrets: "{{ shared_config.secrets | default({}) }}"
+    deploy_config_deploy: "{{ shared_config.deploy | default({}) }}"
+
+- name: Store host workload config
+  ansible.builtin.set_fact:
+    deploy_config_workload: "{{ deploy_config_workloads[inventory_hostname] | default({}) }}"
+
+- name: Store host role config
+  ansible.builtin.set_fact:
+    cloud: "{{ deploy_config_workload.cloud | default(deploy_config_cloud) }}"
+    allowed_ports: "{{ deploy_config_workload.allowed_ports | default([]) }}"
+    required_secrets: "{{ deploy_config_workload.secrets | default([]) }}"
+    runtime_backend: "{{ deploy_config_deploy.runtime_backend | default('external') }}"
+    history_runtime_backend: "{{ deploy_config_deploy.runtime_backend | default('external') }}"
+    proxy_runtime_backend: "{{ deploy_config_deploy.runtime_backend | default('external') }}"
+
+- name: Store NAT private CIDR
+  ansible.builtin.set_fact:
+    nat_private_cidr: "{{ deploy_config_nat_route.private_cidr }}"
+  when: deploy_config_nat_route.private_cidr is defined

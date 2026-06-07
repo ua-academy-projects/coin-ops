@@ -1,6 +1,14 @@
 # –> provision k3s cluster with coin-ops application
 
 ---
+- name: Load shared deployment config
+  hosts: all
+  gather_facts: false
+  vars:
+    shared_config_name: "{{ config_name | default('k3s') }}"
+  roles:
+    - shared_config
+
 - name: Provision k3s gateway
   hosts: bastion
   become: true

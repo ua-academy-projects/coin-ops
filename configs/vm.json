@@ -1,5 +1,19 @@
 {
   "cloud": "azure",
+  "ssh": {
+    "user": "deployer",
+    "public_key_path": "~/.ssh/coinops_gcp.pub",
+    "private_key_path": "~/.ssh/coinops_gcp"
+  },
+  "deploy": {
+    "runtime_backend": "external",
+    "image_registry": "ghcr.io/ua-academy-projects",
+    "image_tag": "shabat-latest",
+    "app_domain": "coinops.test",
+    "tls_mode": "selfsigned",
+    "letsencrypt_email": "",
+    "external_db_host": ""
+  },
   "networks": {
     "main": {
       "cloud": "azure",
@@ -35,7 +49,8 @@
     "name": "coinops-private-egress",
     "destination_range": "0.0.0.0/0",
     "instance_workload": "coinops-frontend",
-    "target_tags": ["private-egress"]
+    "target_tags": ["private-egress"],
+    "private_cidr": "10.10.1.0/24"
   },
   "secrets": {
     "ghcr_username": {

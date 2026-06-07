@@ -14,13 +14,3 @@ variable "config_name" {
   }
 
 }
-
-variable "ssh_public_key_path" {
-  type    = string
-  default = "~/.ssh/coinops_gcp.pub"
-}
-
-variable "ssh_user" {
-  type    = string
-  default = "deployer"
-}
