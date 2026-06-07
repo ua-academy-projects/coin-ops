@@ -63,6 +63,14 @@ module "azure_routing" {
   private_subnet_ids   = module.azure_network[0].private_subnet_ids
 }
 
+module "azure_monitoring" {
+  source = "./modules/azure/monitoring"
+  count  = local.default_cloud == "azure" ? 1 : 0
+
+  name                = "coinops-monitoring"
+  resource_group_name = local.config_azure_resource_group
+  location            = local.config_azure_location
+}
 
 
 # ------------------------------------------------------------
