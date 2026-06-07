@@ -4,6 +4,12 @@ output "instance_names" {
   value = { for key, instance in azurerm_linux_virtual_machine.this : key => instance.name }
 }
 
+output "vm_ids" {
+  value = {
+    for key, vm in azurerm_linux_virtual_machine.this : key => vm.id
+  }
+}
+
 output "private_ips" {
   value = { for key, nic in azurerm_network_interface.this : key => nic.private_ip_address }
 }

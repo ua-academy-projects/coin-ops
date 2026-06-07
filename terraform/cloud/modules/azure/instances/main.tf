@@ -11,9 +11,9 @@ resource "azurerm_public_ip" "this" {
   sku                 = "Standard"
   zones               = [each.value.zone]
 
-  lifecycle {
-    create_before_destroy = true
-  }
+  # lifecycle {
+  #   create_before_destroy = true
+  # }
 }
 
 resource "azurerm_network_interface" "this" {

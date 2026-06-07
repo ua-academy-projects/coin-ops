@@ -70,6 +70,7 @@ module "azure_monitoring" {
   name                = "coinops-monitoring"
   resource_group_name = local.config_azure_resource_group
   location            = local.config_azure_location
+  vm_ids              = try(module.azure_instances[0].vm_ids, {})
 }
 
 
