@@ -376,6 +376,32 @@
     - selected_cloud == 'gcp'
     - cloudflare_tunnel_token_admin_secret_ref | length > 0
 
+# Same tunnel tokens on Azure: terraform (cloudflare_zerotrust.tf) writes them to
+# Azure Key Vault, so fetch them there. Missing == Zero Trust not enabled; soft.
+- name: Fetch Cloudflare apps-tunnel token from Azure Key Vault
+  ansible.builtin.command:
+    argv: [az, keyvault, secret, show, --vault-name, "{{ azure_key_vault_name }}", --name, "{{ cloudflare_tunnel_token_apps_secret_ref }}", --query, value, -o, tsv, --only-show-errors]
+  register: azure_cf_tunnel_apps
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when:
+    - selected_cloud == 'azure'
+    - azure_key_vault_name | length > 0
+    - cloudflare_tunnel_token_apps_secret_ref | length > 0
+
+- name: Fetch Cloudflare admin-tunnel token from Azure Key Vault
+  ansible.builtin.command:
+    argv: [az, keyvault, secret, show, --vault-name, "{{ azure_key_vault_name }}", --name, "{{ cloudflare_tunnel_token_admin_secret_ref }}", --query, value, -o, tsv, --only-show-errors]
+  register: azure_cf_tunnel_admin
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when:
+    - selected_cloud == 'azure'
+    - azure_key_vault_name | length > 0
+    - cloudflare_tunnel_token_admin_secret_ref | length > 0
+
 - name: Resolve secret values
   ansible.builtin.set_fact:
     resolved_db_password: "{{ aws_db_password.stdout if (aws_db_password is defined and aws_db_password.stdout is defined) else (gcp_db_password.stdout if (gcp_db_password
@@ -394,8 +420,8 @@
       0) else (azure_tailscale_auth_key.stdout if (azure_tailscale_auth_key is defined and azure_tailscale_auth_key.stdout is defined and azure_tailscale_auth_key.rc
       == 0) else lookup('env', 'TAILSCALE_AUTH_KEY'))) }}"
     resolved_cloudflare_token: "{{ aws_cloudflare_token.stdout if (aws_cloudflare_token is defined and aws_cloudflare_token.stdout is defined and aws_cloudflare_token.rc == 0) else (gcp_cloudflare_token.stdout if (gcp_cloudflare_token is defined and gcp_cloudflare_token.stdout is defined and gcp_cloudflare_token.rc == 0) else (azure_cloudflare_token.stdout if (azure_cloudflare_token is defined and azure_cloudflare_token.stdout is defined and azure_cloudflare_token.rc == 0) else lookup('env', 'CLOUDFLARE_TOKEN'))) }}"
-    resolved_cloudflare_tunnel_token_apps: "{{ gcp_cf_tunnel_apps.stdout if (gcp_cf_tunnel_apps is defined and gcp_cf_tunnel_apps.stdout is defined and gcp_cf_tunnel_apps.rc == 0) else lookup('env', 'CLOUDFLARE_TUNNEL_TOKEN_APPS') }}"
-    resolved_cloudflare_tunnel_token_admin: "{{ gcp_cf_tunnel_admin.stdout if (gcp_cf_tunnel_admin is defined and gcp_cf_tunnel_admin.stdout is defined and gcp_cf_tunnel_admin.rc == 0) else lookup('env', 'CLOUDFLARE_TUNNEL_TOKEN_ADMIN') }}"
+    resolved_cloudflare_tunnel_token_apps: "{{ gcp_cf_tunnel_apps.stdout if (gcp_cf_tunnel_apps is defined and gcp_cf_tunnel_apps.stdout is defined and gcp_cf_tunnel_apps.rc == 0) else (azure_cf_tunnel_apps.stdout if (azure_cf_tunnel_apps is defined and azure_cf_tunnel_apps.stdout is defined and azure_cf_tunnel_apps.rc == 0) else lookup('env', 'CLOUDFLARE_TUNNEL_TOKEN_APPS')) }}"
+    resolved_cloudflare_tunnel_token_admin: "{{ gcp_cf_tunnel_admin.stdout if (gcp_cf_tunnel_admin is defined and gcp_cf_tunnel_admin.stdout is defined and gcp_cf_tunnel_admin.rc == 0) else (azure_cf_tunnel_admin.stdout if (azure_cf_tunnel_admin is defined and azure_cf_tunnel_admin.stdout is defined and azure_cf_tunnel_admin.rc == 0) else lookup('env', 'CLOUDFLARE_TUNNEL_TOKEN_ADMIN')) }}"
   no_log: true
 
 - name: Validate required resolved secrets
