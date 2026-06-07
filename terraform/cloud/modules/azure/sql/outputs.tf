@@ -19,3 +19,7 @@ output "database_name" {
 output "database_user" {
   value = var.user.name
 }
+
+output "server_id" {
+  value = azurerm_postgresql_flexible_server.this.id
+}

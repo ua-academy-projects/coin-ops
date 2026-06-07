@@ -67,10 +67,11 @@ module "azure_monitoring" {
   source = "./modules/azure/monitoring"
   count  = local.default_cloud == "azure" ? 1 : 0
 
-  name                = "coinops-monitoring"
-  resource_group_name = local.config_azure_resource_group
-  location            = local.config_azure_location
-  vm_ids              = try(module.azure_instances[0].vm_ids, {})
+  name                 = "coinops-monitoring"
+  resource_group_name  = local.config_azure_resource_group
+  location             = local.config_azure_location
+  vm_ids               = try(module.azure_instances[0].vm_ids, {})
+  postgresql_server_id = try(module.azure_sql[0].server_id, null)
 }
 
 

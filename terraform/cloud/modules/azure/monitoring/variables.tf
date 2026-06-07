@@ -15,3 +15,8 @@ variable "name" {
 variable "vm_ids" {
   type = map(string)
 }
+
+variable "postgresql_server_id" {
+  type    = string
+  default = null
+}

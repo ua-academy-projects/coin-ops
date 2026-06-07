@@ -11,11 +11,11 @@ resource "azurerm_log_analytics_workspace" "this" {
 resource "azurerm_virtual_machine_extension" "azure_monitor_agent" {
   for_each = var.vm_ids
 
-  name = "AzureMonitorLinuxAgent"
-  virtual_machine_id = each.value
-  publisher = "Microsoft.Azure.Monitor"
-  type = "AzureMonitorLinuxAgent"
-  type_handler_version = "1.41"
+  name                       = "AzureMonitorLinuxAgent"
+  virtual_machine_id         = each.value
+  publisher                  = "Microsoft.Azure.Monitor"
+  type                       = "AzureMonitorLinuxAgent"
+  type_handler_version       = "1.41"
   auto_upgrade_minor_version = true
 }
 
@@ -64,4 +64,20 @@ resource "azurerm_monitor_data_collection_rule_association" "vm_metrics" {
   name                    = "${each.key}-vm-dcr-association"
   target_resource_id      = each.value
   data_collection_rule_id = azurerm_monitor_data_collection_rule.vm_metrics.id
+}
+
+resource "azurerm_monitor_diagnostic_setting" "postgresql" {
+  count = var.postgresql_server_id != null ? 1 : 0
+
+  name                       = "${var.name}-postgresql-diagnostic"
+  target_resource_id         = var.postgresql_server_id
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.this.id
+
+  enabled_log {
+    category = "PostgreSQLLogs"
+  }
+
+  enabled_metric {
+    category = "AllMetrics"
+  }
 }
