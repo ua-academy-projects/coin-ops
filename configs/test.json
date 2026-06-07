@@ -10,9 +10,7 @@
     "image_registry": "ghcr.io/ua-academy-projects",
     "image_tag": "shabat-latest",
     "app_domain": "coinops.test",
-    "tls_mode": "selfsigned",
-    "letsencrypt_email": "",
-    "external_db_host": ""
+    "tls_mode": "selfsigned"
   },
   "networks": {
     "minimal": {

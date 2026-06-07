@@ -113,6 +113,12 @@ locals {
 
   inventory_bastion_host_public_ip = local.inventory_bastion_host != null ? try(local.inventory_public_ips[local.inventory_bastion_host], null) : null
 
+  inventory_external_db_host = local.default_cloud == "gcp" ? try(module.gcp_sql[0].private_endpoint, "") : (
+    local.default_cloud == "azure" ? try(module.azure_sql[0].private_endpoint, "") : (
+      local.default_cloud == "aws" ? try(module.aws_sql[0].private_endpoint, "") : ""
+    )
+  )
+
   inventory_default_ssh_args = "-o StrictHostKeyChecking=accept-new -o ForwardAgent=yes -o IdentitiesOnly=yes"
   inventory_proxy_ssh_args   = local.inventory_bastion_host_public_ip != null ? "${local.inventory_default_ssh_args} -o ProxyCommand=\"ssh -i ${local.config_ssh_private_key_path} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -W %h:%p ${local.config_ssh_user}@${local.inventory_bastion_host_public_ip}\"" : null
 
@@ -134,6 +140,7 @@ locals {
     ansible_ssh_private_key_file = local.config_ssh_private_key_path
     ansible_ssh_common_args      = local.inventory_default_ssh_args
     ansible_python_interpreter   = "/usr/bin/python3"
+    external_db_host             = local.inventory_external_db_host
   }
 
   inventory_children = {

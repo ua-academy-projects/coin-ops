@@ -9,7 +9,7 @@ history_runtime_backend: "{{ runtime_backend | default('external') }}"
 history_rabbitmq_user: cognitor
 history_rabbitmq_password: "{{ fetched_gsm_secrets.rabbitmq_password | default(lookup('env', 'RABBITMQ_PASSWORD'), true) }}"
 history_postgres_bind_ip: "{{ hostvars[groups['history'][0]].private_ip }}"
-history_external_db_host: "{{ deploy_config_deploy.external_db_host | default('') }}"
+history_external_db_host: "{{ external_db_host | default(deploy_config_deploy.external_db_host | default('')) }}"
 history_external_db_enabled: "{{ history_external_db_host | length > 0 }}"
 history_database_host: "{{ history_external_db_host if history_external_db_host | length > 0 else 'postgres' }}"
 history_database_url: "postgresql://{{ history_db_user }}:{{ history_db_password }}@{{ history_database_host }}:5432/{{ history_db_name }}"
