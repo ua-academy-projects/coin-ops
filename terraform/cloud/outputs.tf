@@ -29,41 +29,41 @@ output "ansible_inventory_path" {
 }
 
 output "cloud_sql_instance_name" {
-  value = var.cloud == "gcp" ? try(module.gcp_sql[0].instance_name, null) : (
-    var.cloud == "azure" ? try(module.azure_sql[0].instance_name, null) : (
-      var.cloud == "aws" ? try(module.aws_sql[0].instance_name, null) : null
+  value = local.default_cloud == "gcp" ? try(module.gcp_sql[0].instance_name, null) : (
+    local.default_cloud == "azure" ? try(module.azure_sql[0].instance_name, null) : (
+      local.default_cloud == "aws" ? try(module.aws_sql[0].instance_name, null) : null
     )
   )
 }
 
 output "external_db_host" {
-  value = var.cloud == "gcp" ? try(module.gcp_sql[0].private_endpoint, null) : (
-    var.cloud == "azure" ? try(module.azure_sql[0].private_endpoint, null) : (
-      var.cloud == "aws" ? try(module.aws_sql[0].private_endpoint, null) : null
+  value = local.default_cloud == "gcp" ? try(module.gcp_sql[0].private_endpoint, null) : (
+    local.default_cloud == "azure" ? try(module.azure_sql[0].private_endpoint, null) : (
+      local.default_cloud == "aws" ? try(module.aws_sql[0].private_endpoint, null) : null
     )
   )
 }
 
 output "cloud_sql_connection_name" {
-  value = var.cloud == "gcp" ? try(module.gcp_sql[0].connection_name, null) : (
-    var.cloud == "azure" ? try(module.azure_sql[0].connection_name, null) : (
-      var.cloud == "aws" ? try(module.aws_sql[0].connection_name, null) : null
+  value = local.default_cloud == "gcp" ? try(module.gcp_sql[0].connection_name, null) : (
+    local.default_cloud == "azure" ? try(module.azure_sql[0].connection_name, null) : (
+      local.default_cloud == "aws" ? try(module.aws_sql[0].connection_name, null) : null
     )
   )
 }
 
 output "cloud_sql_database_name" {
-  value = var.cloud == "gcp" ? try(module.gcp_sql[0].database_name, null) : (
-    var.cloud == "azure" ? try(module.azure_sql[0].database_name, null) : (
-      var.cloud == "aws" ? try(module.aws_sql[0].database_name, null) : null
+  value = local.default_cloud == "gcp" ? try(module.gcp_sql[0].database_name, null) : (
+    local.default_cloud == "azure" ? try(module.azure_sql[0].database_name, null) : (
+      local.default_cloud == "aws" ? try(module.aws_sql[0].database_name, null) : null
     )
   )
 }
 
 output "cloud_sql_database_user" {
-  value = var.cloud == "gcp" ? try(module.gcp_sql[0].database_user, null) : (
-    var.cloud == "azure" ? try(module.azure_sql[0].database_user, null) : (
-      var.cloud == "aws" ? try(module.aws_sql[0].database_user, null) : null
+  value = local.default_cloud == "gcp" ? try(module.gcp_sql[0].database_user, null) : (
+    local.default_cloud == "azure" ? try(module.azure_sql[0].database_user, null) : (
+      local.default_cloud == "aws" ? try(module.aws_sql[0].database_user, null) : null
     )
   )
 }

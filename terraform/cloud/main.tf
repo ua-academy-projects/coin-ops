@@ -6,7 +6,7 @@ module "azure_network" {
   source = "./modules/azure/network"
   count  = local.enable_azure_network ? 1 : 0
 
-  resource_group_name = var.azure_resource_group_name
+  resource_group_name = local.config_azure_resource_group
   network             = local.networks_by_cloud.azure
 }
 
@@ -14,23 +14,23 @@ module "azure_security" {
   source = "./modules/azure/security"
   count  = local.enable_azure_security ? 1 : 0
 
-  resource_group_name = var.azure_resource_group_name
-  location            = var.azure_location
+  resource_group_name = local.config_azure_resource_group
+  location            = local.config_azure_location
   subnet_ids          = module.azure_network[0].subnetwork_ids
   subnets             = local.networks_by_cloud.azure.subnets
   workloads           = local.workloads_by_cloud.azure
-  rules               = var.security_rules
+  rules               = local.config_security_rules
 }
 
 module "azure_instances" {
   source = "./modules/azure/instances"
   count  = local.enable_azure_workloads ? 1 : 0
 
-  resource_group_name            = var.azure_resource_group_name
-  location                       = var.azure_location
-  ssh_user                       = var.ssh_user
-  ssh_public_key_path            = pathexpand(var.ssh_public_key_path)
-  key_vault_name                 = var.azure_key_vault_name
+  resource_group_name            = local.config_azure_resource_group
+  location                       = local.config_azure_location
+  ssh_user                       = local.config_ssh_user
+  ssh_public_key_path            = pathexpand(local.config_ssh_public_key_path)
+  key_vault_name                 = local.config_azure_key_vault_name
   subnet_ids                     = module.azure_network[0].subnetwork_ids
   application_security_group_ids = try(module.azure_security[0].application_security_group_ids, {})
   workloads                      = local.workloads_by_cloud.azure
@@ -40,25 +40,25 @@ module "azure_sql" {
   source = "./modules/azure/sql"
   count  = local.enable_azure_sql ? 1 : 0
 
-  resource_group_name   = var.azure_resource_group_name
-  location              = var.azure_location
+  resource_group_name   = local.config_azure_resource_group
+  location              = local.config_azure_location
   network_name          = module.azure_network[0].network_name
   network_id            = module.azure_network[0].network_id
   network_cidr          = local.networks_by_cloud.azure.cidr
-  key_vault_name        = var.azure_key_vault_name
-  db_password_secret_id = var.secrets["db_password"].secret_id
-  placement             = var.sql.placement
-  instance              = var.sql.instance
-  database              = var.sql.database
-  user                  = var.sql.user
+  key_vault_name        = local.config_azure_key_vault_name
+  db_password_secret_id = local.config_secrets["db_password"].secret_id
+  placement             = local.config_sql.placement
+  instance              = local.config_sql.instance
+  database              = local.config_sql.database
+  user                  = local.config_sql.user
 }
 
 module "azure_routing" {
   source = "./modules/azure/routing"
   count  = local.enable_azure_routing ? 1 : 0
 
-  resource_group_name  = var.azure_resource_group_name
-  route                = var.nat_route
+  resource_group_name  = local.config_azure_resource_group
+  route                = local.config_nat_route
   next_hop_private_ips = module.azure_instances[0].private_ips
   private_subnet_ids   = module.azure_network[0].private_subnet_ids
 }
@@ -80,8 +80,8 @@ module "gcp_instances" {
   source = "./modules/gcp/instances"
   count  = local.enable_gcp_workloads ? 1 : 0
 
-  ssh_user            = var.ssh_user
-  ssh_public_key_path = pathexpand(var.ssh_public_key_path)
+  ssh_user            = local.config_ssh_user
+  ssh_public_key_path = pathexpand(local.config_ssh_public_key_path)
   network_name        = module.gcp_network[0].network_name
   subnetworks         = module.gcp_network[0].subnetwork_names
 
@@ -94,14 +94,14 @@ module "gcp_security" {
 
   network_name       = module.gcp_network[0].network_name
   workload_selectors = module.gcp_instances[0].workload_selectors
-  rules              = var.security_rules
+  rules              = local.config_security_rules
 }
 
 module "gcp_secrets" {
   source = "./modules/gcp/secrets"
   count  = local.enable_gcp_secrets ? 1 : 0
 
-  secrets          = var.secrets
+  secrets          = local.config_secrets
   workloads        = local.workloads_by_cloud.gcp
   service_accounts = module.gcp_instances[0].service_accounts
 }
@@ -110,13 +110,13 @@ module "gcp_sql" {
   source = "./modules/gcp/sql"
   count  = local.enable_gcp_sql ? 1 : 0
 
-  placement             = var.sql.placement
+  placement             = local.config_sql.placement
   network_name          = module.gcp_network[0].network_name
-  db_password_secret_id = var.secrets["db_password"].secret_id
+  db_password_secret_id = local.config_secrets["db_password"].secret_id
 
-  instance = var.sql.instance
-  database = var.sql.database
-  user     = var.sql.user
+  instance = local.config_sql.instance
+  database = local.config_sql.database
+  user     = local.config_sql.user
 }
 
 module "gcp_routing" {
@@ -124,7 +124,7 @@ module "gcp_routing" {
   count  = local.enable_gcp_routing ? 1 : 0
 
   network_name       = module.gcp_network[0].network_name
-  route              = var.nat_route
+  route              = local.config_nat_route
   next_hop_instances = module.gcp_instances[0].instance_self_links
 }
 
@@ -147,19 +147,19 @@ module "aws_security" {
 
   network_id     = module.aws_network[0].network_id
   workload_names = keys(local.workloads_by_cloud.aws)
-  rules          = var.security_rules
+  rules          = local.config_security_rules
 }
 
 module "aws_instances" {
   source = "./modules/aws/instances"
   count  = local.enable_aws_workloads ? 1 : 0
 
-  ssh_user            = var.ssh_user
-  ssh_public_key_path = pathexpand(var.ssh_public_key_path)
+  ssh_user            = local.config_ssh_user
+  ssh_public_key_path = pathexpand(local.config_ssh_public_key_path)
   subnetworks         = module.aws_network[0].subnetwork_ids
   security_group_ids  = try(module.aws_security[0].security_group_ids, {})
   workloads           = local.workloads_by_cloud.aws
-  secrets             = var.secrets
+  secrets             = local.config_secrets
 }
 
 module "aws_sql" {
@@ -168,12 +168,12 @@ module "aws_sql" {
 
   network_id            = module.aws_network[0].network_id
   private_subnet_ids    = module.aws_network[0].private_subnet_ids
-  placement             = var.sql.placement
-  db_password_secret_id = var.secrets["db_password"].secret_id
+  placement             = local.config_sql.placement
+  db_password_secret_id = local.config_secrets["db_password"].secret_id
 
-  instance = var.sql.instance
-  database = var.sql.database
-  user     = var.sql.user
+  instance = local.config_sql.instance
+  database = local.config_sql.database
+  user     = local.config_sql.user
 }
 
 module "aws_routing" {
@@ -182,6 +182,6 @@ module "aws_routing" {
 
   network_id             = module.aws_network[0].network_id
   private_subnet_ids     = module.aws_network[0].private_subnet_ids
-  route                  = var.nat_route
+  route                  = local.config_nat_route
   next_hop_interface_ids = module.aws_instances[0].network_interface_ids
 }
