@@ -2,8 +2,10 @@ locals {
   # ------------------------------------------------------------
   # Shared Defaults
   # ------------------------------------------------------------
+  config_path = "${path.module}/../../configs/${var.config_name}.json"
+  config = jsondecode(file(local.config_path))
   supported_clouds = ["gcp", "azure", "aws"]
-  default_cloud    = var.cloud
+  default_cloud    = local.config.cloud
 
   # ------------------------------------------------------------
   # Cloud-Specific Resource Selection
