@@ -83,12 +83,12 @@ resource "azurerm_monitor_diagnostic_setting" "postgresql" {
 }
 
 resource "azurerm_monitor_metric_alert" "vm_cpu_high" {
-  for_each = var.vm_metric_alerts_enabled ? var.vm_ids : {}
+  for_each = var.vm_cpu_alert_enabled ? var.vm_ids : {}
 
   name                = "${each.key}-cpu-high"
   resource_group_name = var.resource_group_name
   scopes              = [each.value]
-  description         = "CPU usage is higher than 80 percent."
+  description         = "VM CPU usage is higher than 80 percent."
   severity            = 2      # Warning
   frequency           = "PT1M" # Period Time 1 Minute
   window_size         = "PT5M"
@@ -100,5 +100,89 @@ resource "azurerm_monitor_metric_alert" "vm_cpu_high" {
     aggregation      = "Average"
     operator         = "GreaterThan"
     threshold        = 80
+  }
+}
+
+resource "azurerm_monitor_metric_alert" "postgresql_cpu_high" {
+  count = var.postgresql_cpu_alert_enabled && var.postgresql_server_id != null ? 1 : 0
+
+  name                = "${var.name}-postgresql-cpu-high"
+  resource_group_name = var.resource_group_name
+  scopes              = [var.postgresql_server_id]
+  description         = "PostgreSQL CPU usage is higher than 80 percent."
+  severity            = 2      # Warning
+  frequency           = "PT1M" # Period Time 1 Minute
+  window_size         = "PT5M"
+  enabled             = true
+
+  criteria {
+    metric_namespace = "Microsoft.DBforPostgreSQL/flexibleServers"
+    metric_name      = "cpu_percent"
+    aggregation      = "Average"
+    operator         = "GreaterThan"
+    threshold        = 80
+  }
+}
+
+resource "azurerm_monitor_metric_alert" "postgresql_storage_high" {
+  count = var.postgresql_storage_alert_enabled && var.postgresql_server_id != null ? 1 : 0
+
+  name                = "${var.name}-postgresql-storage-high"
+  resource_group_name = var.resource_group_name
+  scopes              = [var.postgresql_server_id]
+  description         = "PostgreSQL storage usage is higher than 80 percent."
+  severity            = 2
+  frequency           = "PT5M"
+  window_size         = "PT15M"
+  enabled             = true
+
+  criteria {
+    metric_namespace = "Microsoft.DBforPostgreSQL/flexibleServers"
+    metric_name      = "storage_percent"
+    aggregation      = "Average"
+    operator         = "GreaterThan"
+    threshold        = 80
+  }
+}
+
+resource "azurerm_monitor_metric_alert" "postgresql_connections_high" {
+  count = var.postgresql_connections_alert_enabled && var.postgresql_server_id != null ? 1 : 0
+
+  name                = "${var.name}-postgresql-connections-high"
+  resource_group_name = var.resource_group_name
+  scopes              = [var.postgresql_server_id]
+  description         = "PostgreSQL active connections are high."
+  severity            = 3
+  frequency           = "PT5M"
+  window_size         = "PT15M"
+  enabled             = true
+
+  criteria {
+    metric_namespace = "Microsoft.DBforPostgreSQL/flexibleServers"
+    metric_name      = "active_connections"
+    aggregation      = "Average"
+    operator         = "GreaterThan"
+    threshold        = 80
+  }
+}
+
+resource "azurerm_monitor_metric_alert" "postgresql_failed_connections" {
+  count = var.postgresql_failed_connections_alert_enabled && var.postgresql_server_id != null ? 1 : 0
+
+  name                = "${var.name}-postgresql-failed-connections"
+  resource_group_name = var.resource_group_name
+  scopes              = [var.postgresql_server_id]
+  description         = "PostgreSQL has failed connections."
+  severity            = 2
+  frequency           = "PT5M"
+  window_size         = "PT15M"
+  enabled             = true
+
+  criteria {
+    metric_namespace = "Microsoft.DBforPostgreSQL/flexibleServers"
+    metric_name      = "connections_failed"
+    aggregation      = "Total"
+    operator         = "GreaterThan"
+    threshold        = 0
   }
 }

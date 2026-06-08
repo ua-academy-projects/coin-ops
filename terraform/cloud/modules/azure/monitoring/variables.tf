@@ -21,7 +21,30 @@ variable "postgresql_server_id" {
   default = null
 }
 
-variable "vm_metric_alerts_enabled" {
+
+# alerts
+
+variable "vm_cpu_alert_enabled" {
   type    = bool
-  default = false
+  default = true
+}
+
+variable "postgresql_cpu_alert_enabled" {
+  type    = bool
+  default = true
+}
+
+variable "postgresql_storage_alert_enabled" {
+  type    = bool
+  default = true
+}
+
+variable "postgresql_connections_alert_enabled" {
+  type    = bool
+  default = true
+}
+
+variable "postgresql_failed_connections_alert_enabled" {
+  type    = bool
+  default = true
 }
