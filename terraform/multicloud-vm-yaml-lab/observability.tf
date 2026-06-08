@@ -18,7 +18,7 @@ locals {
   # as non-empty even for count=0 resources, so it must never be "".
   obs_rg    = local.is_azure ? module.azure[0].resource_group_name : "n-a"
   obs_loc   = local.azure_region
-  obs_email = try(local.config.observability.alert_email, "andriy@netlife.com.ua")
+  obs_email = try(local.config.observability.alert_email, "vshabat64@gmail.com")
 }
 
 # --- Logs ---------------------------------------------------------------------

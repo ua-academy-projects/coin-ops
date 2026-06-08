@@ -125,7 +125,7 @@ defaults:
 # group. Left off so it never affects the initial provisioning apply.
 observability:
   enabled: false
-  alert_email: andriy@netlife.com.ua
+  alert_email: vshabat64@gmail.com
 
 runtime:
   mode: cloud-native
