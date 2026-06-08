@@ -23,15 +23,18 @@ output "internal_vm_ips" {
 
 # SSH connection string to k3s-server-1 (public node).
 # In GCP-only mode there is no jump-host — connect directly to k3s-server-1.
+# SSH connection string to k3s-server-1 (public node).
+# In GCP-only mode there is no jump-host — connect directly to k3s-server-1.
 output "ssh_connection" {
   description = "Ready-to-use SSH command to connect to the cluster entry point"
   value = "ssh -p ${local.general.ssh_port} ${local.general.ops_user}@${
     local.cloud == "gcp" ? coalesce(module.gcp_vm.jump_host_external_ip, "no-jump-host-use-k3s-server-1") : (
-    local.cloud == "aws" ? module.aws_vm.jump_host_external_ip : (
-    local.cloud == "hybrid" ? module.aws_vm.jump_host_external_ip :
+    local.cloud == "aws" ? coalesce(module.aws_vm.k3s_server_1_public_ip, "k3s-server-1-ip-pending") : (
+    local.cloud == "hybrid" ? coalesce(module.aws_vm.jump_host_external_ip, "no-jump-host") :
     module.azure_vm.jump_host_external_ip))
   }"
 }
+
 
 output "rds_endpoint" {
   description = "AWS RDS PostgreSQL connection endpoint (AWS only)"

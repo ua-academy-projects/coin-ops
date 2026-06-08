@@ -37,3 +37,7 @@ variable "web_sg_id" {
 variable "gateway_sg_id" {
   type = string
 }
+
+variable "k3s_sg_id" {
+  type = string
+}

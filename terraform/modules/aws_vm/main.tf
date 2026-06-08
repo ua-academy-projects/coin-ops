@@ -28,10 +28,11 @@ resource "aws_instance" "vm" {
   source_dest_check           = contains(each.value.tags, "gateway") ? false : true
 
 vpc_security_group_ids = concat(
-  contains(each.value.tags, "jump-host") ? [var.jump_host_sg_id] : [],
-  contains(each.value.tags, "internal")  ? [var.internal_sg_id]  : [],
-  contains(each.value.tags, "web")       ? [var.web_sg_id]       : [],
-  contains(each.value.tags, "gateway")   ? [var.gateway_sg_id]   : []
+  contains(each.value.tags, "jump-host")  ? [var.jump_host_sg_id] : [],
+  contains(each.value.tags, "internal")   ? [var.internal_sg_id]  : [],
+  contains(each.value.tags, "web")        ? [var.web_sg_id]       : [],
+  contains(each.value.tags, "gateway")    ? [var.gateway_sg_id]   : [],
+  contains(each.value.tags, "k3s-server") ? [var.k3s_sg_id]       : []
 )
 
   key_name = aws_key_pair.main[0].key_name

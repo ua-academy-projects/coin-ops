@@ -25,5 +25,5 @@
 - name: Deploy app layer (schema init + history + proxy)
   include_tasks: app.yml
 
-- name: Deploy frontend layer (ui + ingress)
+- name: Deploy frontend layer (ui + ingress--)
   include_tasks: frontend.yml

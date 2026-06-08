@@ -163,3 +163,86 @@ resource "aws_security_group" "gateway" {
     Name = "gateway-sg"
   }
 }
+
+# k3s cluster nodes — Kubernetes ports + SSH + HTTP/HTTPS
+resource "aws_security_group" "k3s" {
+  count       = contains(["aws", "hybrid"], var.config.general.cloud) ? 1 : 0
+  name        = "k3s-sg"
+  description = "k3s cluster: SSH, Kubernetes API, etcd, Flannel, Traefik"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    from_port   = tonumber(var.config.general.ssh_port)
+    to_port     = tonumber(var.config.general.ssh_port)
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "SSH"
+  }
+
+  ingress {
+    from_port   = 6443
+    to_port     = 6443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Kubernetes API server"
+  }
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTP Traefik"
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTPS Traefik"
+  }
+
+  ingress {
+    from_port   = 9345
+    to_port     = 9345
+    protocol    = "tcp"
+    self        = true
+    description = "k3s supervisor API"
+  }
+
+  ingress {
+    from_port   = 2379
+    to_port     = 2380
+    protocol    = "tcp"
+    self        = true
+    description = "etcd"
+  }
+
+  ingress {
+    from_port   = 8472
+    to_port     = 8472
+    protocol    = "udp"
+    self        = true
+    description = "Flannel VXLAN"
+  }
+
+  ingress {
+    from_port   = 10250
+    to_port     = 10250
+    protocol    = "tcp"
+    self        = true
+    description = "kubelet API"
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "k3s-sg"
+  }
+}

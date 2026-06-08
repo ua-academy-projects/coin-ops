@@ -4,7 +4,7 @@
 # uncomment AWS/Azure VMs below.
 
 general:
-  cloud: "gcp"           # changed from "hybrid" — GCP only for Task 4
+  cloud: "aws"           # aws k3s cluster
   project_id: "devops-intern-penina"
   location: "europe"
   disk_size: 30
@@ -110,21 +110,21 @@ vms:
 
   # ── GCP k3s cluster — active for Task 4 ──────────────────────────────
   k3s-server-1:
-    cloud: "gcp"
+    cloud: "aws"
     size: medium
     zone: primary
     tags: ["k3s-server"]
     public_ip: true
 
   k3s-server-2:
-    cloud: "gcp"
+    cloud: "aws"
     size: medium
     zone: primary
     tags: ["k3s-server"]
     public_ip: false
 
   k3s-server-3:
-    cloud: "gcp"
+    cloud: "aws"
     size: medium
     zone: secondary
     tags: ["k3s-server"]

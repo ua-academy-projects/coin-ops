@@ -115,18 +115,16 @@ module "aws_vm" {
   internal_sg_id      = module.aws_security.internal_sg_id
   web_sg_id           = module.aws_security.web_sg_id
   gateway_sg_id       = module.aws_security.gateway_sg_id
+  k3s_sg_id           = module.aws_security.k3s_sg_id 
 }
 
 module "aws_lb" {
-  source = "./modules/aws_lb"
-
-  config = local.config
-
+  source             = "./modules/aws_lb"
+  config             = local.config
   vpc_id             = module.aws_network.vpc_id
   public_subnet_id   = module.aws_network.public_subnet_id
   public_subnet_b_id = module.aws_network.public_subnet_b_id
-
-  ui_instance_id = module.aws_vm.ui_instance_id
+  k3s_instance_ids   = module.aws_vm.k3s_instance_ids
 }
 
 module "aws_rds" {

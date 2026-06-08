@@ -17,3 +17,7 @@ output "rds_sg_id" {
 output "gateway_sg_id" {
   value = try(aws_security_group.gateway[0].id, null)
 }
+
+output "k3s_sg_id" {
+  value = try(aws_security_group.k3s[0].id, null)
+}
