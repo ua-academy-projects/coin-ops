@@ -78,6 +78,15 @@ resource "azurerm_role_assignment" "grafana_prometheus_reader" {
   principal_id         = azurerm_dashboard_grafana.obs[0].identity[0].principal_id
 }
 
+# The operator(s) need a Grafana RBAC role to open the Managed Grafana UI
+# (being subscription Owner is not enough — Grafana access is its own role).
+resource "azurerm_role_assignment" "grafana_admin_operators" {
+  for_each             = local.obs_enabled ? toset(try(local.config.clouds.azure.operator_object_ids, [])) : toset([])
+  scope                = azurerm_dashboard_grafana.obs[0].id
+  role_definition_name = "Grafana Admin"
+  principal_id         = each.value
+}
+
 # --- Alerting (action group = where alerts page) ------------------------------
 resource "azurerm_monitor_action_group" "obs" {
   count               = local.obs_enabled ? 1 : 0
