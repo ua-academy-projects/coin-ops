@@ -56,7 +56,7 @@ resource "azurerm_dashboard_grafana" "obs" {
   name                              = substr("${replace(local.config.name_prefix, "-", "")}graf", 0, 23)
   resource_group_name               = local.obs_rg
   location                          = local.obs_loc
-  grafana_major_version             = "11"
+  grafana_major_version             = "12"
   api_key_enabled                   = false
   deterministic_outbound_ip_enabled = false
   public_network_access_enabled     = true
