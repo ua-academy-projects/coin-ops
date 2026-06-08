@@ -100,6 +100,62 @@ resource "azurerm_monitor_action_group" "obs" {
   }
 }
 
+# Prometheus alert rules (evaluated against the Azure Monitor Workspace / managed
+# Prometheus) → the action group. Infra-level for now (metrics already collected);
+# app-level rules (write-path stall, staleness, DLQ) come once the app/backing
+# exporters are scraped (pillar D).
+resource "azurerm_monitor_alert_prometheus_rule_group" "obs" {
+  count               = local.obs_enabled ? 1 : 0
+  name                = "${local.config.name_prefix}-k8s-alerts"
+  location            = local.obs_loc
+  resource_group_name = local.obs_rg
+  cluster_name        = "coinops-k3s"
+  scopes              = [azurerm_monitor_workspace.obs[0].id]
+  rule_group_enabled  = true
+
+  rule {
+    alert      = "NodeMemoryPressure"
+    expression = "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.9"
+    for        = "PT10M"
+    severity   = 2
+    labels     = { severity = "warning" }
+    annotations = {
+      description = "Node {{ $labels.instance }} has <10% memory available for 10m (4 GB nodes — watch it)."
+    }
+    action {
+      action_group_id = azurerm_monitor_action_group.obs[0].id
+    }
+  }
+
+  rule {
+    alert      = "PodRestarting"
+    expression = "increase(kube_pod_container_status_restarts_total{namespace=~\"coinops.*\"}[15m]) > 2"
+    for        = "PT5M"
+    severity   = 3
+    labels     = { severity = "warning" }
+    annotations = {
+      description = "Pod {{ $labels.namespace }}/{{ $labels.pod }} restarted >2 times in 15m."
+    }
+    action {
+      action_group_id = azurerm_monitor_action_group.obs[0].id
+    }
+  }
+
+  rule {
+    alert      = "PodOOMKilled"
+    expression = "kube_pod_container_status_last_terminated_reason{reason=\"OOMKilled\", namespace=~\"coinops.*\"} == 1"
+    for        = "PT1M"
+    severity   = 2
+    labels     = { severity = "warning" }
+    annotations = {
+      description = "Container {{ $labels.namespace }}/{{ $labels.pod }} was OOMKilled."
+    }
+    action {
+      action_group_id = azurerm_monitor_action_group.obs[0].id
+    }
+  }
+}
+
 # Consumed by the k3s_observability ansible role (workspace ids, App Insights
 # connection string, the Managed Prometheus remote-write/query endpoints).
 output "observability" {
