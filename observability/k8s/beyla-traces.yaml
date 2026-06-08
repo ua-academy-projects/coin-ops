@@ -148,8 +148,8 @@ spec:
           volumeMounts:
             - { name: cfg, mountPath: /config }
           resources:
-            requests: { cpu: 50m, memory: 96Mi }
-            limits: { cpu: 300m, memory: 256Mi }
+            requests: { cpu: 50m, memory: 160Mi }
+            limits: { cpu: 400m, memory: 512Mi } # eBPF maps need headroom; 256Mi OOM'd
       volumes:
         - name: cfg
           configMap: { name: beyla-config }
