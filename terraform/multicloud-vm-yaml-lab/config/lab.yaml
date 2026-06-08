@@ -124,7 +124,7 @@ defaults:
 # managed Prometheus, Application Insights, Managed Grafana and the alert action
 # group. Left off so it never affects the initial provisioning apply.
 observability:
-  enabled: false
+  enabled: true
   alert_email: vshabat64@gmail.com
 
 runtime:
