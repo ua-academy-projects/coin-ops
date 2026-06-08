@@ -48,3 +48,15 @@ variable "postgresql_failed_connections_alert_enabled" {
   type    = bool
   default = true
 }
+
+# insights
+
+variable "frontend_public_ip" {
+  type    = string
+  default = null
+}
+
+variable "http_availability_tests_enabled" {
+  type    = bool
+  default = false
+}

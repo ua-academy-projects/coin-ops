@@ -72,6 +72,8 @@ module "azure_monitoring" {
   location                                    = local.config_azure_location
   vm_ids                                      = try(module.azure_instances[0].vm_ids, {})
   postgresql_server_id                        = try(module.azure_sql[0].server_id, null)
+  frontend_public_ip                          = local.monitoring_frontend_public_ip
+  http_availability_tests_enabled             = true
   vm_cpu_alert_enabled                        = true
   postgresql_cpu_alert_enabled                = true
   postgresql_storage_alert_enabled            = true

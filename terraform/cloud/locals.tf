@@ -113,6 +113,12 @@ locals {
 
   inventory_bastion_host_public_ip = local.inventory_bastion_host != null ? try(local.inventory_public_ips[local.inventory_bastion_host], null) : null
 
+  monitoring_frontend_host = try(one([
+    for name, workload in local.workloads : name
+  if contains(workload.roles, "ui")]), null)
+
+  monitoring_frontend_public_ip = local.monitoring_frontend_host != null ? try(local.inventory_public_ips[local.monitoring_frontend_host], null) : null
+
   inventory_external_db_host = local.default_cloud == "gcp" ? try(module.gcp_sql[0].private_endpoint, "") : (
     local.default_cloud == "azure" ? try(module.azure_sql[0].private_endpoint, "") : (
       local.default_cloud == "aws" ? try(module.aws_sql[0].private_endpoint, "") : ""
