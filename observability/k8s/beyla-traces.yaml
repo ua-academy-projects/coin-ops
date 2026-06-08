@@ -68,7 +68,7 @@ spec:
             - { name: cfg, mountPath: /etc/otel }
           resources:
             requests: { cpu: 50m, memory: 96Mi }
-            limits: { cpu: 300m, memory: 256Mi }
+            limits: { cpu: 200m, memory: 256Mi } # capped — single-core nodes
       volumes:
         - name: cfg
           configMap: { name: otel-collector-config }
@@ -131,6 +131,13 @@ spec:
     spec:
       serviceAccountName: beyla
       hostPID: true
+      # Pinned to ONE node: the 1-vCPU k3s nodes can't run eBPF on every node
+      # without starving the k3s control plane (k3s-1/3 hit 100% CPU and the
+      # apiserver refused connections). A DaemonSet + hostname nodeSelector runs
+      # exactly one Beyla, on the node that has spare CPU. Traces cover the
+      # workloads scheduled on this node (eBPF + hostPID see same-node processes).
+      nodeSelector:
+        kubernetes.io/hostname: coinops-lab-k3s-2
       containers:
         - name: beyla
           image: grafana/beyla:1.9.6
@@ -149,7 +156,9 @@ spec:
             - { name: cfg, mountPath: /config }
           resources:
             requests: { cpu: 50m, memory: 160Mi }
-            limits: { cpu: 400m, memory: 512Mi } # eBPF maps need headroom; 256Mi OOM'd
+            # Hard CPU cap so Beyla can't peg the single core and starve k3s.
+            # Memory stays at 512Mi — eBPF maps need it (256Mi OOM'd).
+            limits: { cpu: 150m, memory: 512Mi }
       volumes:
         - name: cfg
           configMap: { name: beyla-config }
