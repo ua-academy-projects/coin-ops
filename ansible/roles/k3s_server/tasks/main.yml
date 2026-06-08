@@ -40,31 +40,54 @@
     k3s_server_ip: "{{ ansible_default_ipv4.address }}"
   when: inventory_hostname in groups['k3s_bootstrap']
 
-# --- Join nodes only (k3s-server-2, k3s-server-3) ---
+# --- Download k3s artifacts on bootstrap node (has public IP) ---
+# Then copy to join nodes via Ansible — avoids GitHub CDN 504 from private subnet NAT
 
-# Pre-download k3s binary separately with retries.
-# The install script downloads the binary internally but has no retry logic.
-# Downloading it first with get_url (which supports retries) avoids timeout failures.
-- name: Pre-download k3s binary for join nodes
+- name: Download k3s binary on bootstrap node
   get_url:
     url: "https://github.com/k3s-io/k3s/releases/download/{{ k3s_version | replace('+', '%2B') }}/k3s"
-    dest: /usr/local/bin/k3s
+    dest: /tmp/k3s-binary
     mode: '0755'
   retries: 5
-  delay: 15
-  when:
-    - inventory_hostname not in groups['k3s_bootstrap']
-    - not ansible_check_mode
+  delay: 10
+  when: inventory_hostname in groups['k3s_bootstrap']
 
-- name: Pre-download k3s sha256 hash for join nodes
+- name: Download k3s sha256 on bootstrap node
   get_url:
     url: "https://github.com/k3s-io/k3s/releases/download/{{ k3s_version | replace('+', '%2B') }}/sha256sum-amd64.txt"
     dest: /tmp/sha256sum-amd64.txt
   retries: 5
-  delay: 15
-  when:
-    - inventory_hostname not in groups['k3s_bootstrap']
-    - not ansible_check_mode
+  delay: 10
+  when: inventory_hostname in groups['k3s_bootstrap']
+
+- name: Fetch k3s binary from bootstrap to Ansible control node
+  fetch:
+    src: /tmp/k3s-binary
+    dest: /tmp/k3s-binary
+    flat: yes
+  when: inventory_hostname in groups['k3s_bootstrap']
+
+- name: Fetch k3s sha256 from bootstrap to Ansible control node
+  fetch:
+    src: /tmp/sha256sum-amd64.txt
+    dest: /tmp/sha256sum-amd64.txt
+    flat: yes
+  when: inventory_hostname in groups['k3s_bootstrap']
+
+# --- Join nodes only (k3s-server-2, k3s-server-3) ---
+
+- name: Copy k3s binary to join nodes
+  copy:
+    src: /tmp/k3s-binary
+    dest: /usr/local/bin/k3s
+    mode: '0755'
+  when: inventory_hostname not in groups['k3s_bootstrap']
+
+- name: Copy k3s sha256 to join nodes
+  copy:
+    src: /tmp/sha256sum-amd64.txt
+    dest: /tmp/sha256sum-amd64.txt
+  when: inventory_hostname not in groups['k3s_bootstrap']
 
 - name: Join k3s cluster (non-bootstrap nodes)
   shell: >
