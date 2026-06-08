@@ -81,3 +81,24 @@ resource "azurerm_monitor_diagnostic_setting" "postgresql" {
     category = "AllMetrics"
   }
 }
+
+resource "azurerm_monitor_metric_alert" "vm_cpu_high" {
+  for_each = var.vm_metric_alerts_enabled ? var.vm_ids : {}
+
+  name                = "${each.key}-cpu-high"
+  resource_group_name = var.resource_group_name
+  scopes              = [each.value]
+  description         = "CPU usage is higher than 80 percent."
+  severity            = 2      # Warning
+  frequency           = "PT1M" # Period Time 1 Minute
+  window_size         = "PT5M"
+  enabled             = true
+
+  criteria {
+    metric_namespace = "Microsoft.Compute/virtualMachines"
+    metric_name      = "Percentage CPU"
+    aggregation      = "Average"
+    operator         = "GreaterThan"
+    threshold        = 80
+  }
+}

@@ -20,3 +20,8 @@ variable "postgresql_server_id" {
   type    = string
   default = null
 }
+
+variable "vm_metric_alerts_enabled" {
+  type    = bool
+  default = false
+}
