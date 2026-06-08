@@ -43,3 +43,9 @@
     - k3s_coinops_data
     - k3s_coinops
     - k3s_netpol
+    # Additive Azure Monitor observability (Beyla traces + backing-service
+    # exporters + managed-Prometheus scrape config + Arc onboarding). Master-
+    # gated off (k3s_observability_enabled) → a no-op until config enables it.
+    # Last so it never sits in the app deploy critical path; runs AFTER netpol
+    # so it can add its own allow-policies on top of the default-deny.
+    - k3s_observability

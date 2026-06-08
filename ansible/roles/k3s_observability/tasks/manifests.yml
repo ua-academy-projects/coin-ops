@@ -1,0 +1,108 @@
+---
+# In-cluster observability objects. All applied on the first node with the
+# node's kubeconfig (mirrors k3s_coinops_data / k3s_cloudflared). state: present
+# everywhere -> declarative + re-runnable.
+
+- name: Ensure the observability namespace
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ k3s_obs_namespace }}"
+
+# --- Traces -----------------------------------------------------------------
+- name: Apply the App Insights connection-string secret
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition: "{{ lookup('template', 'appinsights-secret.yaml.j2') | from_yaml }}"
+  no_log: true
+  when: k3s_obs_appinsights_connstr | length > 0
+
+- name: Apply the OTel Collector (Azure Monitor exporter)
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition: "{{ item }}"
+  loop: "{{ lookup('template', 'otel-collector.yaml.j2') | from_yaml_all | list }}"
+  loop_control:
+    label: "{{ item.kind }}/{{ item.metadata.name }}"
+  when: k3s_obs_appinsights_connstr | length > 0
+
+- name: Apply Beyla (eBPF auto-instrumentation)
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition: "{{ item }}"
+  loop: "{{ lookup('template', 'beyla.yaml.j2') | from_yaml_all | list }}"
+  loop_control:
+    label: "{{ item.kind }}/{{ item.metadata.name }}"
+  when: k3s_obs_beyla_enabled | bool
+
+# --- Pillar D: backing-service exporters ------------------------------------
+- name: Apply redis + postgres exporters
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition: "{{ item }}"
+  loop: "{{ lookup('template', 'exporters.yaml.j2') | from_yaml_all | list }}"
+  loop_control:
+    label: "{{ item.kind }}/{{ item.metadata.name }}"
+  no_log: true   # postgres exporter carries the DB DSN
+  when: k3s_obs_exporters_enabled | bool
+
+- name: Enable the RabbitMQ prometheus plugin (runtime, persisted on the PVC)
+  kubernetes.core.k8s_exec:
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    namespace: "{{ coinops_rabbitmq_namespace }}"
+    pod: "{{ k3s_obs_rabbitmq_pod }}"
+    command: rabbitmq-plugins enable rabbitmq_prometheus
+  register: k3s_obs_rmq_plugin
+  changed_when: "'set' in (k3s_obs_rmq_plugin.stdout | default(''))"
+  failed_when: false   # tolerate not-ready / already-enabled; never fail the play
+  when: k3s_obs_rabbitmq_metrics_enabled | bool
+
+- name: Expose the RabbitMQ metrics port (:15692) via an additive Service
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition: "{{ lookup('template', 'rabbitmq-metrics.yaml.j2') | from_yaml }}"
+  when: k3s_obs_rabbitmq_metrics_enabled | bool
+
+# --- Additive NetworkPolicy allows (so scrapes/exporters can reach data tier) -
+- name: Apply additive observability NetworkPolicies
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition: "{{ item }}"
+  loop: "{{ lookup('template', 'netpol-observability.yaml.j2') | from_yaml_all | list }}"
+  loop_control:
+    label: "{{ item.metadata.namespace }}/{{ item.metadata.name }}"
+
+# --- Azure managed Prometheus custom scrape config --------------------------
+- name: Apply the ama-metrics custom scrape config (kube-system)
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition: "{{ lookup('template', 'ama-metrics-config.yaml.j2') | from_yaml }}"
+  when: k3s_obs_ama_scrape_enabled | bool
+
+# --- Optional load generator -------------------------------------------------
+- name: Apply the load generator (demo traffic)
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition: "{{ lookup('template', 'loadgen.yaml.j2') | from_yaml }}"
+  when: k3s_obs_loadgen_enabled | bool
+
+- name: Observability summary
+  ansible.builtin.debug:
+    msg:
+      - "k3s_observability applied in ns '{{ k3s_obs_namespace }}'."
+      - "Traces: {{ 'Beyla -> OTel -> App Insights' if (k3s_obs_beyla_enabled and k3s_obs_appinsights_connstr | length > 0) else 'disabled (no App Insights connstr)' }}."
+      - "Exporters: {{ 'redis + postgres + rabbitmq(:15692)' if k3s_obs_exporters_enabled else 'disabled' }}."
+      - "Managed-Prometheus scrape config: {{ 'applied' if k3s_obs_ama_scrape_enabled else 'skipped' }}."
+      - "Load generator: {{ 'on' if k3s_obs_loadgen_enabled else 'off' }}."

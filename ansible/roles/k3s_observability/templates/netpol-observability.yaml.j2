@@ -1,0 +1,65 @@
+{# Additive NetworkPolicy allows so the observability tier can reach the data
+   services through k3s_netpol's default-deny. NEW named policies only — the
+   k3s_netpol templates are not touched. NetworkPolicies are additive (OR'd), so
+   these widen the allow-set without overriding the existing deny.
+
+   Flows opened:
+     observability ns  -> redis:6379            (redis_exporter -> redis)
+     observability ns  -> postgres:5432         (postgres_exporter -> CNPG -rw)
+     kube-system ns    -> rabbitmq:15692        (ama-metrics scrapes the plugin)
+   The exporters themselves live in the observability ns (no NetworkPolicy there
+   -> open), so ama-metrics in kube-system can scrape them without an extra rule. #}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-observability-redis
+  namespace: {{ coinops_redis_namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ k3s_obs_namespace }}
+      ports:
+        - protocol: TCP
+          port: 6379
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-observability-postgres
+  namespace: {{ coinops_postgres_namespace }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ k3s_obs_namespace }}
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-metrics-scrape-rabbitmq
+  namespace: {{ coinops_rabbitmq_namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: rabbitmq
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: TCP
+          port: {{ k3s_obs_rabbitmq_metrics_port }}

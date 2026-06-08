@@ -562,8 +562,27 @@ ansible_k3s_app() {
     exit 2
   fi
   export RUNTIME_BACKEND="$RUNTIME_MODE"
+
+  # Pass the Azure observability backend (workspace ids, App Insights connstr,
+  # Grafana/Prometheus endpoints) to the k3s_observability role. Captured here
+  # from the terraform output while we're still able to chdir into the tf dir.
+  # Safe no-op when the output is null/absent (obs disabled or non-Azure): we
+  # pass nothing and the role's disabled defaults take over. The App Insights
+  # connstr ends up in the process argv (visible in `ps`) — acceptable for a
+  # student lab; every consumer of it in the role is no_log.
+  # When the terraform observability output exists (observability.enabled: true),
+  # also flip the role's master gate on — one switch (the tf toggle) drives both
+  # the Azure backend and the in-cluster automation.
+  local obs_extra=""
+  local obs_json
+  obs_json="$(terraform -chdir="$ROOT_DIR" output -json observability 2>/dev/null || true)"
+  if [ -n "$obs_json" ] && [ "$obs_json" != "null" ]; then
+    obs_extra="-e k3s_observability_enabled=true -e tf_observability=$obs_json"
+  fi
+
   cd "$REPO_ROOT"
-  ansible-playbook -i "$ANSIBLE_INVENTORY_OUT" ansible/k3s-app.yml
+  # shellcheck disable=SC2086  # obs_extra is intentionally word-split into args
+  ansible-playbook -i "$ANSIBLE_INVENTORY_OUT" ansible/k3s-app.yml $obs_extra
 }
 
 cmd="${1:-}"

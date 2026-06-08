@@ -1,0 +1,102 @@
+---
+# k3s_observability — the Azure Monitor observability layer for the k3s lab,
+# automated and ADDITIVE. It deploys, in order: Beyla (eBPF traces, no app
+# recompile) + an OTel Collector (-> Application Insights), the backing-service
+# Prometheus exporters (redis/postgres + the RabbitMQ prometheus plugin), the
+# additive NetworkPolicy allows those need, an `ama-metrics-prometheus-config`
+# scrape config so Azure managed Prometheus collects them, an optional load
+# generator, and (operator-gated) the Azure Arc onboarding of the cluster.
+#
+# It NEVER edits the app/data roles (k3s_coinops*, k3s_cnpg, k3s_netpol). It
+# mirrors their namespace/DNS/cred var names here as defaults (no import), and
+# every object it creates lives in its own `observability` namespace, or is a
+# NEW named policy/service added to a data namespace, or the operator-owned
+# managed-Prometheus ConfigMap. Master-gated off: a no-op until enabled.
+
+# --- Master gate (pure no-op until flipped true) ------------------------------
+k3s_observability_enabled: false
+
+# --- Cluster plumbing (same as the other k3s roles) ---------------------------
+k3s_first_node: "{{ ansible_play_hosts_all[0] }}"
+k3s_kubeconfig: /etc/rancher/k3s/k3s.yaml
+k3s_name_prefix: coinops-lab
+
+# Cloud gate — only Azure does Arc + Azure Monitor. selected_cloud is set by the
+# cloud_secrets role (localhost play) and published to the k3s hosts.
+k3s_obs_cloud: "{{ selected_cloud | default('aws') }}"
+
+# --- Terraform `observability` output (injected by lab.sh as -e tf_observability=<json>)
+# Tolerate string (CLI json), dict, or absent.
+k3s_obs_tf: >-
+  {{ (tf_observability | from_json)
+     if (tf_observability is defined and tf_observability is string and tf_observability | length > 0)
+     else (tf_observability | default({})) }}
+k3s_obs_appinsights_connstr: "{{ k3s_obs_tf.app_insights_connection | default('') }}"
+k3s_obs_log_analytics_id: "{{ k3s_obs_tf.log_analytics_workspace_id | default('') }}"
+k3s_obs_monitor_workspace_id: "{{ k3s_obs_tf.monitor_workspace_id | default('') }}"
+k3s_obs_grafana_id: "{{ k3s_obs_tf.grafana_resource_id | default('') }}"
+
+# --- Namespace --------------------------------------------------------------
+k3s_obs_namespace: observability
+
+# --- Arc onboarding (localhost az CLI; uses the OPERATOR's active kubeconfig) --
+# Default ON, but degrades to a clean skip if `az` is absent or the cluster
+# isn't reachable from the operator's current kube-context (private node IP is
+# only reachable via the operator's SSH -L / admin tunnel — same as how they run
+# kubectl by hand). If you onboard Arc manually (docs/observability/01-pilot...),
+# set this false.
+k3s_obs_arc_enabled: true
+k3s_obs_arc_cluster_name: coinops-k3s          # MUST match observability.tf cluster_name
+k3s_obs_arc_resource_group: "{{ k3s_name_prefix }}-rg"
+k3s_obs_arc_location: eastus2
+# Optional explicit kubeconfig for the az commands; empty -> az uses the
+# operator's current context (KUBECONFIG / ~/.kube/config).
+k3s_obs_arc_kubeconfig: ""
+
+# --- Traces: Beyla (eBPF) + OTel Collector -> Application Insights -------------
+k3s_obs_beyla_enabled: true
+k3s_obs_beyla_image: "grafana/beyla:1.9.6"
+k3s_obs_otel_image: "otel/opentelemetry-collector-contrib:0.111.0"
+# Beyla also exposes its RED metrics on this port for managed Prometheus.
+k3s_obs_beyla_prometheus_port: 9090
+# Discover the coinops-* app namespaces (proxy/history/ui/gateway).
+k3s_obs_beyla_namespace_regex: "coinops-.*"
+
+# --- Pillar D: backing-service exporters --------------------------------------
+# DNS/namespaces MIRROR k3s_coinops_data / k3s_coinops (declared, not imported).
+k3s_obs_exporters_enabled: true
+coinops_redis_namespace: coinops-redis
+coinops_rabbitmq_namespace: coinops-rabbitmq
+coinops_postgres_namespace: coinops-postgres
+coinops_cnpg_cluster_name: coinops-pg
+k3s_obs_redis_host: "redis.{{ coinops_redis_namespace }}.svc.cluster.local"
+k3s_obs_rabbitmq_host: "rabbitmq.{{ coinops_rabbitmq_namespace }}.svc.cluster.local"
+k3s_obs_postgres_host: "{{ coinops_cnpg_cluster_name }}-rw.{{ coinops_postgres_namespace }}.svc.cluster.local"
+k3s_obs_redis_exporter_image: "oliver006/redis_exporter:v1.62.0"
+k3s_obs_postgres_exporter_image: "quay.io/prometheuscommunity/postgres-exporter:v0.16.0"
+# Exporter listen ports.
+k3s_obs_redis_exporter_port: 9121
+k3s_obs_postgres_exporter_port: 9187
+# RabbitMQ: enable the built-in prometheus plugin at runtime (persisted on the
+# PVC, reversible, no StatefulSet edit) and expose :15692 via an additive Service.
+k3s_obs_rabbitmq_metrics_enabled: true
+k3s_obs_rabbitmq_pod: rabbitmq-0
+k3s_obs_rabbitmq_metrics_port: 15692
+
+# Creds for the exporters — from the inventory / cloud_secrets add_host vars
+# (same names the app/data roles read). Read under distinct names to avoid
+# self-reference.
+k3s_obs_db_user: "{{ coinops_db_user | default('cognitor', true) }}"
+k3s_obs_db_password: "{{ coinops_db_password | default('') }}"
+k3s_obs_db_name: "{{ coinops_db_name | default('cognitor', true) }}"
+
+# --- ama-metrics scrape config (Azure managed Prometheus) ---------------------
+k3s_obs_ama_scrape_enabled: true
+
+# --- Load generator (demo traffic / dashboard motion) — OFF by default --------
+k3s_obs_loadgen_enabled: false
+k3s_obs_loadgen_image: "curlimages/curl:8.10.1"
+# In-cluster gateway path that fans out proxy -> RabbitMQ -> consumer -> Postgres
+# (so Beyla traces light up). Override to any reachable endpoint.
+k3s_obs_loadgen_target: "http://gateway.coinops-gateway.svc.cluster.local/"
+k3s_obs_loadgen_interval_seconds: 5

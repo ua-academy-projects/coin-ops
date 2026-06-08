@@ -1,0 +1,94 @@
+{# Beyla — eBPF auto-instrumentation of the coinops-* services. Ships OTLP
+   traces to the OTel Collector, and exposes its own RED metrics on
+   :{{ k3s_obs_beyla_prometheus_port }} for managed Prometheus. Single node now,
+   so a DaemonSet schedules exactly one pod (no nodeSelector needed). #}
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: beyla, namespace: {{ k3s_obs_namespace }} }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: { name: beyla }
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets", "deployments", "daemonsets", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: { name: beyla }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: beyla }
+subjects:
+  - { kind: ServiceAccount, name: beyla, namespace: {{ k3s_obs_namespace }} }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: beyla-config, namespace: {{ k3s_obs_namespace }} }
+data:
+  beyla-config.yml: |
+    discovery:
+      services:
+        - k8s_namespace: "{{ k3s_obs_beyla_namespace_regex }}"
+    attributes:
+      kubernetes:
+        enable: true
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata: { name: beyla, namespace: {{ k3s_obs_namespace }} }
+spec:
+  selector:
+    matchLabels: { app: beyla }
+  template:
+    metadata:
+      labels: { app: beyla }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ k3s_obs_beyla_prometheus_port }}"
+    spec:
+      serviceAccountName: beyla
+      hostPID: true
+      containers:
+        - name: beyla
+          image: {{ k3s_obs_beyla_image }}
+          securityContext:
+            privileged: true
+          env:
+            - name: BEYLA_CONFIG_PATH
+              value: /config/beyla-config.yml
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector.{{ k3s_obs_namespace }}:4318
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: http/protobuf
+            - name: BEYLA_KUBE_METADATA_ENABLE
+              value: "true"
+            # Expose Beyla's RED metrics for managed Prometheus.
+            - name: BEYLA_PROMETHEUS_PORT
+              value: "{{ k3s_obs_beyla_prometheus_port }}"
+            - name: BEYLA_PROMETHEUS_PATH
+              value: /metrics
+          ports:
+            - { name: metrics, containerPort: {{ k3s_obs_beyla_prometheus_port }} }
+          volumeMounts:
+            - { name: cfg, mountPath: /config }
+          resources:
+            requests: { cpu: 50m, memory: 160Mi }
+            # Hard CPU cap so eBPF can't peg a core; 512Mi (256Mi OOM'd).
+            limits: { cpu: 150m, memory: 512Mi }
+      volumes:
+        - name: cfg
+          configMap: { name: beyla-config }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: beyla
+  namespace: {{ k3s_obs_namespace }}
+  labels: { app: beyla }
+spec:
+  selector: { app: beyla }
+  ports:
+    - { name: metrics, port: {{ k3s_obs_beyla_prometheus_port }}, targetPort: {{ k3s_obs_beyla_prometheus_port }} }

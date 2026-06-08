@@ -1,0 +1,29 @@
+{# Load generator — a tiny curl loop that drives the in-cluster gateway so the
+   dashboards move and Beyla emits proxy -> RabbitMQ -> consumer -> Postgres
+   traces during the demo. Off by default (k3s_obs_loadgen_enabled). #}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadgen
+  namespace: {{ k3s_obs_namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: loadgen }
+  template:
+    metadata:
+      labels: { app: loadgen }
+    spec:
+      containers:
+        - name: loadgen
+          image: {{ k3s_obs_loadgen_image }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - >-
+              while true; do
+                curl -s -o /dev/null -m 10 "{{ k3s_obs_loadgen_target }}" || true;
+                sleep {{ k3s_obs_loadgen_interval_seconds }};
+              done
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 50m, memory: 32Mi }

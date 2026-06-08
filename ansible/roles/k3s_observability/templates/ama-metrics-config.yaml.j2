@@ -1,0 +1,30 @@
+{# Azure managed Prometheus (ama-metrics) custom scrape config. The
+   ama-metrics-prometheus-config ConfigMap in kube-system is the documented
+   extension point for custom scrape jobs; ama-metrics reloads it and
+   remote-writes to the Azure Monitor Workspace. Targets the exporters + Beyla.
+   NOTE: this ConfigMap is operator-owned for custom jobs — if you hand-created
+   one, this REPLACES it. #}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ama-metrics-prometheus-config
+  namespace: kube-system
+data:
+  prometheus-config: |-
+    scrape_configs:
+      - job_name: redis-exporter
+        scrape_interval: 60s
+        static_configs:
+          - targets: ["redis-exporter.{{ k3s_obs_namespace }}.svc.cluster.local:{{ k3s_obs_redis_exporter_port }}"]
+      - job_name: postgres-exporter
+        scrape_interval: 60s
+        static_configs:
+          - targets: ["postgres-exporter.{{ k3s_obs_namespace }}.svc.cluster.local:{{ k3s_obs_postgres_exporter_port }}"]
+      - job_name: rabbitmq
+        scrape_interval: 60s
+        static_configs:
+          - targets: ["rabbitmq-metrics.{{ coinops_rabbitmq_namespace }}.svc.cluster.local:{{ k3s_obs_rabbitmq_metrics_port }}"]
+      - job_name: beyla
+        scrape_interval: 60s
+        static_configs:
+          - targets: ["beyla.{{ k3s_obs_namespace }}.svc.cluster.local:{{ k3s_obs_beyla_prometheus_port }}"]

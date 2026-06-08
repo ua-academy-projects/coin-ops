@@ -1,0 +1,16 @@
+{# Additive Service exposing the RabbitMQ prometheus plugin (:15692). The plugin
+   is enabled at runtime by the enable-plugin task; the existing `rabbitmq`
+   headless Service (5672) is untouched. Lives in the rabbitmq namespace but is
+   a NEW named object — k3s_coinops_data is not modified. #}
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq-metrics
+  namespace: {{ coinops_rabbitmq_namespace }}
+  labels: { app: rabbitmq, component: metrics }
+spec:
+  selector: { app: rabbitmq }
+  ports:
+    - name: metrics
+      port: {{ k3s_obs_rabbitmq_metrics_port }}
+      targetPort: {{ k3s_obs_rabbitmq_metrics_port }}

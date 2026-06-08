@@ -154,6 +154,26 @@ resource "azurerm_monitor_alert_prometheus_rule_group" "obs" {
       action_group_id = azurerm_monitor_action_group.obs[0].id
     }
   }
+
+  # App-level: the headline write-path-stall demo. Fed by the RabbitMQ prometheus
+  # plugin (enabled + scraped by the k3s_observability role). Fires when a queue
+  # backs up with no consumers — e.g. scale history-consumer to 0 while the proxy
+  # keeps publishing. NOTE: the metric names depend on the RabbitMQ prometheus
+  # plugin's output; confirm against the live :15692 /metrics and adjust if your
+  # version differs (per-object metrics may need the detailed endpoint).
+  rule {
+    alert      = "WritePathStall"
+    expression = "(sum(rabbitmq_queue_messages_ready) > 100) and (sum(rabbitmq_queue_consumers) == 0)"
+    for        = "PT5M"
+    severity   = 1
+    labels     = { severity = "critical" }
+    annotations = {
+      description = "RabbitMQ has >100 ready messages and zero consumers for 5m — the history-consumer write path has stalled."
+    }
+    action {
+      action_group_id = azurerm_monitor_action_group.obs[0].id
+    }
+  }
 }
 
 # Consumed by the k3s_observability ansible role (workspace ids, App Insights
@@ -166,6 +186,7 @@ output "observability" {
     app_insights_connection      = azurerm_application_insights.obs[0].connection_string
     app_insights_instrumentation = azurerm_application_insights.obs[0].instrumentation_key
     grafana_endpoint             = azurerm_dashboard_grafana.obs[0].endpoint
+    grafana_resource_id          = azurerm_dashboard_grafana.obs[0].id
     action_group_id              = azurerm_monitor_action_group.obs[0].id
   } : null
   sensitive = true

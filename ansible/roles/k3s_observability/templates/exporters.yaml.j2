@@ -1,0 +1,83 @@
+{# Backing-service Prometheus exporters — standalone Deployments in the
+   observability ns pointing at the existing service DNS. Additive: the data
+   StatefulSets/Cluster are untouched. RabbitMQ uses its built-in plugin
+   (rabbitmq-metrics.yaml.j2 + the enable-plugin task), not an exporter here. #}
+# --- redis_exporter (redis:7-alpine, no auth) --------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-exporter
+  namespace: {{ k3s_obs_namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: redis-exporter }
+  template:
+    metadata:
+      labels: { app: redis-exporter }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ k3s_obs_redis_exporter_port }}"
+    spec:
+      containers:
+        - name: redis-exporter
+          image: {{ k3s_obs_redis_exporter_image }}
+          env:
+            - name: REDIS_ADDR
+              value: "redis://{{ k3s_obs_redis_host }}:6379"
+          ports:
+            - { name: metrics, containerPort: {{ k3s_obs_redis_exporter_port }} }
+          resources:
+            requests: { cpu: 10m, memory: 24Mi }
+            limits: { cpu: 100m, memory: 64Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-exporter
+  namespace: {{ k3s_obs_namespace }}
+  labels: { app: redis-exporter }
+spec:
+  selector: { app: redis-exporter }
+  ports:
+    - { name: metrics, port: {{ k3s_obs_redis_exporter_port }}, targetPort: {{ k3s_obs_redis_exporter_port }} }
+---
+# --- postgres_exporter (CNPG -rw service) ------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-exporter
+  namespace: {{ k3s_obs_namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: postgres-exporter }
+  template:
+    metadata:
+      labels: { app: postgres-exporter }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ k3s_obs_postgres_exporter_port }}"
+    spec:
+      containers:
+        - name: postgres-exporter
+          image: {{ k3s_obs_postgres_exporter_image }}
+          env:
+            - name: DATA_SOURCE_NAME
+              value: "postgresql://{{ k3s_obs_db_user }}:{{ k3s_obs_db_password }}@{{ k3s_obs_postgres_host }}:5432/{{ k3s_obs_db_name }}?sslmode=prefer"
+          ports:
+            - { name: metrics, containerPort: {{ k3s_obs_postgres_exporter_port }} }
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 100m, memory: 96Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-exporter
+  namespace: {{ k3s_obs_namespace }}
+  labels: { app: postgres-exporter }
+spec:
+  selector: { app: postgres-exporter }
+  ports:
+    - { name: metrics, port: {{ k3s_obs_postgres_exporter_port }}, targetPort: {{ k3s_obs_postgres_exporter_port }} }

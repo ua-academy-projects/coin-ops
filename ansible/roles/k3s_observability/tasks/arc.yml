@@ -1,0 +1,77 @@
+---
+# Azure Arc onboarding + the two Azure Monitor extensions. Runs on localhost
+# using the OPERATOR's az login and current kube-context (the private node IP is
+# only reachable via their SSH -L / admin tunnel — same path they use for manual
+# kubectl). Degrades to a clean skip if az is missing or the cluster isn't
+# reachable, so it never fails the play. Idempotent: connect is show-gated and
+# extensions tolerate "already exists".
+
+- name: Preflight — az CLI present on localhost
+  ansible.builtin.command: az version
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  failed_when: false
+  register: k3s_obs_az_check
+
+- name: Skip Arc onboarding (az CLI absent)
+  ansible.builtin.debug:
+    msg: >-
+      az CLI not found on localhost — skipping Arc onboarding. Onboard by hand
+      (docs/observability/01-pilot-logging-azure-monitor.md) or install az +
+      `az extension add -n connectedk8s -n k8s-extension` and re-run.
+  when: k3s_obs_az_check.rc != 0
+
+- name: Arc onboarding steps
+  when: k3s_obs_az_check.rc == 0
+  delegate_to: localhost
+  become: false
+  block:
+    - name: Is the cluster already Arc-connected?
+      ansible.builtin.command: >-
+        az connectedk8s show -n {{ k3s_obs_arc_cluster_name }}
+        -g {{ k3s_obs_arc_resource_group }}
+      changed_when: false
+      failed_when: false
+      register: k3s_obs_arc_show
+
+    - name: Connect the cluster to Azure Arc
+      ansible.builtin.command: >-
+        az connectedk8s connect -n {{ k3s_obs_arc_cluster_name }}
+        -g {{ k3s_obs_arc_resource_group }} -l {{ k3s_obs_arc_location }}
+        {{ ('--kube-config ' ~ k3s_obs_arc_kubeconfig) if k3s_obs_arc_kubeconfig | length > 0 else '' }}
+      register: k3s_obs_arc_connect
+      changed_when: k3s_obs_arc_connect.rc == 0
+      failed_when:
+        - k3s_obs_arc_connect.rc != 0
+        - "'already' not in k3s_obs_arc_connect.stderr | lower"
+      when: k3s_obs_arc_show.rc != 0
+
+    - name: Enable Container Insights extension (logs -> Log Analytics)
+      ansible.builtin.command: >-
+        az k8s-extension create --name azuremonitor-containers
+        --cluster-name {{ k3s_obs_arc_cluster_name }} --cluster-type connectedClusters
+        -g {{ k3s_obs_arc_resource_group }}
+        --extension-type Microsoft.AzureMonitor.Containers
+        --configuration-settings logAnalyticsWorkspaceResourceID={{ k3s_obs_log_analytics_id }}
+      register: k3s_obs_ext_ci
+      changed_when: "'Succeeded' in k3s_obs_ext_ci.stdout"
+      failed_when:
+        - k3s_obs_ext_ci.rc != 0
+        - "'already exists' not in k3s_obs_ext_ci.stderr | lower"
+      when: k3s_obs_log_analytics_id | length > 0
+
+    - name: Enable managed Prometheus extension (metrics -> Monitor Workspace + Grafana)
+      ansible.builtin.command: >-
+        az k8s-extension create --name azuremonitor-metrics
+        --cluster-name {{ k3s_obs_arc_cluster_name }} --cluster-type connectedClusters
+        -g {{ k3s_obs_arc_resource_group }}
+        --extension-type Microsoft.AzureMonitor.Containers.Metrics
+        --configuration-settings azure-monitor-workspace-resource-id={{ k3s_obs_monitor_workspace_id }}
+        {{ ('grafana-resource-id=' ~ k3s_obs_grafana_id) if k3s_obs_grafana_id | length > 0 else '' }}
+      register: k3s_obs_ext_prom
+      changed_when: "'Succeeded' in k3s_obs_ext_prom.stdout"
+      failed_when:
+        - k3s_obs_ext_prom.rc != 0
+        - "'already exists' not in k3s_obs_ext_prom.stderr | lower"
+      when: k3s_obs_monitor_workspace_id | length > 0

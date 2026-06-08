@@ -177,13 +177,13 @@ app:
     app:
       - app-2
     db: db
-    # k3s learning cluster — provisioned only when `cloud: gcp` (the plan
-    # places the k3s sandbox on GCP, separate from the AWS production demo).
-    # Leave empty under `cloud: aws` to skip cluster provisioning entirely.
+    # k3s learning cluster. Azure observability lab = a SINGLE 2-vCPU node
+    # (size: medium). Single-node k3s (single-member embedded etcd, no HA-join)
+    # so the control plane can't lose quorum, with 2 cores/8 GB of headroom for
+    # the full Azure Monitor agent stack + Beyla + exporters. (3×1-vCPU starved
+    # etcd once Beyla's eBPF ran on the control-plane nodes.)
     k3s:
       - k3s-1
-      - k3s-2
-      - k3s-3
 
 catalog:
   locations:
@@ -216,6 +216,12 @@ catalog:
       gcp: e2-small
       aws: t3.small
       azure: Standard_F1as_v7    # 1 vCPU / 4 GB (AMD x86, eastus2) — k3s nodes
+    medium:
+      # Single-node k3s observability lab: one 2-vCPU/8 GB node carries the k3s
+      # control plane + the Azure Monitor agent stack (ama-logs/ama-metrics/Arc)
+      # + Beyla + the backing-service exporters. 3×1-vCPU could not (eBPF on a
+      # 1-core control-plane node starved etcd). Only the Azure k3s node uses it.
+      azure: Standard_F2as_v7    # 2 vCPU / 8 GB (AMD x86, eastus2)
   database_sizes:
     micro:
       gcp: db-f1-micro
@@ -276,15 +282,11 @@ instances:
   # are 10.10.10.0/24 (subnet-0) and 10.10.11.0/24 (subnet-1): even index →
   # subnet-0, odd index → subnet-1. (GCP used 10.10.20/21 via
   # gcp_private_subnet_cidrs; GCP is retired so these track Azure.)
+  # Single-node Azure observability lab. k3s-2 / k3s-3 intentionally removed:
+  # one 2-vCPU node (size: medium → Standard_F2as_v7) replaces the three
+  # 1-vCPU nodes. To go back to a 3-node HA cluster, restore k3s-2/k3s-3 here
+  # (size: small) and add them to app.nodes.k3s above.
   k3s-1:
     role: k3s
-    size: small
+    size: medium
     private_ip: 10.10.10.40   # idx 0 → subnet-0 (10.10.10.0/24)
-  k3s-2:
-    role: k3s
-    size: small
-    private_ip: 10.10.11.40   # idx 1 → subnet-1 (10.10.11.0/24)
-  k3s-3:
-    role: k3s
-    size: small
-    private_ip: 10.10.10.41   # idx 2 → subnet-0 (10.10.10.0/24)

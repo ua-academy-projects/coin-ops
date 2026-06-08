@@ -1,0 +1,38 @@
+---
+# k3s_observability — additive, master-gated. Runs once on the first k3s node.
+# Splits into: Arc onboarding (localhost az CLI) + in-cluster manifests (node).
+
+- name: Skip k3s_observability (disabled)
+  ansible.builtin.meta: end_host
+  when: not k3s_observability_enabled | bool
+
+- name: Skip k3s_observability (not the first node)
+  ansible.builtin.meta: end_host
+  when: inventory_hostname != k3s_first_node
+
+- name: Note observability is Azure-only
+  ansible.builtin.debug:
+    msg: "k3s_observability: selected_cloud={{ k3s_obs_cloud }} is not 'azure' — skipping."
+  when: k3s_obs_cloud != 'azure'
+
+- name: End host on non-Azure clouds
+  ansible.builtin.meta: end_host
+  when: k3s_obs_cloud != 'azure'
+
+- name: Warn when the terraform observability output was not passed
+  ansible.builtin.debug:
+    msg: >-
+      tf_observability is empty — App Insights / workspace IDs are unknown.
+      Beyla/exporters still deploy, but traces won't ship and Arc extensions
+      can't be wired. Run via `scripts/lab.sh k3s-app` (it injects the output)
+      and ensure `observability.enabled: true` is applied in terraform.
+  when: k3s_obs_appinsights_connstr | length == 0
+
+# --- Azure Arc onboarding (operator's az login + kube-context, on localhost) ---
+- name: Arc onboarding (Container Insights + managed Prometheus)
+  ansible.builtin.import_tasks: arc.yml
+  when: k3s_obs_arc_enabled | bool
+
+# --- In-cluster manifests (on the first node, via its kubeconfig) -------------
+- name: In-cluster observability manifests
+  ansible.builtin.import_tasks: manifests.yml
