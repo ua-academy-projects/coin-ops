@@ -5,11 +5,23 @@ Durable copy of the command sheet (connections kept dropping). Work top to botto
 ## Status
 - [x] Logs — Container Insights → Log Analytics (`ContainerLogV2`), KQL confirmed
 - [x] Metrics — managed Prometheus → Managed Grafana dashboards confirmed
-- [x] Traces — Beyla (eBPF) → OTel Collector → App Insights (proxy span appeared)
-- [ ] Cluster stable — k3s-1 API was refusing on `:6443` (likely memory pressure on 4 GB node)
-- [ ] Beyla 512Mi re-applied, all pods Running (no OOMKilled)
-- [ ] E — infra alert rule group applied (commit `ef933e4`)
-- [ ] D — app + backing-service metrics + app-specific alerts (not started)
+- [x] Dashboards — Azure Managed Grafana confirmed
+- [x] Traces — Beyla (eBPF) → App Insights span PROVEN, then **DISABLED by decision**
+      (eBPF on 1-vCPU control-plane nodes pegged the cores → etcd quorum loss).
+      Do NOT reapply Beyla on this node size. Re-enable only on bigger nodes.
+- [ ] E — infra alert rule group applied (commit `ef933e4`) — Azure-side, no cluster cost
+- [ ] D — SKIPPED on purpose: extra exporters + scrape targets = more CPU the
+      1-vCPU nodes don't have. Infra alerts + logs + metrics + dashboards is the
+      right scope at 4 vCPU.
+
+## CRITICAL node-size constraint (learned the hard way)
+4 vCPU total = 1 vCPU per node. The full Azure Monitor agent stack
+(ama-logs + ama-metrics + Arc) already runs the single core hot; **Beyla eBPF
+on top tipped k3s-1/k3s-3 to 100%, etcd missed heartbeats, the apiserver
+death-spiralled** (`etcdserver: request timed out`, TLS handshake timeouts).
+Recovery: remove orphaned Beyla CRI sandboxes on the nodes, restart one node to
+restore etcd quorum, delete the Beyla DaemonSet. Tracing is the toggle-off-able
+pillar — keep it off here; a vCPU bump is the real fix.
 
 ---
 
