@@ -134,6 +134,7 @@ Useful env vars:
   DB_PASSWORD=...         local source for secrets push and TF_VAR_db_password
   RABBITMQ_PASSWORD=...   local source for secrets push in external/postgres mode
   GHCR_TOKEN=...          optional local source for secrets push
+  TAILSCALE_AUTH_KEY=...  optional local source for secrets push
   ARM_CLIENT_ID=...       Azure Terraform service-principal client ID
   ARM_CLIENT_SECRET=...   Azure Terraform service-principal secret
   ARM_TENANT_ID=...       Azure tenant ID
@@ -382,6 +383,7 @@ secrets_push() {
   # Cloudflare API token for cert-manager's DNS-01 solver (optional — only when
   # issuing Let's Encrypt certs). Same token works if it has Zone:DNS:Edit.
   push_secret_value cloudflare_token CLOUDFLARE_TOKEN cloudflare-token false
+  push_secret_value tailscale_auth_key TAILSCALE_AUTH_KEY tailscale-auth-key false
 }
 
 check_secret_value_exists() {
