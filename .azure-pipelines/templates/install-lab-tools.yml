@@ -1,0 +1,32 @@
+steps:
+  - task: Bash@3
+    displayName: Install Terraform and Ansible
+    inputs:
+      targetType: inline
+      script: |
+        set -euo pipefail
+
+        terraform_version="1.14.8"
+        archive="terraform_${terraform_version}_linux_amd64.zip"
+        sums="terraform_${terraform_version}_SHA256SUMS"
+        base_url="https://releases.hashicorp.com/terraform/${terraform_version}"
+        tools_dir="$(Agent.TempDirectory)/coinops-tools"
+
+        mkdir -p "$tools_dir"
+        cd "$tools_dir"
+        curl -fsSLO "$base_url/$archive"
+        curl -fsSLO "$base_url/$sums"
+        grep " $archive$" "$sums" | sha256sum -c -
+        sudo unzip -o "$archive" -d /usr/local/bin
+
+        python3 -m venv "$tools_dir/ansible"
+        "$tools_dir/ansible/bin/pip" install --disable-pip-version-check "ansible-core==2.16.3"
+        echo "##vso[task.prependpath]$tools_dir/ansible/bin"
+        export PATH="$tools_dir/ansible/bin:$PATH"
+        ansible-galaxy collection install -r "$(Build.SourcesDirectory)/ansible/requirements.yml"
+
+        terraform version
+        ansible --version
+        aws --version
+        az version --output table
+        gcloud version
