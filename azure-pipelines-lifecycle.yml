@@ -1,0 +1,53 @@
+trigger: none
+pr: none
+lockBehavior: sequential
+
+parameters:
+  - name: action
+    displayName: Lifecycle action
+    type: string
+    default: plan
+    values:
+      - plan
+      - apply
+      - deploy
+      - destroy
+      - rebuild
+
+pool:
+  vmImage: ubuntu-24.04
+
+variables:
+  - group: coinops-cicd-secrets
+  - name: azureServiceConnection
+    value: coinops-terraform-azure
+
+stages:
+  - ${{ if eq(parameters.action, 'plan') }}:
+      - stage: Plan
+        displayName: Terraform plan
+        jobs:
+          - job: PlanLab
+            timeoutInMinutes: 60
+            steps:
+              - template: .azure-pipelines/templates/run-lab-action.yml
+                parameters:
+                  action: plan
+                  azureServiceConnection: ${{ variables.azureServiceConnection }}
+
+  - ${{ if ne(parameters.action, 'plan') }}:
+      - stage: Mutate
+        displayName: ${{ parameters.action }} lab
+        jobs:
+          - deployment: MutateLab
+            displayName: ${{ parameters.action }} lab
+            environment: coinops-lab-lifecycle
+            timeoutInMinutes: 180
+            strategy:
+              runOnce:
+                deploy:
+                  steps:
+                    - template: .azure-pipelines/templates/run-lab-action.yml
+                      parameters:
+                        action: ${{ parameters.action }}
+                        azureServiceConnection: ${{ variables.azureServiceConnection }}
