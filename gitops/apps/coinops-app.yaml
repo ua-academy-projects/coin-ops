@@ -12,46 +12,9 @@ spec:
     targetRevision: dev-Shabat-cloud
     path: charts/coinops-app
     helm:
-      valuesObject:
-        image:
-          registry: ghcr.io/ua-academy-projects
-          tag: dev-latest
-          pullPolicy: IfNotPresent
-        ingress:
-          className: traefik
-          host: app.coinops.pp.ua
-          tlsSecretName: coinops-app-tls
-          certManagerClusterIssuer: letsencrypt-cloudflare
-        proxy:
-          namespace: coinops-proxy
-          image: coin-ops-proxy
-          port: 8080
-          replicas: 1
-        historyApi:
-          namespace: coinops-history-api
-          image: coin-ops-history-api
-          port: 8000
-          replicas: 1
-        historyConsumer:
-          namespace: coinops-history-consumer
-          image: coin-ops-history-consumer
-          replicas: 1
-        ui:
-          namespace: coinops-ui
-          image: coin-ops-ui
-          replicas: 1
-        gateway:
-          namespace: coinops-gateway
-          image: nginx:alpine
-          replicas: 1
-        backingNamespaces:
-          postgres: coinops-postgres
-          rabbitmq: coinops-rabbitmq
-          redis: coinops-redis
-        networkPolicy:
-          enabled: true
-          podCidr: 10.42.0.0/16
-          serviceCidr: 10.43.0.0/16
+      valueFiles:
+        - values.yaml
+        - values-dev.yaml
   destination:
     server: https://kubernetes.default.svc
   syncPolicy:
