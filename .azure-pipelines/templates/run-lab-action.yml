@@ -1,0 +1,182 @@
+parameters:
+  - name: action
+    type: string
+  - name: azureServiceConnection
+    type: string
+
+steps:
+  - checkout: self
+    clean: true
+    fetchDepth: 0
+
+  - task: DownloadSecureFile@1
+    name: sshKey
+    displayName: Download SSH key
+    inputs:
+      secureFile: coinops_gcp_jump
+
+  - task: DownloadSecureFile@1
+    name: gcpKey
+    displayName: Download GCP Terraform credentials
+    inputs:
+      secureFile: coinops-gcp-terraform.json
+
+  - template: install-lab-tools.yml
+
+  - task: AzureCLI@2
+    displayName: "Run lab action: ${{ parameters.action }}"
+    inputs:
+      azureSubscription: ${{ parameters.azureServiceConnection }}
+      addSpnToEnvironment: true
+      scriptType: bash
+      scriptLocation: inlineScript
+      workingDirectory: $(Build.SourcesDirectory)
+      inlineScript: |
+        set -euo pipefail
+
+        repo_dir="$(Build.SourcesDirectory)"
+        lab_dir="$repo_dir/terraform/multicloud-vm-yaml-lab"
+        ssh_key="$HOME/.ssh/coinops_gcp_jump"
+        rule_name="ado-$(Build.BuildId)"
+
+        mkdir -p "$HOME/.ssh" "$HOME/.aws"
+        install -m 600 "$(sshKey.secureFilePath)" "$ssh_key"
+        ssh-keygen -y -f "$ssh_key" > "$ssh_key.pub"
+        chmod 644 "$ssh_key.pub"
+
+        aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID" --profile "$AWS_PROFILE"
+        aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY" --profile "$AWS_PROFILE"
+        aws configure set region "$AWS_REGION" --profile "$AWS_PROFILE"
+
+        export GOOGLE_APPLICATION_CREDENTIALS="$(gcpKey.secureFilePath)"
+        gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
+        gcloud config set project "$GCP_PROJECT_ID"
+
+        export ARM_CLIENT_ID="$servicePrincipalId"
+        export ARM_CLIENT_SECRET="$servicePrincipalKey"
+        export ARM_TENANT_ID="$tenantId"
+        export ARM_SUBSCRIPTION_ID
+        ARM_SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
+
+        export SSH_KEY_PATH="$ssh_key"
+        export TF_IN_AUTOMATION=true
+        export TF_INPUT=0
+        export TF_VAR_db_password="$DB_PASSWORD"
+
+        cleanup_ssh_rule() {
+          az network nsg rule delete \
+            --resource-group "$AZURE_WORKLOAD_RESOURCE_GROUP" \
+            --nsg-name coinops-lab-bastion-nsg \
+            --name "$rule_name" \
+            --only-show-errors >/dev/null 2>&1 || true
+        }
+
+        open_ssh_rule() {
+          local agent_ip stale_rule
+          agent_ip="$(curl -fsSL https://api.ipify.org)"
+          test -n "$agent_ip"
+
+          while IFS= read -r stale_rule; do
+            test -z "$stale_rule" && continue
+            az network nsg rule delete \
+              --resource-group "$AZURE_WORKLOAD_RESOURCE_GROUP" \
+              --nsg-name coinops-lab-bastion-nsg \
+              --name "$stale_rule" \
+              --only-show-errors
+          done < <(
+            az network nsg rule list \
+              --resource-group "$AZURE_WORKLOAD_RESOURCE_GROUP" \
+              --nsg-name coinops-lab-bastion-nsg \
+              --query "[?starts_with(name, 'ado-')].name" \
+              --output tsv
+          )
+
+          trap cleanup_ssh_rule EXIT
+          az network nsg rule create \
+            --resource-group "$AZURE_WORKLOAD_RESOURCE_GROUP" \
+            --nsg-name coinops-lab-bastion-nsg \
+            --name "$rule_name" \
+            --priority 4090 \
+            --direction Inbound \
+            --access Allow \
+            --protocol Tcp \
+            --source-address-prefixes "$agent_ip/32" \
+            --source-port-ranges '*' \
+            --destination-address-prefixes '*' \
+            --destination-port-ranges 22 \
+            --description "Temporary Azure Pipelines SSH access for build $(Build.BuildId)" \
+            --only-show-errors >/dev/null
+        }
+
+        verify_cluster() {
+          ansible -i "$repo_dir/ansible/inventory.cloud" k3s -b \
+            -m shell -a 'k3s kubectl get nodes -o wide'
+          ansible -i "$repo_dir/ansible/inventory.cloud" k3s -b \
+            -m shell -a 'k3s kubectl -n argocd get applications.argoproj.io'
+        }
+
+        cd "$lab_dir"
+        ./scripts/lab.sh doctor
+
+        case "${{ parameters.action }}" in
+          plan)
+            ./scripts/lab.sh plan
+            ;;
+          apply)
+            AUTO_APPROVE=true ./scripts/lab.sh apply
+            ./scripts/lab.sh secrets push
+            ;;
+          deploy)
+            ./scripts/lab.sh outputs
+            open_ssh_rule
+            ./scripts/lab.sh k3s-app
+            verify_cluster
+            ;;
+          destroy)
+            AUTO_APPROVE=true ./scripts/lab.sh destroy
+            ;;
+          rebuild)
+            AUTO_APPROVE=true ./scripts/lab.sh destroy
+            AUTO_APPROVE=true ./scripts/lab.sh apply
+            ./scripts/lab.sh secrets push
+            open_ssh_rule
+            ./scripts/lab.sh k3s
+            ./scripts/lab.sh k3s-app
+            verify_cluster
+            ;;
+          *)
+            echo "Unsupported lifecycle action: ${{ parameters.action }}" >&2
+            exit 2
+            ;;
+        esac
+    env:
+      LOAD_ENV: "false"
+      RECONFIGURE: "true"
+      AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+      AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+      AWS_PROFILE: $(AWS_PROFILE)
+      AWS_REGION: $(AWS_REGION)
+      GCP_PROJECT_ID: $(GCP_PROJECT_ID)
+      DB_PASSWORD: $(DB_PASSWORD)
+      RABBITMQ_PASSWORD: $(RABBITMQ_PASSWORD)
+      TAILSCALE_AUTH_KEY: $(TAILSCALE_AUTH_KEY)
+      GHCR_USERNAME: $(GHCR_USERNAME)
+      GHCR_TOKEN: $(GHCR_TOKEN)
+      CLOUDFLARE_API_TOKEN: $(CLOUDFLARE_API_TOKEN)
+      CLOUDFLARE_TOKEN: $(CLOUDFLARE_API_TOKEN)
+      AZURE_WORKLOAD_RESOURCE_GROUP: $(AZURE_WORKLOAD_RESOURCE_GROUP)
+
+  - ${{ if or(eq(parameters.action, 'deploy'), eq(parameters.action, 'rebuild')) }}:
+      - task: AzureCLI@2
+        displayName: Always remove temporary SSH rule
+        condition: always()
+        inputs:
+          azureSubscription: ${{ parameters.azureServiceConnection }}
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            az network nsg rule delete \
+              --resource-group "$(AZURE_WORKLOAD_RESOURCE_GROUP)" \
+              --nsg-name coinops-lab-bastion-nsg \
+              --name "ado-$(Build.BuildId)" \
+              --only-show-errors >/dev/null 2>&1 || true
