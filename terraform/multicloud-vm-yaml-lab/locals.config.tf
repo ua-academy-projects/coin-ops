@@ -255,8 +255,8 @@ locals {
       image_key         = lookup(instance, "image", local.config.defaults.image)
       disk_size_gb      = lookup(instance, "disk_size_gb", local.config.defaults.disk_size_gb)
       subnet_key        = lookup(instance, "subnet_key", null)
-      aws_instance_type = local.config.catalog.sizes[lookup(instance, "size", local.config.defaults.size)].aws
-      gcp_machine_type  = local.config.catalog.sizes[lookup(instance, "size", local.config.defaults.size)].gcp
+      aws_instance_type = try(local.config.catalog.sizes[lookup(instance, "size", local.config.defaults.size)].aws, null)
+      gcp_machine_type  = try(local.config.catalog.sizes[lookup(instance, "size", local.config.defaults.size)].gcp, null)
       gcp_image         = local.config.catalog.images[lookup(instance, "image", local.config.defaults.image)].gcp
       azure_vm_size     = local.config.catalog.sizes[lookup(instance, "size", local.config.defaults.size)].azure
       azure_image       = local.config.catalog.images[lookup(instance, "image", local.config.defaults.image)].azure
