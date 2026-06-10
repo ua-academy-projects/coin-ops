@@ -41,6 +41,16 @@ check "managed_db_password_set" {
   }
 }
 
+check "azure_native_monitoring_requires_observability" {
+  assert {
+    condition = (
+      !try(local.config.observability.azure_native.enabled, false) ||
+      try(local.config.observability.enabled, false)
+    )
+    error_message = "observability.azure_native.enabled=true requires observability.enabled=true."
+  }
+}
+
 check "api_domain_matches_backend_cloud" {
   assert {
     condition     = !try(local.config.domain.enabled, false) || local.backend_cloud == local.cloud

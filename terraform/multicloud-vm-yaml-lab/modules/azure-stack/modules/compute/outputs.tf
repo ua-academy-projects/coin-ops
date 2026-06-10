@@ -41,3 +41,29 @@ output "app_instances" {
     })
   }
 }
+
+output "monitoring_targets" {
+  value = merge(
+    {
+      for name, instance in azurerm_linux_virtual_machine.bastion : name => {
+        id   = instance.id
+        name = instance.name
+        role = "bastion"
+      }
+    },
+    {
+      for name, instance in azurerm_linux_virtual_machine.app : name => {
+        id   = instance.id
+        name = instance.name
+        role = "app"
+      }
+    },
+    {
+      for name, instance in azurerm_linux_virtual_machine.k3s : name => {
+        id   = instance.id
+        name = instance.name
+        role = "k3s"
+      }
+    }
+  )
+}

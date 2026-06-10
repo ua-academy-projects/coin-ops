@@ -45,3 +45,11 @@ output "resource_group_name" {
 output "location" {
   value = module.network.location
 }
+
+output "monitoring_targets" {
+  value = {
+    virtual_machines = module.compute.monitoring_targets
+    nat_gateway_id   = module.network.nat_gateway_id
+    key_vault_id     = module.secrets.key_vault_id
+  }
+}

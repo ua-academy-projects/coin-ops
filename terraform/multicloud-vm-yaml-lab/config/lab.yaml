@@ -126,6 +126,13 @@ defaults:
 observability:
   enabled: true
   alert_email: vshabat64@gmail.com
+  azure_native:
+    enabled: true
+    export_platform_metrics: true
+    alerts_enabled: true
+    workbook_enabled: true
+    cpu_threshold_percent: 85
+    nat_packet_drop_threshold: 0
 
 runtime:
   mode: cloud-native

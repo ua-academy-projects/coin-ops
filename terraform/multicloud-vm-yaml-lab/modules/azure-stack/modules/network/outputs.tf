@@ -29,3 +29,7 @@ output "database_subnet_id" {
 output "app_gateway_subnet_id" {
   value = azurerm_subnet.app_gateway.id
 }
+
+output "nat_gateway_id" {
+  value = azurerm_nat_gateway.this.id
+}
