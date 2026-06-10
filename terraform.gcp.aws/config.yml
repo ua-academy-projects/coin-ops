@@ -9,11 +9,11 @@ project:
       - eu-central-1a
       - eu-central-1b
   azure:
-    subscription_id: "8cf38392-348c-4b76-9350-a7682650064e"
-    tenant_id: "f1c67d06-63a0-4c95-b956-9166fb0eaf9d"
+    subscription_id: "20efc00e-9f7d-4a1c-8be5-c63bd01e15af"
+    tenant_id: "0e1e8f82-581b-4493-b53a-bc1f79473749"
     location: "West Europe"
-    key_vault_name: "coinops-kv-valentyn"
-    resource_group_name: "adv_resource_group"
+    key_vault_name: "coinops-kv-nav-2026"
+    resource_group_name: "navigator-we"
     use_existing_resource_group: true
     use_managed_postgres: true
 
