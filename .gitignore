@@ -27,6 +27,12 @@ terraform/*.tfstate
 terraform/*.tfstate.backup
 terraform/terraform.tfstate.*.backup
 terraform.gcp.aws/.terraform/
+terraform.gcp.aws/*.tfstate
+terraform.gcp.aws/*.tfstate.*
+terraform.gcp.aws/.terraform.tfstate.lock.info
+terraform.gcp.aws/crash.log
+azure_monitoring/.terraform.tfstate.lock.info
+azure_monitoring/crash.log
 terraform.tfstate
 terraform.tfstate.backup
 terraform/terraform.tfvars

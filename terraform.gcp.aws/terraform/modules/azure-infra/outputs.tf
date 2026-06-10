@@ -38,3 +38,19 @@ output "subnet_ids" {
     for name, subnet in azurerm_subnet.subnets : name => subnet.id
   }
 }
+
+output "log_analytics_workspace_id" {
+  value = length(azurerm_log_analytics_workspace.main) > 0 ? azurerm_log_analytics_workspace.main[0].id : null
+}
+
+output "monitor_action_group_id" {
+  value = length(azurerm_monitor_action_group.main) > 0 ? azurerm_monitor_action_group.main[0].id : null
+}
+
+output "monitoring_identity_id" {
+  value = length(azurerm_user_assigned_identity.monitoring) > 0 ? azurerm_user_assigned_identity.monitoring[0].id : null
+}
+
+output "monitoring_identity_principal_id" {
+  value = length(azurerm_user_assigned_identity.monitoring) > 0 ? azurerm_user_assigned_identity.monitoring[0].principal_id : null
+}

@@ -16,11 +16,18 @@ project:
     resource_group_name: "navigator-we"
     use_existing_resource_group: true
     use_managed_postgres: true
+    monitoring:
+      enabled: true
+      identity_name: "coinops-monitoring"
+      alert_email: "val.don.ua@gmail.com"
+      cpu_alert_threshold: 80
+      cpu_alert_severity: 3
+      log_retention_days: 30
 
 ssh:
   user: valentyn
   public_key_path: ~/.ssh/id_rsa.pub
-  allowed_source_cidr: 176.119.114.72/32
+  allowed_source_cidr: 31.31.123.89/32
 
 network:
   name: coinops-vpc

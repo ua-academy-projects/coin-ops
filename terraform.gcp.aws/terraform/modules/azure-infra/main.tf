@@ -1,10 +1,16 @@
 locals {
-  azure_location       = var.config.project.azure.location
-  network_name         = "${var.config.network.name}-azure"
-  rg_name              = try(var.config.project.azure.resource_group_name, "${local.network_name}-rg")
-  use_existing_rg      = try(var.config.project.azure.use_existing_resource_group, false)
-  admin_user           = var.config.ssh.user
-  use_managed_postgres = try(var.config.project.azure.use_managed_postgres, false)
+  azure_location           = var.config.project.azure.location
+  network_name             = "${var.config.network.name}-azure"
+  rg_name                  = try(var.config.project.azure.resource_group_name, "${local.network_name}-rg")
+  use_existing_rg          = try(var.config.project.azure.use_existing_resource_group, false)
+  admin_user               = var.config.ssh.user
+  use_managed_postgres     = try(var.config.project.azure.use_managed_postgres, false)
+  monitoring_enabled       = try(var.config.project.azure.monitoring.enabled, true)
+  monitoring_email         = try(var.config.project.azure.monitoring.alert_email, "val.don.ua@gmail.com")
+  cpu_alert_threshold      = try(var.config.project.azure.monitoring.cpu_alert_threshold, 80)
+  cpu_alert_severity       = try(var.config.project.azure.monitoring.cpu_alert_severity, 3)
+  log_retention_days       = try(var.config.project.azure.monitoring.log_retention_days, 30)
+  monitoring_identity_name = try(var.config.project.azure.monitoring.identity_name, "${local.network_name}-monitoring")
   vm_subnet_names = {
     bastion = "bastion"
     app     = "app"
@@ -26,6 +32,55 @@ resource "azurerm_resource_group" "main" {
 locals {
   resource_group_name     = local.use_existing_rg ? data.azurerm_resource_group.existing[0].name : azurerm_resource_group.main[0].name
   resource_group_location = local.use_existing_rg ? data.azurerm_resource_group.existing[0].location : azurerm_resource_group.main[0].location
+  resource_group_id       = local.use_existing_rg ? data.azurerm_resource_group.existing[0].id : azurerm_resource_group.main[0].id
+}
+
+resource "azurerm_log_analytics_workspace" "main" {
+  count = local.monitoring_enabled ? 1 : 0
+
+  name                = "${local.network_name}-logs"
+  location            = local.resource_group_location
+  resource_group_name = local.resource_group_name
+  sku                 = "PerGB2018"
+  retention_in_days   = local.log_retention_days
+}
+
+resource "azurerm_user_assigned_identity" "monitoring" {
+  count = local.monitoring_enabled ? 1 : 0
+
+  name                = local.monitoring_identity_name
+  location            = local.resource_group_location
+  resource_group_name = local.resource_group_name
+}
+
+resource "azurerm_monitor_action_group" "main" {
+  count = local.monitoring_enabled ? 1 : 0
+
+  name                = "${local.network_name}-alerts"
+  resource_group_name = local.resource_group_name
+  short_name          = "coinopsaz"
+
+  email_receiver {
+    name                    = "primary-email"
+    email_address           = local.monitoring_email
+    use_common_alert_schema = true
+  }
+}
+
+resource "azurerm_role_assignment" "monitoring_metrics_publisher" {
+  count = local.monitoring_enabled ? 1 : 0
+
+  scope                = local.resource_group_id
+  role_definition_name = "Monitoring Metrics Publisher"
+  principal_id         = azurerm_user_assigned_identity.monitoring[0].principal_id
+}
+
+resource "azurerm_role_assignment" "log_analytics_contributor" {
+  count = local.monitoring_enabled ? 1 : 0
+
+  scope                = azurerm_log_analytics_workspace.main[0].id
+  role_definition_name = "Log Analytics Contributor"
+  principal_id         = azurerm_user_assigned_identity.monitoring[0].principal_id
 }
 
 resource "azurerm_network_security_group" "main" {
@@ -158,6 +213,14 @@ resource "azurerm_linux_virtual_machine" "vms" {
     public_key = file(pathexpand(var.config.ssh.public_key_path))
   }
 
+
+
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.monitoring[0].id]
+
+  }
+
   os_disk {
     caching              = "ReadWrite"
     storage_account_type = "Standard_LRS"
@@ -168,6 +231,79 @@ resource "azurerm_linux_virtual_machine" "vms" {
     offer     = "0001-com-ubuntu-server-jammy"
     sku       = "22_04-lts-gen2"
     version   = "latest"
+  }
+}
+
+resource "azurerm_virtual_machine_extension" "azure_monitor_agent" {
+  for_each = local.monitoring_enabled ? azurerm_linux_virtual_machine.vms : {}
+
+  name                       = "AzureMonitorLinuxAgent"
+  virtual_machine_id         = each.value.id
+  publisher                  = "Microsoft.Azure.Monitor"
+  type                       = "AzureMonitorLinuxAgent"
+  type_handler_version       = "1.0"
+  auto_upgrade_minor_version = true
+}
+
+resource "azurerm_monitor_data_collection_rule" "linux" {
+  count = local.monitoring_enabled ? 1 : 0
+
+  name                = "${local.network_name}-dcr"
+  location            = local.resource_group_location
+  resource_group_name = local.resource_group_name
+
+  destinations {
+    log_analytics {
+      workspace_resource_id = azurerm_log_analytics_workspace.main[0].id
+      name                  = "logdest"
+    }
+  }
+
+  data_flow {
+    streams      = ["Microsoft-Syslog"]
+    destinations = ["logdest"]
+  }
+
+  data_sources {
+    syslog {
+      name           = "syslogSource"
+      facility_names = ["*"]
+      log_levels     = ["*"]
+      streams        = ["Microsoft-Syslog"]
+    }
+  }
+}
+
+resource "azurerm_monitor_data_collection_rule_association" "linux" {
+  for_each = local.monitoring_enabled ? azurerm_linux_virtual_machine.vms : {}
+
+  name                    = "${each.key}-dcr-association"
+  target_resource_id      = each.value.id
+  data_collection_rule_id = azurerm_monitor_data_collection_rule.linux[0].id
+  depends_on              = [azurerm_virtual_machine_extension.azure_monitor_agent]
+}
+
+resource "azurerm_monitor_metric_alert" "cpu" {
+  for_each = local.monitoring_enabled ? azurerm_linux_virtual_machine.vms : {}
+
+  name                = "${each.value.name}-cpu-alert"
+  resource_group_name = local.resource_group_name
+  scopes              = [each.value.id]
+  description         = "Alert when average CPU usage on the VM is above the configured threshold."
+  severity            = local.cpu_alert_severity
+  frequency           = "PT1M"
+  window_size         = "PT5M"
+
+  criteria {
+    metric_namespace = "Microsoft.Compute/virtualMachines"
+    metric_name      = "Percentage CPU"
+    aggregation      = "Average"
+    operator         = "GreaterThan"
+    threshold        = local.cpu_alert_threshold
+  }
+
+  action {
+    action_group_id = azurerm_monitor_action_group.main[0].id
   }
 }
 
