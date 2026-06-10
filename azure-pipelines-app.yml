@@ -1,0 +1,183 @@
+trigger:
+  batch: true
+  branches:
+    include:
+      - dev-Shabat-cloud
+  paths:
+    include:
+      - proxy/**
+      - history/**
+      - ui-react/**
+      - deploy/postgres-runtime/**
+      - azure-pipelines-app.yml
+      - .azure-pipelines/**
+    exclude:
+      - charts/coinops-app/values-dev.yaml
+      - gitops/**
+
+pr: none
+
+pool:
+  vmImage: ubuntu-24.04
+
+variables:
+  - group: coinops-cicd-secrets
+
+stages:
+  - stage: Test
+    jobs:
+      - job: Frontend
+        steps:
+          - checkout: self
+          - task: NodeTool@0
+            inputs:
+              versionSpec: 22.x
+          - task: Bash@3
+            inputs:
+              targetType: inline
+              workingDirectory: ui-react
+              script: |
+                set -euo pipefail
+                npm ci
+                npm run lint
+                npm run test:run --if-present
+                npm run build
+
+      - job: Go
+        steps:
+          - checkout: self
+          - task: GoTool@0
+            inputs:
+              version: 1.24.0
+          - task: Bash@3
+            inputs:
+              targetType: inline
+              workingDirectory: proxy
+              script: |
+                set -euo pipefail
+                go test ./...
+                go build ./...
+
+      - job: Python
+        steps:
+          - checkout: self
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: "3.12"
+          - task: Bash@3
+            inputs:
+              targetType: inline
+              script: |
+                set -euo pipefail
+                export PYTHONPATH="$(Build.SourcesDirectory)"
+                docker build -t coinops-postgres-runtime:test -f tests/python/integration/Dockerfile.pg_sql .
+                python -m pip install --upgrade pip
+                python -m pip install -r history/requirements.txt -r history/requirements-dev.txt ruff
+                ruff check history
+                python -m py_compile history/main.py history/consumer.py
+                python -m pytest tests/python/unit -v
+                python -m pytest tests/python/integration -v
+
+  - stage: Build
+    dependsOn: Test
+    jobs:
+      - job: Images
+        strategy:
+          maxParallel: 5
+          matrix:
+            proxy:
+              imageName: coin-ops-proxy
+              buildContext: ./proxy
+              dockerfile: ./proxy/Dockerfile
+            history_api:
+              imageName: coin-ops-history-api
+              buildContext: ./history
+              dockerfile: ./history/Dockerfile.api
+            history_consumer:
+              imageName: coin-ops-history-consumer
+              buildContext: ./history
+              dockerfile: ./history/Dockerfile.consumer
+            ui:
+              imageName: coin-ops-ui
+              buildContext: ./ui-react
+              dockerfile: ./ui-react/Dockerfile
+            postgres_runtime:
+              imageName: coin-ops-postgres-runtime
+              buildContext: ./deploy/postgres-runtime
+              dockerfile: ./deploy/postgres-runtime/Dockerfile
+        steps:
+          - checkout: self
+          - task: Bash@3
+            displayName: Build and push $(imageName)
+            inputs:
+              targetType: inline
+              script: |
+                set -euo pipefail
+                image="ghcr.io/ua-academy-projects/$(imageName):$(Build.SourceVersion)"
+                printf '%s' "$GHCR_PUSH_TOKEN" | docker login ghcr.io --username "$GHCR_USERNAME" --password-stdin
+                trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
+                docker build --pull --file "$(dockerfile)" --tag "$image" "$(buildContext)"
+                docker push "$image"
+            env:
+              GHCR_USERNAME: $(GHCR_USERNAME)
+              GHCR_PUSH_TOKEN: $(GHCR_PUSH_TOKEN)
+
+  - stage: GitOps
+    dependsOn: Build
+    jobs:
+      - job: UpdateImageTag
+        steps:
+          - checkout: self
+            clean: true
+            fetchDepth: 0
+            persistCredentials: false
+          - task: Bash@3
+            displayName: Commit immutable image SHA
+            inputs:
+              targetType: inline
+              script: |
+                set -euo pipefail
+
+                auth_header="$(printf 'x-access-token:%s' "$GITHUB_GITOPS_TOKEN" | base64 -w0)"
+
+                update_values() {
+                  cat > charts/coinops-app/values-dev.yaml <<EOF
+                image:
+                  tag: "$(Build.SourceVersion)"
+                EOF
+                  git add charts/coinops-app/values-dev.yaml
+                }
+
+                checkout_remote_branch() {
+                  git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth_header" \
+                    fetch origin dev-Shabat-cloud
+                  git checkout -B dev-Shabat-cloud origin/dev-Shabat-cloud
+                }
+
+                git config user.name "CoinOps Azure Pipelines"
+                git config user.email "azure-pipelines@coinops.local"
+
+                checkout_remote_branch
+                update_values
+                if git diff --cached --quiet; then
+                  echo "GitOps already points to $(Build.SourceVersion)"
+                  exit 0
+                fi
+                git commit -m "chore(gitops): deploy $(Build.SourceVersion) [skip ci]"
+                if git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth_header" \
+                  push origin HEAD:dev-Shabat-cloud; then
+                  exit 0
+                fi
+
+                sleep 5
+                checkout_remote_branch
+                update_values
+                if git diff --cached --quiet; then
+                  echo "GitOps retry found the desired SHA already committed"
+                  exit 0
+                fi
+                git commit -m "chore(gitops): deploy $(Build.SourceVersion) [skip ci]"
+                git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth_header" \
+                  push origin HEAD:dev-Shabat-cloud
+            env:
+              GITHUB_GITOPS_TOKEN: $(GITHUB_GITOPS_TOKEN)
