@@ -3,7 +3,7 @@ output "resource_group_name" {
 }
 
 output "bastion_external_ip" {
-  value = azurerm_public_ip.bastion.ip_address
+  value = try(azurerm_public_ip.vms["bastion"].ip_address, null)
 }
 
 output "bastion_internal_ip" {
@@ -17,12 +17,24 @@ output "private_internal_ips" {
   }
 }
 
+output "vm_private_ips" {
+  value = {
+    for name, nic in azurerm_network_interface.vms : name => nic.private_ip_address
+  }
+}
+
+output "vm_public_ips" {
+  value = {
+    for name, pip in azurerm_public_ip.vms : name => pip.ip_address
+  }
+}
+
 output "load_balancer_dns_name" {
   value = null
 }
 
 output "load_balancer_ip_address" {
-  value = azurerm_public_ip.web.ip_address
+  value = try(azurerm_public_ip.vms["web"].ip_address, null)
 }
 
 output "external_db_host" {

@@ -22,6 +22,9 @@ project:
       alert_email: "val.don.ua@gmail.com"
       cpu_alert_threshold: 80
       cpu_alert_severity: 3
+      heartbeat_alert_severity: 2
+      heartbeat_window_minutes: 10
+      heartbeat_evaluation_frequency: "PT5M"
       log_retention_days: 30
 
 ssh:

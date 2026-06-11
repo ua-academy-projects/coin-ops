@@ -9,12 +9,30 @@ locals {
   monitoring_email         = try(var.config.project.azure.monitoring.alert_email, "val.don.ua@gmail.com")
   cpu_alert_threshold      = try(var.config.project.azure.monitoring.cpu_alert_threshold, 80)
   cpu_alert_severity       = try(var.config.project.azure.monitoring.cpu_alert_severity, 3)
+  heartbeat_alert_severity = try(var.config.project.azure.monitoring.heartbeat_alert_severity, 2)
   log_retention_days       = try(var.config.project.azure.monitoring.log_retention_days, 30)
+  heartbeat_window_minutes = try(var.config.project.azure.monitoring.heartbeat_window_minutes, 10)
+  heartbeat_eval_frequency = try(var.config.project.azure.monitoring.heartbeat_evaluation_frequency, "PT5M")
   monitoring_identity_name = try(var.config.project.azure.monitoring.identity_name, "${local.network_name}-monitoring")
-  vm_subnet_names = {
+  default_vm_subnet_names = {
     bastion = "bastion"
     app     = "app"
     web     = "app"
+  }
+  load_balancer_vm_names = toset([
+    for name, vm in var.config.vms : name if contains(try(vm.tags, []), var.config.load_balancer.target_tag)
+  ])
+  vm_subnet_names = {
+    for name, vm in var.config.vms :
+    name => coalesce(
+      try(vm.azure_subnet, null),
+      try(local.default_vm_subnet_names[name], null),
+      vm.role == "bastion" ? "bastion" : contains(vm.tags, var.config.load_balancer.target_tag) ? "web" : "app"
+    )
+  }
+  public_vms = {
+    for name, vm in var.config.vms :
+    name => vm if try(vm.external_ip, false) || contains(local.load_balancer_vm_names, name)
   }
 }
 
@@ -163,16 +181,10 @@ resource "azurerm_subnet_network_security_group_association" "subnets" {
   network_security_group_id = azurerm_network_security_group.main.id
 }
 
-resource "azurerm_public_ip" "bastion" {
-  name                = "${local.network_name}-bastion-pip"
-  location            = local.resource_group_location
-  resource_group_name = local.resource_group_name
-  allocation_method   = "Static"
-  sku                 = "Standard"
-}
+resource "azurerm_public_ip" "vms" {
+  for_each = local.public_vms
 
-resource "azurerm_public_ip" "web" {
-  name                = "${local.network_name}-web-pip"
+  name                = "${local.network_name}-${each.key}-pip"
   location            = local.resource_group_location
   resource_group_name = local.resource_group_name
   allocation_method   = "Static"
@@ -191,7 +203,7 @@ resource "azurerm_network_interface" "vms" {
     subnet_id                     = azurerm_subnet.subnets[local.vm_subnet_names[each.key]].id
     private_ip_address_allocation = "Static"
     private_ip_address            = each.value.ip
-    public_ip_address_id          = each.key == "bastion" ? azurerm_public_ip.bastion.id : each.key == "web" ? azurerm_public_ip.web.id : null
+    public_ip_address_id          = try(azurerm_public_ip.vms[each.key].id, null)
   }
 }
 
@@ -212,13 +224,9 @@ resource "azurerm_linux_virtual_machine" "vms" {
     username   = local.admin_user
     public_key = file(pathexpand(var.config.ssh.public_key_path))
   }
-
-
-
   identity {
     type         = "UserAssigned"
     identity_ids = [azurerm_user_assigned_identity.monitoring[0].id]
-
   }
 
   os_disk {
@@ -304,6 +312,41 @@ resource "azurerm_monitor_metric_alert" "cpu" {
 
   action {
     action_group_id = azurerm_monitor_action_group.main[0].id
+  }
+}
+
+resource "azurerm_monitor_scheduled_query_rules_alert_v2" "heartbeat_missing" {
+  for_each = local.monitoring_enabled ? azurerm_linux_virtual_machine.vms : {}
+
+  name                    = "${each.value.name}-heartbeat-missing"
+  location                = local.resource_group_location
+  resource_group_name     = local.resource_group_name
+  scopes                  = [azurerm_log_analytics_workspace.main[0].id]
+  description             = "Alert when the VM stops sending Azure Monitor heartbeat data."
+  severity                = local.heartbeat_alert_severity
+  evaluation_frequency    = local.heartbeat_eval_frequency
+  window_duration         = format("PT%dM", local.heartbeat_window_minutes)
+  enabled                 = true
+  auto_mitigation_enabled = true
+
+  criteria {
+    query                   = <<-QUERY
+      Heartbeat
+      | where Computer == "${each.value.name}"
+      | where TimeGenerated > ago(${local.heartbeat_window_minutes}m)
+    QUERY
+    time_aggregation_method = "Count"
+    operator                = "LessThan"
+    threshold               = 1
+
+    failing_periods {
+      minimum_failing_periods_to_trigger_alert = 1
+      number_of_evaluation_periods             = 1
+    }
+  }
+
+  action {
+    action_groups = [azurerm_monitor_action_group.main[0].id]
   }
 }
 
