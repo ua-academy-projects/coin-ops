@@ -10,9 +10,10 @@ test -n "$run_id"
 echo "run_id=$run_id"
 
 while true; do
-  read -r status result <<<"$(az pipelines runs show --org "$org" --project "$project" --id "$run_id" --query '[status,result]' -o tsv)"
-  printf 'status=%s result=%s\n' "$status" "${result:-pending}"
-  [[ "$status" == "completed" ]] && break
+  run_json="$(az pipelines runs show --org "$org" --project "$project" --id "$run_id" -o json)"
+  read -r status result < <(python3 -c 'import json,sys; row=json.load(sys.stdin); status = row.get("status") or "unknown"; result = row.get("result") or "pending"; print(status, result)' <<<"$run_json")
+  printf 'status=%s result=%s\n' "$status" "$result"
+  [[ "$status" == "completed" && "$result" != "pending" ]] && break
   sleep 20
 done
 
