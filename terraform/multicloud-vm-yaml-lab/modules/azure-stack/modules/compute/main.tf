@@ -71,6 +71,10 @@ resource "azurerm_linux_virtual_machine" "bastion" {
   network_interface_ids           = [azurerm_network_interface.bastion[each.key].id]
   custom_data                     = base64encode(local.user_data)
 
+  identity {
+    type = "SystemAssigned"
+  }
+
   admin_ssh_key {
     username   = var.ssh.user
     public_key = var.ssh_public_key
@@ -116,6 +120,10 @@ resource "azurerm_linux_virtual_machine" "k3s" {
   disable_password_authentication = true
   network_interface_ids           = [azurerm_network_interface.k3s[each.key].id]
   custom_data                     = base64encode(local.user_data)
+
+  identity {
+    type = "SystemAssigned"
+  }
 
   admin_ssh_key {
     username   = var.ssh.user
