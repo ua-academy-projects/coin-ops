@@ -150,6 +150,7 @@ POLICY_DOC=$(cat <<'POLICY'
         "sns:ListSubscriptionsByTopic",
         "sns:TagResource",
         "sns:UntagResource",
+        "sns:GetSubscriptionAttributes",
         "sns:ListTagsForResource"
       ],
       "Resource": "*"
@@ -187,6 +188,8 @@ POLICY_DOC=$(cat <<'POLICY'
         "iam:ListInstanceProfilesForRole",
         "iam:TagRole",
         "iam:UntagRole",
+        "iam:ListRolePolicies",
+        "iam:GetRolePolicy",
         "iam:ListRoleTags"
       ],
       "Resource": "*"
