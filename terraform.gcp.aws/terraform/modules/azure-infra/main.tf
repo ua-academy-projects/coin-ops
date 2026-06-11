@@ -14,6 +14,43 @@ locals {
   heartbeat_window_minutes = try(var.config.project.azure.monitoring.heartbeat_window_minutes, 10)
   heartbeat_eval_frequency = try(var.config.project.azure.monitoring.heartbeat_evaluation_frequency, "PT5M")
   monitoring_identity_name = try(var.config.project.azure.monitoring.identity_name, "${local.network_name}-monitoring")
+  syslog_facility_names = [
+    "alert",
+    "audit",
+    "auth",
+    "authpriv",
+    "cron",
+    "daemon",
+    "ftp",
+    "kern",
+    "local0",
+    "local1",
+    "local2",
+    "local3",
+    "local4",
+    "local5",
+    "local6",
+    "local7",
+    "lpr",
+    "mail",
+    "mark",
+    "news",
+    "nopri",
+    "ntp",
+    "syslog",
+    "user",
+    "uucp",
+  ]
+  syslog_log_levels = [
+    "Debug",
+    "Info",
+    "Notice",
+    "Warning",
+    "Error",
+    "Critical",
+    "Alert",
+    "Emergency",
+  ]
   default_vm_subnet_names = {
     bastion = "bastion"
     app     = "app"
@@ -275,8 +312,8 @@ resource "azurerm_monitor_data_collection_rule" "linux" {
   data_sources {
     syslog {
       name           = "syslogSource"
-      facility_names = ["*"]
-      log_levels     = ["*"]
+      facility_names = local.syslog_facility_names
+      log_levels     = local.syslog_log_levels
       streams        = ["Microsoft-Syslog"]
     }
   }
