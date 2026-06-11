@@ -446,8 +446,7 @@ doctor() {
         if az group show --name "$AZURE_STATE_RESOURCE_GROUP_NAME" --only-show-errors >/dev/null 2>&1; then
           echo "OK tfstate resource group: $AZURE_STATE_RESOURCE_GROUP_NAME"
         else
-          echo "Missing tfstate resource group: $AZURE_STATE_RESOURCE_GROUP_NAME. Run ./azure-bootstrap.sh first."
-          failed=true
+          echo "Cannot inspect tfstate resource group with this least-privilege identity; verifying blob access directly."
         fi
         container_exists="$(az storage container exists --account-name "$AZURE_STATE_STORAGE_ACCOUNT_NAME" --name "$AZURE_STATE_CONTAINER_NAME" --auth-mode login --query exists -o tsv 2>/dev/null || printf 'false')"
         if [ "$container_exists" = "true" ]; then
@@ -466,7 +465,11 @@ doctor() {
         fi
         [ "${contributor_count:-0}" != "0" ] && echo "OK role: Contributor on $AZURE_RESOURCE_GROUP_NAME" || { echo "Missing role: Contributor on $AZURE_RESOURCE_GROUP_NAME"; failed=true; }
         [ "${uaa_count:-0}" != "0" ] && echo "OK role: User Access Administrator on $AZURE_RESOURCE_GROUP_NAME" || { echo "Missing role: User Access Administrator on $AZURE_RESOURCE_GROUP_NAME"; failed=true; }
-        [ "${blob_count:-0}" != "0" ] && echo "OK role: Storage Blob Data Contributor for tfstate" || { echo "Missing role: Storage Blob Data Contributor for tfstate"; failed=true; }
+        if [ "${blob_count:-0}" != "0" ]; then
+          echo "OK role: Storage Blob Data Contributor for tfstate"
+        elif [ "$container_exists" = "true" ]; then
+          echo "State role metadata is not enumerable; Azure AD container access already verified."
+        fi
       fi
       ;;
   esac
