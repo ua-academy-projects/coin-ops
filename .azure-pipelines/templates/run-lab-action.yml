@@ -22,6 +22,8 @@ steps:
       secureFile: coinops-gcp-terraform.json
 
   - template: install-lab-tools.yml
+    parameters:
+      installAnsible: ${{ or(eq(parameters.action, 'deploy'), eq(parameters.action, 'rebuild')) }}
 
   - task: AzureCLI@2
     displayName: "Run lab action: ${{ parameters.action }}"

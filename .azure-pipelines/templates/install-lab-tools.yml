@@ -1,3 +1,8 @@
+parameters:
+  - name: installAnsible
+    type: boolean
+    default: true
+
 steps:
   - task: Bash@3
     displayName: Install Terraform and Ansible
@@ -19,14 +24,29 @@ steps:
         grep " $archive$" "$sums" | sha256sum -c -
         sudo unzip -o "$archive" -d /usr/local/bin
 
-        python3 -m venv "$tools_dir/ansible"
-        "$tools_dir/ansible/bin/pip" install --disable-pip-version-check "ansible-core==2.16.3"
-        echo "##vso[task.prependpath]$tools_dir/ansible/bin"
-        export PATH="$tools_dir/ansible/bin:$PATH"
-        ansible-galaxy collection install -r "$(Build.SourcesDirectory)/ansible/requirements.yml"
+        if [[ "$INSTALL_ANSIBLE" == "true" ]]; then
+          python3 -m venv "$tools_dir/ansible"
+          "$tools_dir/ansible/bin/pip" install --disable-pip-version-check "ansible-core==2.16.3"
+          echo "##vso[task.prependpath]$tools_dir/ansible/bin"
+          export PATH="$tools_dir/ansible/bin:$PATH"
+
+          for attempt in 1 2 3; do
+            if ansible-galaxy collection install --timeout 120 -r "$(Build.SourcesDirectory)/ansible/requirements.yml"; then
+              break
+            fi
+            if [[ "$attempt" == "3" ]]; then
+              echo "Ansible Galaxy collection installation failed after $attempt attempts." >&2
+              exit 1
+            fi
+            sleep "$((attempt * 10))"
+          done
+
+          ansible --version
+        fi
 
         terraform version
-        ansible --version
         aws --version
         az version --output table
         gcloud version
+    env:
+      INSTALL_ANSIBLE: ${{ parameters.installAnsible }}
