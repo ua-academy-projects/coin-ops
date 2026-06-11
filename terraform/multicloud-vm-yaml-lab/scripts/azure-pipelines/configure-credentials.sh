@@ -24,6 +24,8 @@ test -n "$aws_access_key_id"
 test -n "$aws_secret_access_key"
 test -n "$ARM_CLIENT_ID"
 test -n "$ARM_CLIENT_SECRET"
+test -n "$TF_VAR_github_oauth_client_id"
+test -n "$TF_VAR_github_oauth_client_secret"
 
 group_id="$(az pipelines variable-group list \
   --organization "$org" \
@@ -92,6 +94,8 @@ upsert_secret GHCR_TOKEN "$GHCR_TOKEN"
 upsert_secret GHCR_PUSH_TOKEN "$GHCR_TOKEN"
 upsert_secret GITHUB_GITOPS_TOKEN "$GHCR_TOKEN"
 upsert_secret CLOUDFLARE_API_TOKEN "$CLOUDFLARE_API_TOKEN"
+upsert_secret TF_VAR_github_oauth_client_id "$TF_VAR_github_oauth_client_id"
+upsert_secret TF_VAR_github_oauth_client_secret "$TF_VAR_github_oauth_client_secret"
 
 endpoint_id="$(az devops service-endpoint list \
   --organization "$org" \

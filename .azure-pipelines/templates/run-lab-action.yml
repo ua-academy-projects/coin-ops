@@ -166,6 +166,8 @@ steps:
       GHCR_TOKEN: $(GHCR_TOKEN)
       CLOUDFLARE_API_TOKEN: $(CLOUDFLARE_API_TOKEN)
       CLOUDFLARE_TOKEN: $(CLOUDFLARE_API_TOKEN)
+      TF_VAR_github_oauth_client_id: $(TF_VAR_github_oauth_client_id)
+      TF_VAR_github_oauth_client_secret: $(TF_VAR_github_oauth_client_secret)
       AZURE_WORKLOAD_RESOURCE_GROUP: $(AZURE_WORKLOAD_RESOURCE_GROUP)
 
   - ${{ if or(eq(parameters.action, 'deploy'), eq(parameters.action, 'rebuild')) }}:
