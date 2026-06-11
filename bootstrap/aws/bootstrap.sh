@@ -89,24 +89,9 @@ POLICY_DOC=$(cat <<'POLICY'
       "Resource": "*"
     },
     {
-      "Sid": "S3State",
+      "Sid": "S3",
       "Effect": "Allow",
-      "Action": [
-        "s3:GetObject",
-        "s3:PutObject",
-        "s3:DeleteObject",
-        "s3:ListBucket",
-        "s3:GetBucketVersioning",
-        "s3:PutBucketVersioning",
-        "s3:GetBucketAcl",
-        "s3:PutBucketAcl",
-        "s3:PutBucketPolicy",
-        "s3:GetBucketPolicy",
-        "s3:PutPublicAccessBlock",
-        "s3:GetBucketPublicAccessBlock",
-        "s3:CreateBucket",
-        "s3:DeleteBucket"
-      ],
+      "Action": ["s3:*"],
       "Resource": "*"
     },
     {
