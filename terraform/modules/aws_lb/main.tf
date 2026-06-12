@@ -70,13 +70,12 @@ resource "aws_lb_target_group" "k3s" {
 
   # Health check — TCP on port 80, same as GCP health check
   health_check {
-    protocol            = "HTTP"
-    path                = "/"
+    protocol            = "TCP"
     port                = "80"
     healthy_threshold   = 2
     unhealthy_threshold = 2
     interval            = 10
-  }
+}
 
   tags = { Name = "coinops-k3s-tg" }
 }
