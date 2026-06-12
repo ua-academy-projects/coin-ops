@@ -117,7 +117,8 @@ POLICY_DOC=$(cat <<'POLICY'
         "cloudwatch:PutDashboard",
         "cloudwatch:DeleteDashboards",
         "cloudwatch:GetDashboard",
-        "cloudwatch:ListDashboards"
+        "cloudwatch:ListDashboards",
+        "cloudwatch:ListTagsForResource"
       ],
       "Resource": "*"
     },
@@ -133,7 +134,8 @@ POLICY_DOC=$(cat <<'POLICY'
         "logs:DeleteMetricFilter",
         "logs:DescribeMetricFilters",
         "logs:TagLogGroup",
-        "logs:ListTagsLogGroup"
+        "logs:ListTagsLogGroup",
+        "logs:ListTagsForResource"
       ],
       "Resource": "*"
     },
