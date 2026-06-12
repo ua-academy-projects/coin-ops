@@ -1,3 +1,5 @@
+# main.tf
+
 resource "azurerm_virtual_network" "this" {
   name                = var.network.name
   location            = data.azurerm_resource_group.this.location

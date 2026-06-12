@@ -1,3 +1,5 @@
+# azure/instances/main.tf
+
 resource "azurerm_public_ip" "this" {
   for_each = {
     for key, instance in local.instances : key => instance

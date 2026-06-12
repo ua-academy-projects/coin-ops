@@ -1,4 +1,5 @@
 # main.tf
+#TODO: optimize code (merge repited resources)
 
 resource "azurerm_log_analytics_workspace" "this" {
   name                = var.name
@@ -187,6 +188,7 @@ resource "azurerm_monitor_metric_alert" "postgresql_failed_connections" {
   }
 }
 
+# -> commented because consumes a lot
 resource "azurerm_application_insights" "this" {
   count = var.http_availability_tests_enabled ? 1 : 0
 
@@ -216,6 +218,5 @@ resource "azurerm_application_insights_standard_web_test" "availability" {
 
   validation_rules {
     expected_status_code        = 200
-    ssl_cert_remaining_lifetime = 0
   }
 }

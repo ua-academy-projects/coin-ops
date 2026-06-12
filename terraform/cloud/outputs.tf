@@ -67,3 +67,23 @@ output "cloud_sql_database_user" {
     )
   )
 }
+
+output "monitoring_workspace_name" {
+  value = try(module.azure_monitoring[0].workspace_name, null)
+}
+
+output "monitoring_application_insights_id" {
+  value = try(module.azure_monitoring[0].application_insights_id, null)
+}
+
+output "monitoring_vm_cpu_alert_names" {
+  value = try(module.azure_monitoring[0].vm_cpu_alert_names, {})
+}
+
+output "monitoring_postgresql_alert_names" {
+  value = try(module.azure_monitoring[0].postgresql_alert_names, {})
+}
+
+output "monitoring_availability_test_names" {
+  value = try(module.azure_monitoring[0].availability_test_names, {})
+}

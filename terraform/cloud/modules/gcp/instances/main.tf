@@ -1,3 +1,5 @@
+# gcp/instances/main.tf
+
 resource "google_service_account" "this" {
   for_each = local.workload_identities
 

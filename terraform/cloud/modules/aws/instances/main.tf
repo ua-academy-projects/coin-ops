@@ -1,4 +1,4 @@
-# main.tf
+# aws/instances/main.tf
 
 resource "aws_instance" "this" {
   for_each = local.instances
@@ -11,30 +11,10 @@ resource "aws_instance" "this" {
   vpc_security_group_ids      = lookup(var.security_group_ids, each.key, null) != null ? [var.security_group_ids[each.key]] : null
   iam_instance_profile        = each.value.iam_instance_profile
   source_dest_check           = !each.value.can_ip_forward
-  user_data                   = <<-EOF
-    #!/bin/bash
-    set -euo pipefail
-
-    if ! id ${var.ssh_user} >/dev/null 2>&1; then
-      useradd --create-home --shell /bin/bash ${var.ssh_user}
-    fi
-
-    install -d -m 700 -o ${var.ssh_user} -g ${var.ssh_user} /home/${var.ssh_user}/.ssh
-    cat > /home/${var.ssh_user}/.ssh/authorized_keys <<'KEYS'
-    ${local.ssh_public_key}
-    KEYS
-    chown ${var.ssh_user}:${var.ssh_user} /home/${var.ssh_user}/.ssh/authorized_keys
-    chmod 600 /home/${var.ssh_user}/.ssh/authorized_keys
-
-    if command -v apt-get >/dev/null 2>&1; then
-      apt-get update
-      DEBIAN_FRONTEND=noninteractive apt-get install -y python3 sudo
-    fi
-
-    usermod -aG sudo ${var.ssh_user}
-    echo '${var.ssh_user} ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/${var.ssh_user}
-    chmod 440 /etc/sudoers.d/${var.ssh_user}
-  EOF
+  user_data = templatefile("${path.module}/user_data.sh.tpl", {
+    ssh_user       = var.ssh_user
+    ssh_public_key = local.ssh_public_key
+  })
 
   root_block_device {
     volume_size = each.value.disk_size_gb

@@ -33,8 +33,10 @@ resource "azurerm_postgresql_flexible_server" "this" {
   resource_group_name           = data.azurerm_resource_group.this.name
   location                      = local.location
   version                       = local.instance.database_version
+
   delegated_subnet_id           = azurerm_subnet.postgres.id
   private_dns_zone_id           = azurerm_private_dns_zone.this.id
+
   administrator_login           = var.user.name
   administrator_password        = data.azurerm_key_vault_secret.db_password.value
   zone                          = local.instance.zone
