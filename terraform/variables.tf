@@ -51,3 +51,14 @@ variable "ssh_public_key_path" {
   description = "Path to SSH public key file"
   default     = "/d/.ssh/id_ed25519_devops.pub"
 }
+variable "alert_email" {
+  type        = string
+  description = "Email address for CloudWatch alarm notifications"
+  default     = "marta.penina.academic@gmail.com"
+}
+
+variable "aws_account_id" {
+  type        = string
+  description = "AWS account ID for S3 bucket policy"
+  default     = "584856877361"
+}

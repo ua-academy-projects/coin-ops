@@ -41,3 +41,9 @@ variable "gateway_sg_id" {
 variable "k3s_sg_id" {
   type = string
 }
+
+variable "iam_instance_profile" {
+  description = "IAM instance profile name for CloudWatch Agent"
+  type        = string
+  default     = null
+}

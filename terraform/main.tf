@@ -116,6 +116,7 @@ module "aws_vm" {
   web_sg_id           = module.aws_security.web_sg_id
   gateway_sg_id       = module.aws_security.gateway_sg_id
   k3s_sg_id           = module.aws_security.k3s_sg_id 
+  iam_instance_profile = module.aws_monitoring_iam.instance_profile_name
 }
 
 module "aws_lb" {
@@ -136,3 +137,58 @@ module "aws_rds" {
 }
 
 
+
+# --- Monitoring modules ---
+
+module "aws_monitoring_alerting" {
+  source      = "./modules/aws_monitoring/alerting"
+  topic_name  = "coinops-alerts"
+  alert_email = var.alert_email
+}
+
+module "aws_monitoring_logs" {
+  source      = "./modules/aws_monitoring/logs"
+  bucket_name = "coinops-alb-logs-penina"
+  account_id  = var.aws_account_id
+}
+
+module "aws_monitoring_iam" {
+  source = "./modules/aws_monitoring/iam"
+}
+
+module "aws_monitoring_ec2_alarms" {
+  source        = "./modules/aws_monitoring/ec2_alarms"
+  instance_ids  = module.aws_vm.k3s_instance_ids
+  sns_topic_arn = module.aws_monitoring_alerting.sns_topic_arn
+  cpu_threshold = 80
+  depends_on    = [module.aws_monitoring_alerting]
+}
+
+module "aws_monitoring_alb_alarms" {
+  source                  = "./modules/aws_monitoring/alb_alarms"
+  sns_topic_arn           = module.aws_monitoring_alerting.sns_topic_arn
+  alb_arn_suffix          = module.aws_lb.alb_arn_suffix
+  target_group_arn_suffix = module.aws_lb.target_group_arn_suffix
+  healthy_host_threshold  = 2
+  depends_on              = [module.aws_monitoring_alerting]
+}
+
+module "aws_monitoring_log_metrics" {
+  source        = "./modules/aws_monitoring/log_metrics"
+  sns_topic_arn = module.aws_monitoring_alerting.sns_topic_arn
+  depends_on    = [module.aws_monitoring_alerting]
+}
+
+module "aws_monitoring_dashboard" {
+  source                  = "./modules/aws_monitoring/dashboard"
+  instance_ids            = module.aws_vm.k3s_instance_ids
+  alb_arn_suffix          = module.aws_lb.alb_arn_suffix
+  target_group_arn_suffix = module.aws_lb.target_group_arn_suffix
+  depends_on              = [module.aws_lb, module.aws_vm]
+  region = local.config.locations[local.general.location].aws.region
+}
+
+module "aws_monitoring_agent" {
+  source = "./modules/aws_monitoring/agent"
+  region = local.config.locations[local.general.location].aws.region
+}

@@ -1,0 +1,6 @@
+terraform {
+  backend "gcs" {
+    bucket = "devops-intern-penina-tf-state"
+    prefix = "coinops/gcp/state"
+  }
+}

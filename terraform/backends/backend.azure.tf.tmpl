@@ -1,0 +1,8 @@
+terraform {
+  backend "azurerm" {
+    resource_group_name  = "coinops-tfstate-rg"
+    storage_account_name = "coinopsmpenina"
+    container_name       = "tfstate"
+    key                  = "coinops/azure/terraform.tfstate"
+  }
+}
