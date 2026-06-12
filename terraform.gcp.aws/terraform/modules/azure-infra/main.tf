@@ -15,31 +15,12 @@ locals {
   heartbeat_eval_frequency = try(var.config.project.azure.monitoring.heartbeat_evaluation_frequency, "PT5M")
   monitoring_identity_name = try(var.config.project.azure.monitoring.identity_name, "${local.network_name}-monitoring")
   syslog_facility_names = [
-    "alert",
-    "audit",
     "auth",
     "authpriv",
-    "cron",
     "daemon",
-    "ftp",
     "kern",
-    "local0",
-    "local1",
-    "local2",
-    "local3",
-    "local4",
-    "local5",
-    "local6",
-    "local7",
-    "lpr",
-    "mail",
-    "mark",
-    "news",
-    "nopri",
-    "ntp",
     "syslog",
     "user",
-    "uucp",
   ]
   syslog_log_levels = [
     "Debug",
