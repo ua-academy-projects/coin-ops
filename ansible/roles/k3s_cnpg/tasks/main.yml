@@ -35,6 +35,16 @@
       status: "True"
     wait_timeout: 120
 
+# Step 2.5 — create namespace for CNPG database
+- name: Create coinops-db namespace
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ cnpg_namespace }}"
+
 # Step 3 — create Secret with DB credentials for CNPG to use during initdb
 # CNPG reads this secret when creating the database for the first time
 - name: Create CNPG database credentials secret
