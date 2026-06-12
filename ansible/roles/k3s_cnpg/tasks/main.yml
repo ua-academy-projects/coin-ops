@@ -1,10 +1,9 @@
 ---
-# Installs CNPG operator via Helm and creates PostgreSQL cluster.
+# Installs CNPG operator via Helm.
 # CNPG = CloudNativePG — runs PostgreSQL as native Kubernetes workload.
-# Replaces CloudSQL (external GCP service) with in-cluster database.
+# Only installs the operator — cluster and secrets are managed by Helm chart.
 
 # Step 1 — install CNPG operator
-# The operator watches for "kind: Cluster" resources and creates PostgreSQL pods.
 - name: Add CNPG Helm repository
   kubernetes.core.helm_repository:
     name: cnpg
@@ -21,8 +20,7 @@
     values:
       replicaCount: 1
 
-# Step 2 — wait for operator to be ready before creating Cluster resource
-# Without this, "kind: Cluster" CRD might not exist yet → apply fails
+# Step 2 — wait for operator to be ready before Helm deploys the cluster
 - name: Wait for CNPG operator pod to be ready
   kubernetes.core.k8s_info:
     kind: Pod
@@ -34,49 +32,3 @@
       type: Ready
       status: "True"
     wait_timeout: 120
-
-# Step 2.5 — create namespace for CNPG database
-- name: Create coinops-db namespace
-  kubernetes.core.k8s:
-    state: present
-    definition:
-      apiVersion: v1
-      kind: Namespace
-      metadata:
-        name: "{{ cnpg_namespace }}"
-
-# Step 3 — create Secret with DB credentials for CNPG to use during initdb
-# CNPG reads this secret when creating the database for the first time
-- name: Create CNPG database credentials secret
-  kubernetes.core.k8s:
-    state: present
-    definition:
-      apiVersion: v1
-      kind: Secret
-      metadata:
-        name: cnpg-db-secret
-        namespace: "{{ cnpg_namespace }}"
-      type: kubernetes.io/basic-auth
-      data:
-        username: "{{ cnpg_db_user | b64encode }}"
-        password: "{{ lookup('env', 'DB_PASSWORD') | b64encode }}"
-
-# Step 4 — apply CNPG Cluster resource
-# This tells the operator: "create a PostgreSQL instance with these settings"
-- name: Apply CNPG PostgreSQL cluster
-  kubernetes.core.k8s:
-    state: present
-    definition: "{{ lookup('template', 'cnpg-cluster.yaml.j2') }}"
-
-# Step 5 — wait for cluster to be ready
-- name: Wait for CNPG cluster to be ready
-  kubernetes.core.k8s_info:
-    kind: Cluster
-    api_version: postgresql.cnpg.io/v1
-    name: "{{ cnpg_cluster_name }}"
-    namespace: "{{ cnpg_namespace }}"
-    wait: true
-    wait_condition:
-      type: Ready
-      status: "True"
-    wait_timeout: 300
