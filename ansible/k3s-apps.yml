@@ -40,3 +40,9 @@
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   roles:
     - k3s_cnpg
+
+- name: Install CloudWatch Agent
+  hosts: k3s_server
+  become: yes
+  roles:
+    - cloudwatch_agent

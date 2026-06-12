@@ -1,0 +1,37 @@
+---
+# Install and configure CloudWatch Agent on k3s nodes.
+# Agent reads pod logs and ships to CloudWatch Log Groups.
+# IAM role attached to EC2 instance grants write permissions.
+
+- name: Download CloudWatch Agent deb package
+  get_url:
+    url: https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
+    dest: /tmp/amazon-cloudwatch-agent.deb
+    mode: '0644'
+
+- name: Install CloudWatch Agent
+  apt:
+    deb: /tmp/amazon-cloudwatch-agent.deb
+
+- name: Install AWS CLI
+  apt:
+    name: awscli
+    state: present
+
+- name: Fetch agent config from SSM Parameter Store
+  shell: |
+    aws ssm get-parameter \
+      --name /coinops/cloudwatch-agent-config \
+      --region {{ cw_region }} \
+      --query Parameter.Value \
+      --output text > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+  environment:
+    AWS_DEFAULT_REGION: "{{ cw_region }}"
+
+- name: Start CloudWatch Agent with fetched config
+  shell: |
+    /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+      -a fetch-config \
+      -m ec2 \
+      -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
+      -s
