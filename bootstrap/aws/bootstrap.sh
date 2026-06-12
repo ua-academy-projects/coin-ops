@@ -192,7 +192,10 @@ POLICY_DOC=$(cat <<'POLICY'
         "iam:UntagRole",
         "iam:ListRolePolicies",
         "iam:GetRolePolicy",
-        "iam:ListRoleTags"
+        "iam:ListRoleTags",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:GetRolePolicy"
       ],
       "Resource": "*"
     },
