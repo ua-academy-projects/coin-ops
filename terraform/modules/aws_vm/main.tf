@@ -27,15 +27,16 @@ resource "aws_instance" "vm" {
   associate_public_ip_address = each.value.public_ip
   source_dest_check           = contains(each.value.tags, "gateway") ? false : true
 
-vpc_security_group_ids = concat(
-  contains(each.value.tags, "jump-host")  ? [var.jump_host_sg_id] : [],
-  contains(each.value.tags, "internal")   ? [var.internal_sg_id]  : [],
-  contains(each.value.tags, "web")        ? [var.web_sg_id]       : [],
-  contains(each.value.tags, "gateway")    ? [var.gateway_sg_id]   : [],
-  contains(each.value.tags, "k3s-server") ? [var.k3s_sg_id]       : []
-)
+  vpc_security_group_ids = concat(
+    contains(each.value.tags, "jump-host")  ? [var.jump_host_sg_id] : [],
+    contains(each.value.tags, "internal")   ? [var.internal_sg_id]  : [],
+    contains(each.value.tags, "web")        ? [var.web_sg_id]       : [],
+    contains(each.value.tags, "gateway")    ? [var.gateway_sg_id]   : [],
+    contains(each.value.tags, "k3s-server") ? [var.k3s_sg_id]       : []
+  )
 
-  key_name = aws_key_pair.main[0].key_name
+  key_name             = aws_key_pair.main[0].key_name
+  iam_instance_profile = var.iam_instance_profile
 
   root_block_device {
     volume_size = try(each.value.disk_size, var.config.general.disk_size)
