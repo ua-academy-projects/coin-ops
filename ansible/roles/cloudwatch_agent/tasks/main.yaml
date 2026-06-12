@@ -13,10 +13,18 @@
   apt:
     deb: /tmp/amazon-cloudwatch-agent.deb
 
-- name: Install AWS CLI
+- name: Install unzip for AWS CLI installer
   apt:
-    name: awscli
+    name: unzip
     state: present
+
+- name: Install AWS CLI v2
+  shell: |
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+    unzip -o /tmp/awscliv2.zip -d /tmp/
+    /tmp/aws/install --update
+  args:
+    creates: /usr/local/bin/aws
 
 - name: Fetch agent config from SSM Parameter Store
   shell: |
