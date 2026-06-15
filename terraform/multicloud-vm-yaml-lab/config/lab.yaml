@@ -16,6 +16,17 @@ clouds:
     # managed app stack (Cloud SQL / Pub-Sub / Memorystore / app VMs / LB).
     # The coin-ops app lives on AWS; GCP is just the k3s learning sandbox.
     k3s_only: true
+    # Managed Kubernetes chapter. Set enabled:true (and `cloud: gcp` at top) to
+    # provision GKE in the lab VPC. Uses a separate terraform workspace/state.
+    gke:
+      enabled: false
+      node_machine_type: e2-medium
+      min_nodes: 1
+      max_nodes: 3
+      release_channel: REGULAR
+      subnet_cidr: 10.10.30.0/24
+      pods_cidr: 10.20.0.0/16
+      services_cidr: 10.30.0.0/20
   aws:
     profile: coinops-admin
     terraform_iam_user: terraform-coinops-lab
@@ -229,6 +240,7 @@ catalog:
       # control plane + the Azure Monitor agent stack (ama-logs/ama-metrics/Arc)
       # + Beyla + the backing-service exporters. 3×1-vCPU could not (eBPF on a
       # 1-core control-plane node starved etcd). Only the Azure k3s node uses it.
+      gcp: e2-medium             # 2 vCPU / 4 GB — GKE node pool
       azure: Standard_F2as_v7    # 2 vCPU / 8 GB (AMD x86, eastus2)
   database_sizes:
     micro:
