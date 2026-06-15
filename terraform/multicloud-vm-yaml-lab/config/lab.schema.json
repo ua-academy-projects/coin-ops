@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://coinops/lab.schema.json",
+  "title": "Coin-Ops multicloud lab config",
+  "description": "Single source of truth for the lab. Terraform reads this via locals.config.tf and dispatches to modules/<cloud>-stack. Flip `cloud:` to retarget the whole stack.",
+  "type": "object",
+  "required": ["cloud", "location", "name_prefix"],
+  "additionalProperties": true,
+  "properties": {
+    "cloud": {
+      "description": "Active backend cloud. Drives which stack module Terraform builds (aws|gcp|azure). One cloud per apply/workspace.",
+      "enum": ["aws", "gcp", "azure"]
+    },
+    "location": {
+      "description": "Logical region key, resolved per-cloud via catalog.locations[<this>]. e.g. eu_central -> gcp:europe-central2 / azure:eastus2.",
+      "type": "string"
+    },
+    "name_prefix": {
+      "description": "Prefix applied to every resource name. Keep short; some clouds cap name length.",
+      "type": "string"
+    },
+    "clouds": {
+      "description": "Per-cloud settings (project ids, k3s_only flags, GKE). Only the active `cloud:` block is used.",
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "gcp": {
+          "description": "GCP settings.",
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "project_id": { "description": "GCP project id that owns every resource.", "type": "string" },
+            "k3s_only": { "description": "Build only network + bastion + k3s VMs (self-managed Kubernetes). Mutually exclusive in spirit with gke.enabled.", "type": "boolean" },
+            "gke": {
+              "description": "Managed Kubernetes (GKE). When enabled, Terraform stands up a VPC-native GKE cluster + node pool in the lab VPC. The headline of the GCP chapter.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["enabled"],
+              "properties": {
+                "enabled": { "description": "Provision the GKE module. Default false.", "type": "boolean" },
+                "node_machine_type": { "description": "Compute Engine machine type for node-pool nodes (e.g. e2-medium = 2 vCPU / 4 GB).", "type": "string" },
+                "min_nodes": { "description": "Autoscaler floor per zone.", "type": "integer", "minimum": 1 },
+                "max_nodes": { "description": "Autoscaler ceiling per zone.", "type": "integer", "minimum": 1 },
+                "release_channel": { "description": "GKE upgrade channel.", "enum": ["RAPID", "REGULAR", "STABLE"] },
+                "pods_cidr": { "description": "Secondary range CIDR for pod IPs (VPC-native).", "type": "string" },
+                "services_cidr": { "description": "Secondary range CIDR for service IPs (VPC-native).", "type": "string" },
+                "subnet_cidr": { "description": "Primary CIDR for the dedicated GKE node subnet.", "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "runtime": {
+      "description": "How the app's backing services are provided (external containers vs cloud-native managed). See locals.config.tf runtime_mode.",
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "mode": { "description": "external = in-VM/in-cluster containers; cloud-native = managed DB/queue/cache.", "type": "string" }
+      }
+    },
+    "app": {
+      "description": "App-level config + which named instances fill each role.",
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "nodes": {
+          "description": "Maps roles to instance keys defined under `instances`.",
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "k3s": { "description": "k3s node instance keys. Empty when using GKE instead.", "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "catalog": {
+      "description": "Cloud-agnostic lookup tables: locations, machine sizes, db sizes, images. Instances reference these by key.",
+      "type": "object",
+      "additionalProperties": true
+    },
+    "instances": {
+      "description": "Named VMs. Each has a role (-> roles[]), optional size/image/subnet, and a private_ip.",
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

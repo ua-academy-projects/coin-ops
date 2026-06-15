@@ -1,0 +1,11 @@
+{
+  "yaml.schemas": {
+    "terraform/multicloud-vm-yaml-lab/config/lab.schema.json": [
+      "terraform/multicloud-vm-yaml-lab/config/lab.yaml",
+      "**/lab.yaml"
+    ]
+  },
+  "yaml.validate": true,
+  "yaml.hover": true,
+  "yaml.completion": true
+}
