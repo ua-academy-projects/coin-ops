@@ -78,7 +78,7 @@ jobs:
             tags="${tags}"$'\n'"${image}:shabat-latest"
           fi
 
-                     
+
           if [[ "${GITHUB_REF_TYPE}" == "branch" && "${GITHUB_REF_NAME}" == "dev" ]]; then
             tags="${tags}"$'\n'"${image}:dev-latest"
           fi

@@ -17,3 +17,5 @@ ignore: |
   presentation/
   ui-react/
   charts/coinops-app/templates/
+  # Jinja2-templated compose files (not pure YAML):
+  deploy/compose/
