@@ -1,0 +1,17 @@
+# Jenkins Kubernetes agent pod — referenced by the Jenkinsfile (yamlFile).
+# kaniko builds/pushes images without a Docker daemon; `tools` (Cloud SDK) holds
+# gcloud + (installs) helm for the GKE deploy. The `jenkins` ServiceAccount should
+# be bound to a GCP SA via Workload Identity for image push + container.developer.
+apiVersion: v1
+kind: Pod
+spec:
+  serviceAccountName: jenkins
+  containers:
+    - name: kaniko
+      image: gcr.io/kaniko-project/executor:debug
+      command: ["/busybox/cat"]
+      tty: true
+    - name: tools
+      image: google/cloud-sdk:slim
+      command: ["cat"]
+      tty: true

@@ -1,0 +1,21 @@
+# Official Jenkins Helm chart (jenkins/jenkins) values — controller in GKE.
+controller:
+  installPlugins:
+    - kubernetes:latest
+    - workflow-aggregator:latest
+    - git:latest
+    - configuration-as-code:latest
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+  serviceType: ClusterIP
+persistence:
+  size: 8Gi
+agent:
+  enabled: true
+rbac:
+  create: true
+serviceAccount:
+  create: true
+  name: jenkins

@@ -1,0 +1,39 @@
+# cloudbuild.yaml — GCP-native CD alternative to Jenkins.
+# Run: gcloud builds submit --config cloudbuild.yaml --substitutions=_SHA=$(git rev-parse HEAD)
+substitutions:
+  _REGISTRY: ghcr.io/ua-academy-projects
+  _CLUSTER: coinops-lab-gke
+  _REGION: europe-central2
+steps:
+  - id: build-proxy
+    name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_REGISTRY}/coin-ops-proxy:${_SHA}", "-f", "proxy/Dockerfile", "proxy"]
+  - id: build-history-api
+    name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_REGISTRY}/coin-ops-history-api:${_SHA}", "-f", "history/Dockerfile.api", "history"]
+  - id: build-history-consumer
+    name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_REGISTRY}/coin-ops-history-consumer:${_SHA}", "-f", "history/Dockerfile.consumer", "history"]
+  - id: build-ui
+    name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_REGISTRY}/coin-ops-ui:${_SHA}", "-f", "ui-react/Dockerfile", "ui-react"]
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -eu
+        export USE_GKE_GCLOUD_AUTH_PLUGIN=True
+        gcloud container clusters get-credentials "${_CLUSTER}" --region "${_REGION}"
+        curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+        helm upgrade --install coinops-app charts/coinops-app \
+          -f charts/coinops-app/values.yaml -f charts/coinops-app/values-gke.yaml \
+          --set image.tag="${_SHA}" --wait --timeout 5m
+images:
+  - "${_REGISTRY}/coin-ops-proxy:${_SHA}"
+  - "${_REGISTRY}/coin-ops-history-api:${_SHA}"
+  - "${_REGISTRY}/coin-ops-history-consumer:${_SHA}"
+  - "${_REGISTRY}/coin-ops-ui:${_SHA}"
+options:
+  logging: CLOUD_LOGGING_ONLY
