@@ -1,0 +1,49 @@
+---
+# Deploy CoinOps application into the existing k3s cluster.
+#
+# This playbook is intentionally separate from:
+#   - k3s-cluster.yml   (creates/joins the k3s cluster)
+#   - k3s-platform.yml  (platform components: cert-manager, homepage, etc.)
+#
+# Run examples:
+#   ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml
+#   ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags data
+#   ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags app
+#   ansible-playbook -i ansible/inventory.k3s.gcp ansible/coinops-app.yml --tags network-policy
+#
+# Note: the application layer (proxy, history API, history consumer, UI,
+# ingress + middlewares) is deployed via a single Helm release `coinops`
+# from the chart at `charts/coinops/`. The legacy backend/frontend/ingress
+# tags still work for backward compatibility, but they all reinstall the
+# full chart release (Helm has no concept of partial release upgrades).
+
+- name: Deploy CoinOps on k3s
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - role: cnpg_operator
+      tags:
+        - cnpg
+        - data
+
+    - role: coinops_data
+      tags:
+        - data
+
+    - role: coinops_app_chart
+      tags:
+        - app
+        - chart
+        - backend
+        - frontend
+        - ingress
+        - proxy
+        - history
+        - ui
+
+    - role: coinops_network_policy
+      tags:
+        - network-policy
+        - netpol
+        - security

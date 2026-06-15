@@ -1,0 +1,14 @@
+---
+common_allowed_ports:
+  - 47832
+  - 6443
+  - 2379:2380
+  - 10250
+common_upgrade_packages: false
+common_manage_ufw: false
+
+k3s_private_subnet_cidr: 10.0.0.0/24
+k3s_api_port: 6443
+k3s_channel: stable
+k3s_tls_san: "{{ hostvars[groups['k3s_jump'][0]].ansible_host }}"
+k3s_first_server_url: "https://{{ hostvars[groups['k3s_first_server'][0]].ansible_host }}:{{ k3s_api_port }}"

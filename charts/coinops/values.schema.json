@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "CoinOps Helm values",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["global", "proxy", "history", "ui", "ingress"],
+  "properties": {
+    "nameOverride": {
+      "type": "string"
+    },
+    "global": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "imageRegistry",
+        "imageTag",
+        "imagePullSecret",
+        "backendNamespace",
+        "frontendNamespace",
+        "backendEnvSecret",
+        "backendEnvSecretVersion",
+        "runtimeBackend"
+      ],
+      "properties": {
+        "imageRegistry":     { "type": "string", "minLength": 1 },
+        "imageTag":          { "type": "string", "minLength": 1 },
+        "imagePullSecret":   { "type": "string", "minLength": 1 },
+        "backendNamespace":  { "type": "string", "minLength": 1 },
+        "frontendNamespace": { "type": "string", "minLength": 1 },
+        "backendEnvSecret":  { "type": "string", "minLength": 1 },
+        "backendEnvSecretVersion": { "type": "string" },
+        "runtimeBackend":    { "type": "string", "minLength": 1 }
+      }
+    },
+    "proxy": {
+      "$ref": "#/definitions/httpComponent"
+    },
+    "history": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["api", "consumer"],
+      "properties": {
+        "api":      { "$ref": "#/definitions/httpComponent" },
+        "consumer": { "$ref": "#/definitions/workerComponent" }
+      }
+    },
+    "ui": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled", "name", "replicas", "image",
+        "containerPort", "servicePort", "proxyUrl", "historyUrl"
+      ],
+      "properties": {
+        "enabled":       { "type": "boolean" },
+        "name":          { "type": "string", "minLength": 1 },
+        "replicas":      { "type": "integer", "minimum": 0 },
+        "image":         { "$ref": "#/definitions/imageRef" },
+        "containerPort": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "servicePort":   { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "proxyUrl":      { "type": "string", "minLength": 1 },
+        "historyUrl":    { "type": "string", "minLength": 1 }
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "className", "domain", "name", "tls", "middlewares"],
+      "properties": {
+        "enabled":   { "type": "boolean" },
+        "className": { "type": "string", "minLength": 1 },
+        "domain":    { "type": "string", "minLength": 1 },
+        "name":      { "type": "string", "minLength": 1 },
+        "tls": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["secretName", "clusterIssuer"],
+          "properties": {
+            "secretName":    { "type": "string", "minLength": 1 },
+            "clusterIssuer": { "type": "string", "minLength": 1 }
+          }
+        },
+        "middlewares": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["name", "prefix"],
+            "properties": {
+              "name":   { "type": "string", "minLength": 1 },
+              "prefix": { "type": "string", "minLength": 1, "pattern": "^/" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "imageRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "tag":  { "type": "string" }
+      }
+    },
+    "httpComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled", "name", "replicas", "image",
+        "containerPort", "servicePort"
+      ],
+      "properties": {
+        "enabled":       { "type": "boolean" },
+        "name":          { "type": "string", "minLength": 1 },
+        "replicas":      { "type": "integer", "minimum": 0 },
+        "image":         { "$ref": "#/definitions/imageRef" },
+        "containerPort": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "servicePort":   { "type": "integer", "minimum": 1, "maximum": 65535 }
+      }
+    },
+    "workerComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "name", "replicas", "image"],
+      "properties": {
+        "enabled":  { "type": "boolean" },
+        "name":     { "type": "string", "minLength": 1 },
+        "replicas": { "type": "integer", "minimum": 0 },
+        "image":    { "$ref": "#/definitions/imageRef" }
+      }
+    }
+  }
+}

@@ -1,0 +1,80 @@
+---
+platform_kubeconfig: "{{ lookup('env', 'KUBECONFIG') | default(lookup('env', 'HOME') ~ '/.kube/config', true) }}"
+
+jenkins_release_name: jenkins
+jenkins_namespace: cicd
+jenkins_chart_repo_url: https://charts.jenkins.io
+jenkins_chart_ref: jenkins/jenkins
+jenkins_chart_version: "5.8.42"
+
+jenkins_admin_user: admin
+
+jenkins_domain: jenkins.kazachuk-k3s.pp.ua
+jenkins_tls_secret_name: jenkins-tls
+jenkins_tls_cluster_issuer: letsencrypt-cloudflare-production
+
+# AKS Standard SSD by default. Bump if you want Premium.
+jenkins_storage_class: default
+jenkins_storage_size: 8Gi
+
+# Resource footprint tuned for the single B2s_v2 node (8 GB RAM total).
+# Java max heap is set via JAVA_OPTS to avoid Jenkins eating the box.
+jenkins_resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+jenkins_java_opts: "-Xms256m -Xmx768m"
+
+jenkins_wait: true
+jenkins_wait_timeout: 900s
+
+# Helm values for jenkins/jenkins chart.
+jenkins_values:
+  controller:
+    image:
+      tag: "2.504.3-jdk17"
+    admin:
+      username: "{{ jenkins_admin_user }}"
+    resources: "{{ jenkins_resources }}"
+    javaOpts: "{{ jenkins_java_opts }}"
+    serviceType: ClusterIP
+    installPlugins:
+      - kubernetes
+      - workflow-aggregator
+      - git
+      - configuration-as-code
+      - github-branch-source
+      - credentials-binding
+      - pipeline-stage-view
+      - job-dsl
+      - ansicolor
+      - timestamper
+    ingress:
+      enabled: true
+      apiVersion: networking.k8s.io/v1
+      ingressClassName: traefik
+      hostName: "{{ jenkins_domain }}"
+      tls:
+        - hosts:
+            - "{{ jenkins_domain }}"
+          secretName: "{{ jenkins_tls_secret_name }}"
+      annotations:
+        cert-manager.io/cluster-issuer: "{{ jenkins_tls_cluster_issuer }}"
+  agent:
+    enabled: true
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  persistence:
+    enabled: true
+    storageClass: "{{ jenkins_storage_class }}"
+    size: "{{ jenkins_storage_size }}"
+  serviceAccount:
+    create: true

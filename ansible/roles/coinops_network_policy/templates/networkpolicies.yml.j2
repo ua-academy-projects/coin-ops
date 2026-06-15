@@ -1,0 +1,164 @@
+# Ingress-only NetworkPolicies.
+# Egress stays open intentionally: CoinOps proxy calls external APIs, and pods
+# still need DNS/Kubernetes/system traffic. This gives namespace isolation
+# without breaking the current application flow.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: {{ coinops_network_policy_frontend_namespace }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-traefik-to-ui
+  namespace: {{ coinops_network_policy_frontend_namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: coinops-ui
+      app.kubernetes.io/instance: {{ coinops_network_policy_release_name }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ coinops_network_policy_ingress_namespace }}
+      ports:
+        - protocol: TCP
+          port: {{ coinops_network_policy_ui_port }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: {{ coinops_network_policy_backend_namespace }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-traefik-to-backend-http
+  namespace: {{ coinops_network_policy_backend_namespace }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ coinops_network_policy_ingress_namespace }}
+      ports:
+        - protocol: TCP
+          port: {{ coinops_network_policy_proxy_port }}
+        - protocol: TCP
+          port: {{ coinops_network_policy_history_api_port }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: {{ coinops_network_policy_postgres_namespace }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-postgres-clients
+  namespace: {{ coinops_network_policy_postgres_namespace }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ coinops_network_policy_backend_namespace }}
+      ports:
+        - protocol: TCP
+          port: {{ coinops_network_policy_postgres_port }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ coinops_network_policy_postgres_namespace }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ coinops_network_policy_cnpg_namespace }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: {{ coinops_network_policy_rabbitmq_namespace }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-rabbitmq-clients
+  namespace: {{ coinops_network_policy_rabbitmq_namespace }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ coinops_network_policy_backend_namespace }}
+      ports:
+        - protocol: TCP
+          port: {{ coinops_network_policy_rabbitmq_port }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ coinops_network_policy_rabbitmq_namespace }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: {{ coinops_network_policy_redis_namespace }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-redis-clients
+  namespace: {{ coinops_network_policy_redis_namespace }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ coinops_network_policy_backend_namespace }}
+      ports:
+        - protocol: TCP
+          port: {{ coinops_network_policy_redis_port }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ coinops_network_policy_redis_namespace }}

@@ -1,0 +1,51 @@
+# RBAC for the Jenkins build pod.
+#
+# Jenkins agents run as ServiceAccount `jenkins-deployer` in namespace `cicd`.
+# This binding grants exactly the permissions needed to `helm upgrade` the
+# coinops release and watch rollouts in the application namespaces.
+#
+# Apply once:
+#   kubectl apply -f manifests/jenkins-deployer-rbac.yaml
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jenkins-deployer
+  namespace: cicd
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: coinops-deployer
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces", "configmaps", "secrets", "services", "serviceaccounts", "pods", "pods/log", "events", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "replicasets", "daemonsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["traefik.io", "traefik.containo.us"]
+    resources: ["middlewares", "ingressroutes", "tlsoptions"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["cert-manager.io"]
+    resources: ["certificates", "issuers", "clusterissuers"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: jenkins-deployer-coinops
+subjects:
+  - kind: ServiceAccount
+    name: jenkins-deployer
+    namespace: cicd
+roleRef:
+  kind: ClusterRole
+  name: coinops-deployer
+  apiGroup: rbac.authorization.k8s.io

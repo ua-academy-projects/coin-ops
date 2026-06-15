@@ -1,0 +1,51 @@
+---
+- name: Ensure Jenkins Helm repository is added
+  kubernetes.core.helm_repository:
+    name: jenkins
+    repo_url: "{{ jenkins_chart_repo_url }}"
+
+- name: Ensure cicd namespace exists
+  kubernetes.core.k8s:
+    kubeconfig: "{{ platform_kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ jenkins_namespace }}"
+
+- name: Install or upgrade Jenkins with Helm
+  kubernetes.core.helm:
+    kubeconfig: "{{ platform_kubeconfig }}"
+    name: "{{ jenkins_release_name }}"
+    chart_ref: "{{ jenkins_chart_ref }}"
+    chart_version: "{{ jenkins_chart_version }}"
+    release_namespace: "{{ jenkins_namespace }}"
+    create_namespace: false
+    release_values: "{{ jenkins_values }}"
+    wait: "{{ jenkins_wait }}"
+    wait_timeout: "{{ jenkins_wait_timeout }}"
+    state: present
+
+- name: Read Jenkins admin password Secret
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ platform_kubeconfig }}"
+    api_version: v1
+    kind: Secret
+    namespace: "{{ jenkins_namespace }}"
+    name: "{{ jenkins_release_name }}"
+  register: jenkins_admin_secret
+  no_log: true
+
+- name: Decode Jenkins admin password
+  set_fact:
+    jenkins_admin_password: "{{ jenkins_admin_secret.resources[0].data['jenkins-admin-password'] | b64decode }}"
+  no_log: true
+
+- name: Print Jenkins URL and admin credentials
+  debug:
+    msg:
+      - "Jenkins URL:      https://{{ jenkins_domain }}/"
+      - "Admin user:       {{ jenkins_admin_user }}"
+      - "Admin password:   {{ jenkins_admin_password }}"
+      - "Save the password securely; it lives only in the k8s Secret jenkins/{{ jenkins_release_name }}."

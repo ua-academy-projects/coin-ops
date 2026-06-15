@@ -1,0 +1,23 @@
+{
+    email {$ACME_EMAIL}
+    admin :2019
+    servers {
+        metrics
+    }
+}
+
+{$COINOPS_DOMAIN} {
+    encode zstd gzip
+
+    handle_path /api/* {
+        reverse_proxy coinops-proxy:8080
+    }
+
+    handle_path /history-api/* {
+        reverse_proxy coinops-history-api:8000
+    }
+
+    handle {
+        reverse_proxy coinops-ui:80
+    }
+}

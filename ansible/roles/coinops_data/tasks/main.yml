@@ -1,0 +1,262 @@
+---
+- name: Read CoinOps database secrets from GCP Secret Manager
+  command: >-
+    gcloud secrets versions access latest
+    --project {{ coinops_data_gcp_project_id }}
+    --secret {{ coinops_data_db_gcp_secret_name }}
+  register: coinops_data_db_secret_raw
+  changed_when: false
+  no_log: true
+
+- name: Read CoinOps service secrets from GCP Secret Manager
+  command: >-
+    gcloud secrets versions access latest
+    --project {{ coinops_data_gcp_project_id }}
+    --secret {{ coinops_data_service_gcp_secret_name }}
+  register: coinops_data_service_secret_raw
+  changed_when: false
+  no_log: true
+
+- name: Store CoinOps secrets in memory
+  set_fact:
+    coinops_data_db_secret: "{{ coinops_data_db_secret_raw.stdout | from_json }}"
+    coinops_data_service_secret: "{{ coinops_data_service_secret_raw.stdout | from_json }}"
+  no_log: true
+
+- name: Validate required CoinOps secret keys
+  assert:
+    that:
+      - coinops_data_db_secret.db_user is defined
+      - coinops_data_db_secret.db_password is defined
+      - coinops_data_db_secret.db_name is defined
+      - coinops_data_service_secret.rabbitmq_user is defined
+      - coinops_data_service_secret.rabbitmq_password is defined
+      - coinops_data_service_secret.redis_password is defined
+      - coinops_data_service_secret.ghcr_username is defined
+      - coinops_data_service_secret.ghcr_token is defined
+    fail_msg: |
+      Required GCP Secret Manager values are missing.
+      Expected JSON keys:
+      DB secret: db_user, db_password, db_name.
+      Service secret: rabbitmq_user, rabbitmq_password, redis_password, ghcr_username, ghcr_token.
+  no_log: true
+
+- name: Ensure CoinOps namespaces exist
+  kubernetes.core.k8s:
+    kubeconfig: "{{ coinops_data_kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ item }}"
+  loop: "{{ coinops_data_namespaces }}"
+
+- name: Create PostgreSQL application credentials secret
+  kubernetes.core.k8s:
+    kubeconfig: "{{ coinops_data_kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: "{{ coinops_data_postgres_credentials_secret_name }}"
+        namespace: "{{ coinops_data_postgres_namespace }}"
+      type: kubernetes.io/basic-auth
+      stringData:
+        username: "{{ coinops_data_db_secret.db_user }}"
+        password: "{{ coinops_data_db_secret.db_password }}"
+        database: "{{ coinops_data_db_secret.db_name }}"
+  no_log: true
+
+- name: Create RabbitMQ credentials secret
+  kubernetes.core.k8s:
+    kubeconfig: "{{ coinops_data_kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: "{{ coinops_data_rabbitmq_credentials_secret_name }}"
+        namespace: "{{ coinops_data_rabbitmq_namespace }}"
+      type: Opaque
+      stringData:
+        rabbitmq-username: "{{ coinops_data_service_secret.rabbitmq_user }}"
+        rabbitmq-password: "{{ coinops_data_service_secret.rabbitmq_password }}"
+  no_log: true
+
+- name: Create Redis credentials secret
+  kubernetes.core.k8s:
+    kubeconfig: "{{ coinops_data_kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: "{{ coinops_data_redis_credentials_secret_name }}"
+        namespace: "{{ coinops_data_redis_namespace }}"
+      type: Opaque
+      stringData:
+        redis-password: "{{ coinops_data_service_secret.redis_password }}"
+  no_log: true
+
+- name: Create GHCR image pull secrets
+  kubernetes.core.k8s:
+    kubeconfig: "{{ coinops_data_kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: "{{ coinops_data_image_pull_secret_name }}"
+        namespace: "{{ item }}"
+      type: kubernetes.io/dockerconfigjson
+      stringData:
+        .dockerconfigjson: >-
+          {{
+            {
+              "auths": {
+                "ghcr.io": {
+                  "username": coinops_data_service_secret.ghcr_username,
+                  "password": coinops_data_service_secret.ghcr_token,
+                  "auth": (coinops_data_service_secret.ghcr_username ~ ":" ~ coinops_data_service_secret.ghcr_token) | b64encode
+                }
+              }
+            } | to_json
+          }}
+  loop: "{{ coinops_data_image_pull_secret_namespaces }}"
+  no_log: true
+
+- name: Create backend runtime environment secret
+  kubernetes.core.k8s:
+    kubeconfig: "{{ coinops_data_kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: "{{ coinops_data_backend_env_secret_name }}"
+        namespace: "{{ coinops_data_backend_namespace }}"
+      type: Opaque
+      stringData:
+        DATABASE_URL: >-
+          postgresql://{{ coinops_data_db_secret.db_user | urlencode }}:{{ coinops_data_db_secret.db_password | urlencode }}@{{ coinops_data_postgres_host }}:{{ coinops_data_postgres_port }}/{{ coinops_data_db_secret.db_name | urlencode }}
+        RABBITMQ_URL: >-
+          amqp://{{ coinops_data_service_secret.rabbitmq_user | urlencode }}:{{ coinops_data_service_secret.rabbitmq_password | urlencode }}@{{ coinops_data_rabbitmq_host }}:{{ coinops_data_rabbitmq_port }}/
+        REDIS_URL: >-
+          redis://:{{ coinops_data_service_secret.redis_password | urlencode }}@{{ coinops_data_redis_host }}:{{ coinops_data_redis_port }}/0
+  no_log: true
+
+- name: Create CNPG PostgreSQL cluster
+  kubernetes.core.k8s:
+    kubeconfig: "{{ coinops_data_kubeconfig }}"
+    state: present
+    definition: "{{ lookup('template', role_path ~ '/templates/postgres-cluster.yml.j2') | from_yaml }}"
+
+- name: Wait for CNPG PostgreSQL cluster to become healthy
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ coinops_data_kubeconfig }}"
+    api_version: postgresql.cnpg.io/v1
+    kind: Cluster
+    namespace: "{{ coinops_data_postgres_namespace }}"
+    name: "{{ coinops_data_postgres_cluster_name }}"
+  register: coinops_data_postgres_cluster
+  retries: "{{ (coinops_data_postgres_wait_timeout / 10) | int }}"
+  delay: 10
+  until:
+    - coinops_data_postgres_cluster.resources | length == 1
+    - coinops_data_postgres_cluster.resources[0].status.phase | default('') == 'Cluster in healthy state'
+
+- name: Show CNPG PostgreSQL cluster status
+  debug:
+    msg: "{{ coinops_data_postgres_cluster.resources[0].status.phase }}"
+
+- name: Install RabbitMQ with Helm
+  kubernetes.core.helm:
+    kubeconfig: "{{ coinops_data_kubeconfig }}"
+    name: "{{ coinops_data_rabbitmq_release_name }}"
+    chart_ref: "{{ coinops_data_rabbitmq_chart_ref }}"
+    chart_version: "{{ coinops_data_rabbitmq_chart_version }}"
+    release_namespace: "{{ coinops_data_rabbitmq_namespace }}"
+    wait: true
+    timeout: 10m
+    values:
+      global:
+        security:
+          allowInsecureImages: true
+      image:
+        registry: docker.io
+        repository: bitnamilegacy/rabbitmq
+        tag: 4.1.3-debian-12-r1
+      auth:
+        username: "{{ coinops_data_service_secret.rabbitmq_user }}"
+        existingPasswordSecret: "{{ coinops_data_rabbitmq_credentials_secret_name }}"
+        existingSecretPasswordKey: rabbitmq-password
+      persistence:
+        enabled: true
+        size: "{{ coinops_data_rabbitmq_storage_size }}"
+  no_log: true
+
+- name: Install Redis with Helm
+  kubernetes.core.helm:
+    kubeconfig: "{{ coinops_data_kubeconfig }}"
+    name: "{{ coinops_data_redis_release_name }}"
+    chart_ref: "{{ coinops_data_redis_chart_ref }}"
+    chart_version: "{{ coinops_data_redis_chart_version }}"
+    release_namespace: "{{ coinops_data_redis_namespace }}"
+    wait: true
+    timeout: 10m
+    values:
+      global:
+        security:
+          allowInsecureImages: true
+      image:
+        registry: docker.io
+        repository: bitnamilegacy/redis
+        tag: 8.2.1-debian-12-r0
+      architecture: standalone
+      auth:
+        enabled: true
+        existingSecret: "{{ coinops_data_redis_credentials_secret_name }}"
+        existingSecretPasswordKey: redis-password
+      master:
+        persistence:
+          enabled: true
+          size: "{{ coinops_data_redis_storage_size }}"
+  no_log: true
+
+- name: Read CoinOps PostgreSQL pods
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ coinops_data_kubeconfig }}"
+    api_version: v1
+    kind: Pod
+    namespace: "{{ coinops_data_postgres_namespace }}"
+  register: coinops_data_postgres_pods
+
+- name: Show CoinOps PostgreSQL pod names
+  debug:
+    msg: "{{ coinops_data_postgres_pods.resources | map(attribute='metadata.name') | list }}"
+
+- name: Read CoinOps RabbitMQ pods
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ coinops_data_kubeconfig }}"
+    api_version: v1
+    kind: Pod
+    namespace: "{{ coinops_data_rabbitmq_namespace }}"
+  register: coinops_data_rabbitmq_pods
+
+- name: Show CoinOps RabbitMQ pod names
+  debug:
+    msg: "{{ coinops_data_rabbitmq_pods.resources | map(attribute='metadata.name') | list }}"
+
+- name: Read CoinOps Redis pods
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ coinops_data_kubeconfig }}"
+    api_version: v1
+    kind: Pod
+    namespace: "{{ coinops_data_redis_namespace }}"
+  register: coinops_data_redis_pods
+
+- name: Show CoinOps Redis pod names
+  debug:
+    msg: "{{ coinops_data_redis_pods.resources | map(attribute='metadata.name') | list }}"

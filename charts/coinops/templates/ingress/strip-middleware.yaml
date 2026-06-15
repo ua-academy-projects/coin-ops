@@ -1,0 +1,16 @@
+{{- if .Values.ingress.enabled -}}
+{{- range $key, $mw := .Values.ingress.middlewares }}
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ $mw.name }}
+  namespace: {{ $.Values.global.backendNamespace }}
+  labels:
+    {{- include "coinops.labels" (dict "ctx" $ "component" $mw.name) | nindent 4 }}
+spec:
+  stripPrefix:
+    prefixes:
+      - {{ $mw.prefix }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,11 @@
+---
+# Deploy CoinOps to the manually-created Azure VM with Docker Compose.
+#
+# Run:
+#   ansible-playbook -i ansible/inventory.azure-vm ansible/azure-vm-deploy.yml
+
+- name: Deploy CoinOps on Azure VM
+  hosts: azure_vm
+  become: yes
+  roles:
+    - azure_vm_app

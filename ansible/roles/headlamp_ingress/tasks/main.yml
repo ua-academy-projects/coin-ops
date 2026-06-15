@@ -1,0 +1,19 @@
+---
+- name: Apply Headlamp ingress
+  kubernetes.core.k8s:
+    kubeconfig: "{{ platform_kubeconfig }}"
+    state: present
+    definition: "{{ lookup('template', role_path ~ '/templates/ingress.yml.j2') | from_yaml }}"
+
+- name: Read Headlamp certificate
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ platform_kubeconfig }}"
+    api_version: cert-manager.io/v1
+    kind: Certificate
+    namespace: "{{ headlamp_ingress_namespace }}"
+    name: "{{ headlamp_ingress_tls_secret_name }}"
+  register: headlamp_ingress_certificate
+
+- name: Show Headlamp certificate status
+  debug:
+    var: headlamp_ingress_certificate.resources[0].status.conditions | default([])

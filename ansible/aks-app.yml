@@ -1,0 +1,44 @@
+---
+# Deploy CoinOps into an existing AKS cluster.
+#
+# Run:
+#   ansible-playbook -i ansible/inventory.aks ansible/aks-app.yml
+#   ansible-playbook -i ansible/inventory.aks ansible/aks-app.yml --tags data
+#   ansible-playbook -i ansible/inventory.aks ansible/aks-app.yml --tags app
+#   ansible-playbook -i ansible/inventory.aks ansible/aks-app.yml --tags network-policy
+#
+# Pre-reqs:
+#   - AKS cluster is provisioned.
+#   - Platform playbook (aks-platform.yml) has been run so cert-manager + ClusterIssuer exist.
+#   - GCP Secret Manager has `coinops-db-secrets` and `coinops-service-secrets`.
+
+- name: Deploy CoinOps on AKS
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - role: cnpg_operator
+      tags:
+        - cnpg
+        - data
+
+    - role: coinops_data
+      tags:
+        - data
+
+    - role: coinops_app_chart
+      tags:
+        - app
+        - chart
+        - backend
+        - frontend
+        - ingress
+        - proxy
+        - history
+        - ui
+
+    - role: coinops_network_policy
+      tags:
+        - network-policy
+        - netpol
+        - security

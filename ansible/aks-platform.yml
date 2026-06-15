@@ -1,0 +1,39 @@
+---
+# AKS platform components.
+#
+# Run:
+#   ansible-playbook -i ansible/inventory.aks ansible/aks-platform.yml
+#
+# Tags:
+#   --tags cert-manager   install cert-manager only
+#   --tags issuer         create ClusterIssuer (Let's Encrypt + Cloudflare DNS)
+#
+# Pre-reqs:
+#   - AKS cluster is provisioned (see gcp-terraform-bootstrap).
+#   - `platform_kubeconfig` resolves to the AKS admin kubeconfig.
+#   - Cloudflare API token exists in GCP Secret Manager (cloudflare-api-token).
+
+- name: Install platform components on AKS
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - role: traefik_install
+      tags:
+        - traefik
+        - ingress
+
+    - role: cert_manager
+      tags:
+        - cert-manager
+        - tls
+
+    - role: cert_manager_issuer
+      tags:
+        - issuer
+        - tls
+
+    - role: jenkins_install
+      tags:
+        - jenkins
+        - cicd

@@ -1,0 +1,42 @@
+---
+- name: Ensure homepage namespace exists
+  kubernetes.core.k8s:
+    kubeconfig: "{{ platform_kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ homepage_namespace }}"
+
+- name: Apply homepage configmap
+  kubernetes.core.k8s:
+    kubeconfig: "{{ platform_kubeconfig }}"
+    state: present
+    definition: "{{ lookup('template', role_path ~ '/templates/configmap.yml.j2') | from_yaml }}"
+
+- name: Apply homepage deployment
+  kubernetes.core.k8s:
+    kubeconfig: "{{ platform_kubeconfig }}"
+    state: present
+    force: true
+    definition: "{{ lookup('template', role_path ~ '/templates/deployment.yml.j2') | from_yaml }}"
+
+- name: Apply homepage service
+  kubernetes.core.k8s:
+    kubeconfig: "{{ platform_kubeconfig }}"
+    state: present
+    definition: "{{ lookup('template', role_path ~ '/templates/service.yml.j2') | from_yaml }}"
+
+- name: Wait for homepage deployment rollout
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ platform_kubeconfig }}"
+    api_version: apps/v1
+    kind: Deployment
+    namespace: "{{ homepage_namespace }}"
+    name: "{{ homepage_app_name }}"
+    wait: true
+    wait_condition:
+      type: Available
+      status: "True"
+    wait_timeout: 180

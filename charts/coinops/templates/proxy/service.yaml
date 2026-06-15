@@ -1,0 +1,17 @@
+{{- if .Values.proxy.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.proxy.name }}
+  namespace: {{ .Values.global.backendNamespace }}
+  labels:
+    {{- include "coinops.labels" (dict "ctx" . "component" .Values.proxy.name) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "coinops.selectorLabels" (dict "ctx" . "component" .Values.proxy.name) | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.proxy.servicePort }}
+      targetPort: http
+{{- end }}

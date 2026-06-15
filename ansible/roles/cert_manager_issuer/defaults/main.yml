@@ -1,0 +1,14 @@
+---
+platform_kubeconfig: "{{ lookup('env', 'KUBECONFIG') | default(lookup('env', 'HOME') ~ '/.kube/config', true) }}"
+
+cert_manager_namespace: cert-manager
+cert_manager_gcp_project_id: project-8888321c-54a9-4dac-86d
+cert_manager_cloudflare_secret_manager_name: cloudflare-api-token
+cert_manager_cloudflare_k8s_secret_name: cloudflare-api-token-secret
+cert_manager_cloudflare_k8s_secret_key: api-token
+
+cert_manager_acme_email: dem2bb1@gmail.com
+cert_manager_cloudflare_zone: kazachuk-k3s.pp.ua
+cert_manager_issuer_name: letsencrypt-cloudflare-production
+cert_manager_acme_server: https://acme-v02.api.letsencrypt.org/directory
+cert_manager_acme_private_key_secret_name: letsencrypt-cloudflare-production-account-key

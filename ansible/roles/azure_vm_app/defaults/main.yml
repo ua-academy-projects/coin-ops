@@ -1,0 +1,31 @@
+---
+azure_vm_app_name: coinops
+azure_vm_app_dir: /opt/coinops
+azure_vm_app_domain: coinops-kazachuk.pp.ua
+azure_vm_app_acme_email: you@example.com
+azure_vm_app_gcp_project_id: project-8888321c-54a9-4dac-86d
+azure_vm_app_db_gcp_secret_name: coinops-db-secrets
+azure_vm_app_service_gcp_secret_name: coinops-service-secrets
+
+azure_vm_app_image_registry: ghcr.io/ua-academy-projects
+azure_vm_app_image_tag: dev-latest
+
+azure_vm_app_postgres_db: cognitor
+azure_vm_app_postgres_user: coinops12
+azure_vm_app_postgres_password: ""
+azure_vm_app_postgres_host: pg-coinops.postgres.database.azure.com
+azure_vm_app_postgres_port: 5432
+azure_vm_app_postgres_sslmode: require
+azure_vm_app_database_url: ""
+azure_vm_app_rabbitmq_user: coinops
+azure_vm_app_rabbitmq_password: ""
+azure_vm_app_redis_password: ""
+
+# Optional local overrides. By default the role reads the existing GCP Secret
+# Manager secrets and uses these only as a fallback/override.
+azure_vm_app_ghcr_username: "{{ lookup('env', 'GHCR_USERNAME') }}"
+azure_vm_app_ghcr_token: "{{ lookup('env', 'GHCR_TOKEN') }}"
+azure_vm_app_env_azure_postgres_password: "{{ lookup('env', 'AZURE_POSTGRES_PASSWORD') }}"
+azure_vm_app_env_postgres_password: "{{ lookup('env', 'POSTGRES_PASSWORD') }}"
+azure_vm_app_env_rabbitmq_password: "{{ lookup('env', 'RABBITMQ_PASSWORD') }}"
+azure_vm_app_env_redis_password: "{{ lookup('env', 'REDIS_PASSWORD') }}"

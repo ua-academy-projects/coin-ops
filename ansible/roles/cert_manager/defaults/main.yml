@@ -1,0 +1,13 @@
+---
+platform_kubeconfig: "{{ lookup('env', 'KUBECONFIG') | default(lookup('env', 'HOME') ~ '/.kube/config', true) }}"
+
+cert_manager_release_name: cert-manager
+cert_manager_namespace: cert-manager
+cert_manager_chart_ref: oci://quay.io/jetstack/charts/cert-manager
+cert_manager_chart_version: v1.20.2
+cert_manager_wait: true
+cert_manager_wait_timeout: 600s
+cert_manager_values:
+  crds:
+    enabled: true
+

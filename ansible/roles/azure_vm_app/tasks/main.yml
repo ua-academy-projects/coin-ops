@@ -1,0 +1,164 @@
+---
+- name: Read CoinOps database secrets from GCP Secret Manager
+  ansible.builtin.command: >-
+    gcloud secrets versions access latest
+    --project {{ azure_vm_app_gcp_project_id }}
+    --secret {{ azure_vm_app_db_gcp_secret_name }}
+  delegate_to: localhost
+  become: false
+  register: azure_vm_app_db_secret_raw
+  changed_when: false
+  no_log: true
+
+- name: Read CoinOps service secrets from GCP Secret Manager
+  ansible.builtin.command: >-
+    gcloud secrets versions access latest
+    --project {{ azure_vm_app_gcp_project_id }}
+    --secret {{ azure_vm_app_service_gcp_secret_name }}
+  delegate_to: localhost
+  become: false
+  register: azure_vm_app_service_secret_raw
+  changed_when: false
+  no_log: true
+
+- name: Store CoinOps secrets in memory
+  ansible.builtin.set_fact:
+    azure_vm_app_db_secret: "{{ azure_vm_app_db_secret_raw.stdout | from_json }}"
+    azure_vm_app_service_secret: "{{ azure_vm_app_service_secret_raw.stdout | from_json }}"
+  no_log: true
+
+- name: Resolve runtime secret values
+  ansible.builtin.set_fact:
+    azure_vm_app_runtime_postgres_db: "{{ azure_vm_app_postgres_db | default(azure_vm_app_db_secret.db_name, true) }}"
+    azure_vm_app_runtime_postgres_user: "{{ azure_vm_app_postgres_user | default(azure_vm_app_db_secret.db_user, true) }}"
+    azure_vm_app_runtime_postgres_password: "{{ azure_vm_app_postgres_password | default(azure_vm_app_env_azure_postgres_password | default(azure_vm_app_db_secret.db_password | default(azure_vm_app_env_postgres_password, true), true), true) }}"
+    azure_vm_app_runtime_postgres_host: "{{ azure_vm_app_postgres_host }}"
+    azure_vm_app_runtime_postgres_port: "{{ azure_vm_app_postgres_port }}"
+    azure_vm_app_runtime_postgres_sslmode: "{{ azure_vm_app_postgres_sslmode }}"
+    azure_vm_app_runtime_rabbitmq_user: "{{ azure_vm_app_rabbitmq_user | default(azure_vm_app_service_secret.rabbitmq_user, true) }}"
+    azure_vm_app_runtime_rabbitmq_password: "{{ azure_vm_app_rabbitmq_password | default(azure_vm_app_service_secret.rabbitmq_password | default(azure_vm_app_env_rabbitmq_password, true), true) }}"
+    azure_vm_app_runtime_redis_password: "{{ azure_vm_app_redis_password | default(azure_vm_app_service_secret.redis_password | default(azure_vm_app_env_redis_password, true), true) }}"
+    azure_vm_app_runtime_ghcr_username: "{{ azure_vm_app_ghcr_username | default(azure_vm_app_service_secret.ghcr_username, true) }}"
+    azure_vm_app_runtime_ghcr_token: "{{ azure_vm_app_ghcr_token | default(azure_vm_app_service_secret.ghcr_token, true) }}"
+  no_log: true
+
+- name: Resolve runtime database URL
+  ansible.builtin.set_fact:
+    azure_vm_app_runtime_database_url: >-
+      {{
+        azure_vm_app_database_url
+        if azure_vm_app_database_url | length > 0
+        else
+        'postgresql://' ~ (azure_vm_app_runtime_postgres_user | urlencode) ~ ':' ~
+        (azure_vm_app_runtime_postgres_password | urlencode) ~ '@' ~
+        azure_vm_app_runtime_postgres_host ~ ':' ~
+        azure_vm_app_runtime_postgres_port ~ '/' ~
+        (azure_vm_app_runtime_postgres_db | urlencode) ~
+        '?sslmode=' ~ azure_vm_app_runtime_postgres_sslmode
+      }}
+  no_log: true
+
+- name: Resolve runtime service URLs
+  ansible.builtin.set_fact:
+    azure_vm_app_runtime_rabbitmq_url: >-
+      {{
+        'amqp://' ~ (azure_vm_app_runtime_rabbitmq_user | urlencode) ~ ':' ~
+        (azure_vm_app_runtime_rabbitmq_password | urlencode) ~
+        '@rabbitmq:5672/'
+      }}
+    azure_vm_app_runtime_redis_url: >-
+      {{
+        'redis://:' ~ (azure_vm_app_runtime_redis_password | urlencode) ~
+        '@redis:6379/0'
+      }}
+  no_log: true
+
+- name: Validate required secret inputs
+  ansible.builtin.assert:
+    that:
+      - azure_vm_app_runtime_postgres_db | length > 0
+      - azure_vm_app_runtime_postgres_user | length > 0
+      - azure_vm_app_runtime_postgres_password | length > 0
+      - azure_vm_app_runtime_postgres_host | length > 0
+      - azure_vm_app_runtime_database_url | length > 0
+      - azure_vm_app_runtime_rabbitmq_url | length > 0
+      - azure_vm_app_runtime_redis_url | length > 0
+      - azure_vm_app_runtime_rabbitmq_user | length > 0
+      - azure_vm_app_runtime_rabbitmq_password | length > 0
+      - azure_vm_app_runtime_redis_password | length > 0
+      - azure_vm_app_runtime_ghcr_username | length > 0
+      - azure_vm_app_runtime_ghcr_token | length > 0
+    fail_msg: |
+      Missing required secrets. Export these before running:
+        GHCR_USERNAME
+        GHCR_TOKEN
+        POSTGRES_PASSWORD
+        RABBITMQ_PASSWORD
+        REDIS_PASSWORD
+  no_log: true
+
+- name: Create application directory
+  ansible.builtin.file:
+    path: "{{ azure_vm_app_dir }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0750"
+
+- name: Upload Docker Compose file
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../deployments/azure-vm/docker-compose.yml"
+    dest: "{{ azure_vm_app_dir }}/docker-compose.yml"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0640"
+
+- name: Upload Caddyfile
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../deployments/azure-vm/Caddyfile"
+    dest: "{{ azure_vm_app_dir }}/Caddyfile"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0640"
+
+- name: Render runtime environment file
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ azure_vm_app_dir }}/.env"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0600"
+  no_log: true
+
+- name: Log in to GHCR
+  community.docker.docker_login:
+    registry_url: ghcr.io
+    username: "{{ azure_vm_app_runtime_ghcr_username }}"
+    password: "{{ azure_vm_app_runtime_ghcr_token }}"
+    reauthorize: true
+  no_log: true
+
+- name: Pull CoinOps images
+  ansible.builtin.command:
+    cmd: docker compose pull
+    chdir: "{{ azure_vm_app_dir }}"
+  changed_when: "'Downloaded newer image' in azure_vm_app_pull.stdout or 'Pulling' in azure_vm_app_pull.stdout"
+  register: azure_vm_app_pull
+
+- name: Start CoinOps stack
+  ansible.builtin.command:
+    cmd: docker compose up -d
+    chdir: "{{ azure_vm_app_dir }}"
+  register: azure_vm_app_up
+  changed_when: "'Started' in azure_vm_app_up.stdout or 'Created' in azure_vm_app_up.stdout or 'Recreated' in azure_vm_app_up.stdout"
+
+- name: Show running containers
+  ansible.builtin.command:
+    cmd: docker compose ps
+    chdir: "{{ azure_vm_app_dir }}"
+  register: azure_vm_app_ps
+  changed_when: false
+
+- name: Print running containers
+  ansible.builtin.debug:
+    var: azure_vm_app_ps.stdout_lines

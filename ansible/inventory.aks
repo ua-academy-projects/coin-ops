@@ -1,0 +1,25 @@
+; ============================================================================
+; AKS local inventory.
+;
+; This inventory runs platform + app playbooks against a managed AKS cluster.
+; Unlike inventory.k3s.gcp, no VMs are SSH'd — playbooks operate entirely
+; through the Kubernetes API using the kubeconfig provided in vars.
+;
+; The kubeconfig path here points at the file written by Terraform in
+; gcp-terraform-bootstrap (output `kubeconfig_path`). Override with
+; `--extra-vars platform_kubeconfig=...` if you keep it elsewhere.
+; ============================================================================
+
+[local]
+localhost ansible_connection=local
+
+[local:vars]
+ansible_python_interpreter=/usr/bin/python3
+platform_kubeconfig=~/gcp-terraform-bootstrap/infrastructure/environments/learning/kubeconfig.aks
+coinops_data_kubeconfig=~/gcp-terraform-bootstrap/infrastructure/environments/learning/kubeconfig.aks
+
+; AKS-specific overrides for the CNPG postgres cluster: a single replica fits
+; the tiny B2s_v2 node, and AKS ships the `default` Standard-SSD StorageClass
+; (k3s's `local-path` doesn't exist here).
+coinops_data_postgres_instances=1
+coinops_data_postgres_storage_class=default

@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ homepage_ingress_name }}
+  namespace: {{ homepage_namespace }}
+  annotations:
+    cert-manager.io/cluster-issuer: {{ homepage_ingress_cluster_issuer_name }}
+spec:
+  ingressClassName: {{ homepage_ingress_class_name }}
+  tls:
+    - hosts:
+        - {{ homepage_domain }}
+      secretName: {{ homepage_ingress_tls_secret_name }}
+  rules:
+    - host: {{ homepage_domain }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ homepage_service_name }}
+                port:
+                  number: {{ homepage_service_port }}
+

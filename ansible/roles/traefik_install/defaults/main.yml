@@ -1,0 +1,45 @@
+---
+platform_kubeconfig: "{{ lookup('env', 'KUBECONFIG') | default(lookup('env', 'HOME') ~ '/.kube/config', true) }}"
+
+traefik_release_name: traefik
+traefik_namespace: traefik
+traefik_chart_repo_url: https://traefik.github.io/charts
+traefik_chart_ref: traefik/traefik
+traefik_chart_version: 33.2.1
+traefik_wait: true
+traefik_wait_timeout: 600s
+
+# Helm values for Traefik. Defaults:
+# - Single replica (we run one node, no point in 2+).
+# - LoadBalancer service that AKS provisions via Standard Azure LB.
+# - IngressClass `traefik` registered as default in the cluster.
+# - CRDs (Middleware, IngressRoute, etc.) installed so coinops middlewares work.
+traefik_values:
+  deployment:
+    replicas: 1
+  service:
+    type: LoadBalancer
+  ingressClass:
+    enabled: true
+    isDefaultClass: true
+    name: traefik
+  providers:
+    kubernetesCRD:
+      enabled: true
+      allowCrossNamespace: true
+    kubernetesIngress:
+      enabled: true
+      publishedService:
+        enabled: true
+  ports:
+    web:
+      redirectTo:
+        port: websecure
+    websecure:
+      tls:
+        enabled: true
+  logs:
+    general:
+      level: INFO
+    access:
+      enabled: true

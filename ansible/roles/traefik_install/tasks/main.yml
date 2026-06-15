@@ -1,0 +1,34 @@
+---
+- name: Ensure Traefik Helm repository is added
+  kubernetes.core.helm_repository:
+    name: traefik
+    repo_url: "{{ traefik_chart_repo_url }}"
+
+- name: Install Traefik with Helm
+  kubernetes.core.helm:
+    kubeconfig: "{{ platform_kubeconfig }}"
+    name: "{{ traefik_release_name }}"
+    chart_ref: "{{ traefik_chart_ref }}"
+    chart_version: "{{ traefik_chart_version }}"
+    release_namespace: "{{ traefik_namespace }}"
+    create_namespace: true
+    release_values: "{{ traefik_values }}"
+    wait: "{{ traefik_wait }}"
+    wait_timeout: "{{ traefik_wait_timeout }}"
+    state: present
+
+- name: Wait for Traefik LoadBalancer to receive an external IP
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ platform_kubeconfig }}"
+    api_version: v1
+    kind: Service
+    namespace: "{{ traefik_namespace }}"
+    name: "{{ traefik_release_name }}"
+  register: traefik_service
+  retries: 60
+  delay: 5
+  until: traefik_service.resources[0].status.loadBalancer.ingress[0].ip is defined
+
+- name: Show Traefik public IP
+  debug:
+    msg: "Traefik LoadBalancer external IP: {{ traefik_service.resources[0].status.loadBalancer.ingress[0].ip }}. Point your DNS A record here."

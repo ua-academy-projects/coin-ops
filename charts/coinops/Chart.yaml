@@ -1,0 +1,15 @@
+apiVersion: v2
+name: coinops
+description: CoinOps application stack (proxy, history API, history consumer, UI, ingress).
+type: application
+version: 0.1.0
+appVersion: "dev-latest"
+home: https://coinops.kazachuk-k3s.pp.ua
+sources:
+  - https://github.com/ua-academy-projects/coin-ops
+maintainers:
+  - name: CoinOps DevOps
+keywords:
+  - coinops
+  - k3s
+  - traefik

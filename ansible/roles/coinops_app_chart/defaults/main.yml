@@ -1,0 +1,36 @@
+---
+# CoinOps app Helm chart wrapper.
+# Replaces former roles: coinops_proxy, coinops_history, coinops_ui, coinops_ingress.
+# The chart lives in `charts/coinops/` at the repo root.
+# Role variables are prefixed with coinops_app_chart_ by convention.
+
+coinops_app_chart_kubeconfig: "{{ lookup('env', 'KUBECONFIG') | default('~/.kube/config', true) | expanduser }}"
+
+coinops_app_chart_release_name: coinops
+coinops_app_chart_release_namespace: coinops-backend
+
+# Path relative to the repository root.
+coinops_app_chart_chart_ref: "{{ playbook_dir }}/../charts/coinops"
+
+# Wait for Helm to mark the release as ready (pods Ready, etc).
+coinops_app_chart_wait: true
+coinops_app_chart_wait_timeout: 5m
+
+# Component toggles — forwarded into chart values.
+coinops_app_chart_proxy_enabled: true
+coinops_app_chart_history_api_enabled: true
+coinops_app_chart_history_consumer_enabled: true
+coinops_app_chart_ui_enabled: true
+coinops_app_chart_ingress_enabled: true
+
+# Image tag override. Empty string means "use the chart's default (global.imageTag)".
+coinops_app_chart_image_tag: ""
+
+# Public ingress hostname. Empty string means "use the chart's default".
+coinops_app_chart_ingress_domain: ""
+
+# Namespaces in which the chart will create resources.
+# These are NOT created by this role — they are created by `coinops_data`.
+coinops_app_chart_backend_namespace: coinops-backend
+coinops_app_chart_frontend_namespace: coinops-frontend
+coinops_app_chart_backend_env_secret_name: coinops-backend-env

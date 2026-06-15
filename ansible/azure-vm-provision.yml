@@ -1,0 +1,40 @@
+---
+# Prepare the manually-created Azure VM for Docker Compose deployments.
+#
+# Run:
+#   ansible-playbook -i ansible/inventory.azure-vm ansible/azure-vm-provision.yml
+
+- name: Provision Azure VM for CoinOps
+  hosts: azure_vm
+  become: yes
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install Docker and Compose plugin from Ubuntu packages
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - docker.io
+          - docker-compose-v2
+          - python3
+          - python3-docker
+        state: present
+
+    - name: Enable and start Docker
+      ansible.builtin.service:
+        name: docker
+        enabled: yes
+        state: started
+
+    - name: Allow deployment user to run Docker
+      ansible.builtin.user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+
+    - name: Reconnect so Docker group membership is active
+      ansible.builtin.meta: reset_connection

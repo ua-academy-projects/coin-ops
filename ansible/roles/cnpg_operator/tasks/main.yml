@@ -1,0 +1,26 @@
+---
+- name: Install CNPG operator with Helm
+  kubernetes.core.helm:
+    kubeconfig: "{{ cnpg_operator_kubeconfig }}"
+    name: "{{ cnpg_operator_release_name }}"
+    chart_ref: "{{ cnpg_operator_chart_ref }}"
+    chart_repo_url: "{{ cnpg_operator_chart_repo_url }}"
+    chart_version: "{{ cnpg_operator_chart_version }}"
+    release_namespace: "{{ cnpg_operator_namespace }}"
+    create_namespace: true
+    wait: true
+    timeout: 5m
+
+- name: Read CNPG operator pods
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ cnpg_operator_kubeconfig }}"
+    api_version: v1
+    kind: Pod
+    namespace: "{{ cnpg_operator_namespace }}"
+    label_selectors:
+      - app.kubernetes.io/name=cloudnative-pg
+  register: cnpg_operator_pods
+
+- name: Show CNPG operator pod names
+  debug:
+    msg: "{{ cnpg_operator_pods.resources | map(attribute='metadata.name') | list }}"

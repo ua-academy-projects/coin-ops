@@ -1,0 +1,8 @@
+[azure_vm]
+vm-coinops ansible_host=10.10.0.5 ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyCommand="ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=yes -i ~/.ssh/azure_coinops -p 47832 -W %h:%p dem2bb@68.210.97.218"'
+
+[azure_vm:vars]
+ansible_user=dem2bb
+ansible_ssh_private_key_file=~/.ssh/azure_coinops
+ansible_port=47832
+ansible_python_interpreter=/usr/bin/python3

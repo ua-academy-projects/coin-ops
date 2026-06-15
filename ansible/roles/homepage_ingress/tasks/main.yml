@@ -1,0 +1,20 @@
+---
+- name: Apply homepage ingress
+  kubernetes.core.k8s:
+    kubeconfig: "{{ platform_kubeconfig }}"
+    state: present
+    definition: "{{ lookup('template', role_path ~ '/templates/ingress.yml.j2') | from_yaml }}"
+
+- name: Read homepage certificate
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ platform_kubeconfig }}"
+    api_version: cert-manager.io/v1
+    kind: Certificate
+    namespace: "{{ homepage_namespace }}"
+    name: "{{ homepage_ingress_tls_secret_name }}"
+  register: homepage_certificate
+
+- name: Show homepage certificate status
+  debug:
+    var: homepage_certificate.resources[0].status.conditions | default([])
+

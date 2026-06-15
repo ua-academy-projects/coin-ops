@@ -1,0 +1,140 @@
+name: coinops
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    profiles:
+      - local-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - default
+      - observability
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  coinops-proxy:
+    image: ${IMAGE_REGISTRY}/coin-ops-proxy:${IMAGE_TAG}
+    restart: unless-stopped
+    environment:
+      PORT: 8080
+      RUNTIME_BACKEND: external
+      DATABASE_URL: ${DATABASE_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      REDIS_URL: ${REDIS_URL}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  coinops-history-api:
+    image: ${IMAGE_REGISTRY}/coin-ops-history-api:${IMAGE_TAG}
+    restart: unless-stopped
+    environment:
+      PORT: 8000
+      DATABASE_URL: ${DATABASE_URL}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  coinops-history-consumer:
+    image: ${IMAGE_REGISTRY}/coin-ops-history-consumer:${IMAGE_TAG}
+    restart: unless-stopped
+    environment:
+      RUNTIME_BACKEND: external
+      DATABASE_URL: ${DATABASE_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  coinops-ui:
+    image: ${IMAGE_REGISTRY}/coin-ops-ui:${IMAGE_TAG}
+    restart: unless-stopped
+    environment:
+      PROXY_URL: /api
+      HISTORY_URL: /history-api
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    depends_on:
+      coinops-proxy:
+        condition: service_started
+      coinops-history-api:
+        condition: service_started
+      coinops-ui:
+        condition: service_started
+    environment:
+      COINOPS_DOMAIN: ${COINOPS_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - default
+      - observability
+
+volumes:
+  postgres-data:
+  rabbitmq-data:
+  redis-data:
+  caddy-data:
+  caddy-config:
+
+networks:
+  default:
+  observability:
+    external: true
+    name: coinops-observability_observability

@@ -1,0 +1,31 @@
+CoinOps {{ .Chart.AppVersion }} has been deployed as release {{ .Release.Name }}.
+
+Components installed:
+{{- if .Values.proxy.enabled }}
+  - proxy            ({{ .Values.proxy.replicas }} replicas) -> svc/{{ .Values.proxy.name }} in {{ .Values.global.backendNamespace }}
+{{- end }}
+{{- if .Values.history.api.enabled }}
+  - history API      ({{ .Values.history.api.replicas }} replicas) -> svc/{{ .Values.history.api.name }} in {{ .Values.global.backendNamespace }}
+{{- end }}
+{{- if .Values.history.consumer.enabled }}
+  - history consumer ({{ .Values.history.consumer.replicas }} replicas) in {{ .Values.global.backendNamespace }}
+{{- end }}
+{{- if .Values.ui.enabled }}
+  - UI               ({{ .Values.ui.replicas }} replicas) -> svc/{{ .Values.ui.name }} in {{ .Values.global.frontendNamespace }}
+{{- end }}
+{{- if .Values.ingress.enabled }}
+  - ingress at https://{{ .Values.ingress.domain }}/
+{{- end }}
+
+Quick checks:
+
+  kubectl -n {{ .Values.global.backendNamespace }} get pods
+  kubectl -n {{ .Values.global.frontendNamespace }} get pods
+  kubectl -n {{ .Values.global.frontendNamespace }} get certificate
+  curl -I https://{{ .Values.ingress.domain }}/
+
+Manage this release:
+
+  helm status   {{ .Release.Name }} -n {{ .Release.Namespace }}
+  helm history  {{ .Release.Name }} -n {{ .Release.Namespace }}
+  helm rollback {{ .Release.Name }} <REVISION> -n {{ .Release.Namespace }}
