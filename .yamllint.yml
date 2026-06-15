@@ -1,0 +1,19 @@
+# .yamllint.yml — repo-wide YAML style gate (used by .github/workflows/validate.yml)
+extends: relaxed
+rules:
+  line-length:
+    max: 200
+    level: warning
+  comments:
+    min-spaces-from-content: 1
+  truthy:
+    allowed-values: ["true", "false", "on"]   # GitHub Actions `on:`
+  document-start: disable
+  empty-lines:
+    max: 2
+ignore: |
+  node_modules/
+  **/node_modules/
+  presentation/
+  ui-react/
+  charts/coinops-app/templates/
