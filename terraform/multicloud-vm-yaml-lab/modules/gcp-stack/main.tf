@@ -8,6 +8,9 @@ locals {
   cloud_native  = try(local.stack.runtime.mode, "external") == "cloud_native"
   build_managed = local.cloud_native && !local.k3s_only
 
+  # Managed Kubernetes (GKE) — additive, independent of k3s_only.
+  gke_enabled = try(local.stack.gcp.gke.enabled, false)
+
   # No app nodes in k3s-only mode, so no app firewall tags / LB targets.
   effective_app_names = local.k3s_only ? [] : local.stack.app_names
 
@@ -86,6 +89,17 @@ module "network" {
   name_prefix = local.stack.name_prefix
   network     = local.stack.network
   region      = local.stack.gcp.region
+}
+
+module "gke" {
+  count  = local.gke_enabled ? 1 : 0
+  source = "./modules/gke"
+
+  name_prefix       = local.stack.name_prefix
+  project_id        = local.stack.gcp.project_id
+  region            = local.stack.gcp.region
+  network_self_link = module.network.network_self_link
+  gke               = local.stack.gcp.gke
 }
 
 module "security" {

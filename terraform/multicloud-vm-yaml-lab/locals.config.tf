@@ -297,6 +297,16 @@ locals {
       zone       = local.gcp_zone
       zones      = local.gcp_zones
       k3s_only   = try(local.config.clouds.gcp.k3s_only, false)
+      gke = {
+        enabled           = try(local.config.clouds.gcp.gke.enabled, false)
+        node_machine_type = try(local.config.clouds.gcp.gke.node_machine_type, "e2-medium")
+        min_nodes         = try(local.config.clouds.gcp.gke.min_nodes, 1)
+        max_nodes         = try(local.config.clouds.gcp.gke.max_nodes, 3)
+        release_channel   = try(local.config.clouds.gcp.gke.release_channel, "REGULAR")
+        subnet_cidr       = try(local.config.clouds.gcp.gke.subnet_cidr, "10.10.30.0/24")
+        pods_cidr         = try(local.config.clouds.gcp.gke.pods_cidr, "10.20.0.0/16")
+        services_cidr     = try(local.config.clouds.gcp.gke.services_cidr, "10.30.0.0/20")
+      }
     }
 
     azure = {

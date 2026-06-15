@@ -30,3 +30,11 @@ output "runtime" {
 output "secret_refs" {
   value = module.access_outputs.secret_refs
 }
+
+output "gke" {
+  value = local.gke_enabled ? {
+    cluster_name        = module.gke[0].cluster_name
+    location            = module.gke[0].location
+    get_credentials_cmd = module.gke[0].get_credentials_command
+  } : null
+}

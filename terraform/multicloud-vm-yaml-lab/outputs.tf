@@ -92,3 +92,8 @@ output "rabbitmq_password_secret_ref" {
 output "ghcr_token_secret_ref" {
   value = try(local.backend_secret_refs.ghcr_token, null)
 }
+
+output "gke" {
+  description = "GKE cluster info + the gcloud get-credentials command (null unless clouds.gcp.gke.enabled)."
+  value       = try(module.gcp[0].gke, null)
+}
