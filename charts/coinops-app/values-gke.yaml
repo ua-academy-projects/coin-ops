@@ -1,0 +1,21 @@
+# values-gke.yaml — overrides for deploying coinops-app to GKE (managed control plane).
+# Apply:
+#   helm upgrade --install coinops-app charts/coinops-app \
+#     -f charts/coinops-app/values.yaml -f charts/coinops-app/values-gke.yaml \
+#     --set image.tag=<commit SHA>
+image:
+  registry: ghcr.io/ua-academy-projects
+  # tag is set by the pipeline (Jenkins/Cloud Build): --set image.tag=<commit SHA>
+
+# GKE ships its own L7 ingress controller; there is no Traefik / cert-manager /
+# cloudflared on the managed cluster, so use the GCE class.
+ingress:
+  className: gce
+  host: coinops.gke.local
+
+# GKE's default datapath does NOT enforce NetworkPolicy (needs Dataplane V2 / Calico),
+# and the chart's policies hard-code the k3s pod/service CIDRs (10.42/10.43) which differ
+# from this cluster's ranges. Disable here to avoid mis-scoped egress rules.
+# (NetworkPolicy default-deny is showcased on the self-managed k3s chapter.)
+networkPolicy:
+  enabled: false
