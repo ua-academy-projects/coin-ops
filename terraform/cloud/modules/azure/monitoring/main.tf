@@ -189,34 +189,34 @@ resource "azurerm_monitor_metric_alert" "postgresql_failed_connections" {
 }
 
 # -> commented because consumes a lot
-resource "azurerm_application_insights" "this" {
-  count = var.http_availability_tests_enabled ? 1 : 0
-
-  name                = "${var.name}-appinsights"
-  location            = var.location
-  resource_group_name = var.resource_group_name
-  workspace_id        = azurerm_log_analytics_workspace.this.id
-  application_type    = "web"
-}
-
-resource "azurerm_application_insights_standard_web_test" "availability" {
-  for_each = local.availability_tests
-
-  name                    = "${var.name}-${each.key}-availability"
-  resource_group_name     = var.resource_group_name
-  location                = var.location
-  application_insights_id = azurerm_application_insights.this[0].id
-  geo_locations           = ["emea-nl-ams-azr"]
-  frequency               = 300
-  timeout                 = 30
-  enabled                 = true
-
-  request {
-    url       = each.value
-    http_verb = "GET"
-  }
-
-  validation_rules {
-    expected_status_code        = 200
-  }
-}
+# resource "azurerm_application_insights" "this" {
+#   count = var.http_availability_tests_enabled ? 1 : 0
+#
+#   name                = "${var.name}-appinsights"
+#   location            = var.location
+#   resource_group_name = var.resource_group_name
+#   workspace_id        = azurerm_log_analytics_workspace.this.id
+#   application_type    = "web"
+# }
+#
+# resource "azurerm_application_insights_standard_web_test" "availability" {
+#   for_each = local.availability_tests
+#
+#   name                    = "${var.name}-${each.key}-availability"
+#   resource_group_name     = var.resource_group_name
+#   location                = var.location
+#   application_insights_id = azurerm_application_insights.this[0].id
+#   geo_locations           = ["emea-nl-ams-azr"]
+#   frequency               = 300
+#   timeout                 = 30
+#   enabled                 = true
+#
+#   request {
+#     url       = each.value
+#     http_verb = "GET"
+#   }
+#
+#   validation_rules {
+#     expected_status_code        = 200
+#   }
+# }

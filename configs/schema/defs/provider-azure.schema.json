@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coin-ops.local/schema/configs/v1/defs/provider-azure",
+  "title": "Azure Provider Overrides",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "resource_group_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "key_vault_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "location": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

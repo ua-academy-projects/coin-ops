@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coin-ops.local/schema/configs/v1/defs/cloud",
+  "title": "Cloud",
+  "type": "string",
+  "enum": ["gcp", "aws", "azure"]
+}

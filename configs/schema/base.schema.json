@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coin-ops.local/schema/configs/v1/base",
+  "title": "Coin-Ops Base Config",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["cloud", "ssh", "networks"],
+  "properties": {
+    "cloud": {
+      "$ref": "./defs/cloud.schema.json"
+    },
+    "ssh": {
+      "$ref": "./defs/ssh.schema.json"
+    },
+    "deploy": {
+      "$ref": "./defs/deploy.schema.json"
+    },
+    "networks": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "./defs/network.schema.json"
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "azure": {
+          "$ref": "./defs/provider-azure.schema.json"
+        }
+      }
+    }
+  }
+}
