@@ -1,0 +1,25 @@
+---
+# ── ui role defaults ─────────────────────────────────────────────────────
+# Variables consumed by roles/ui/tasks/main.yml and
+# roles/ui/templates/nginx.gateway.conf.j2.
+# Moved here from ansible/group_vars/all/main.yml — ui is the only
+# consumer of app_domain, tls_*, and ui_image.
+ 
+# ── Public entrypoint / TLS ─────────────────────────────────────────────────
+app_domain: "{{ lookup('env', 'APP_DOMAIN') | default('coinops-penina.pp.ua', true) }}"
+tls_mode: "off"
+tls_enabled: false
+tls_cert_dir: /etc/cognitor/tls
+tls_cert_path: "{{ tls_cert_dir }}/coinops.crt"
+tls_key_path: "{{ tls_cert_dir }}/coinops.key"
+ 
+# ── Ports — nginx proxies to these on the proxy/history nodes ──────────────
+proxy_port: 8080
+history_port: 8000
+ 
+# ── Container image ─────────────────────────────────────────────────────────
+image_registry: "{{ lookup('env', 'IMAGE_REGISTRY') | default('ghcr.io/ua-academy-projects', true) }}"
+image_tag: "{{ lookup('env', 'IMAGE_TAG') | default('shabat-latest', true) }}"
+ui_image: "{{ image_registry }}/coin-ops-ui:{{ image_tag }}"
+registry_username: "{{ lookup('env', 'GHCR_USERNAME') | default('', true) }}"
+registry_token: "{{ lookup('env', 'GHCR_TOKEN') | default('', true) }}"

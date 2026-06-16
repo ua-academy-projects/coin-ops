@@ -58,3 +58,13 @@ ansible_ssh_common_args=-o ProxyJump=marta_ops@18.196.82.182:9922 -o StrictHostK
 [k3s_server:vars]
 common_allowed_ports=["9922", "6443", "9345", "10250", "2379", "2380"]
 common_allowed_udp_ports=["8472"]
+
+# Per-group firewall port overrides — moved here from ansible/group_vars/{history,proxy,ui}
+[history:vars]
+common_allowed_ports=[9922, 5672, 15672, 8000]
+
+[proxy:vars]
+common_allowed_ports=[9922, 8080]
+
+[ui:vars]
+common_allowed_ports=[9922, 80, 443]

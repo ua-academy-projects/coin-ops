@@ -1,0 +1,36 @@
+---
+# ── proxy role defaults ─────────────────────────────────────────────────────
+# Variables consumed by roles/proxy/templates/proxy.env.j2.
+# Moved here from ansible/group_vars/all/main.yml — proxy is the only
+# consumer of proxy_port, proxy_image and proxy_database_url, so they live
+# next to the role that uses them instead of in a shared all-hosts file.
+ 
+# ── Secrets (read from environment, never hardcoded) ───────────────────────
+rabbitmq_password: "{{ lookup('env', 'RABBITMQ_PASSWORD') }}"
+db_password: "{{ lookup('env', 'DB_PASSWORD') }}"
+ 
+# ── Service accounts — shared contract with history/k3s_coinops ────────────
+rabbitmq_user: cognitor
+db_name: cognitor
+db_user: cognitor
+ 
+# ── Runtime ──────────────────────────────────────────────────────────────
+runtime_backend: "{{ lookup('env', 'RUNTIME_BACKEND') | default('external', true) }}"
+use_rds: true
+proxy_port: 8080
+ 
+# ── Database endpoint ───────────────────────────────────────────────────────
+rds_endpoint: "coinops-db.cj8kme8e0kqa.eu-central-1.rds.amazonaws.com"
+ 
+# ── Container image ─────────────────────────────────────────────────────────
+image_registry: "{{ lookup('env', 'IMAGE_REGISTRY') | default('ghcr.io/ua-academy-projects', true) }}"
+image_tag: "{{ lookup('env', 'IMAGE_TAG') | default('shabat-latest', true) }}"
+proxy_image: "{{ image_registry }}/coin-ops-proxy:{{ image_tag }}"
+registry_username: "{{ lookup('env', 'GHCR_USERNAME') | default('', true) }}"
+registry_token: "{{ lookup('env', 'GHCR_TOKEN') | default('', true) }}"
+ 
+# ── Derived connection strings consumed by proxy.env.j2 ────────────────────
+rabbitmq_url: "amqp://{{ rabbitmq_user }}:{{ rabbitmq_password }}@{{ hostvars[groups['history'][0]].ansible_host }}:5672/"
+proxy_database_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ rds_endpoint }}:5432/{{ db_name }}"
+redis_url: "redis://127.0.0.1:6379/0"
+ 
