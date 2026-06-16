@@ -95,32 +95,32 @@ spec:
 						}
 					}
 				}
+			}
 
-				stage('Terraform Plan') {
-					steps {
-						container('tools') {
-							dir('terraform') {
-								sh 'terraform init'
-								sh 'terraform plan -out=tfplan'	// save plan to file tfplan
-							}
-						}
-					}
-				}
-				stage('Approval') {
-					steps {
-						input message: 'Terraform plan completed. Proceed with apply?',
-							ok: 'Proceed'
-					}
-				}
-				stage('Terraform Apply') {
-					steps {
-						container('tools') {
-							dir('terraform') {
-								sh 'terraform apply -auto-approve tfplan'
-							}
+			stage('Terraform Plan') {
+				steps {
+					container('tools') {
+						dir('terraform') {
+							sh 'terraform init'
+							sh 'terraform plan -out=tfplan'	// save plan to file tfplan
 						}
 					}
 				}
 			}
-		}
+			stage('Approval') {
+				steps {
+					input message: 'Terraform plan completed. Proceed with apply?',
+						ok: 'Proceed'
+				}
+			}
+			stage('Terraform Apply') {
+				steps {
+					container('tools') {
+						dir('terraform') {
+							sh 'terraform apply -auto-approve tfplan'
+						}
+					}
+				}
+			}
+	}
 }
