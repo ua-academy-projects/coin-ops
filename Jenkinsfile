@@ -21,6 +21,9 @@ spec:
     - name: docker-config
       secret:
         secretName: ghcr-dockerconfigjson
+				items:
+					- key: .dockerconfigjson
+						path: config.json
 """
         }
     }
