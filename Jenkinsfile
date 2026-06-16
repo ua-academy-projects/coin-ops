@@ -29,7 +29,28 @@ pipeline {
                 spec:
                   serviceAccountName: jenkins-deployer
                   containers:
-                    - name: kaniko
+                    - name: kaniko-proxy
+                      image: gcr.io/kaniko-project/executor:v1.23.2-debug
+                      command: ["/busybox/cat"]
+                      tty: true
+                      volumeMounts:
+                        - name: ghcr-config
+                          mountPath: /kaniko/.docker
+                    - name: kaniko-api
+                      image: gcr.io/kaniko-project/executor:v1.23.2-debug
+                      command: ["/busybox/cat"]
+                      tty: true
+                      volumeMounts:
+                        - name: ghcr-config
+                          mountPath: /kaniko/.docker
+                    - name: kaniko-consumer
+                      image: gcr.io/kaniko-project/executor:v1.23.2-debug
+                      command: ["/busybox/cat"]
+                      tty: true
+                      volumeMounts:
+                        - name: ghcr-config
+                          mountPath: /kaniko/.docker
+                    - name: kaniko-ui
                       image: gcr.io/kaniko-project/executor:v1.23.2-debug
                       command: ["/busybox/cat"]
                       tty: true
@@ -72,62 +93,58 @@ pipeline {
             }
         }
 
-        // Builds run SEQUENTIALLY in a single kaniko container. kaniko unpacks
-        // each image over the container root filesystem, so concurrent builds in
-        // one container corrupt each other. --cleanup wipes the filesystem after
-        // each build so the next one starts clean.
+        // Each image builds in its OWN kaniko container. kaniko unpacks each
+        // base image over the container root filesystem, so one container per
+        // image avoids cross-build corruption. Stages run sequentially to keep
+        // peak memory to a single build on the small nodes.
         stage('Build proxy') {
             steps {
-                container('kaniko') {
+                container('kaniko-proxy') {
                     sh '''
                         /kaniko/executor \\
-                          --context=./proxy \\
-                          --dockerfile=./proxy/Dockerfile \\
+                          --context=`pwd`/proxy \\
+                          --dockerfile=`pwd`/proxy/Dockerfile \\
                           --destination=${REGISTRY}/coin-ops-proxy:${IMAGE_TAG} \\
-                          --destination=${REGISTRY}/coin-ops-proxy:dev-latest \\
-                          --cleanup
+                          --destination=${REGISTRY}/coin-ops-proxy:dev-latest
                     '''
                 }
             }
         }
         stage('Build history-api') {
             steps {
-                container('kaniko') {
+                container('kaniko-api') {
                     sh '''
                         /kaniko/executor \\
-                          --context=./history \\
-                          --dockerfile=./history/Dockerfile.api \\
+                          --context=`pwd`/history \\
+                          --dockerfile=`pwd`/history/Dockerfile.api \\
                           --destination=${REGISTRY}/coin-ops-history-api:${IMAGE_TAG} \\
-                          --destination=${REGISTRY}/coin-ops-history-api:dev-latest \\
-                          --cleanup
+                          --destination=${REGISTRY}/coin-ops-history-api:dev-latest
                     '''
                 }
             }
         }
         stage('Build history-consumer') {
             steps {
-                container('kaniko') {
+                container('kaniko-consumer') {
                     sh '''
                         /kaniko/executor \\
-                          --context=./history \\
-                          --dockerfile=./history/Dockerfile.consumer \\
+                          --context=`pwd`/history \\
+                          --dockerfile=`pwd`/history/Dockerfile.consumer \\
                           --destination=${REGISTRY}/coin-ops-history-consumer:${IMAGE_TAG} \\
-                          --destination=${REGISTRY}/coin-ops-history-consumer:dev-latest \\
-                          --cleanup
+                          --destination=${REGISTRY}/coin-ops-history-consumer:dev-latest
                     '''
                 }
             }
         }
         stage('Build ui') {
             steps {
-                container('kaniko') {
+                container('kaniko-ui') {
                     sh '''
                         /kaniko/executor \\
-                          --context=./ui-react \\
-                          --dockerfile=./ui-react/Dockerfile \\
+                          --context=`pwd`/ui-react \\
+                          --dockerfile=`pwd`/ui-react/Dockerfile \\
                           --destination=${REGISTRY}/coin-ops-ui:${IMAGE_TAG} \\
-                          --destination=${REGISTRY}/coin-ops-ui:dev-latest \\
-                          --cleanup
+                          --destination=${REGISTRY}/coin-ops-ui:dev-latest
                     '''
                 }
             }
