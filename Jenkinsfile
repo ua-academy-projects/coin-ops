@@ -1,21 +1,3 @@
-// CoinOps end-to-end CI/CD pipeline.
-//
-// On every push to a tracked branch:
-//   1. Build all four service images in parallel (proxy / history-api /
-//      history-consumer / ui).
-//   2. Push them to GHCR tagged with both the commit SHA and `dev-latest`.
-//   3. Upgrade the `coinops` Helm release on AKS so pods roll to the new tag.
-//
-// The pipeline runs on Kubernetes agents created on-demand by the
-// jenkins-kubernetes plugin. The build pod ships with kaniko (image build)
-// and a sidecar with helm + kubectl (deploy).
-//
-// Required Jenkins credentials:
-//   - id: ghcr-credentials        type: Username/Password (username + PAT)
-//   - id: ghcr-dockerconfigjson   type: Secret file (~/.docker/config.json with GHCR auth)
-//
-// Pipeline must run with the in-cluster ServiceAccount `jenkins-deployer`
-// (created by manifests/jenkins-deployer-rbac.yaml).
 
 pipeline {
     agent {

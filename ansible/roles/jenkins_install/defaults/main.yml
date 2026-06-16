@@ -31,6 +31,15 @@ jenkins_java_opts: "-Xms256m -Xmx768m"
 jenkins_wait: true
 jenkins_wait_timeout: 900s
 
+# Name of the pre-created Kubernetes Secret (in the cicd namespace) holding the
+# GitHub username + PAT. JCasC reads it via injected env vars, so the token is
+# never written into Helm values or git.
+jenkins_github_secret_name: jenkins-github-creds
+
+# Git coordinates of the repo Jenkins builds from.
+jenkins_repo_url: https://github.com/ua-academy-projects/coin-ops.git
+jenkins_repo_branch: feat/azure-aks-platform
+
 # Helm values for jenkins/jenkins chart.
 jenkins_values:
   controller:
@@ -45,6 +54,7 @@ jenkins_values:
       - kubernetes
       - workflow-aggregator
       - git
+      - github
       - configuration-as-code
       - github-branch-source
       - credentials-binding
@@ -52,6 +62,62 @@ jenkins_values:
       - job-dsl
       - ansicolor
       - timestamper
+    # Inject the GitHub credential secret as environment variables so JCasC can
+    # reference them as ${GITHUB_USERNAME} / ${GITHUB_TOKEN} without hardcoding.
+    containerEnv:
+      - name: GITHUB_USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: "{{ jenkins_github_secret_name }}"
+            key: username
+      - name: GITHUB_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: "{{ jenkins_github_secret_name }}"
+            key: token
+    # Jenkins Configuration as Code: declares the whole Jenkins config in YAML,
+    # re-applied on every startup. No manual UI clicking; survives restarts.
+    JCasC:
+      defaultConfig: true
+      configScripts:
+        welcome-message: |
+          jenkins:
+            systemMessage: "CoinOps CI/CD - configured entirely via JCasC (no manual setup)."
+        github-credentials: |
+          credentials:
+            system:
+              domainCredentials:
+                - credentials:
+                    - usernamePassword:
+                        scope: GLOBAL
+                        id: "github-pat"
+                        description: "GitHub PAT for repo checkout + GHCR push"
+                        username: "${GITHUB_USERNAME}"
+                        password: "${GITHUB_TOKEN}"
+        seed-coinops-pipeline: |
+          jobs:
+            - script: >
+                pipelineJob('coinops-deploy') {
+                  description('Build coinops images with kaniko and deploy to AKS. Managed by JCasC.')
+                  definition {
+                    cpsScm {
+                      scm {
+                        git {
+                          remote {
+                            url('{{ jenkins_repo_url }}')
+                            credentials('github-pat')
+                          }
+                          branch('*/{{ jenkins_repo_branch }}')
+                        }
+                      }
+                      scriptPath('Jenkinsfile')
+                      lightweight(true)
+                    }
+                  }
+                  triggers {
+                    githubPush()
+                  }
+                }
     ingress:
       enabled: true
       apiVersion: networking.k8s.io/v1
