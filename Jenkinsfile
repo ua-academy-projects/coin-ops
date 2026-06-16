@@ -72,63 +72,63 @@ pipeline {
             }
         }
 
-        stage('Build images') {
-            parallel {
-                stage('proxy') {
-                    steps {
-                        container('kaniko') {
-                            sh '''
-                                /kaniko/executor \\
-                                  --context=./proxy \\
-                                  --dockerfile=./proxy/Dockerfile \\
-                                  --destination=${REGISTRY}/coin-ops-proxy:${IMAGE_TAG} \\
-                                  --destination=${REGISTRY}/coin-ops-proxy:dev-latest \\
-                                  --cache=true
-                            '''
-                        }
-                    }
+        // Builds run SEQUENTIALLY in a single kaniko container. kaniko unpacks
+        // each image over the container root filesystem, so concurrent builds in
+        // one container corrupt each other. --cleanup wipes the filesystem after
+        // each build so the next one starts clean.
+        stage('Build proxy') {
+            steps {
+                container('kaniko') {
+                    sh '''
+                        /kaniko/executor \\
+                          --context=./proxy \\
+                          --dockerfile=./proxy/Dockerfile \\
+                          --destination=${REGISTRY}/coin-ops-proxy:${IMAGE_TAG} \\
+                          --destination=${REGISTRY}/coin-ops-proxy:dev-latest \\
+                          --cleanup
+                    '''
                 }
-                stage('history-api') {
-                    steps {
-                        container('kaniko') {
-                            sh '''
-                                /kaniko/executor \\
-                                  --context=./history \\
-                                  --dockerfile=./history/Dockerfile.api \\
-                                  --destination=${REGISTRY}/coin-ops-history-api:${IMAGE_TAG} \\
-                                  --destination=${REGISTRY}/coin-ops-history-api:dev-latest \\
-                                  --cache=true
-                            '''
-                        }
-                    }
+            }
+        }
+        stage('Build history-api') {
+            steps {
+                container('kaniko') {
+                    sh '''
+                        /kaniko/executor \\
+                          --context=./history \\
+                          --dockerfile=./history/Dockerfile.api \\
+                          --destination=${REGISTRY}/coin-ops-history-api:${IMAGE_TAG} \\
+                          --destination=${REGISTRY}/coin-ops-history-api:dev-latest \\
+                          --cleanup
+                    '''
                 }
-                stage('history-consumer') {
-                    steps {
-                        container('kaniko') {
-                            sh '''
-                                /kaniko/executor \\
-                                  --context=./history \\
-                                  --dockerfile=./history/Dockerfile.consumer \\
-                                  --destination=${REGISTRY}/coin-ops-history-consumer:${IMAGE_TAG} \\
-                                  --destination=${REGISTRY}/coin-ops-history-consumer:dev-latest \\
-                                  --cache=true
-                            '''
-                        }
-                    }
+            }
+        }
+        stage('Build history-consumer') {
+            steps {
+                container('kaniko') {
+                    sh '''
+                        /kaniko/executor \\
+                          --context=./history \\
+                          --dockerfile=./history/Dockerfile.consumer \\
+                          --destination=${REGISTRY}/coin-ops-history-consumer:${IMAGE_TAG} \\
+                          --destination=${REGISTRY}/coin-ops-history-consumer:dev-latest \\
+                          --cleanup
+                    '''
                 }
-                stage('ui') {
-                    steps {
-                        container('kaniko') {
-                            sh '''
-                                /kaniko/executor \\
-                                  --context=./ui-react \\
-                                  --dockerfile=./ui-react/Dockerfile \\
-                                  --destination=${REGISTRY}/coin-ops-ui:${IMAGE_TAG} \\
-                                  --destination=${REGISTRY}/coin-ops-ui:dev-latest \\
-                                  --cache=true
-                            '''
-                        }
-                    }
+            }
+        }
+        stage('Build ui') {
+            steps {
+                container('kaniko') {
+                    sh '''
+                        /kaniko/executor \\
+                          --context=./ui-react \\
+                          --dockerfile=./ui-react/Dockerfile \\
+                          --destination=${REGISTRY}/coin-ops-ui:${IMAGE_TAG} \\
+                          --destination=${REGISTRY}/coin-ops-ui:dev-latest \\
+                          --cleanup
+                    '''
                 }
             }
         }
