@@ -94,6 +94,7 @@ spec:
                       --dockerfile=\$WORKSPACE/ui-react/Dockerfile \
                       --destination=${REGISTRY}/coin-ops-ui:${SHA} \
                       --destination=${REGISTRY}/coin-ops-ui:latest
+											--single-snapshot
                 """
               }
             }
