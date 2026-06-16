@@ -12,6 +12,10 @@ ssh:
 clouds:
   gcp:
     project_id: coinops-student-leev1tan-001
+    # Remote Terraform state for the GCP chapter (created by scripts/bootstrap-gcp.sh).
+    # Cloud Build runs terraform against this bucket — state lives in the cloud, not a laptop.
+    state_bucket: coinops-lab-tfstate
+    state_prefix: multicloud-vm-yaml-lab
     # k3s_only: build ONLY network + bastion + k3s nodes on GCP — skip the
     # managed app stack (Cloud SQL / Pub-Sub / Memorystore / app VMs / LB).
     # The coin-ops app lives on AWS; GCP is just the k3s learning sandbox.

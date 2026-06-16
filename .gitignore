@@ -84,3 +84,4 @@ terraform/**/.env.azure
 terraform/**/.env.azure.*
 terraform/**/backend.generated.tf
 terraform/**/backend.azurerm.generated.hcl
+terraform/**/backend.gcs.generated.hcl

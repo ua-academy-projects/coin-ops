@@ -11,6 +11,7 @@ CONFIG_FILE="$ROOT_DIR/config/lab.yaml"
 S3_BACKEND_CONFIG_FILE="$ROOT_DIR/backend.hcl"
 GENERATED_BACKEND_TF="$ROOT_DIR/backend.generated.tf"
 GENERATED_AZURERM_BACKEND_CONFIG="$ROOT_DIR/backend.azurerm.generated.hcl"
+GENERATED_GCS_BACKEND_CONFIG="$ROOT_DIR/backend.gcs.generated.hcl"
 
 yaml_cloud_value() {
   local cloud="$1"
@@ -78,7 +79,7 @@ CLOUD="${CLOUD:-$(read_cloud)}"
 RUNTIME_MODE="${RUNTIME_MODE:-$(read_runtime_mode)}"
 RUNTIME_MODE="$(normalize_runtime_mode "${RUNTIME_MODE:-external}")"
 LAB_WORKSPACE="${LAB_WORKSPACE:-$([ "$RUNTIME_MODE" = "cloud_native" ] && printf '%s-cloud-native' "$CLOUD" || printf '%s' "$CLOUD")}"
-BACKEND_KIND="${BACKEND_KIND:-$([ "$CLOUD" = "azure" ] && printf 'azurerm' || printf 's3')}"
+BACKEND_KIND="${BACKEND_KIND:-$(case "$CLOUD" in azure) printf 'azurerm' ;; gcp) printf 'gcs' ;; *) printf 's3' ;; esac)}"
 BACKEND_CONFIG_OVERRIDE="${BACKEND_CONFIG:-}"
 
 AWS_PROFILE_NAME="${AWS_PROFILE:-$(yaml_cloud_value aws profile)}"
@@ -92,6 +93,8 @@ AWS_REGION_NAME="${AWS_REGION:-$(awk '
   in_aws && /^[[:space:]]{8}region:[[:space:]]*/ { sub(/^[[:space:]]{8}region:[[:space:]]*/, ""); print; exit }
 ' "$CONFIG_FILE")}"
 GCP_PROJECT_ID="${GCP_PROJECT_ID:-$(yaml_cloud_value gcp project_id)}"
+GCS_STATE_BUCKET="${GCS_STATE_BUCKET:-$(yaml_cloud_value gcp state_bucket)}"
+GCS_STATE_PREFIX="${GCS_STATE_PREFIX:-$(yaml_cloud_value gcp state_prefix)}"
 AZURE_RESOURCE_GROUP_NAME="${AZURE_RESOURCE_GROUP_NAME:-$(yaml_cloud_value azure resource_group_name)}"
 AZURE_KEY_VAULT_NAME="${AZURE_KEY_VAULT_NAME:-$(yaml_cloud_value azure key_vault_name)}"
 AZURE_STATE_LOCATION="${AZURE_STATE_LOCATION:-$(yaml_cloud_value azure state_location)}"
@@ -192,6 +195,21 @@ key                  = "$AZURE_STATE_KEY"
 use_azuread_auth     = true
 EOF
       ACTIVE_BACKEND_CONFIG="${BACKEND_CONFIG_OVERRIDE:-$GENERATED_AZURERM_BACKEND_CONFIG}"
+      ;;
+    gcs)
+      : "${GCS_STATE_BUCKET:?Set clouds.gcp.state_bucket in config/lab.yaml or export GCS_STATE_BUCKET.}"
+
+      cat > "$GENERATED_BACKEND_TF" <<'EOF'
+terraform {
+  backend "gcs" {}
+}
+EOF
+
+      cat > "$GENERATED_GCS_BACKEND_CONFIG" <<EOF
+bucket = "$GCS_STATE_BUCKET"
+prefix = "${GCS_STATE_PREFIX:-multicloud-vm-yaml-lab}"
+EOF
+      ACTIVE_BACKEND_CONFIG="${BACKEND_CONFIG_OVERRIDE:-$GENERATED_GCS_BACKEND_CONFIG}"
       ;;
     *)
       echo "Unsupported BACKEND_KIND: $BACKEND_KIND" >&2

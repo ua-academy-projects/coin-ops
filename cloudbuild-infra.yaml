@@ -1,0 +1,66 @@
+# cloudbuild-infra.yaml — provision the GCP infra (GKE) with Terraform, IN THE CLOUD.
+# Terraform state lives in a GCS bucket; Cloud Build runs as the Cloud Build service
+# account (no `gcloud auth login` on anyone's laptop).
+#
+# One-time setup: run scripts/bootstrap-gcp.sh (creates the state bucket, grants the
+# Cloud Build SA the roles it needs, creates the db-password secret). Then either:
+#   gcloud builds submit --config cloudbuild-infra.yaml --substitutions=_ACTION=plan
+#   gcloud builds submit --config cloudbuild-infra.yaml --substitutions=_ACTION=apply
+# or wire a Cloud Build trigger on push (docs/gcp/02-cloud-build-infra.md).
+#
+# Requires config/lab.yaml set for the GCP chapter (see that doc): cloud: gcp,
+# clouds.gcp.gke.enabled: true. Reads state bucket/prefix from substitutions below.
+substitutions:
+  _STATE_BUCKET: coinops-lab-tfstate
+  _STATE_PREFIX: multicloud-vm-yaml-lab
+  _WORKSPACE: gcp-gke
+  _ACTION: apply          # plan | apply | destroy
+  _TF_VERSION: "1.14.8"
+options:
+  logging: CLOUD_LOGGING_ONLY
+availableSecrets:
+  secretManager:
+    - versionName: projects/$PROJECT_ID/secrets/coinops-db-password/versions/latest
+      env: TF_VAR_db_password
+steps:
+  - id: render-backend
+    name: hashicorp/terraform:$_TF_VERSION
+    entrypoint: sh
+    args:
+      - -c
+      - |
+        set -eu
+        printf 'terraform {\n  backend "gcs" {}\n}\n' \
+          > terraform/multicloud-vm-yaml-lab/backend.generated.tf
+        echo "rendered gcs backend"
+  - id: init
+    name: hashicorp/terraform:$_TF_VERSION
+    dir: terraform/multicloud-vm-yaml-lab
+    args:
+      - init
+      - -input=false
+      - -backend-config=bucket=${_STATE_BUCKET}
+      - -backend-config=prefix=${_STATE_PREFIX}
+  - id: workspace
+    name: hashicorp/terraform:$_TF_VERSION
+    dir: terraform/multicloud-vm-yaml-lab
+    entrypoint: sh
+    args:
+      - -c
+      - terraform workspace select ${_WORKSPACE} || terraform workspace new ${_WORKSPACE}
+  - id: terraform
+    name: hashicorp/terraform:$_TF_VERSION
+    dir: terraform/multicloud-vm-yaml-lab
+    entrypoint: sh
+    secretEnv: ["TF_VAR_db_password"]
+    args:
+      - -c
+      - |
+        set -e
+        case "${_ACTION}" in
+          plan)    terraform plan -input=false ;;
+          apply)   terraform apply -input=false -auto-approve ;;
+          destroy) terraform destroy -input=false -auto-approve ;;
+          *) echo "unknown _ACTION=${_ACTION} (use plan|apply|destroy)"; exit 1 ;;
+        esac
+timeout: 2400s
