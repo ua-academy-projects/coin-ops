@@ -29,7 +29,7 @@ pipeline {
     stage('Build Docker image') {
       steps {
         sh '''
-          set -euo pipefail
+          set -eu
           SHORT_SHA="$(git rev-parse --short=7 HEAD)"
           FULL_SHA="$(git rev-parse --short=12 HEAD)"
           IMAGE_TAG="${BUILD_NUMBER}-${SHORT_SHA}"
@@ -52,7 +52,7 @@ EOF
     stage('Run basic validation') {
       steps {
         sh '''
-          set -euo pipefail
+          set -eu
           . ./.build.env
           docker image inspect "${IMAGE_NAME}:${IMAGE_TAG}" >/dev/null
           docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/workspace" -w /workspace/ui-react node:22-bookworm-slim bash -lc '
@@ -74,7 +74,7 @@ EOF
           string(credentialsId: 'ACR_NAME', variable: 'ACR_NAME')
         ]) {
           sh '''
-            set -euo pipefail
+            set -eu
             . ./.build.env
             az login --service-principal \
               --username "${AZURE_CLIENT_ID}" \
@@ -102,7 +102,7 @@ EOF
       steps {
         withCredentials([file(credentialsId: 'KUBECONFIG', variable: 'KUBECONFIG')]) {
           sh '''
-            set -euo pipefail
+            set -eu
             . ./.acr.env
             . ./.build.env
 
@@ -130,7 +130,7 @@ EOF
       steps {
         withCredentials([file(credentialsId: 'KUBECONFIG', variable: 'KUBECONFIG')]) {
           sh '''
-            set -euo pipefail
+            set -eu
 
             EXTERNAL_IP=""
             for _ in $(seq 1 30); do
@@ -164,7 +164,7 @@ EOF
           string(credentialsId: 'CLOUDFLARE_ZONE_ID', variable: 'CLOUDFLARE_ZONE_ID')
         ]) {
           sh '''
-            set -euo pipefail
+            set -eu
             . ./.deploy.env
             chmod +x scripts/cloudflare-dns.sh
             CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN}" \
@@ -178,7 +178,7 @@ EOF
     stage('Verify application availability') {
       steps {
         sh '''
-          set -euo pipefail
+          set -eu
           curl --fail --silent --show-error \
             --retry 12 \
             --retry-delay 10 \
@@ -194,21 +194,14 @@ EOF
       withCredentials([file(credentialsId: 'KUBECONFIG', variable: 'KUBECONFIG')]) {
         sh '''
           set +e
-          PREVIOUS_DEPLOYED_REVISION="$(
-            helm history "${APP_NAME}" -n "${APP_NAMESPACE}" -o json 2>/dev/null | python3 -c '
-import json, sys
-history = json.load(sys.stdin) if not sys.stdin.isatty() else []
-deployed = [item["revision"] for item in history if item.get("status") == "deployed"]
-print(deployed[-1] if deployed else "")
-'
-          )"
+          PREVIOUS_DEPLOYED_REVISION=""
 
           if [ -n "${PREVIOUS_DEPLOYED_REVISION}" ]; then
             echo "Rolling back ${APP_NAME} to revision ${PREVIOUS_DEPLOYED_REVISION}"
             helm rollback "${APP_NAME}" "${PREVIOUS_DEPLOYED_REVISION}" -n "${APP_NAMESPACE}" --wait --timeout 10m
             kubectl --kubeconfig "${KUBECONFIG}" rollout status deployment/"${APP_NAME}" -n "${APP_NAMESPACE}" --timeout=300s
           else
-            echo "No previous deployed Helm revision found. Skipping rollback."
+            echo "Skipping automatic rollback because no portable revision resolver is configured on this executor."
           fi
         '''
       }
