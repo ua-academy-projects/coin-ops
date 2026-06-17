@@ -207,6 +207,8 @@ module "aws_eks" {
 }
 
 module "aws_codebuild" {
-  source         = "./modules/aws_codebuild"
-  aws_account_id = var.aws_account_id
+  source                  = "./modules/aws_codebuild"
+  aws_account_id          = var.aws_account_id
+  db_password             = var.db_password
+  ssh_public_key_content  = file(var.ssh_public_key_path)
 }

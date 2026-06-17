@@ -2,6 +2,16 @@ variable "aws_account_id" {
   type = string
 }
 
+variable "db_password" {
+  type      = string
+  sensitive = true
+}
+
+variable "ssh_public_key_content" {
+  type      = string
+  sensitive = true
+}
+
 variable "github_repo_url" {
   description = "HTTPS URL of the GitHub repo CodeBuild pulls source from"
   type        = string
@@ -32,6 +42,18 @@ resource "aws_codebuild_project" "terraform_apply" {
     image           = "aws/codebuild/standard:7.0"
     type            = "LINUX_CONTAINER"
     privileged_mode = false
+
+    environment_variable {
+      name  = "TF_VAR_db_password"
+      value = var.db_password
+      type  = "PLAINTEXT"
+    }
+
+    environment_variable {
+      name  = "SSH_PUBLIC_KEY_CONTENT"
+      value = var.ssh_public_key_content
+      type  = "PLAINTEXT"
+    }
   }
 
   source {
