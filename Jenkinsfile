@@ -275,7 +275,11 @@ EOF
 
   post {
     always {
-      sh 'rm -f .acr.env .build.env .deploy.env'
+      script {
+        if (env.WORKSPACE?.trim()) {
+          sh 'rm -f .acr.env .build.env .deploy.env || true'
+        }
+      }
     }
   }
 }
