@@ -10,18 +10,19 @@ permissions:
   contents: read
 
 jobs:
-  config:
-    name: Config
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 1
-          sparse-checkout: |
-            configs
-            scripts
-
+  #
+  # config:
+  #   name: Config
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v6
+  #       with:
+  #         fetch-depth: 1
+  #         sparse-checkout: |
+  #           configs
+  #           scripts
+  #
   terraform:
     name: Terraform
     runs-on: ubuntu-latest
@@ -32,25 +33,31 @@ jobs:
           fetch-depth: 1
           sparse-checkout: |
             terraform/cloud
-            
-  ansible:
-    name: Ansible
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 1
-          sparse-checkout: |
-            ansible
 
-  shell:
-    name: Shell
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 1
-          sparse-checkout: |
-            bootstrap
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Check Terraform formatting
+        run: terraform fmt -check -recursive terraform/cloud
+  #
+  # ansible:
+  #   name: Ansible
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v6
+  #       with:
+  #         fetch-depth: 1
+  #         sparse-checkout: |
+  #           ansible
+  #
+  # shell:
+  #   name: Shell
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v6
+  #       with:
+  #         fetch-depth: 1
+  #         sparse-checkout: |
+  #           bootstrap
