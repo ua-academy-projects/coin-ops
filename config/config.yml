@@ -27,7 +27,7 @@ ssh:
 region_map:
   aws: eu-central-1
   gcp: europe-central2
-  azure: eastus2
+  azure: denmarkeast
 zone_map: 
   aws: 
     first: eu-central-1a

@@ -34,3 +34,10 @@ module "azure" {
   ssh_public_key = local.ssh_public_key
   instances = local.azure_instances
 }
+
+module "aks" {
+  source = "./modules/azure/aks"
+  name_prefix = local.config.name_prefix
+  location = lookup(local.config.region_map, "azure", "denmarkeast")
+  cloudflare_zone_id = var.cloudflare_zone_id
+}
