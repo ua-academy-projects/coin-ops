@@ -143,7 +143,10 @@ cat > "$POLICY_FILE" <<'POLICY'
         "logs:DescribeMetricFilters",
         "logs:TagLogGroup",
         "logs:ListTagsLogGroup",
-        "logs:ListTagsForResource"
+        "logs:ListTagsForResource",
+        "logs:GetLogEvents",
+        "logs:FilterLogEvents",
+        "logs:DescribeLogStreams"
       ],
       "Resource": "*"
     },
