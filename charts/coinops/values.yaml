@@ -10,22 +10,26 @@ proxy:
   replicas: 1
 
 historyApi:
+  enabled: true
   name: history-api
   image: coin-ops-history-api
   port: 8000
   replicas: 1
 
 historyConsumer:
+  enabled: true
   name: history-consumer
   image: coin-ops-history-consumer
   replicas: 1
 
 ui:
+  enabled: true
   name: ui
   image: coin-ops-ui
   port: 80
   replicas: 1
 
 ingress:
+  enabled: true
   className: traefik
   domain: app.coin-ops.pp.ua
