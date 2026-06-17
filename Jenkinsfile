@@ -123,13 +123,22 @@ spec:
           }
         }
       }
-
       stage('Terraform Plan') {
         steps {
           container('terraform') {
-            dir('terraform') {
-              sh 'terraform init'
-              sh 'terraform plan -out=tfplan'
+            withCredentials([
+              file(credentialsId: 'gcp-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS'),
+              string(credentialsId: 'azure-client-id', variable: 'ARM_CLIENT_ID'),
+              string(credentialsId: 'azure-client-secret', variable: 'ARM_CLIENT_SECRET'),
+              string(credentialsId: 'azure-tenant-id', variable: 'ARM_TENANT_ID'),
+              string(credentialsId: 'azure-subscription-id', variable: 'ARM_SUBSCRIPTION_ID'),
+              string(credentialsId: 'cloudflare-api-token', variable: 'TF_VAR_cloudflare_api_token'),
+              string(credentialsId: 'cloudflare-zone-id', variable: 'TF_VAR_cloudflare_zone_id')
+            ]) {
+              dir('terraform') {
+                sh 'terraform init'
+                sh 'terraform plan -out=tfplan'
+              }
             }
           }
         }
@@ -144,9 +153,19 @@ spec:
 
       stage('Terraform Apply') {
         steps {
-          container('tools') {
-            dir('terraform') {
-              sh 'terraform apply -auto-approve tfplan'
+          container('terraform') {
+            withCredentials([
+              file(credentialsId: 'gcp-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS'),
+              string(credentialsId: 'azure-client-id', variable: 'ARM_CLIENT_ID'),
+              string(credentialsId: 'azure-client-secret', variable: 'ARM_CLIENT_SECRET'),
+              string(credentialsId: 'azure-tenant-id', variable: 'ARM_TENANT_ID'),
+              string(credentialsId: 'azure-subscription-id', variable: 'ARM_SUBSCRIPTION_ID'),
+              string(credentialsId: 'cloudflare-api-token', variable: 'TF_VAR_cloudflare_api_token'),
+              string(credentialsId: 'cloudflare-zone-id', variable: 'TF_VAR_cloudflare_zone_id')
+            ]) {
+              dir('terraform') {
+                sh 'terraform apply -auto-approve tfplan'
+              }
             }
           }
         }
