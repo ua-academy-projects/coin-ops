@@ -1,21 +1,45 @@
-# Official Jenkins Helm chart (jenkins/jenkins) values — controller in GKE.
+# Official Jenkins Helm chart (jenkins/jenkins) values — controller in GKE,
+# installed by Terraform (gke-addons.tf). JCasC bakes the deploy pipeline so
+# Jenkins boots ready: a parameterised "deploy-coinops-app" job from the repo
+# Jenkinsfile. Jenkins deploys into its OWN cluster via in-cluster RBAC.
 controller:
   installPlugins:
     - kubernetes:latest
     - workflow-aggregator:latest
     - git:latest
     - configuration-as-code:latest
+    - job-dsl:latest
+  JCasC:
+    configScripts:
+      coinops-deploy: |
+        jobs:
+          - script: >
+              pipelineJob('deploy-coinops-app') {
+                description('Deploy a pre-built coinops-app image tag to this GKE cluster')
+                parameters {
+                  stringParam('IMAGE_TAG', 'latest', 'Artifact Registry tag (commit SHORT_SHA) to deploy')
+                }
+                definition {
+                  cpsScm {
+                    scm {
+                      git {
+                        remote { url('https://github.com/ua-academy-projects/coin-ops.git') }
+                        branches('dev-Shabat-cloud')
+                      }
+                    }
+                    scriptPath('Jenkinsfile')
+                  }
+                }
+              }
   resources:
     requests:
       cpu: "500m"
       memory: "1Gi"
-  serviceType: ClusterIP
+  serviceType: ClusterIP   # exposed via cloudflared (Zero Trust), not a public LB
 persistence:
   size: 8Gi
-agent:
-  enabled: true
-rbac:
-  create: true
 serviceAccount:
   create: true
   name: jenkins
+rbac:
+  create: true

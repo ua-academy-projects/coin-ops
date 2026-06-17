@@ -23,8 +23,16 @@ gcloud services enable \
   container.googleapis.com \
   compute.googleapis.com \
   cloudbuild.googleapis.com \
+  artifactregistry.googleapis.com \
   secretmanager.googleapis.com \
   iam.googleapis.com
+
+echo ">> creating Artifact Registry docker repo (coinops)"
+if ! gcloud artifacts repositories describe coinops --location="${REGION}" >/dev/null 2>&1; then
+  gcloud artifacts repositories create coinops \
+    --repository-format=docker --location="${REGION}" \
+    --description="coin-ops app images"
+fi
 
 echo ">> creating GCS state bucket (versioned)"
 if ! gsutil ls -b "gs://${STATE_BUCKET}" >/dev/null 2>&1; then
@@ -39,6 +47,7 @@ for role in \
   roles/compute.admin \
   roles/iam.serviceAccountAdmin \
   roles/iam.serviceAccountUser \
+  roles/artifactregistry.writer \
   roles/storage.admin; do
   gcloud projects add-iam-policy-binding "${PROJECT}" \
     --member="serviceAccount:${CB_SA}" --role="${role}" --condition=None >/dev/null

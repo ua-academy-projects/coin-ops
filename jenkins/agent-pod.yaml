@@ -1,17 +1,13 @@
 # Jenkins Kubernetes agent pod — referenced by the Jenkinsfile (yamlFile).
-# kaniko builds/pushes images without a Docker daemon; `tools` (Cloud SDK) holds
-# gcloud + (installs) helm for the GKE deploy. The `jenkins` ServiceAccount should
-# be bound to a GCP SA via Workload Identity for image push + container.developer.
+# Deploy-only: a single `helm` container. Runs as the `jenkins` ServiceAccount,
+# which Terraform grants in-cluster RBAC to deploy coinops-app. No build tools
+# (images are built by Cloud Build), no cloud creds (same-cluster deploy).
 apiVersion: v1
 kind: Pod
 spec:
   serviceAccountName: jenkins
   containers:
-    - name: kaniko
-      image: gcr.io/kaniko-project/executor:debug
-      command: ["/busybox/cat"]
-      tty: true
-    - name: tools
-      image: google/cloud-sdk:slim
+    - name: helm
+      image: alpine/helm:3.16.3
       command: ["cat"]
       tty: true

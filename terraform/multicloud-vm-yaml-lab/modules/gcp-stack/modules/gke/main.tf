@@ -28,6 +28,13 @@ resource "google_service_account" "nodes" {
   display_name = "${var.name_prefix} GKE nodes"
 }
 
+# Nodes pull app images from Artifact Registry.
+resource "google_project_iam_member" "nodes_artifact_reader" {
+  project = var.project_id
+  role    = "roles/artifactregistry.reader"
+  member  = "serviceAccount:${google_service_account.nodes.email}"
+}
+
 resource "google_container_cluster" "main" {
   name     = local.cluster_name
   project  = var.project_id

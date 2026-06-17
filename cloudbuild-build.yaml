@@ -1,0 +1,31 @@
+# cloudbuild-build.yaml — BUILD ONLY. Builds the app images and pushes them to
+# Artifact Registry, tagged by commit SHA. No deploy here (Jenkins deploys).
+#
+# Wire as a Cloud Build trigger on push to dev-Shabat-cloud, path-filtered to app
+# code so it only rebuilds on real code changes:
+#   included files: proxy/**  history/**  ui-react/**
+# Manual run: gcloud builds submit --config cloudbuild-build.yaml --substitutions=SHORT_SHA=$(git rev-parse --short HEAD)
+substitutions:
+  _AR: europe-central2-docker.pkg.dev/coinops-student-leev1tan-001/coinops
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+steps:
+  - id: proxy
+    name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_AR}/coin-ops-proxy:${SHORT_SHA}", "-f", "proxy/Dockerfile", "proxy"]
+  - id: history-api
+    name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_AR}/coin-ops-history-api:${SHORT_SHA}", "-f", "history/Dockerfile.api", "history"]
+  - id: history-consumer
+    name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_AR}/coin-ops-history-consumer:${SHORT_SHA}", "-f", "history/Dockerfile.consumer", "history"]
+  - id: ui
+    name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_AR}/coin-ops-ui:${SHORT_SHA}", "-f", "ui-react/Dockerfile", "ui-react"]
+images:
+  - "${_AR}/coin-ops-proxy:${SHORT_SHA}"
+  - "${_AR}/coin-ops-history-api:${SHORT_SHA}"
+  - "${_AR}/coin-ops-history-consumer:${SHORT_SHA}"
+  - "${_AR}/coin-ops-ui:${SHORT_SHA}"
+timeout: 1800s

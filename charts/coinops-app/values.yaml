@@ -4,8 +4,9 @@ image:
   tag: dev-latest
   pullPolicy: IfNotPresent
 
-# Hostnames + TLS.
+# Hostnames + TLS. (enabled:false on GKE, where cloudflared exposes the gateway.)
 ingress:
+  enabled: true
   className: traefik
   host: app.coinops.pp.ua
   tlsSecretName: coinops-app-tls
