@@ -16,11 +16,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 1
-          sparse-checkout: |
-            configs
-            scripts/validate_configs.py
 
       - name: Set up Python
         uses: actions/setup-python@v5
