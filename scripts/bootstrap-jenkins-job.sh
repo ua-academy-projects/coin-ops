@@ -462,6 +462,35 @@ PY
     >/dev/null
 }
 
+create_username_password_credential() {
+  local cred_id="$1"
+  local username="$2"
+  local password="$3"
+  local description="$4"
+  local xml_file="${TMP_DIR}/${cred_id}.xml"
+
+  delete_credential_if_exists "${cred_id}"
+
+  python3 - "$cred_id" "$username" "$password" "$description" > "${xml_file}" <<'PY'
+import sys
+from xml.sax.saxutils import escape
+cred_id, username, password, description = sys.argv[1:5]
+print(f"""<com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl>
+  <scope>GLOBAL</scope>
+  <id>{escape(cred_id)}</id>
+  <description>{escape(description)}</description>
+  <username>{escape(username)}</username>
+  <password>{escape(password)}</password>
+</com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl>""")
+PY
+
+  curl "${curl_auth_args[@]}" \
+    -H "Content-Type: application/xml" \
+    --data-binary "@${xml_file}" \
+    "${JENKINS_URL}/credentials/store/system/domain/_/createCredentials" \
+    >/dev/null
+}
+
 job_exists() {
   curl \
     --silent \
@@ -561,11 +590,15 @@ print(xml)
 PY
 
 echo "[bootstrap-jenkins] Creating Jenkins credentials."
+AcrPushUsername="$(az acr credential show --name "${ACR_NAME}" --query username -o tsv)"
+AcrPushPassword="$(az acr credential show --name "${ACR_NAME}" --query 'passwords[0].value' -o tsv)"
+
 create_secret_text_credential "AZURE_CLIENT_ID" "${ARM_CLIENT_ID}" "Azure service principal client ID"
 create_secret_text_credential "AZURE_CLIENT_SECRET" "${ARM_CLIENT_SECRET}" "Azure service principal client secret"
 create_secret_text_credential "AZURE_TENANT_ID" "${ARM_TENANT_ID}" "Azure tenant ID"
 create_secret_text_credential "AZURE_SUBSCRIPTION_ID" "${ARM_SUBSCRIPTION_ID}" "Azure subscription ID"
 create_secret_text_credential "ACR_NAME" "${ACR_NAME}" "Azure Container Registry name"
+create_username_password_credential "acr-push" "${AcrPushUsername}" "${AcrPushPassword}" "ACR push credentials"
 create_secret_text_credential "CLOUDFLARE_API_TOKEN" "${CLOUDFLARE_API_TOKEN}" "Cloudflare API token"
 create_secret_text_credential "CLOUDFLARE_ZONE_ID" "${CLOUDFLARE_ZONE_ID}" "Cloudflare zone ID"
 create_secret_file_credential "KUBECONFIG" "${KUBECONFIG_FILE}" "config" "AKS kubeconfig for Coin-Ops deployments"
@@ -607,6 +640,7 @@ Created or updated Jenkins credentials:
 - AZURE_TENANT_ID
 - AZURE_SUBSCRIPTION_ID
 - ACR_NAME
+- acr-push
 - CLOUDFLARE_API_TOKEN
 - CLOUDFLARE_ZONE_ID
 - KUBECONFIG
