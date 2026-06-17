@@ -133,7 +133,7 @@ spec:
           container('terraform') {
             withCredentials([
               file(credentialsId: 'gcp-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS'),
-							file(credentialsId: 'ssh-public-key', variable: 'SSH_PUBLIC_KEY_PATH'),
+							file(credentialsId: 'sshkey', variable: 'SSH_PUBLIC_KEY_PATH'),
               string(credentialsId: 'azure-client-id', variable: 'ARM_CLIENT_ID'),
               string(credentialsId: 'azure-client-secret', variable: 'ARM_CLIENT_SECRET'),
               string(credentialsId: 'azure-tenant-id', variable: 'ARM_TENANT_ID'),
