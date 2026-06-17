@@ -1,0 +1,6 @@
+---
+- name: Apply Jenkins deployer RBAC
+  kubernetes.core.k8s:
+    kubeconfig: "{{ platform_kubeconfig }}"
+    state: present
+    src: "{{ jenkins_deployer_rbac_manifest }}"

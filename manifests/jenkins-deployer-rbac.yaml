@@ -1,8 +1,9 @@
-# RBAC for the Jenkins build pod.
+# RBAC for the Jenkins deploy pod.
 #
 # Jenkins agents run as ServiceAccount `jenkins-deployer` in namespace `cicd`.
-# This binding grants exactly the permissions needed to `helm upgrade` the
-# coinops release and watch rollouts in the application namespaces.
+# The permissions are scoped to the namespaces touched by the `coinops` Helm
+# release. Image builds happen in GitHub Actions, so Jenkins does not need GHCR
+# push permissions or broad cluster-admin style access.
 #
 # Apply once:
 #   kubectl apply -f manifests/jenkins-deployer-rbac.yaml
@@ -14,38 +15,64 @@ metadata:
   namespace: cicd
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+kind: Role
 metadata:
   name: coinops-deployer
+  namespace: coinops-backend
 rules:
   - apiGroups: [""]
-    resources: ["namespaces", "configmaps", "secrets", "services", "serviceaccounts", "pods", "pods/log", "events", "persistentvolumeclaims"]
+    resources: ["configmaps", "secrets", "services", "pods", "pods/log", "events"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["apps"]
-    resources: ["deployments", "statefulsets", "replicasets", "daemonsets"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  - apiGroups: ["batch"]
-    resources: ["jobs", "cronjobs"]
+    resources: ["deployments", "replicasets"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["networking.k8s.io"]
     resources: ["ingresses", "networkpolicies"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["traefik.io", "traefik.containo.us"]
-    resources: ["middlewares", "ingressroutes", "tlsoptions"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  - apiGroups: ["cert-manager.io"]
-    resources: ["certificates", "issuers", "clusterissuers"]
+    resources: ["middlewares"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: RoleBinding
 metadata:
   name: jenkins-deployer-coinops
+  namespace: coinops-backend
 subjects:
   - kind: ServiceAccount
     name: jenkins-deployer
     namespace: cicd
 roleRef:
-  kind: ClusterRole
+  kind: Role
+  name: coinops-deployer
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: coinops-deployer
+  namespace: coinops-frontend
+rules:
+  - apiGroups: [""]
+    resources: ["services", "pods", "pods/log", "events"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jenkins-deployer-coinops
+  namespace: coinops-frontend
+subjects:
+  - kind: ServiceAccount
+    name: jenkins-deployer
+    namespace: cicd
+roleRef:
+  kind: Role
   name: coinops-deployer
   apiGroup: rbac.authorization.k8s.io

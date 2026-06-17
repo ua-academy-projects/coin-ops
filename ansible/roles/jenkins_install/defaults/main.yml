@@ -91,14 +91,20 @@ jenkins_values:
                     - usernamePassword:
                         scope: GLOBAL
                         id: "github-pat"
-                        description: "GitHub PAT for repo checkout + GHCR push"
+                        description: "GitHub PAT for repo checkout"
                         username: "${GITHUB_USERNAME}"
                         password: "${GITHUB_TOKEN}"
         seed-coinops-pipeline: |
           jobs:
             - script: >
                 pipelineJob('coinops-deploy') {
-                  description('Build coinops images with kaniko and deploy to AKS. Managed by JCasC.')
+                  description('Deploy prebuilt CoinOps images to AKS. Image builds are owned by GitHub Actions; this job is managed by JCasC.')
+                  parameters {
+                    stringParam('PROXY_TAG', '', 'Optional tag for ghcr.io/ua-academy-projects/coin-ops-proxy')
+                    stringParam('HISTORY_API_TAG', '', 'Optional tag for ghcr.io/ua-academy-projects/coin-ops-history-api')
+                    stringParam('HISTORY_CONSUMER_TAG', '', 'Optional tag for ghcr.io/ua-academy-projects/coin-ops-history-consumer')
+                    stringParam('UI_TAG', '', 'Optional tag for ghcr.io/ua-academy-projects/coin-ops-ui')
+                  }
                   definition {
                     cpsScm {
                       scm {
@@ -113,9 +119,6 @@ jenkins_values:
                       scriptPath('Jenkinsfile')
                       lightweight(true)
                     }
-                  }
-                  triggers {
-                    githubPush()
                   }
                 }
     ingress:

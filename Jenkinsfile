@@ -7,58 +7,28 @@ pipeline {
                 kind: Pod
                 metadata:
                   labels:
-                    app: jenkins-coinops-builder
+                    app: jenkins-coinops-deployer
                 spec:
                   serviceAccountName: jenkins-deployer
                   containers:
-                    - name: kaniko-proxy
-                      image: gcr.io/kaniko-project/executor:v1.23.2-debug
-                      command: ["/busybox/cat"]
-                      tty: true
-                      volumeMounts:
-                        - name: ghcr-config
-                          mountPath: /kaniko/.docker
-                    - name: kaniko-api
-                      image: gcr.io/kaniko-project/executor:v1.23.2-debug
-                      command: ["/busybox/cat"]
-                      tty: true
-                      volumeMounts:
-                        - name: ghcr-config
-                          mountPath: /kaniko/.docker
-                    - name: kaniko-consumer
-                      image: gcr.io/kaniko-project/executor:v1.23.2-debug
-                      command: ["/busybox/cat"]
-                      tty: true
-                      volumeMounts:
-                        - name: ghcr-config
-                          mountPath: /kaniko/.docker
-                    - name: kaniko-ui
-                      image: gcr.io/kaniko-project/executor:v1.23.2-debug
-                      command: ["/busybox/cat"]
-                      tty: true
-                      volumeMounts:
-                        - name: ghcr-config
-                          mountPath: /kaniko/.docker
                     - name: tools
                       image: alpine/k8s:1.30.4
                       command: ["sleep"]
                       args: ["infinity"]
                       tty: true
-                  volumes:
-                    - name: ghcr-config
-                      secret:
-                        secretName: ghcr-dockerconfigjson
-                        items:
-                          - key: .dockerconfigjson
-                            path: config.json
             '''
         }
     }
 
     environment {
-        REGISTRY  = "ghcr.io/ua-academy-projects"
-        IMAGE_TAG = "${env.GIT_COMMIT?.take(7) ?: env.BUILD_NUMBER}"
-        BRANCH    = "${env.BRANCH_NAME ?: 'main'}"
+        BRANCH = "${env.BRANCH_NAME ?: 'main'}"
+    }
+
+    parameters {
+        string(name: 'PROXY_TAG', defaultValue: '', description: 'Optional tag for ghcr.io/ua-academy-projects/coin-ops-proxy')
+        string(name: 'HISTORY_API_TAG', defaultValue: '', description: 'Optional tag for ghcr.io/ua-academy-projects/coin-ops-history-api')
+        string(name: 'HISTORY_CONSUMER_TAG', defaultValue: '', description: 'Optional tag for ghcr.io/ua-academy-projects/coin-ops-history-consumer')
+        string(name: 'UI_TAG', defaultValue: '', description: 'Optional tag for ghcr.io/ua-academy-projects/coin-ops-ui')
     }
 
     options {
@@ -75,71 +45,29 @@ pipeline {
             }
         }
 
-        // Each image builds in its OWN kaniko container. kaniko unpacks each
-        // base image over the container root filesystem, so one container per
-        // image avoids cross-build corruption. Stages run sequentially to keep
-        // peak memory to a single build on the small nodes.
-        stage('Build proxy') {
-            steps {
-                container('kaniko-proxy') {
-                    sh '''
-                        /kaniko/executor \\
-                          --context=`pwd`/proxy \\
-                          --dockerfile=`pwd`/proxy/Dockerfile \\
-                          --destination=${REGISTRY}/coin-ops-proxy:${IMAGE_TAG} \\
-                          --destination=${REGISTRY}/coin-ops-proxy:dev-latest
-                    '''
-                }
-            }
-        }
-        stage('Build history-api') {
-            steps {
-                container('kaniko-api') {
-                    sh '''
-                        /kaniko/executor \\
-                          --context=`pwd`/history \\
-                          --dockerfile=`pwd`/history/Dockerfile.api \\
-                          --destination=${REGISTRY}/coin-ops-history-api:${IMAGE_TAG} \\
-                          --destination=${REGISTRY}/coin-ops-history-api:dev-latest
-                    '''
-                }
-            }
-        }
-        stage('Build history-consumer') {
-            steps {
-                container('kaniko-consumer') {
-                    sh '''
-                        /kaniko/executor \\
-                          --context=`pwd`/history \\
-                          --dockerfile=`pwd`/history/Dockerfile.consumer \\
-                          --destination=${REGISTRY}/coin-ops-history-consumer:${IMAGE_TAG} \\
-                          --destination=${REGISTRY}/coin-ops-history-consumer:dev-latest
-                    '''
-                }
-            }
-        }
-        stage('Build ui') {
-            steps {
-                container('kaniko-ui') {
-                    sh '''
-                        /kaniko/executor \\
-                          --context=`pwd`/ui-react \\
-                          --dockerfile=`pwd`/ui-react/Dockerfile \\
-                          --destination=${REGISTRY}/coin-ops-ui:${IMAGE_TAG} \\
-                          --destination=${REGISTRY}/coin-ops-ui:dev-latest
-                    '''
-                }
-            }
-        }
-
         stage('Deploy to AKS') {
             steps {
                 container('tools') {
                     sh '''
                         set -eu
+
+                        set_args=""
+                        if [ -n "${PROXY_TAG:-}" ]; then
+                          set_args="${set_args} --set proxy.image.tag=${PROXY_TAG}"
+                        fi
+                        if [ -n "${HISTORY_API_TAG:-}" ]; then
+                          set_args="${set_args} --set history.api.image.tag=${HISTORY_API_TAG}"
+                        fi
+                        if [ -n "${HISTORY_CONSUMER_TAG:-}" ]; then
+                          set_args="${set_args} --set history.consumer.image.tag=${HISTORY_CONSUMER_TAG}"
+                        fi
+                        if [ -n "${UI_TAG:-}" ]; then
+                          set_args="${set_args} --set ui.image.tag=${UI_TAG}"
+                        fi
+
                         helm upgrade --reuse-values \\
                           --namespace coinops-backend \\
-                          --set global.imageTag=${IMAGE_TAG} \\
+                          ${set_args} \\
                           coinops ./charts/coinops
                     '''
                 }
@@ -163,10 +91,10 @@ pipeline {
 
     post {
         success {
-            echo "Deployed coinops at tag ${IMAGE_TAG} from branch ${BRANCH}."
+            echo "Deployed coinops from branch ${BRANCH}: proxy=${params.PROXY_TAG}, history-api=${params.HISTORY_API_TAG}, history-consumer=${params.HISTORY_CONSUMER_TAG}, ui=${params.UI_TAG}."
         }
         failure {
-            echo "Build or deploy FAILED for ${BRANCH} @ ${env.GIT_COMMIT?.take(7)}."
+            echo "Deploy FAILED for ${BRANCH} @ ${env.GIT_COMMIT?.take(7)}."
         }
     }
 }

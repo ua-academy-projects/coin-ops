@@ -1,0 +1,3 @@
+---
+platform_kubeconfig: "{{ lookup('env', 'KUBECONFIG') | default(lookup('env', 'HOME') ~ '/.kube/config', true) }}"
+jenkins_deployer_rbac_manifest: "{{ playbook_dir }}/../manifests/jenkins-deployer-rbac.yaml"

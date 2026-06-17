@@ -6,11 +6,11 @@ Coin-Ops uses `release-please` to automate semantic version releases from Conven
 
 - `dev` is the integration branch for normal team work.
 - `main` is the stable release branch.
-- `Shabat` continues to publish `shabat-latest`.
-- `dev` continues to publish `dev-latest`.
+- `feat/azure-aks-platform` publishes commit SHA image tags and automatically
+  hands off to Jenkins for the AKS learning deployment.
 - Git tags named `vX.Y.Z` continue to publish immutable versioned images.
 
-Release automation runs only on pushes to `main`. It does not run on `dev` or `Shabat`.
+Release automation runs only on pushes to `main`. It does not run on feature branches.
 
 ## Tooling Choice
 
@@ -55,4 +55,4 @@ If maintainers later prefer natural tag-triggered Docker publishing instead of e
 
 ## Existing Docker Compatibility
 
-The Docker workflow already listens for tags matching `v*.*.*`. This release workflow only creates those tags; it does not change the Docker image build matrix and does not change `dev-latest` or `shabat-latest` behavior.
+The Docker workflow already listens for tags matching `v*.*.*`. On release tags, it builds every service image and publishes immutable SemVer tags. On `feat/azure-aks-platform`, it publishes immutable commit SHA tags and triggers Jenkins to deploy those tags.

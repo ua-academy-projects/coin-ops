@@ -1,7 +1,8 @@
 # CoinOps on AKS — runbook
 
-End-to-end deployment of CoinOps to **Azure Kubernetes Service (AKS)** with
-**Jenkins** as the CI/CD engine.
+End-to-end deployment of CoinOps to **Azure Kubernetes Service (AKS)**.
+GitHub Actions owns image builds and publishing; **Jenkins** owns deployment to
+AKS.
 
 ## Architecture
 
@@ -26,7 +27,7 @@ Cloudflare DNS
  coinops-rabbitmq         → RabbitMQ via Bitnami chart
  coinops-redis            → Redis via Bitnami chart
 
- cicd ns → jenkins controller + agent pods
+ cicd ns → jenkins controller + short-lived deploy agent pods
 ```
 
 ## Prerequisites (per workstation)
@@ -137,73 +138,89 @@ curl -I https://coinops.kazachuk-k3s.pp.ua/   # expect HTTP/2 200
 kubectl get pods -A
 ```
 
-## 4. Hook up CI/CD (Jenkins, one-time setup)
+## 4. CI/CD ownership
+
+The production split is:
+
+- **GitHub Actions** builds service images and pushes them to GHCR.
+- **Jenkins** deploys already-built image tags to AKS with Helm.
+- **Ansible** installs Jenkins, JCasC, plugins, and the Kubernetes RBAC used by
+  Jenkins deploy agents.
+
+This keeps expensive Docker/Kaniko work out of the AKS cluster. Jenkins still
+uses dynamic Kubernetes agents, but those agents are small deploy pods with
+`helm` and `kubectl`, not image builders.
+
+### 4.1 GitHub Actions image build
+
+The workflow `.github/workflows/docker-images.yml` runs on pushes to
+`feat/azure-aks-platform` and on release tags matching `v*.*.*`.
+
+It builds only the changed service images:
+
+- `proxy/**` -> `coin-ops-proxy`
+- `history/**` -> `coin-ops-history-api` and `coin-ops-history-consumer`
+- `ui-react/**` -> `coin-ops-ui`
+
+Tagging rules:
+
+- Every branch build publishes the immutable commit SHA tag.
+- release tags publish the SemVer tag, for example `v1.4.2`.
+
+### 4.2 Jenkins deploy
 
 After `aks-platform.yml` runs, Jenkins is accessible at
 `https://jenkins.kazachuk-k3s.pp.ua/`. The admin password is auto-generated
 and printed by the playbook (also stored in Secret
 `cicd/jenkins`, key `jenkins-admin-password`).
 
-The pipeline is defined by the root `Jenkinsfile`. To wire it up:
+Jenkins is configured by JCasC in the `jenkins_install` Ansible role. It creates
+the `coinops-deploy` pipeline job automatically; do not create jobs manually in
+the UI. The job reads `Jenkinsfile` from `feat/azure-aks-platform`, so a push to
+the feature branch builds and deploys the code from that same branch.
 
-### 4.1 Apply Jenkins RBAC + image-pull secret
+The root `Jenkinsfile` is deploy-only. It accepts image tag parameters:
 
-These are created by the post-Helm steps once, then can be re-applied freely:
+- `PROXY_TAG`
+- `HISTORY_API_TAG`
+- `HISTORY_CONSUMER_TAG`
+- `UI_TAG`
 
-```bash
-kubectl apply -f manifests/jenkins-deployer-rbac.yaml
+Use the commit SHA tags for reproducible deploys. Empty tag parameters mean
+"leave this service on its current Helm value".
 
-GHCR_USER=$(gcloud secrets versions access latest \
-  --project project-8888321c-54a9-4dac-86d \
-  --secret coinops-service-secrets | jq -r .ghcr_username)
-GHCR_TOKEN=$(gcloud secrets versions access latest \
-  --project project-8888321c-54a9-4dac-86d \
-  --secret coinops-service-secrets | jq -r .ghcr_token)
+For automatic feature-branch deploys, configure these GitHub repository secrets:
 
-kubectl -n cicd create secret docker-registry ghcr-dockerconfigjson \
-  --docker-server=ghcr.io \
-  --docker-username="$GHCR_USER" \
-  --docker-password="$GHCR_TOKEN" \
-  --dry-run=client -o yaml | kubectl apply -f -
-```
+| Secret | Purpose |
+| --- | --- |
+| `JENKINS_URL` | Public Jenkins URL, for example `https://jenkins.kazachuk-k3s.pp.ua` |
+| `JENKINS_USER` | Jenkins user allowed to run `coinops-deploy` |
+| `JENKINS_API_TOKEN` | API token for that Jenkins user |
 
-### 4.2 Add GitHub PAT as Jenkins credential
+When the `feat/azure-aks-platform` image workflow finishes successfully, GitHub
+Actions calls `coinops-deploy/buildWithParameters`. Changed services are
+deployed by immutable commit SHA tags; unchanged services are not passed to
+`helm --set`, so their current Helm values stay untouched. The workflow then
+follows the Jenkins queue item and build URL until Jenkins reports `SUCCESS` or
+failure, so the GitHub Actions run represents the full build-and-deploy cycle.
 
-In the UI: **Manage Jenkins → Credentials → System → Global → Add Credentials**:
+### 4.3 Jenkins dynamic workers
 
-- Kind: **Username with password**
-- Scope: **Global**
-- Username: `<ghcr_username>`
-- Password: `<ghcr_token>` (same PAT — needs `repo` + `write:packages` scopes)
-- ID: `github-pat`
+The Jenkins Kubernetes plugin creates a short-lived pod for each deploy run.
+Ansible does not create one worker per build. Ansible installs the controller,
+plugins, JCasC config, and RBAC; Jenkins creates and removes the agent pod at
+runtime.
 
-### 4.3 Create a Multibranch Pipeline
+The deploy pod uses ServiceAccount `jenkins-deployer` in namespace `cicd`. Its
+RBAC is applied by `ansible/aks-app.yml` after the application namespaces exist.
 
-**New Item → coinops → Multibranch Pipeline** with:
+### 4.4 Pipeline behaviour
 
-- Branch sources → GitHub
-  - Credentials: `github-pat`
-  - Repository HTTPS URL: `https://github.com/ua-academy-projects/coin-ops.git`
-  - Behaviors: discover branches, discover pull requests from origin
-- Build Configuration → by Jenkinsfile (default), Script Path `Jenkinsfile`
-- Save.
+On deploy, Jenkins:
 
-### 4.4 GitHub webhook
-
-Already created via `POST /repos/ua-academy-projects/coin-ops/hooks` to
-`https://jenkins.kazachuk-k3s.pp.ua/github-webhook/`. See the repo's
-**Settings → Webhooks** to verify it's delivering `200`.
-
-### 4.5 Pipeline behaviour
-
-On every push the pipeline:
-
-1. Builds four images in parallel with **kaniko** (no Docker daemon needed).
-2. Pushes them to GHCR tagged with both the short SHA and `dev-latest`.
-3. Runs `helm upgrade --reuse-values --set global.imageTag=<short-sha>` on
-   the `coinops` release.
-4. Waits for the rollout to settle in `coinops-backend` and
-   `coinops-frontend`.
+1. Checks out the repo to get the Helm chart.
+2. Runs `helm upgrade --reuse-values` with per-service image tags.
+3. Waits for the proxy, history API, history consumer, and UI rollouts.
 
 Failures roll back automatically because Kubernetes Deployments keep the
 previous ReplicaSet healthy until the new one passes readiness.
@@ -220,9 +237,8 @@ The single-node B2s_v2 cluster + LoadBalancer + 8 Gi disk costs roughly
 
 ## What's _not_ automated
 
-- The Multibranch Pipeline creation step (4.3). A future improvement is to
-  add a **JCasC ConfigMap** with a seed-job that creates the pipeline on
-  Jenkins startup.
+- Human approval gates for production-style releases. The current automatic
+  Jenkins handoff is scoped to `feat/azure-aks-platform`.
 - Tuning resource requests/limits if the cluster scales beyond one node.
 - Backup of the CNPG PostgreSQL volume to Azure Blob (CNPG supports it
   natively via `backup.barmanObjectStore`).

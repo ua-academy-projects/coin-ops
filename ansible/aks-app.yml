@@ -13,6 +13,12 @@
       tags:
         - data
 
+    - role: jenkins_deployer_rbac
+      tags:
+        - jenkins
+        - cicd
+        - rbac
+
     - role: coinops_app_chart
       tags:
         - app

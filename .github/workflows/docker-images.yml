@@ -3,8 +3,7 @@ name: Build Docker images
 on:
   push:
     branches:
-      - Shabat
-      - dev
+      - feat/azure-aks-platform
     tags:
       - "v*.*.*"
     paths:
@@ -23,29 +22,114 @@ env:
   OWNER: ua-academy-projects
 
 jobs:
+  changes:
+    name: Detect image changes
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.detect.outputs.matrix }}
+      has_changes: ${{ steps.detect.outputs.has_changes }}
+      proxy_changed: ${{ steps.detect.outputs.proxy_changed }}
+      history_changed: ${{ steps.detect.outputs.history_changed }}
+      ui_changed: ${{ steps.detect.outputs.ui_changed }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build service matrix
+        id: detect
+        shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          build_all=false
+          if [[ "${GITHUB_REF_TYPE}" == "tag" || "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            build_all=true
+          fi
+
+          if [[ -z "${BEFORE_SHA}" || "${BEFORE_SHA}" =~ ^0+$ ]]; then
+            build_all=true
+          fi
+
+          changed_files=""
+          if [[ "${build_all}" == "false" ]]; then
+            changed_files="$(git diff --name-only "${BEFORE_SHA}" "${GITHUB_SHA}")"
+          fi
+
+          matrix='[]'
+          proxy_changed=false
+          history_changed=false
+          ui_changed=false
+
+          add_service() {
+            matrix="$(
+              jq -c \
+                --arg service "$1" \
+                --arg image "$2" \
+                --arg context "$3" \
+                --arg dockerfile "$4" \
+                '. + [{
+                  service: $service,
+                  image: $image,
+                  context: $context,
+                  dockerfile: $dockerfile
+                }]' <<< "${matrix}"
+            )"
+          }
+
+          changed() {
+            local pattern="$1"
+            grep -Eq "${pattern}" <<< "${changed_files}"
+          }
+
+          if [[ "${build_all}" == "true" ]] || changed '^(\.github/workflows/docker-images\.yml|proxy/)'; then
+            proxy_changed=true
+            add_service proxy coin-ops-proxy ./proxy ./proxy/Dockerfile
+          fi
+
+          if [[ "${build_all}" == "true" ]] || changed '^(\.github/workflows/docker-images\.yml|history/)'; then
+            history_changed=true
+            add_service history-api coin-ops-history-api ./history ./history/Dockerfile.api
+            add_service history-consumer coin-ops-history-consumer ./history ./history/Dockerfile.consumer
+          fi
+
+          if [[ "${build_all}" == "true" ]] || changed '^(\.github/workflows/docker-images\.yml|ui-react/)'; then
+            ui_changed=true
+            add_service ui coin-ops-ui ./ui-react ./ui-react/Dockerfile
+          fi
+
+          {
+            echo "proxy_changed=${proxy_changed}"
+            echo "history_changed=${history_changed}"
+            echo "ui_changed=${ui_changed}"
+          } >> "${GITHUB_OUTPUT}"
+
+          if [[ "${matrix}" == "[]" ]]; then
+            echo 'has_changes=false' >> "${GITHUB_OUTPUT}"
+            echo 'matrix={"include":[]}' >> "${GITHUB_OUTPUT}"
+          else
+            echo 'has_changes=true' >> "${GITHUB_OUTPUT}"
+            echo "matrix={\"include\":${matrix}}" >> "${GITHUB_OUTPUT}"
+          fi
+
+          {
+            echo "### Image build matrix"
+            echo
+            jq -r '.[] | "- \(.service) -> \(.image)"' <<< "${matrix}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
   build:
     name: Build ${{ matrix.service }}
+    needs: changes
+    if: ${{ needs.changes.outputs.has_changes == 'true' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - service: proxy
-            image: coin-ops-proxy
-            context: ./proxy
-            dockerfile: ./proxy/Dockerfile
-          - service: history-api
-            image: coin-ops-history-api
-            context: ./history
-            dockerfile: ./history/Dockerfile.api
-          - service: history-consumer
-            image: coin-ops-history-consumer
-            context: ./history
-            dockerfile: ./history/Dockerfile.consumer
-          - service: ui
-            image: coin-ops-ui
-            context: ./ui-react
-            dockerfile: ./ui-react/Dockerfile
+      matrix: ${{ fromJson(needs.changes.outputs.matrix) }}
 
     steps:
       - name: Checkout
@@ -68,16 +152,6 @@ jobs:
           image="${REGISTRY}/${OWNER}/${{ matrix.image }}"
           tags="${image}:${GITHUB_SHA}"
           version="${GITHUB_SHA}"
-
-          if [[ "${GITHUB_REF_TYPE}" == "branch" && "${GITHUB_REF_NAME}" == "Shabat" ]]; then
-            tags="${tags}"$'\n'"${image}:shabat-latest"
-          fi
-
-                     
-          if [[ "${GITHUB_REF_TYPE}" == "branch" && "${GITHUB_REF_NAME}" == "dev" ]]; then
-            tags="${tags}"$'\n'"${image}:dev-latest"
-          fi
-
 
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             tags="${tags}"$'\n'"${image}:${GITHUB_REF_NAME}"
@@ -102,3 +176,150 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ steps.image-meta.outputs.version }}
+
+  deploy-aks-platform:
+    name: Deploy feature branch to AKS
+    needs:
+      - changes
+      - build
+    if: >-
+      ${{
+        github.ref_type == 'branch' &&
+        github.ref_name == 'feat/azure-aks-platform' &&
+        needs.changes.outputs.has_changes == 'true' &&
+        needs.build.result == 'success'
+      }}
+    runs-on: ubuntu-latest
+    env:
+      JENKINS_JOB: coinops-deploy
+      JENKINS_URL: ${{ secrets.JENKINS_URL }}
+      JENKINS_USER: ${{ secrets.JENKINS_USER }}
+      JENKINS_API_TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
+      JENKINS_TIMEOUT_SECONDS: "900"
+      PROXY_TAG: ${{ needs.changes.outputs.proxy_changed == 'true' && github.sha || '' }}
+      HISTORY_API_TAG: ${{ needs.changes.outputs.history_changed == 'true' && github.sha || '' }}
+      HISTORY_CONSUMER_TAG: ${{ needs.changes.outputs.history_changed == 'true' && github.sha || '' }}
+      UI_TAG: ${{ needs.changes.outputs.ui_changed == 'true' && github.sha || '' }}
+
+    steps:
+      - name: Trigger Jenkins deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for var in JENKINS_URL JENKINS_USER JENKINS_API_TOKEN; do
+            if [[ -z "${!var}" ]]; then
+              echo "::error::Repository secret ${var} is required for Jenkins deploy."
+              exit 1
+            fi
+          done
+
+          jenkins_url="${JENKINS_URL%/}"
+          job_url="${jenkins_url}/job/${JENKINS_JOB}"
+
+          auth_args=(-u "${JENKINS_USER}:${JENKINS_API_TOKEN}")
+          crumb_json="$(curl -fsS -u "${JENKINS_USER}:${JENKINS_API_TOKEN}" \
+            "${jenkins_url}/crumbIssuer/api/json" || true)"
+
+          crumb_args=()
+          if [[ -n "${crumb_json}" ]]; then
+            crumb_field="$(jq -r '.crumbRequestField // empty' <<< "${crumb_json}")"
+            crumb_value="$(jq -r '.crumb // empty' <<< "${crumb_json}")"
+            if [[ -n "${crumb_field}" && -n "${crumb_value}" ]]; then
+              crumb_args=(-H "${crumb_field}: ${crumb_value}")
+            fi
+          fi
+
+          headers_file="$(mktemp)"
+          body_file="$(mktemp)"
+          http_status="$(
+            curl -sS -X POST "${auth_args[@]}" \
+              "${crumb_args[@]}" \
+              --data-urlencode "PROXY_TAG=${PROXY_TAG}" \
+              --data-urlencode "HISTORY_API_TAG=${HISTORY_API_TAG}" \
+              --data-urlencode "HISTORY_CONSUMER_TAG=${HISTORY_CONSUMER_TAG}" \
+              --data-urlencode "UI_TAG=${UI_TAG}" \
+              --dump-header "${headers_file}" \
+              --output "${body_file}" \
+              --write-out "%{http_code}" \
+              "${job_url}/buildWithParameters"
+          )"
+
+          if [[ "${http_status}" != "201" && "${http_status}" != "302" ]]; then
+            echo "::error::Jenkins trigger failed with HTTP ${http_status}."
+            cat "${body_file}"
+            exit 1
+          fi
+
+          queue_url="$(
+            awk 'BEGIN { IGNORECASE = 1 } /^Location:/ { sub(/\r$/, "", $2); print $2 }' "${headers_file}" | tail -n1
+          )"
+
+          if [[ -z "${queue_url}" ]]; then
+            echo "::error::Jenkins did not return a queue Location header."
+            cat "${headers_file}"
+            exit 1
+          fi
+
+          echo "Queued Jenkins deploy: ${queue_url}"
+
+          deadline=$((SECONDS + JENKINS_TIMEOUT_SECONDS))
+          build_url=""
+          queue_api_url="${queue_url%/}/api/json"
+          while (( SECONDS < deadline )); do
+            queue_json="$(curl -fsS "${auth_args[@]}" "${queue_api_url}")"
+            build_url="$(jq -r '.executable.url // empty' <<< "${queue_json}")"
+            if [[ -n "${build_url}" ]]; then
+              break
+            fi
+            blocked="$(jq -r '.why // empty' <<< "${queue_json}")"
+            if [[ -n "${blocked}" ]]; then
+              echo "Waiting in Jenkins queue: ${blocked}"
+            else
+              echo "Waiting in Jenkins queue..."
+            fi
+            sleep 5
+          done
+
+          if [[ -z "${build_url}" ]]; then
+            echo "::error::Timed out waiting for Jenkins queue item to start."
+            exit 1
+          fi
+
+          echo "Started Jenkins deploy: ${build_url}"
+
+          result=""
+          build_api_url="${build_url%/}/api/json"
+          while (( SECONDS < deadline )); do
+            build_json="$(curl -fsS "${auth_args[@]}" "${build_api_url}")"
+            building="$(jq -r '.building' <<< "${build_json}")"
+            result="$(jq -r '.result // empty' <<< "${build_json}")"
+            if [[ "${building}" == "false" ]]; then
+              break
+            fi
+            echo "Waiting for Jenkins deploy build..."
+            sleep 10
+          done
+
+          if [[ -z "${result}" ]]; then
+            echo "::error::Timed out waiting for Jenkins deploy result: ${build_url}"
+            exit 1
+          fi
+
+          if [[ "${result}" != "SUCCESS" ]]; then
+            echo "::error::Jenkins deploy finished with result ${result}: ${build_url}"
+            exit 1
+          fi
+
+          echo "Jenkins deploy succeeded: ${build_url}"
+
+          {
+            echo "### Jenkins deploy succeeded"
+            echo
+            echo "- job: ${JENKINS_JOB}"
+            echo "- build: ${build_url}"
+            echo "- proxy: ${PROXY_TAG:-unchanged}"
+            echo "- history-api: ${HISTORY_API_TAG:-unchanged}"
+            echo "- history-consumer: ${HISTORY_CONSUMER_TAG:-unchanged}"
+            echo "- ui: ${UI_TAG:-unchanged}"
+          } >> "${GITHUB_STEP_SUMMARY}"
