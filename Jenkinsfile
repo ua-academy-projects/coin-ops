@@ -141,6 +141,7 @@ spec:
               string(credentialsId: 'cloudflare-zone-id', variable: 'TF_VAR_cloudflare_zone_id')
             ]) {
               dir('terraform') {
+								sh 'mkdir -p ~/.ssh && cp $SSH_PUBLIC_KEY_PATH ~/.ssh/id_ed25519.pub'
                 sh 'terraform init'
                 sh 'terraform plan -out=tfplan'
               }
