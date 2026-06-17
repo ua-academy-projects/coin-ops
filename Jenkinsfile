@@ -163,6 +163,21 @@ spec:
               kubectl -n coinops-data rollout status deploy/postgres --timeout=120s
               kubectl -n coinops-data rollout status deploy/redis --timeout=120s
               kubectl -n coinops-data rollout status deploy/rabbitmq --timeout=120s
+
+              kubectl create secret generic coinops-secrets \
+                --namespace coinops-app \
+                --from-literal=DB_NAME=currency_rates_tracker \
+                --from-literal=DB_USER=postgres \
+                --from-literal=DB_PASSWORD=postgres \
+                --from-literal=DB_HOST=postgres.coinops-data.svc.cluster.local \
+                --from-literal=DB_PORT=5432 \
+                --from-literal=REDIS_HOST=redis.coinops-data.svc.cluster.local \
+                --from-literal=REDIS_PORT=6379 \
+                --from-literal=RABBITMQ_HOST=rabbitmq.coinops-data.svc.cluster.local \
+                --from-literal=RABBITMQ_PORT=5672 \
+                --from-literal=RABBITMQ_USER=admin \
+                --from-literal=RABBITMQ_PASSWORD=admin \
+                --dry-run=client -o yaml | kubectl apply -f -
             '''
           }
         }
