@@ -5,6 +5,7 @@ pipeline {
 apiVersion: v1
 kind: Pod
 spec:
+  serviceAccountName: jenkins-deployer
   containers:
     - name: kaniko-proxy
       image: gcr.io/kaniko-project/executor:v1.23.2-debug
@@ -34,12 +35,8 @@ spec:
       volumeMounts:
         - name: docker-config
           mountPath: /kaniko/.docker
-    - name: terraform
-      image: hashicorp/terraform:1.9.8
-      command: [sleep]
-      args: [infinity]
     - name: tools
-      image: alpine/helm:3.14.0
+      image: alpine/k8s:1.30.4
       command: [sleep]
       args: [infinity]
   volumes:
@@ -58,14 +55,6 @@ spec:
       SHA = "${env.GIT_COMMIT[0..6]}"
       AKS_CLUSTER = "coinops-aks"
       RESOURCE_GROUP = "coinops-aks-rg"
-      NAMESPACE = "coinops"
-
-      TF_VAR_db_name = "currency_rates_tracker"
-      TF_VAR_db_user = "postgres"
-      TF_VAR_db_password = "postgres"
-      TF_VAR_domain_name = "coin-ops.pp.ua"
-
-			AWS_DEFAULT_REGION = "eu-central-1"
     }
 
     stages {
@@ -130,65 +119,72 @@ spec:
           }
         }
       }
-      // stage('Terraform Plan') {
-      //   steps {
-      //     container('terraform') {
-      //       withCredentials([
-      //         file(credentialsId: 'gcp-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS'),
-			// 				file(credentialsId: 'sshkey', variable: 'SSH_PUBLIC_KEY_PATH'),
-      //         string(credentialsId: 'azure-client-id', variable: 'ARM_CLIENT_ID'),
-      //         string(credentialsId: 'azure-client-secret', variable: 'ARM_CLIENT_SECRET'),
-      //         string(credentialsId: 'azure-tenant-id', variable: 'ARM_TENANT_ID'),
-      //         string(credentialsId: 'azure-subscription-id', variable: 'ARM_SUBSCRIPTION_ID'),
-      //         string(credentialsId: 'cloudflare-api-token', variable: 'TF_VAR_cloudflare_api_token'),
-      //         string(credentialsId: 'cloudflare-zone-id', variable: 'TF_VAR_cloudflare_zone_id'),
-			// 				string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
-			// 				string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
-      //       ]) {
-			// 				sh '''
-			// 					cat > /tmp/id_ed25519.pub <<EOF
-			// 				ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMCAv5M0/tJCzjIM2iTjeJDc4UivC7hOUH/M8RBL/iOp rkurdupel@Romans-MacBook-Pro.local
-			// 				EOF	'''
-      //         dir('terraform') {
-      //           sh 'terraform init'
-      //           sh 'terraform plan -out=tfplan'
-      //         }
-      //       }
-      //     }
-      //   }
-      // }
 
-      // stage('Approval') {
-      //   steps {
-      //     input message: 'Terraform plan completed. Proceed with apply?',
-      //       ok: 'Proceed'
-      //   }
-      // }
+      stage('Deploy Bitnami dependencies') {
+        steps {
+          container('tools') {
+            sh '''
+              helm repo add bitnami https://charts.bitnami.com/bitnami
+              helm repo update
 
-      // stage('Terraform Apply') {
-      //   steps {
-      //     container('terraform') {
-      //       withCredentials([
-      //         file(credentialsId: 'gcp-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS'),
-      //         string(credentialsId: 'azure-client-id', variable: 'ARM_CLIENT_ID'),
-      //         string(credentialsId: 'azure-client-secret', variable: 'ARM_CLIENT_SECRET'),
-      //         string(credentialsId: 'azure-tenant-id', variable: 'ARM_TENANT_ID'),
-      //         string(credentialsId: 'azure-subscription-id', variable: 'ARM_SUBSCRIPTION_ID'),
-      //         string(credentialsId: 'cloudflare-api-token', variable: 'TF_VAR_cloudflare_api_token'),
-      //         string(credentialsId: 'cloudflare-zone-id', variable: 'TF_VAR_cloudflare_zone_id'),
-			// 				string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
-			// 				string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
-      //       ]) {
-			// 				sh '''
-			// 					cat > /tmp/id_ed25519.pub <<EOF
-			// 				ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMCAv5M0/tJCzjIM2iTjeJDc4UivC7hOUH/M8RBL/iOp rkurdupel@Romans-MacBook-Pro.local
-			// 				EOF	'''
-      //         dir('terraform') {
-      //           sh 'terraform apply -auto-approve tfplan'
-      //         }
-      //       }
-      //     }
-       // }
-     // }
+              helm upgrade --install postgres bitnami/postgresql \
+                --namespace coinops-data \
+                --set auth.username=postgres \
+                --set auth.password=postgres \
+                --set auth.database=currency_rates_tracker \
+                --set primary.persistence.enabled=false \
+                --wait --timeout 5m
+              helm upgrade --install redis bitnami/redis \
+                --namespace coinops-data \
+                --set auth.enabled=false \
+                --set master.persistence.enabled=false \
+                --set replica.replicaCount=0 \
+                --wait --timeout 5m
+
+              helm upgrade --install rabbitmq bitnami/rabbitmq \
+                --namespace coinops-data \
+                --set auth.username=admin \
+                --set auth.password=admin \
+                --set persistence.enabled=false \
+                --wait --timeout 5m
+            '''
+          }
+        }
+      }
+
+      stage('Deploy coinops app') {
+        steps {
+          container('tools') {
+            sh '''
+              helm upgrade --install coinops ./charts/coinops \
+                --namespace coinops-app \
+                --set global.imageTag=${SHA} \
+                --wait --timeout 5m
+            '''
+          }
+        }
+      }
+
+      stage('Verify rollout') {
+        steps {
+          container('tools') {
+            sh '''
+              kubectl -n coinops-app rollout status deploy/proxy --timeout=180s
+              kubectl -n coinops-app rollout status deploy/history-api --timeout=180s
+              kubectl -n coinops-app rollout status deploy/history-consumer --timeout=180s
+              kubectl -n coinops-app rollout status deploy/ui --timeout=180s
+            '''
+          }
+        }
+      }
+    }
+
+    post {
+      success {
+        echo "Pipeline succeeded. Images pushed and deployed to AKS."
+      }
+      failure {
+        echo "Pipeline FAILED for commit ${env.GIT_COMMIT?.take(7)}."
+      }
     }
 }
