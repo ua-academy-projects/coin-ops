@@ -16,21 +16,41 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            configs
+            scripts
+
   terraform:
     name: Terraform
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            terraform/cloud
+            
   ansible:
     name: Ansible
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            ansible
+
   shell:
     name: Shell
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            bootstrap
