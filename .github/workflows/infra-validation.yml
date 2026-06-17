@@ -38,19 +38,37 @@ jobs:
         uses: hashicorp/setup-terraform@v3
 
       - name: Check Terraform formatting
-        run: terraform fmt -check -recursive terraform/cloud
-  #
-  # ansible:
-  #   name: Ansible
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v6
-  #       with:
-  #         fetch-depth: 1
-  #         sparse-checkout: |
-  #           ansible
-  #
+        run: |
+          echo "Checking Terraform formatting. If this step fails, run: terraform fmt -recursive terraform/cloud"
+          terraform fmt -check -recursive terraform/cloud
+
+  ansible:
+    name: Ansible
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            ansible
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Ansible tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible ansible-lint
+
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r ansible/requirements.yml
+
+      - name: Run ansible-lint
+        run: ansible-lint ansible
+
   # shell:
   #   name: Shell
   #   runs-on: ubuntu-latest
