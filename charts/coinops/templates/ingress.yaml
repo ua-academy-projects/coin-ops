@@ -3,8 +3,8 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: coinops
+  namespace: {{ .Release.Namespace }}
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
     cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: nginx
@@ -12,24 +12,13 @@ spec:
     - host: {{ .Values.ingress.domain }}
       http:
         paths:
-          - path: /api(/|$)(.*)
-            pathType: ImplementationSpecific
-            backend:
-              service:
-                name: proxy
-                port: { number: 8080 }
-          - path: /history-api(/|$)(.*)
-            pathType: ImplementationSpecific
-            backend:
-              service:
-                name: history-api
-                port: { number: 8000 }
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: ui
-                port: { number: 80 }
+                name: gateway
+                port:
+                  number: 80
   tls:
     - hosts:
         - {{ .Values.ingress.domain }}
