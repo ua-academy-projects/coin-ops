@@ -237,8 +237,6 @@ POLICY_DOC=$(cat <<'POLICY'
       "Action": "iam:CreateServiceLinkedRole",
       "Resource": "*"
     }
-      }
-    }
   ]
 }
 POLICY
