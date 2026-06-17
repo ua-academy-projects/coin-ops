@@ -39,7 +39,7 @@ spec:
                 port:
                   number: {{.Values.historyApi.port}}
           - path: /health
-            pathType: prefix
+            pathType: Prefix
             backend:
               service:
                 name: {{.Values.proxy.name}}
