@@ -11,4 +11,4 @@ COPY . .
 
 USER user
 
-CMD ["python", "consume.py"]
+CMD ["python", "consumer.py"]
