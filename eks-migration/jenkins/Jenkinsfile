@@ -31,7 +31,6 @@ spec:
                     script {
                         // The pod already assumes the IAM role via IRSA. No AWS keys needed.
                         sh "aws ecr get-login-password --region ${AWS_REGION} | helm registry login --username AWS --password-stdin ${ECR_REGISTRY}"
-                        sh "aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}"
                     }
                 }
             }

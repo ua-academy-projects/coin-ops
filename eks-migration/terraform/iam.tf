@@ -46,7 +46,8 @@ resource "aws_iam_role_policy" "jenkins_ecr_access" {
           "ecr:DescribeRepositories",
           "ecr:ListImages",
           "ecr:DescribeImages",
-          "ecr:BatchGetImage"
+          "ecr:BatchGetImage",
+          "eks:DescribeCluster"
         ]
         Resource = "*"
       }
