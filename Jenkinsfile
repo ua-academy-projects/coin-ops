@@ -133,6 +133,7 @@ spec:
           container('terraform') {
             withCredentials([
               file(credentialsId: 'gcp-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS'),
+							file(credentialsId:, 'ssh-public-key', variable: 'SSH_PUBLIC_KEY_PATH'),
               string(credentialsId: 'azure-client-id', variable: 'ARM_CLIENT_ID'),
               string(credentialsId: 'azure-client-secret', variable: 'ARM_CLIENT_SECRET'),
               string(credentialsId: 'azure-tenant-id', variable: 'ARM_TENANT_ID'),
@@ -141,7 +142,6 @@ spec:
               string(credentialsId: 'cloudflare-zone-id', variable: 'TF_VAR_cloudflare_zone_id')
             ]) {
               dir('terraform') {
-								sh 'mkdir -p ~/.ssh && cp $SSH_PUBLIC_KEY_PATH ~/.ssh/id_ed25519.pub'
                 sh 'terraform init'
                 sh 'terraform plan -out=tfplan'
               }
