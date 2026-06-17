@@ -6,7 +6,28 @@ apiVersion: v1
 kind: Pod
 spec:
   containers:
-    - name: kaniko
+    - name: kaniko-proxy
+      image: gcr.io/kaniko-project/executor:v1.23.2-debug
+      command: [sleep]
+      args: [infinity]
+      volumeMounts:
+        - name: docker-config
+          mountPath: /kaniko/.docker
+    - name: kaniko-api
+      image: gcr.io/kaniko-project/executor:v1.23.2-debug
+      command: [sleep]
+      args: [infinity]
+      volumeMounts:
+        - name: docker-config
+          mountPath: /kaniko/.docker
+    - name: kaniko-consumer
+      image: gcr.io/kaniko-project/executor:v1.23.2-debug
+      command: [sleep]
+      args: [infinity]
+      volumeMounts:
+        - name: docker-config
+          mountPath: /kaniko/.docker
+    - name: kaniko-ui
       image: gcr.io/kaniko-project/executor:v1.23.2-debug
       command: [sleep]
       args: [infinity]
