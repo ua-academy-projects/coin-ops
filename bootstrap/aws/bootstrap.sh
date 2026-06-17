@@ -208,6 +208,28 @@ POLICY_DOC=$(cat <<'POLICY'
         "ec2:DescribeKeyPairs"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "EKS",
+      "Effect": "Allow",
+      "Action": [
+        "eks:CreateCluster",
+        "eks:DeleteCluster",
+        "eks:DescribeCluster",
+        "eks:ListClusters",
+        "eks:UpdateClusterConfig",
+        "eks:UpdateClusterVersion",
+        "eks:TagResource",
+        "eks:UntagResource",
+        "eks:ListTagsForResource",
+        "eks:CreateNodegroup",
+        "eks:DeleteNodegroup",
+        "eks:DescribeNodegroup",
+        "eks:ListNodegroups",
+        "eks:UpdateNodegroupConfig",
+        "eks:UpdateNodegroupVersion"
+      ],
+      "Resource": "*"
     }
   ]
 }
