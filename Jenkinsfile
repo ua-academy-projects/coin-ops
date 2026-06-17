@@ -34,10 +34,10 @@ spec:
       volumeMounts:
         - name: docker-config
           mountPath: /kaniko/.docker
-		- name: terraform
-			image: hashicorp/terraform:1.9.8
-			command: [sleep]
-			args: [infinity]
+    - name: terraform
+        image: hashicorp/terraform:1.9.8
+        command: [sleep]
+        args: [infinity]
     - name: tools
       image: alpine/helm:3.14.0
       command: [sleep]
