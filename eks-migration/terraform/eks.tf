@@ -24,11 +24,30 @@ module "eks" {
   # Enable OIDC provider for IRSA (IAM Roles for Service Accounts)
   enable_irsa = true
 
+  node_security_group_additional_rules = {
+    ingress_nginx_webhook = {
+      description                   = "Cluster API to Nginx Ingress webhook"
+      protocol                      = "tcp"
+      from_port                     = 8443
+      to_port                       = 8443
+      type                          = "ingress"
+      source_cluster_security_group = true
+    }
+    ingress_cnpg_webhook = {
+      description                   = "Cluster API to CNPG webhook"
+      protocol                      = "tcp"
+      from_port                     = 9443
+      to_port                       = 9443
+      type                          = "ingress"
+      source_cluster_security_group = true
+    }
+  }
+
   eks_managed_node_groups = {
     default = {
-      min_size     = 2
+      min_size     = 3
       max_size     = 5
-      desired_size = 2
+      desired_size = 3
 
       instance_types = ["t3.medium"]
       capacity_type  = "ON_DEMAND"
@@ -258,17 +277,17 @@ resource "helm_release" "jenkins" {
 
   # Inject the IRSA role into Jenkins agent service account
   set {
-    name  = "agent.serviceAccount.create"
+    name  = "serviceAccountAgent.create"
     value = "true"
   }
 
   set {
-    name  = "agent.serviceAccount.name"
+    name  = "serviceAccountAgent.name"
     value = "jenkins-agent"
   }
 
   set {
-    name  = "agent.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+    name  = "serviceAccountAgent.annotations.eks\\.amazonaws\\.com/role-arn"
     value = aws_iam_role.jenkins_agent_role.arn
   }
 
