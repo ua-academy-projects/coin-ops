@@ -1,48 +1,37 @@
-{{if .Values.ingress.enabled}}
+{{- if .Values.ingress.enabled }}
 apiVersion: networking.k8s.io/v1
-kind: Ingress   # ingress always listens on 80/443
+kind: Ingress
 metadata:
   name: coinops
-  namespace: {{.Release.Namespace}}
   annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
     cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
-  ingressClassName: {{.Values.ingress.ingressClassName}}
-  # tell traefik to use HTTPS for this host
-  tls:  
-    - hosts:
-        - {{.Values.ingress.domain}}
-      secretName: coinops-tls
+  ingressClassName: nginx
   rules:
-    - host: {{.Values.ingress.domain}}  # only match request for app.coin-ops.pp.ua
+    - host: {{ .Values.ingress.domain }}
       http:
         paths:
-          - path: / # match any path starting with /
-            pathType: Prefix    # match everything / (/, /api, /history-api)
+          - path: /api(/|$)(.*)
+            pathType: ImplementationSpecific
             backend:
               service:
-                name: {{.Values.ui.name}}
-                port:
-                  number: {{.Values.ui.port}}    # ui service on port 80
-          - path: /api
-            pathType: Prefix
-            backend: 
+                name: proxy
+                port: { number: 8080 }
+          - path: /history-api(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
               service:
-                name: {{.Values.proxy.name}}
-                port:
-                  number: {{.Values.proxy.port}}
-          - path: /history-api
+                name: history-api
+                port: { number: 8000 }
+          - path: /
             pathType: Prefix
             backend:
               service:
-                name: {{.Values.historyApi.name}}
-                port:
-                  number: {{.Values.historyApi.port}}
-          - path: /health
-            pathType: Prefix
-            backend:
-              service:
-                name: {{.Values.proxy.name}}
-                port:
-                  number: {{.Values.proxy.port}}
-{{end}}
+                name: ui
+                port: { number: 80 }
+  tls:
+    - hosts:
+        - {{ .Values.ingress.domain }}
+      secretName: coinops-tls
+{{- end }}
