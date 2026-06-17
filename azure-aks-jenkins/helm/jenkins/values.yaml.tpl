@@ -26,6 +26,15 @@ controller:
       platform-config: |
         jenkins:
           systemMessage: "Provisioned by Terraform on AKS."
+          clouds:
+            - kubernetes:
+                name: "kubernetes"
+                namespace: "${jenkins_namespace}"
+                serverUrl: "https://kubernetes.default"
+                jenkinsUrl: "http://jenkins.${jenkins_namespace}.svc.cluster.local:8080"
+                jenkinsTunnel: "jenkins-agent.${jenkins_namespace}.svc.cluster.local:50000"
+                skipTlsVerify: true
+                containerCapStr: "10"
         credentials:
           system:
             domainCredentials:

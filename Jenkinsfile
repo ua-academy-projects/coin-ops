@@ -1,5 +1,35 @@
 pipeline {
-  agent any
+  agent {
+    kubernetes {
+      defaultContainer 'node'
+      yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  serviceAccountName: jenkins
+  containers:
+    - name: node
+      image: node:22-bookworm-slim
+      command:
+        - cat
+      tty: true
+    - name: kaniko
+      image: gcr.io/kaniko-project/executor:debug
+      command:
+        - /busybox/cat
+      tty: true
+    - name: azure
+      image: mcr.microsoft.com/azure-cli:2.61.0
+      command:
+        - cat
+      tty: true
+'''
+    }
+  }
+
+  options {
+    skipDefaultCheckout()
+  }
 
   parameters {
     string(name: 'APP_DOMAIN', defaultValue: 'example.com', description: 'Base DNS zone, for example example.com')
@@ -22,13 +52,16 @@ pipeline {
   stages {
     stage('Checkout source code') {
       steps {
-        checkout scm
+        container('node') {
+          checkout scm
+        }
       }
     }
 
-    stage('Build Docker image') {
+    stage('Prepare build metadata') {
       steps {
-        sh '''
+        container('node') {
+          sh '''
           set -eu
           SHORT_SHA="$(git rev-parse --short=7 HEAD)"
           FULL_SHA="$(git rev-parse --short=12 HEAD)"
@@ -41,41 +74,38 @@ IMAGE_TAG=${IMAGE_TAG}
 IMAGE_TAG_SHA=${IMAGE_TAG_SHA}
 IMAGE_TAG_BUILD=${IMAGE_TAG_BUILD}
 EOF
-
-          docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" .
-          docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "${IMAGE_NAME}:${IMAGE_TAG_SHA}"
-          docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "${IMAGE_NAME}:${IMAGE_TAG_BUILD}"
-        '''
+          '''
+        }
       }
     }
 
     stage('Run basic validation') {
       steps {
-        sh '''
+        container('node') {
+          sh '''
           set -eu
           . ./.build.env
-          docker image inspect "${IMAGE_NAME}:${IMAGE_TAG}" >/dev/null
-          docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/workspace" -w /workspace/ui-react node:22-bookworm-slim bash -lc '
-            npm ci
-            npm run lint
-            npm run test:run
-          '
-        '''
+          cd ui-react
+          npm ci
+          npm run lint
+          npm run test:run
+          '''
+        }
       }
     }
 
-    stage('Login to ACR and push image') {
+    stage('Resolve ACR login server') {
       steps {
-        withCredentials([
-          string(credentialsId: 'AZURE_CLIENT_ID', variable: 'AZURE_CLIENT_ID'),
-          string(credentialsId: 'AZURE_CLIENT_SECRET', variable: 'AZURE_CLIENT_SECRET'),
-          string(credentialsId: 'AZURE_TENANT_ID', variable: 'AZURE_TENANT_ID'),
-          string(credentialsId: 'AZURE_SUBSCRIPTION_ID', variable: 'AZURE_SUBSCRIPTION_ID'),
-          string(credentialsId: 'ACR_NAME', variable: 'ACR_NAME')
-        ]) {
-          sh '''
+        container('azure') {
+          withCredentials([
+            string(credentialsId: 'AZURE_CLIENT_ID', variable: 'AZURE_CLIENT_ID'),
+            string(credentialsId: 'AZURE_CLIENT_SECRET', variable: 'AZURE_CLIENT_SECRET'),
+            string(credentialsId: 'AZURE_TENANT_ID', variable: 'AZURE_TENANT_ID'),
+            string(credentialsId: 'AZURE_SUBSCRIPTION_ID', variable: 'AZURE_SUBSCRIPTION_ID'),
+            string(credentialsId: 'ACR_NAME', variable: 'ACR_NAME')
+          ]) {
+            sh '''
             set -eu
-            . ./.build.env
             az login --service-principal \
               --username "${AZURE_CLIENT_ID}" \
               --password "${AZURE_CLIENT_SECRET}" \
@@ -85,26 +115,57 @@ EOF
 
             ACR_LOGIN_SERVER="$(az acr show --name "${ACR_NAME}" --query loginServer -o tsv)"
             echo "ACR_LOGIN_SERVER=${ACR_LOGIN_SERVER}" > .acr.env
+            '''
+          }
+        }
+      }
+    }
 
-            docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}"
-            docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG_SHA}"
-            docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG_BUILD}"
+    stage('Build and push image to ACR') {
+      steps {
+        container('kaniko') {
+          withCredentials([usernamePassword(credentialsId: 'acr-push', usernameVariable: 'ACR_USER', passwordVariable: 'ACR_PASS')]) {
+            sh '''
+            set -eu
+            . ./.build.env
+            . ./.acr.env
 
-            docker push "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}"
-            docker push "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG_SHA}"
-            docker push "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG_BUILD}"
-          '''
+            mkdir -p /kaniko/.docker
+            cat > /kaniko/.docker/config.json <<EOF
+{"auths":{"${ACR_LOGIN_SERVER}":{"username":"${ACR_USER}","password":"${ACR_PASS}"}}}
+EOF
+
+            /kaniko/executor \
+              --context "${WORKSPACE}" \
+              --dockerfile "${WORKSPACE}/Dockerfile" \
+              --destination "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}" \
+              --destination "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG_SHA}" \
+              --destination "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG_BUILD}" \
+              --cache=true
+            '''
+          }
         }
       }
     }
 
     stage('Deploy application to AKS using Helm') {
       steps {
-        withCredentials([file(credentialsId: 'KUBECONFIG', variable: 'KUBECONFIG')]) {
-          sh '''
+        container('azure') {
+          withCredentials([file(credentialsId: 'KUBECONFIG', variable: 'KUBECONFIG')]) {
+            sh '''
             set -eu
             . ./.acr.env
             . ./.build.env
+
+            if ! command -v kubectl >/dev/null 2>&1; then
+              az aks install-cli --install-location /usr/local/bin/kubectl
+            fi
+            if ! command -v helm >/dev/null 2>&1; then
+              HELM_VERSION="v3.16.1"
+              curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tgz
+              tar -xzf /tmp/helm.tgz -C /tmp
+              install /tmp/linux-amd64/helm /usr/local/bin/helm
+            fi
 
             helm dependency update "${CHART_DIR}" >/dev/null 2>&1 || true
 
@@ -117,19 +178,22 @@ EOF
               --set-string image.tag="${IMAGE_TAG}" \
               --set-string ingress.host="${APP_HOST}" \
               --set-string ingress.tls.secretName="${INGRESS_TLS_SECRET_NAME}" \
+              --atomic \
               --wait \
               --timeout 10m
 
             kubectl --kubeconfig "${KUBECONFIG}" rollout status deployment/"${APP_NAME}" -n "${APP_NAMESPACE}" --timeout=300s
-          '''
+            '''
+          }
         }
       }
     }
 
     stage('Obtain application external endpoint') {
       steps {
-        withCredentials([file(credentialsId: 'KUBECONFIG', variable: 'KUBECONFIG')]) {
-          sh '''
+        container('azure') {
+          withCredentials([file(credentialsId: 'KUBECONFIG', variable: 'KUBECONFIG')]) {
+            sh '''
             set -eu
 
             EXTERNAL_IP=""
@@ -152,60 +216,49 @@ EOF
 
             echo "EXTERNAL_IP=${EXTERNAL_IP}" > .deploy.env
             echo "Resolved endpoint IP: ${EXTERNAL_IP}"
-          '''
+            '''
+          }
         }
       }
     }
 
     stage('Create or update Cloudflare DNS record') {
       steps {
-        withCredentials([
-          string(credentialsId: 'CLOUDFLARE_API_TOKEN', variable: 'CLOUDFLARE_API_TOKEN'),
-          string(credentialsId: 'CLOUDFLARE_ZONE_ID', variable: 'CLOUDFLARE_ZONE_ID')
-        ]) {
-          sh '''
+        container('azure') {
+          withCredentials([
+            string(credentialsId: 'CLOUDFLARE_API_TOKEN', variable: 'CLOUDFLARE_API_TOKEN'),
+            string(credentialsId: 'CLOUDFLARE_ZONE_ID', variable: 'CLOUDFLARE_ZONE_ID')
+          ]) {
+            sh '''
             set -eu
             . ./.deploy.env
             chmod +x scripts/cloudflare-dns.sh
             CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN}" \
             CLOUDFLARE_ZONE_ID="${CLOUDFLARE_ZONE_ID}" \
             scripts/cloudflare-dns.sh upsert "${APP_HOST}" "${EXTERNAL_IP}"
-          '''
+            '''
+          }
         }
       }
     }
 
     stage('Verify application availability') {
       steps {
-        sh '''
+        container('azure') {
+          sh '''
           set -eu
           curl --fail --silent --show-error \
             --retry 12 \
             --retry-delay 10 \
             --retry-all-errors \
             "https://${APP_HOST}"
-        '''
+          '''
+        }
       }
     }
   }
 
   post {
-    failure {
-      withCredentials([file(credentialsId: 'KUBECONFIG', variable: 'KUBECONFIG')]) {
-        sh '''
-          set +e
-          PREVIOUS_DEPLOYED_REVISION=""
-
-          if [ -n "${PREVIOUS_DEPLOYED_REVISION}" ]; then
-            echo "Rolling back ${APP_NAME} to revision ${PREVIOUS_DEPLOYED_REVISION}"
-            helm rollback "${APP_NAME}" "${PREVIOUS_DEPLOYED_REVISION}" -n "${APP_NAMESPACE}" --wait --timeout 10m
-            kubectl --kubeconfig "${KUBECONFIG}" rollout status deployment/"${APP_NAME}" -n "${APP_NAMESPACE}" --timeout=300s
-          else
-            echo "Skipping automatic rollback because no portable revision resolver is configured on this executor."
-          fi
-        '''
-      }
-    }
     always {
       sh 'rm -f .acr.env .build.env .deploy.env'
     }
