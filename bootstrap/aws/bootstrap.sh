@@ -68,7 +68,15 @@ echo "Creating Terraform least-privilege policy..."
 POLICY_NAME="TerraformCoinOpsPolicy"
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
-POLICY_DOC=$(cat <<'POLICY'
+# Write policy JSON to a temp file instead of passing it inline as a CLI
+# argument — passing long JSON through "--policy-document "$VAR"" is prone
+# to shell quoting/escaping issues across different shells (bash vs
+# CloudShell's shell), which is what caused MalformedPolicyDocument errors
+# even when the JSON itself was valid. file:// is the AWS-recommended way
+# to pass policy documents and avoids this entirely.
+POLICY_FILE="/tmp/terraform_coinops_policy.json"
+
+cat > "$POLICY_FILE" <<'POLICY'
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -240,9 +248,8 @@ POLICY_DOC=$(cat <<'POLICY'
   ]
 }
 POLICY
-)
 
-# Create or update policy
+# Create or update policy — using file:// reference, not inline string
 if aws iam get-policy --policy-arn "arn:aws:iam::${ACCOUNT_ID}:policy/${POLICY_NAME}" > /dev/null 2>&1; then
   echo "Policy already exists, updating..."
   VERSION_ID=$(aws iam list-policy-versions \
@@ -256,13 +263,13 @@ if aws iam get-policy --policy-arn "arn:aws:iam::${ACCOUNT_ID}:policy/${POLICY_N
   fi
   aws iam create-policy-version \
     --policy-arn "arn:aws:iam::${ACCOUNT_ID}:policy/${POLICY_NAME}" \
-    --policy-document "$POLICY_DOC" \
+    --policy-document "file://${POLICY_FILE}" \
     --set-as-default
 else
   echo "Creating new policy..."
   aws iam create-policy \
     --policy-name "$POLICY_NAME" \
-    --policy-document "$POLICY_DOC"
+    --policy-document "file://${POLICY_FILE}"
 fi
 echo "Policy ready."
 
