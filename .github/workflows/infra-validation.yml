@@ -2,6 +2,9 @@ name: Infrastructure Validation
 
 on:
   workflow_dispatch:
+  push:
+      branches:
+        - volynets-infra-dev
 
 permissions:
   contents: read
