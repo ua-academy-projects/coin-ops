@@ -66,7 +66,7 @@ spec:
 
       stage('Build proxy') {
         steps {
-          container('kaniko') {
+          container('kaniko-proxy') {
             sh """
                 /kaniko/executor \
                   --context=dir://\$WORKSPACE/proxy \
@@ -80,7 +80,7 @@ spec:
 
       stage('Build history-api') {
         steps {
-          container('kaniko') {
+          container('kaniko-api') {
             sh """
                 /kaniko/executor \
                   --context=dir://\$WORKSPACE/history \
@@ -94,7 +94,7 @@ spec:
 
       stage('Build history-consumer') {
         steps {
-          container('kaniko') {
+          container('kaniko-consumer') {
             sh """
                 /kaniko/executor \
                   --context=dir://\$WORKSPACE/history \
@@ -108,7 +108,7 @@ spec:
 
       stage('Build ui') {
         steps {
-          container('kaniko') {
+          container('kaniko-ui') {
             sh """
                 /kaniko/executor \
                   --context=dir://\$WORKSPACE/ui-react \
