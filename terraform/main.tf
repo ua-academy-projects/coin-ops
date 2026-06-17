@@ -1,6 +1,6 @@
 # Create AWS infrastructure only when config cloud is "aws".
 module "aws" {
-  count = length(local.aws_instances) > 0 ? 1 : 0 # create module if it has instances
+  count  = length(local.aws_instances) > 0 ? 1 : 0 # create module if it has instances
   source = "./modules/aws"
 
   config             = local.config
@@ -12,32 +12,32 @@ module "aws" {
   db_password = var.db_password
 
   domain_name = var.domain_name
-  instances = local.aws_instances
+  instances   = local.aws_instances
 
 }
 
 module "gcp" {
-  count = length(local.gcp_instances) > 0 ? 1 : 0
+  count  = length(local.gcp_instances) > 0 ? 1 : 0
   source = "./modules/gcp"
 
-  config         = local.config
-  ssh_public_key = local.ssh_public_key
-  instances = local.gcp_instances
+  config             = local.config
+  ssh_public_key     = local.ssh_public_key
+  instances          = local.gcp_instances
   cloudflare_zone_id = var.cloudflare_zone_id
 }
 
 module "azure" {
-  count = length(local.azure_instances) > 0 ? 1 : 0
+  count  = length(local.azure_instances) > 0 ? 1 : 0
   source = "./modules/azure"
 
   config         = local.config
   ssh_public_key = local.ssh_public_key
-  instances = local.azure_instances
+  instances      = local.azure_instances
 }
 
 module "aks" {
-  source = "./modules/azure/aks"
-  name_prefix = local.config.name_prefix
-  location = lookup(local.config.region_map, "azure", "denmarkeast")
+  source             = "./modules/azure/aks"
+  name_prefix        = local.config.name_prefix
+  location           = lookup(local.config.region_map, "azure", "denmarkeast")
   cloudflare_zone_id = var.cloudflare_zone_id
 }

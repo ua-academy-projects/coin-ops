@@ -8,10 +8,10 @@ locals {
   # if cloud is not provided get general from local.config.cloud
   aws_instances = {
     for name, instance in local.config.instances :
-    name => instance  # "bastion" => {size: "small", private_ip: "10.10.0.10", ...}
+    name => instance                                          # "bastion" => {size: "small", private_ip: "10.10.0.10", ...}
     if lookup(instance, "cloud", local.config.cloud) == "aws" # get cloud from instance only keep it if cloud is aws
   }
-   gcp_instances = {
+  gcp_instances = {
     for name, instance in local.config.instances :
     name => instance
     if lookup(instance, "cloud", local.config.cloud) == "gcp"
