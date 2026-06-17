@@ -22,9 +22,7 @@ provider "google" {
 }
 
 provider "aws" {
-  region     = local.config.locations[local.general.location].aws.region
-  access_key = var.aws_access_key
-  secret_key = var.aws_secret_key
+  region = local.config.locations[local.general.location].aws.region
 }
 
 provider "azurerm" {
