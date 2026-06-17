@@ -34,5 +34,5 @@ ingress:
   className: traefik
   domain: app.coin-ops.pp.ua
 
-  gateway:
-    enabled: true
+gateway:
+  enabled: true
