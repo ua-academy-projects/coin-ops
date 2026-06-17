@@ -58,6 +58,10 @@ Use concise, imperative commit messages, for example `Add top-level project READ
 
 Never commit real credentials. Use `.env`, Ansible variables, and generated env files for secrets. Keep local VM images, tfstate backups, and Hyper-V artifacts ignored. Be careful with container networking: inside containers, `localhost` means the container itself, not the VM host.
 
+## Kubernetes Configuration Notes
+
+For k3s/Kubernetes manifests, follow Kubernetes configuration good practices: use stable API versions, keep YAML minimal and version-controlled, group related resources logically, use Deployments/StatefulSets/Jobs instead of naked Pods, use Services and DNS for discovery, avoid hostPort/hostNetwork unless explicitly needed, and apply common Kubernetes labels consistently.
+
 ## Architecture Notes
 
 Terraform creates VMs, Ansible configures and deploys them, Docker packages runtime services, RabbitMQ decouples ingestion, PostgreSQL stores history, and Redis stores short-lived UI session state.

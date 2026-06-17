@@ -1,5 +1,3 @@
-#NOTE: MAYBE ITS BETTER TO MAKE FILE FLATTEN
-
 namespaces:
   create: false # bc ansible creates ns before helm runc
   app: coin-ops-app
