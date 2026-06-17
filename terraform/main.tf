@@ -1,5 +1,5 @@
 locals {
-  raw_config = yamldecode(file("${path.module}/config.yaml"))
+  raw_config = yamldecode(file("${path.module}/../config.yaml"))
 
   config = merge(local.raw_config, {
     general = merge(local.raw_config.general, {
@@ -191,4 +191,22 @@ module "aws_monitoring_dashboard" {
 module "aws_monitoring_agent" {
   source = "./modules/aws_monitoring/agent"
   region = local.config.locations[local.general.location].aws.region
+}
+
+# --- EKS module ---
+module "aws_eks" {
+  source = "./modules/aws_eks"
+  vpc_id = module.aws_network.vpc_id
+  subnet_ids = [
+    module.aws_network.public_subnet_id,
+    module.aws_network.public_subnet_b_id,
+    module.aws_network.private_subnet_id,
+    module.aws_network.private_subnet_b_id,
+  ]
+  depends_on = [module.aws_network]
+}
+
+module "aws_codebuild" {
+  source         = "./modules/aws_codebuild"
+  aws_account_id = var.aws_account_id
 }

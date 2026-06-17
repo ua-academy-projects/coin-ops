@@ -62,7 +62,7 @@ sizes:
     aws: "t3.small"
     azure: "Standard_B2s_v2"
 
-vms:
+vms: {}
   # ── AWS/Azure VMs commented out — not needed for Task 4 (k3s on GCP) ──
   # Uncomment to restore hybrid deployment for Tasks 1-2.
   #
@@ -108,24 +108,24 @@ vms:
   #   tags: ["ui", "web"]
   #   public_ip: false
 
-  # ── GCP k3s cluster — active for Task 4 ──────────────────────────────
-  k3s-server-1:
-    cloud: "aws"
-    size: medium
-    zone: primary
-    tags: ["k3s-server"]
-    public_ip: true
-
-  k3s-server-2:
-    cloud: "aws"
-    size: medium
-    zone: primary
-    tags: ["k3s-server"]
-    public_ip: false
-
-  k3s-server-3:
-    cloud: "aws"
-    size: medium
-    zone: secondary
-    tags: ["k3s-server"]
-    public_ip: false
+  # ── k3s-on-EC2 VMs commented out — replaced by EKS module for this task ──
+  # k3s-server-1:
+  #   cloud: "aws"
+  #   size: medium
+  #   zone: primary
+  #   tags: ["k3s-server"]
+  #   public_ip: true
+  #
+  # k3s-server-2:
+  #   cloud: "aws"
+  #   size: medium
+  #   zone: primary
+  #   tags: ["k3s-server"]
+  #   public_ip: false
+  #
+  # k3s-server-3:
+  #   cloud: "aws"
+  #   size: medium
+  #   zone: secondary
+  #   tags: ["k3s-server"]
+  #   public_ip: false
