@@ -11,11 +11,11 @@ output "workspace_name" {
 output "workspace_customer_id" {
   value = azurerm_log_analytics_workspace.this.workspace_id
 }
-
-output "application_insights_id" {
-  value = try(azurerm_application_insights.this[0].id, null)
-}
-
+#
+# output "application_insights_id" {
+#   value = try(azurerm_application_insights.this[0].id, null)
+# }
+#
 output "vm_cpu_alert_names" {
   value = {
     for key, alert in azurerm_monitor_metric_alert.vm_cpu_high : key => alert.name
@@ -30,9 +30,9 @@ output "postgresql_alert_names" {
     failed_connections = try(azurerm_monitor_metric_alert.postgresql_failed_connections[0].name, null)
   }
 }
-
-output "availability_test_names" {
-  value = {
-    for key, test in azurerm_application_insights_standard_web_test.availability : key => test.name
-  }
-}
+#
+# output "availability_test_names" {
+#   value = {
+#     for key, test in azurerm_application_insights_standard_web_test.availability : key => test.name
+#   }
+# }
