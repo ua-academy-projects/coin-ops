@@ -141,6 +141,10 @@ spec:
               string(credentialsId: 'cloudflare-api-token', variable: 'TF_VAR_cloudflare_api_token'),
               string(credentialsId: 'cloudflare-zone-id', variable: 'TF_VAR_cloudflare_zone_id')
             ]) {
+							sh '''
+								cat > /tmp/id_ed25519.pub <<EOF
+							ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMCAv5M0/tJCzjIM2iTjeJDc4UivC7hOUH/M8RBL/iOp rkurdupel@Romans-MacBook-Pro.local
+							EOF	'''
               dir('terraform') {
                 sh 'terraform init'
                 sh 'terraform plan -out=tfplan'
@@ -169,6 +173,10 @@ spec:
               string(credentialsId: 'cloudflare-api-token', variable: 'TF_VAR_cloudflare_api_token'),
               string(credentialsId: 'cloudflare-zone-id', variable: 'TF_VAR_cloudflare_zone_id')
             ]) {
+							sh '''
+								cat > /tmp/id_ed25519.pub <<EOF
+							ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMCAv5M0/tJCzjIM2iTjeJDc4UivC7hOUH/M8RBL/iOp rkurdupel@Romans-MacBook-Pro.local
+							EOF	'''
               dir('terraform') {
                 sh 'terraform apply -auto-approve tfplan'
               }

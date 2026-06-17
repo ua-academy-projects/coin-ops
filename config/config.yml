@@ -19,7 +19,7 @@ defaults:
 
 ssh:
   user: rkurdupel
-  public_key_path: ~/.ssh/id_ed25519.pub
+  public_key_path: /tmp/id_ed25519.pub
   port: 22
   protocol: tcp
 
