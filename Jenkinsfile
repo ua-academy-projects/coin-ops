@@ -166,17 +166,10 @@ spec:
 
               kubectl create secret generic coinops-secrets \
                 --namespace coinops-app \
-                --from-literal=DB_NAME=currency_rates_tracker \
-                --from-literal=DB_USER=postgres \
-                --from-literal=DB_PASSWORD=postgres \
-                --from-literal=DB_HOST=postgres.coinops-data.svc.cluster.local \
-                --from-literal=DB_PORT=5432 \
-                --from-literal=REDIS_HOST=redis.coinops-data.svc.cluster.local \
-                --from-literal=REDIS_PORT=6379 \
-                --from-literal=RABBITMQ_HOST=rabbitmq.coinops-data.svc.cluster.local \
-                --from-literal=RABBITMQ_PORT=5672 \
-                --from-literal=RABBITMQ_USER=admin \
-                --from-literal=RABBITMQ_PASSWORD=admin \
+                --from-literal=DATABASE_URL='postgres://postgres:postgres@postgres.coinops-data.svc.cluster.local:5432/currency_rates_tracker?sslmode=disable' \
+                --from-literal=REDIS_URL='redis://redis.coinops-data.svc.cluster.local:6379' \
+                --from-literal=RABBITMQ_URL='amqp://admin:admin@rabbitmq.coinops-data.svc.cluster.local:5672/' \
+                --from-literal=RUNTIME_BACKEND=external \
                 --dry-run=client -o yaml | kubectl apply -f -
             '''
           }
