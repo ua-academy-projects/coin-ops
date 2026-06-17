@@ -127,21 +127,25 @@ spec:
               helm repo add bitnami https://charts.bitnami.com/bitnami
               helm repo update
 
-              helm upgrade --install postgres bitnami/postgresql \
+              helm upgrade --install postgres oci://registry-1.docker.io/bitnamicharts/postgresql \
+                --version 15.5.20 \
                 --namespace coinops-data \
                 --set auth.username=postgres \
                 --set auth.password=postgres \
                 --set auth.database=currency_rates_tracker \
                 --set primary.persistence.enabled=false \
                 --wait --timeout 5m
-              helm upgrade --install redis bitnami/redis \
+
+              helm upgrade --install redis oci://registry-1.docker.io/bitnamicharts/redis \
+                --version 20.0.4 \
                 --namespace coinops-data \
                 --set auth.enabled=false \
                 --set master.persistence.enabled=false \
                 --set replica.replicaCount=0 \
                 --wait --timeout 5m
 
-              helm upgrade --install rabbitmq bitnami/rabbitmq \
+              helm upgrade --install rabbitmq oci://registry-1.docker.io/bitnamicharts/rabbitmq \
+                --version 12.15.5 \
                 --namespace coinops-data \
                 --set auth.username=admin \
                 --set auth.password=admin \
