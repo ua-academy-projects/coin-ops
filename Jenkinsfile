@@ -120,41 +120,53 @@ spec:
         }
       }
 
-      stage('Deploy Bitnami dependencies') {
+      stage('Deploy data services') {
         steps {
           container('tools') {
             sh '''
-              helm repo add bitnami https://charts.bitnami.com/bitnami
-              helm repo update
-
-              helm upgrade --install postgres oci://registry-1.docker.io/bitnamicharts/postgresql \
-                --version 15.5.20 \
-                --namespace coinops-data \
-                --set auth.username=postgres \
-                --set auth.password=postgres \
-                --set auth.database=currency_rates_tracker \
-                --set primary.persistence.enabled=false \
-                --wait --timeout 5m
-
-              helm upgrade --install redis oci://registry-1.docker.io/bitnamicharts/redis \
-                --version 20.0.4 \
-                --namespace coinops-data \
-                --set auth.enabled=false \
-                --set master.persistence.enabled=false \
-                --set replica.replicaCount=0 \
-                --wait --timeout 5m
-
-              helm upgrade --install rabbitmq oci://registry-1.docker.io/bitnamicharts/rabbitmq \
-                --version 12.15.5 \
-                --namespace coinops-data \
-                --set auth.username=admin \
-                --set auth.password=admin \
-                --set persistence.enabled=false \
-                --wait --timeout 5m
+              # Postgres
+              kubectl -n coinops-data create deployment postgres \
+                --image=postgres:16-alpine \
+                --dry-run=client -o yaml | kubectl apply -f -
+              
+              kubectl -n coinops-data set env deployment/postgres \
+                POSTGRES_USER=postgres \
+                POSTGRES_PASSWORD=postgres \
+                POSTGRES_DB=currency_rates_tracker
+              
+              kubectl -n coinops-data expose deployment postgres \
+                --port=5432 --target-port=5432 \
+                --dry-run=client -o yaml | kubectl apply -f -
+              
+              # Redis
+              kubectl -n coinops-data create deployment redis \
+                --image=redis:7-alpine \
+                --dry-run=client -o yaml | kubectl apply -f -
+              
+              kubectl -n coinops-data expose deployment redis \
+                --port=6379 --target-port=6379 \
+                --dry-run=client -o yaml | kubectl apply -f -
+              
+              # RabbitMQ
+              kubectl -n coinops-data create deployment rabbitmq \
+                --image=rabbitmq:3-management-alpine \
+                --dry-run=client -o yaml | kubectl apply -f -
+              
+              kubectl -n coinops-data set env deployment/rabbitmq \
+                RABBITMQ_DEFAULT_USER=admin \
+                RABBITMQ_DEFAULT_PASS=admin
+              
+              kubectl -n coinops-data expose deployment rabbitmq \
+                --port=5672 --target-port=5672 \
+                --dry-run=client -o yaml | kubectl apply -f -
+              
+              kubectl -n coinops-data rollout status deploy/postgres --timeout=120s
+              kubectl -n coinops-data rollout status deploy/redis --timeout=120s
+              kubectl -n coinops-data rollout status deploy/rabbitmq --timeout=120s
             '''
           }
         }
-      }
+     }
 
       stage('Deploy coinops app') {
         steps {
