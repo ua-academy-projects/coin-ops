@@ -1,10 +1,6 @@
 pipeline {
   agent any
 
-  options {
-    timestamps()
-  }
-
   parameters {
     string(name: 'APP_DOMAIN', defaultValue: 'example.com', description: 'Base DNS zone, for example example.com')
     string(name: 'APP_NAMESPACE', defaultValue: 'coin-ops', description: 'AKS namespace for the release')
