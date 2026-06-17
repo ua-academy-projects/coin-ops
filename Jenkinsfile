@@ -60,21 +60,17 @@ spec:
 
     stage('Prepare build metadata') {
       steps {
-        container('node') {
-          sh '''
-          set -eu
-          SHORT_SHA="$(git rev-parse --short=7 HEAD)"
-          FULL_SHA="$(git rev-parse --short=12 HEAD)"
-          IMAGE_TAG="${BUILD_NUMBER}-${SHORT_SHA}"
-          IMAGE_TAG_SHA="${FULL_SHA}"
-          IMAGE_TAG_BUILD="build-${BUILD_NUMBER}"
+        script {
+          def fullSha = env.GIT_COMMIT ?: 'manual'
+          def shortSha = fullSha.length() >= 7 ? fullSha.take(7) : fullSha
+          def imageTag = "${env.BUILD_NUMBER}-${shortSha}"
+          def imageTagSha = fullSha.length() >= 12 ? fullSha.take(12) : fullSha
+          def imageTagBuild = "build-${env.BUILD_NUMBER}"
 
-          cat > .build.env <<EOF
-IMAGE_TAG=${IMAGE_TAG}
-IMAGE_TAG_SHA=${IMAGE_TAG_SHA}
-IMAGE_TAG_BUILD=${IMAGE_TAG_BUILD}
-EOF
-          '''
+          writeFile file: '.build.env', text: """IMAGE_TAG=${imageTag}
+IMAGE_TAG_SHA=${imageTagSha}
+IMAGE_TAG_BUILD=${imageTagBuild}
+"""
         }
       }
     }
