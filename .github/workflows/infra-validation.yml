@@ -2,6 +2,12 @@ name: Infrastructure Validation
 
 on:
   workflow_dispatch:
+<<<<<<< Updated upstream
+=======
+  push:
+      branches:
+        - feature/infra-validation-workflow
+>>>>>>> Stashed changes
 
 permissions:
   contents: read
@@ -17,7 +23,7 @@ jobs:
           fetch-depth: 1
           sparse-checkout: |
             configs
-            scripts
+            scripts/validate_configs.py
 
       - name: Set up Python
         uses: actions/setup-python@v5
