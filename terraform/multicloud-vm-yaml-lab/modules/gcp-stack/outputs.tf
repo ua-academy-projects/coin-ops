@@ -38,3 +38,11 @@ output "gke" {
     get_credentials_cmd = module.gke[0].get_credentials_command
   } : null
 }
+
+output "gke_auth" {
+  sensitive = true
+  value = local.gke_enabled ? {
+    endpoint       = module.gke[0].endpoint
+    ca_certificate = module.gke[0].ca_certificate
+  } : null
+}

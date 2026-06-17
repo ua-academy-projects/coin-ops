@@ -307,6 +307,12 @@ locals {
         pods_cidr         = try(local.config.clouds.gcp.gke.pods_cidr, "10.20.0.0/16")
         services_cidr     = try(local.config.clouds.gcp.gke.services_cidr, "10.30.0.0/20")
       }
+      jenkins = {
+        enabled = try(local.config.clouds.gcp.jenkins.enabled, false)
+      }
+      cloudflared = {
+        enabled = try(local.config.clouds.gcp.cloudflared.enabled, false)
+      }
     }
 
     azure = {
