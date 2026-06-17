@@ -64,6 +64,8 @@ spec:
       TF_VAR_db_user = "postgres"
       TF_VAR_db_password = "postgres"
       TF_VAR_domain_name = "coin-ops.pp.ua"
+
+			AWS_DEFAULT_REGION = "eu-central-1"
     }
 
     stages {
@@ -140,6 +142,8 @@ spec:
               string(credentialsId: 'azure-subscription-id', variable: 'ARM_SUBSCRIPTION_ID'),
               string(credentialsId: 'cloudflare-api-token', variable: 'TF_VAR_cloudflare_api_token'),
               string(credentialsId: 'cloudflare-zone-id', variable: 'TF_VAR_cloudflare_zone_id')
+							string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID')
+							string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
             ]) {
 							sh '''
 								cat > /tmp/id_ed25519.pub <<EOF
