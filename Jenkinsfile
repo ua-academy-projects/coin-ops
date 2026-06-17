@@ -158,6 +158,23 @@ EOF
             if ! command -v kubectl >/dev/null 2>&1; then
               az aks install-cli --install-location /usr/local/bin/kubectl
             fi
+            if ! command -v curl >/dev/null 2>&1; then
+              if command -v apk >/dev/null 2>&1; then
+                apk add --no-cache curl tar gzip
+              elif command -v apt-get >/dev/null 2>&1; then
+                apt-get update
+                apt-get install -y curl tar gzip
+              elif command -v microdnf >/dev/null 2>&1; then
+                microdnf install -y curl tar gzip
+              elif command -v dnf >/dev/null 2>&1; then
+                dnf install -y curl tar gzip
+              elif command -v tdnf >/dev/null 2>&1; then
+                tdnf install -y curl tar gzip
+              else
+                echo "No supported package manager found to install curl"
+                exit 1
+              fi
+            fi
             if ! command -v helm >/dev/null 2>&1; then
               HELM_VERSION="v3.16.1"
               curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tgz
