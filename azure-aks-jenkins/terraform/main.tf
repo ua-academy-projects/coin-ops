@@ -54,6 +54,17 @@ module "traefik" {
   depends_on         = [module.aks]
 }
 
+module "cert_manager" {
+  source              = "../modules/cert-manager"
+  namespace           = var.cert_manager_namespace
+  release_name        = var.cert_manager_release_name
+  chart_version       = var.cert_manager_chart_version
+  cluster_issuer_name = var.cluster_issuer_name
+  letsencrypt_email   = var.letsencrypt_email
+  ingress_class_name  = var.ingress_class_name
+  depends_on          = [module.traefik]
+}
+
 module "jenkins" {
   source                         = "../modules/jenkins"
   resource_group_name            = module.resource_group.name
@@ -71,5 +82,5 @@ module "jenkins" {
   azure_tenant_id                = data.azurerm_client_config.current.tenant_id
   jenkins_values_template_path   = "${path.root}/../helm/jenkins/values.yaml.tpl"
   depends_on_aks_ready_indicator = module.aks.id
-  depends_on                     = [module.traefik]
+  depends_on                     = [module.traefik, module.cert_manager]
 }

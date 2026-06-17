@@ -114,6 +114,35 @@ variable "ingress_class_name" {
   default     = "traefik"
 }
 
+variable "cert_manager_namespace" {
+  type        = string
+  description = "Namespace for cert-manager."
+  default     = "cert-manager"
+}
+
+variable "cert_manager_release_name" {
+  type        = string
+  description = "Helm release name for cert-manager."
+  default     = "cert-manager"
+}
+
+variable "cert_manager_chart_version" {
+  type        = string
+  description = "Version of the cert-manager Helm chart."
+  default     = "v1.18.1"
+}
+
+variable "cluster_issuer_name" {
+  type        = string
+  description = "ClusterIssuer name used by ingress annotations."
+  default     = "letsencrypt-prod"
+}
+
+variable "letsencrypt_email" {
+  type        = string
+  description = "Email used for Let's Encrypt ACME registration."
+}
+
 variable "aks_subnet_cidr" {
   type        = string
   description = "CIDR for AKS subnet."
