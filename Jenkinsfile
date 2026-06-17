@@ -141,7 +141,7 @@ spec:
               string(credentialsId: 'azure-tenant-id', variable: 'ARM_TENANT_ID'),
               string(credentialsId: 'azure-subscription-id', variable: 'ARM_SUBSCRIPTION_ID'),
               string(credentialsId: 'cloudflare-api-token', variable: 'TF_VAR_cloudflare_api_token'),
-              string(credentialsId: 'cloudflare-zone-id', variable: 'TF_VAR_cloudflare_zone_id')
+              string(credentialsId: 'cloudflare-zone-id', variable: 'TF_VAR_cloudflare_zone_id'),
 							string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
 							string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
             ]) {
@@ -175,7 +175,7 @@ spec:
               string(credentialsId: 'azure-tenant-id', variable: 'ARM_TENANT_ID'),
               string(credentialsId: 'azure-subscription-id', variable: 'ARM_SUBSCRIPTION_ID'),
               string(credentialsId: 'cloudflare-api-token', variable: 'TF_VAR_cloudflare_api_token'),
-              string(credentialsId: 'cloudflare-zone-id', variable: 'TF_VAR_cloudflare_zone_id')
+              string(credentialsId: 'cloudflare-zone-id', variable: 'TF_VAR_cloudflare_zone_id'),
 							string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
 							string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
             ]) {
