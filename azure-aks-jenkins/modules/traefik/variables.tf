@@ -12,7 +12,7 @@ variable "release_name" {
 variable "chart_version" {
   type        = string
   description = "Version of the Traefik Helm chart."
-  default     = "34.4.1"
+  default     = "41.0.0"
 }
 
 variable "ingress_class_name" {

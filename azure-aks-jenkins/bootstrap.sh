@@ -11,9 +11,11 @@ GENERATED_DIR="${ROOT_DIR}/.generated"
 TFVARS_PATH="${ENV_DIR}/terraform.tfvars"
 BACKEND_CONFIG_PATH="${GENERATED_DIR}/backend.hcl"
 SP_ENV_PATH="${GENERATED_DIR}/terraform-sp.env"
+TMP_KUBECONFIG_PATH="${GENERATED_DIR}/bootstrap-kubeconfig"
 REPO_ROOT="$(cd "${ROOT_DIR}/.." && pwd)"
 JENKINS_BOOTSTRAP_SCRIPT="${REPO_ROOT}/scripts/bootstrap-jenkins-job.sh"
 LEGACY_CONFIG_PATH="${REPO_ROOT}/terraform.gcp.aws/config.yml"
+CLUSTER_ISSUER_TEMPLATE_PATH="${ROOT_DIR}/k8s/cluster-issuer.yaml.tpl"
 
 TARGET_SUBSCRIPTION_ID="${AZURE_SUBSCRIPTION_ID:-}"
 BACKEND_RG_NAME="${TF_BACKEND_RESOURCE_GROUP:-${PROJECT_NAME}-${ENVIRONMENT}-tfstate-rg}"
@@ -27,6 +29,9 @@ LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-$(git -C "${REPO_ROOT}" config user.emai
 JENKINS_ADMIN_USERNAME="${JENKINS_ADMIN_USERNAME:-admin}"
 APP_NAMESPACE="${APP_NAMESPACE:-apps}"
 JENKINS_NAMESPACE="${JENKINS_NAMESPACE:-jenkins}"
+CERT_MANAGER_NAMESPACE="${CERT_MANAGER_NAMESPACE:-cert-manager}"
+CLUSTER_ISSUER_NAME="${CLUSTER_ISSUER_NAME:-letsencrypt-prod}"
+INGRESS_CLASS_NAME="${INGRESS_CLASS_NAME:-traefik}"
 TERRAFORM_SP_NAME="${TERRAFORM_SP_NAME:-${PROJECT_NAME}-${ENVIRONMENT}-terraform-sp}"
 TF_AUTO_APPROVE="${TF_AUTO_APPROVE:-true}"
 BOOTSTRAP_JENKINS_JOB="${BOOTSTRAP_JENKINS_JOB:-true}"
@@ -265,6 +270,45 @@ export_arm_env() {
   export TF_VAR_letsencrypt_email="${LETSENCRYPT_EMAIL}"
 }
 
+apply_cluster_issuer() {
+  if [[ -z "${LETSENCRYPT_EMAIL}" ]]; then
+    fail "LETSENCRYPT_EMAIL is empty; cannot configure ClusterIssuer."
+  fi
+
+  if [[ ! -f "${CLUSTER_ISSUER_TEMPLATE_PATH}" ]]; then
+    fail "Missing ClusterIssuer template: ${CLUSTER_ISSUER_TEMPLATE_PATH}"
+  fi
+
+  mkdir -p "${GENERATED_DIR}"
+
+  log "Fetching AKS kubeconfig for ClusterIssuer bootstrap."
+  az aks get-credentials \
+    --resource-group "${TF_RESOURCE_GROUP_NAME}" \
+    --name "${TF_AKS_NAME}" \
+    --file "${TMP_KUBECONFIG_PATH}" \
+    --overwrite-existing \
+    >/dev/null
+
+  log "Waiting for cert-manager deployments."
+  kubectl --kubeconfig "${TMP_KUBECONFIG_PATH}" rollout status deployment/cert-manager -n "${CERT_MANAGER_NAMESPACE}" --timeout=300s
+  kubectl --kubeconfig "${TMP_KUBECONFIG_PATH}" rollout status deployment/cert-manager-cainjector -n "${CERT_MANAGER_NAMESPACE}" --timeout=300s
+  kubectl --kubeconfig "${TMP_KUBECONFIG_PATH}" rollout status deployment/cert-manager-webhook -n "${CERT_MANAGER_NAMESPACE}" --timeout=300s
+
+  log "Applying ClusterIssuer ${CLUSTER_ISSUER_NAME}."
+  python3 - "${CLUSTER_ISSUER_TEMPLATE_PATH}" "${CLUSTER_ISSUER_NAME}" "${LETSENCRYPT_EMAIL}" "${INGRESS_CLASS_NAME}" <<'PY' \
+    | kubectl --kubeconfig "${TMP_KUBECONFIG_PATH}" apply -f -
+from pathlib import Path
+import sys
+
+template_path, issuer_name, email, ingress_class = sys.argv[1:5]
+content = Path(template_path).read_text()
+content = content.replace("${CLUSTER_ISSUER_NAME}", issuer_name)
+content = content.replace("${LETSENCRYPT_EMAIL}", email)
+content = content.replace("${INGRESS_CLASS_NAME}", ingress_class)
+sys.stdout.write(content)
+PY
+}
+
 run_terraform() {
   log "Running terraform init."
   terraform -chdir="${TF_DIR}" init -reconfigure -backend-config="${BACKEND_CONFIG_PATH}"
@@ -311,6 +355,7 @@ main() {
   write_backend_config
   generate_tfvars_if_missing
   run_terraform
+  apply_cluster_issuer
   run_jenkins_job_bootstrap
 
   log "Bootstrap completed."
