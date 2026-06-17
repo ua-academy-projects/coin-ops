@@ -250,6 +250,7 @@ EOF
             chmod +x scripts/cloudflare-dns.sh
             CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN}" \
             CLOUDFLARE_ZONE_ID="${CLOUDFLARE_ZONE_ID}" \
+            CLOUDFLARE_PROXIED="false" \
             scripts/cloudflare-dns.sh upsert "${APP_HOST}" "${EXTERNAL_IP}"
             '''
           }
