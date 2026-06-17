@@ -262,8 +262,19 @@ EOF
         container('azure') {
           sh '''
           set -eu
+          . ./.deploy.env
+
+          echo "Verifying origin directly via ingress IP ${EXTERNAL_IP}."
           curl --fail --silent --show-error \
+            --resolve "${APP_HOST}:443:${EXTERNAL_IP}" \
             --retry 12 \
+            --retry-delay 10 \
+            --retry-all-errors \
+            "https://${APP_HOST}"
+
+          echo "Verifying public Cloudflare endpoint."
+          curl --fail --silent --show-error \
+            --retry 60 \
             --retry-delay 10 \
             --retry-all-errors \
             "https://${APP_HOST}"
