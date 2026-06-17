@@ -2,12 +2,9 @@ name: Infrastructure Validation
 
 on:
   workflow_dispatch:
-<<<<<<< Updated upstream
-=======
   push:
-      branches:
-        - feature/infra-validation-workflow
->>>>>>> Stashed changes
+    branches:
+      - feature/infra-validation-workflow
 
 permissions:
   contents: read
