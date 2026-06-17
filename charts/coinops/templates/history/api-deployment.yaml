@@ -1,0 +1,38 @@
+{{if .Values.historyApi.enabled}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.historyApi.name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: {{ .Values.historyApi.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Values.historyApi.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.historyApi.name }}
+    spec:
+      containers:
+        - name: history-api
+          image: {{ .Values.global.imageRegistry }}/{{ .Values.historyApi.image }}:{{ .Values.global.imageTag }}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: {{ .Values.historyApi.port }}
+          envFrom:
+            - secretRef:
+                name: coinops-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.historyApi.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.historyApi.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 15
+{{end}}

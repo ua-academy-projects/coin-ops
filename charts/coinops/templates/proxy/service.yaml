@@ -1,0 +1,14 @@
+# service to make proxy service reachable for other components in cluster
+{{if .Values.proxy.enabled}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{.Values.proxy.name}}
+  namespace: {{.Release.Namespace}}
+spec:
+  selector:
+    app: {{.Values.proxy.name}}  #  match all pods with label app:proxy
+  ports:
+    - port: {{.Values.proxy.port}}  # port, other pods use to reach this service
+      targetPort: {{.Values.proxy.port}}  # to which port service should forward the requests to ( specified in container block )
+{{end}}

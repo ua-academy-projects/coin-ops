@@ -1,0 +1,13 @@
+{{if .Values.historyApi.enabled}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.historyApi.name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    app: {{ .Values.historyApi.name }}
+  ports:
+    - port: {{ .Values.historyApi.port }}
+      targetPort: {{ .Values.historyApi.port }}
+{{end}}

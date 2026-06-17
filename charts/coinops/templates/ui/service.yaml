@@ -1,0 +1,13 @@
+{{if .Values.ui.enabled}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.ui.name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    app: {{ .Values.ui.name }}
+  ports:
+    - port: {{ .Values.ui.port }}
+      targetPort: {{ .Values.ui.port }}
+{{end}}

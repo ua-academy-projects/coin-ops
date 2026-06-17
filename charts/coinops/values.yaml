@@ -1,0 +1,31 @@
+global:
+  imageRegistry: rkurdupel
+  imageTag: v1
+
+proxy:
+  enabled: true
+  name: proxy
+  image: coin-ops-proxy
+  port: 8080
+  replicas: 1
+
+historyApi:
+  name: history-api
+  image: coin-ops-history-api
+  port: 8000
+  replicas: 1
+
+historyConsumer:
+  name: history-consumer
+  image: coin-ops-history-consumer
+  replicas: 1
+
+ui:
+  name: ui
+  image: coin-ops-ui
+  port: 80
+  replicas: 1
+
+ingress:
+  className: traefik
+  domain: app.coin-ops.pp.ua

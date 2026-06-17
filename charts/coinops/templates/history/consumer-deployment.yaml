@@ -1,0 +1,34 @@
+{{if .Values.historyConsumer.enabled}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.historyConsumer.name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.historyConsumer.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.historyConsumer.name }}
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - until pg_isready -h postgres-rw -U $(POSTGRES_USER); do sleep 2; done
+          envFrom:
+            - secretRef:
+                name: coinops-secrets
+      containers:
+        - name: history-consumer
+          image: {{ .Values.global.imageRegistry }}/{{ .Values.historyConsumer.image }}:{{ .Values.global.imageTag }}
+          imagePullPolicy: Always
+          envFrom:
+            - secretRef:
+                name: coinops-secrets
+{{end}}

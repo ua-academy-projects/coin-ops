@@ -1,0 +1,6 @@
+apiVersion: v2
+name: coinops
+description: Coin-Ops application stack
+type: application
+version: 0.1.0  # chart version
+appVersion: "1.0.0" # app version they are shown in helm list

@@ -1,0 +1,45 @@
+{{if .Values.proxy.enabled}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{.Values.proxy.name}} # name of the deployment
+  namespace: {{.Release.Namespace}}   # in-built command that gets namespace
+spec:
+  replicas: {{.Values.proxy.replicas}}
+
+  selector:
+    matchLabels:
+      app: {{.Values.proxy.name}}    # tell the deployment which pod to manage (match all pods with label app:proxy)
+  # template - configure pod within Deployment
+  template:
+    metadata:
+      labels:
+        app: {{.Values.proxy.name}}  # put the label on the pod when created
+    spec:
+      containers:
+        - name: proxy
+          image: {{.Values.global.imageRegistry}}/{{.Values.proxy.image}}:{{.Values.global.imageTag}}
+          imagePullPolicy: Always # allow to pull new images
+          ports:
+            - containerPort: {{.Values.proxy.port}}   # port the app inside the container listens on
+          # load secrets
+          envFrom:
+            - secretRef:
+                name: coinops-secrets
+          # can this pod handle a request right now ? (health check)
+          # failure - remove pod from service and traefik does not where to go
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{.Values.proxy.port}}
+            initialDelaySeconds: 5  # wait 5s after continer starts before first check
+            periodSeconds: 5  # check every 5 sec
+          # is this pod still functioning ? 
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{.Values.proxy.port}}
+            initialDelaySeconds: 10
+            periodSeconds: 15
+
+{{end}}
