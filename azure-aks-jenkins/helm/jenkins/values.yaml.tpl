@@ -1,5 +1,6 @@
 controller:
   serviceType: LoadBalancer
+  numExecutors: 1
   installLatestPlugins: false
   admin:
     existingSecret: ${admin_secret_name}
