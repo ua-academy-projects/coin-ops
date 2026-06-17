@@ -12,7 +12,7 @@ phases:
       - echo "Running terraform apply for EKS infrastructure..."
       - cd terraform
       - terraform init
-      - terraform apply -auto-approve
+      - terraform apply -auto-approve -target=module.aws_network -target=module.aws_security -target=module.aws_vm -target=module.aws_lb -target=module.aws_rds -target=module.aws_monitoring_alerting -target=module.aws_monitoring_logs -target=module.aws_monitoring_iam -target=module.aws_monitoring_ec2_alarms -target=module.aws_monitoring_alb_alarms -target=module.aws_monitoring_log_metrics -target=module.aws_monitoring_dashboard -target=module.aws_monitoring_agent -target=module.aws_eks -target=module.aws_codebuild
 
 artifacts:
   files:
