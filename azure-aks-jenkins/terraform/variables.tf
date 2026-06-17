@@ -90,6 +90,30 @@ variable "jenkins_chart_version" {
   default     = "5.8.47"
 }
 
+variable "ingress_controller_namespace" {
+  type        = string
+  description = "Namespace for the ingress controller."
+  default     = "traefik"
+}
+
+variable "ingress_controller_release_name" {
+  type        = string
+  description = "Helm release name for the ingress controller."
+  default     = "traefik"
+}
+
+variable "ingress_controller_chart_version" {
+  type        = string
+  description = "Version of the Traefik Helm chart."
+  default     = "34.4.1"
+}
+
+variable "ingress_class_name" {
+  type        = string
+  description = "IngressClass name used by application ingresses."
+  default     = "traefik"
+}
+
 variable "aks_subnet_cidr" {
   type        = string
   description = "CIDR for AKS subnet."
@@ -113,4 +137,3 @@ variable "tags" {
   description = "Common Azure tags."
   default     = {}
 }
-

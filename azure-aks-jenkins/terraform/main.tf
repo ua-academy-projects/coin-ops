@@ -45,6 +45,15 @@ module "rbac" {
   kubelet_object_id = module.aks.kubelet_object_id
 }
 
+module "traefik" {
+  source             = "../modules/traefik"
+  namespace          = var.ingress_controller_namespace
+  release_name       = var.ingress_controller_release_name
+  chart_version      = var.ingress_controller_chart_version
+  ingress_class_name = var.ingress_class_name
+  depends_on         = [module.aks]
+}
+
 module "jenkins" {
   source                         = "../modules/jenkins"
   resource_group_name            = module.resource_group.name
@@ -62,4 +71,5 @@ module "jenkins" {
   azure_tenant_id                = data.azurerm_client_config.current.tenant_id
   jenkins_values_template_path   = "${path.root}/../helm/jenkins/values.yaml.tpl"
   depends_on_aks_ready_indicator = module.aks.id
+  depends_on                     = [module.traefik]
 }
