@@ -20,7 +20,7 @@ spec:
           command:
             - sh
             - -c
-            - until pg_isready -h postgres-rw -U $(POSTGRES_USER); do sleep 2; done
+            - until pg_isready -h postgres.coinops-data.svc.cluster.local -U postgres; do sleep 2; done
           envFrom:
             - secretRef:
                 name: coinops-secrets
