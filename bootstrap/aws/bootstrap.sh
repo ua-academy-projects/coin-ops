@@ -230,6 +230,17 @@ POLICY_DOC=$(cat <<'POLICY'
         "eks:UpdateNodegroupVersion"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "EKSServiceLinkedRole",
+      "Effect": "Allow",
+      "Action": "iam:CreateServiceLinkedRole",
+      "Resource": "arn:aws:iam::*:role/aws-service-role/eks.amazonaws.com/AWSServiceRoleForAmazonEKS",
+      "Condition": {
+        "StringEquals": {
+          "iam:AWSServiceName": "eks.amazonaws.com"
+        }
+      }
     }
   ]
 }
