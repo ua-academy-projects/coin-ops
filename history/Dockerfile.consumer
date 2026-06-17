@@ -2,13 +2,13 @@ FROM python:3.12-slim-bookworm
 
 WORKDIR /app
 
-RUN useadd -m -r user || true
+RUN useradd -m -r user || true
 
-COPY equirements.txt .
-RUN pip install --no-cache-di -r requirements.txt
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-USER use
+USER user
 
 CMD ["python", "consume.py"]
