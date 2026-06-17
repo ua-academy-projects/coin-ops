@@ -52,8 +52,11 @@ spec:
   stages {
     stage('Checkout source code') {
       steps {
-        container('node') {
-          checkout scm
+        script {
+          def scmVars = checkout scm
+          if (scmVars?.GIT_COMMIT) {
+            env.GIT_COMMIT = scmVars.GIT_COMMIT
+          }
         }
       }
     }
@@ -107,7 +110,6 @@ IMAGE_TAG_BUILD=${imageTagBuild}
               --password "${AZURE_CLIENT_SECRET}" \
               --tenant "${AZURE_TENANT_ID}" >/dev/null
             az account set --subscription "${AZURE_SUBSCRIPTION_ID}"
-            az acr login --name "${ACR_NAME}"
 
             ACR_LOGIN_SERVER="$(az acr show --name "${ACR_NAME}" --query loginServer -o tsv)"
             echo "ACR_LOGIN_SERVER=${ACR_LOGIN_SERVER}" > .acr.env
