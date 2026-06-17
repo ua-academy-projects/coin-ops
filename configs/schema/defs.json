@@ -65,11 +65,11 @@
       "properties": {
         "cidr": {
           "type": "string",
-          "minLength": 1
+          "pattern": "^[0-9]{1,3}(\\.[0-9]{1,3}){3}/[0-9]{1,2}$"
         },
         "placement": {
           "type": "string",
-          "minLength": 1
+          "enum": ["primary", "secondary"]
         },
         "exposure": {
           "type": "string",
@@ -91,7 +91,7 @@
         },
         "cidr": {
           "type": "string",
-          "minLength": 1
+          "pattern": "^[0-9]{1,3}(\\.[0-9]{1,3}){3}/[0-9]{1,2}$"
         },
         "subnets": {
           "type": "object",
@@ -156,7 +156,7 @@
         },
         "placement": {
           "type": "string",
-          "minLength": 1
+          "enum": ["primary", "secondary"]
         },
         "subnet": {
           "type": "string",
@@ -220,27 +220,29 @@
         },
         "direction": {
           "type": "string",
-          "minLength": 1
+          "enum": ["INGRESS", "EGRESS"]
         },
         "priority": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 65535
         },
         "protocol": {
           "type": "string",
-          "minLength": 1
+          "enum": ["tcp", "udp", "icmp"]
         },
         "ports": {
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "pattern": "^([0-9]{1,5}|[0-9]{1,5}-[0-9]{1,5})$"
           }
         },
         "cidr_blocks": {
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "pattern": "^[0-9]{1,3}(\\.[0-9]{1,3}){3}/[0-9]{1,2}$"
           }
         },
         "source_workloads": {
@@ -276,7 +278,7 @@
         },
         "destination_range": {
           "type": "string",
-          "minLength": 1
+          "pattern": "^[0-9]{1,3}(\\.[0-9]{1,3}){3}/[0-9]{1,2}$"
         },
         "instance_workload": {
           "type": "string",
@@ -291,7 +293,7 @@
         },
         "private_cidr": {
           "type": "string",
-          "minLength": 1
+          "pattern": "^[0-9]{1,3}(\\.[0-9]{1,3}){3}/[0-9]{1,2}$"
         }
       }
     },
@@ -371,7 +373,8 @@
         },
         "private_range_cidr": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 8,
+          "maximum": 30
         }
       }
     },
@@ -404,7 +407,7 @@
       "properties": {
         "placement": {
           "type": "string",
-          "minLength": 1
+          "enum": ["primary", "secondary"]
         },
         "instance": {
           "$ref": "#/$defs/sqlInstance"
