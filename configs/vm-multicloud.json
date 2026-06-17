@@ -10,7 +10,7 @@
     "image_registry": "ghcr.io/ua-academy-projects",
     "image_tag": "shabat-latest",
     "app_domain": "coinops.test",
-    "tls_mode": "off"
+    "tls_mode": "selfsigned"
   },
   "networks": {
     "main": {
@@ -25,6 +25,18 @@
         },
         "edge": {
           "cidr": "10.10.2.0/24",
+          "placement": "primary",
+          "exposure": "public"
+        }
+      }
+    },
+    "secondary": {
+      "cloud": "gcp",
+      "name": "coinops-network-gcp",
+      "cidr": "10.20.0.0/16",
+      "subnets": {
+        "edge": {
+          "cidr": "10.20.1.0/24",
           "placement": "primary",
           "exposure": "public"
         }
@@ -81,7 +93,7 @@
       "roles": ["ui", "bastion", "nat"],
       "instance_type": "micro",
       "image_family": "ubuntu_24",
-      "placement": "secondary",
+      "placement": "primary",
       "subnet": "edge",
       "tags": ["ssh", "ui", "ui-http", "ui-https", "nat", "bastion"],
       "disk_size_gb": 20,
@@ -95,7 +107,7 @@
       "roles": ["proxy", "history"],
       "instance_type": "micro",
       "image_family": "ubuntu_24",
-      "placement": "secondary",
+      "placement": "primary",
       "subnet": "app",
       "tags": ["ssh", "proxy-api", "history-api", "postgres", "private-egress"],
       "disk_size_gb": 20,
@@ -104,6 +116,19 @@
       "allowed_ports": [22, 8080, 5432, 5672, 15672, 8000],
       "identity": "proxy",
       "secrets": ["ghcr_username", "ghcr_token", "rabbitmq_password", "db_password"]
+    },
+    "coinops-test": {
+      "cloud": "gcp",
+      "roles": [],
+      "instance_type": "micro",
+      "image_family": "ubuntu_24",
+      "placement": "primary",
+      "subnet": "edge",
+      "tags": ["ssh"],
+      "disk_size_gb": 20,
+      "public_ip": true,
+      "can_ip_forward": false,
+      "allowed_ports": []
     }
   },
   "security_rules": {
