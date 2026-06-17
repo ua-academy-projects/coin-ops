@@ -218,6 +218,171 @@ Equivalent direct Compose command:
 docker compose up --build
 ```
 
+## AKS CI/CD Path
+
+The repository now also contains a production-like AKS deployment path for the browser-facing Coin-Ops UI:
+
+```text
+.
+|-- Dockerfile                  # root Docker build for the UI runtime image
+|-- Jenkinsfile                 # Jenkins pipeline for ACR -> AKS -> Cloudflare
+|-- helm/coin-ops/             # Helm chart for the AKS deployment
+|-- scripts/cloudflare-dns.sh  # Cloudflare DNS upsert helper
+`-- ui-react/                  # deployed browser-facing application source
+```
+
+This AKS pipeline deploys the public React/nginx service and preserves the same-origin frontend contract:
+
+- `PROXY_URL=/api`
+- `HISTORY_URL=/history-api`
+
+That means the UI remains compatible with the existing browser routing model. If you later move the Go proxy and FastAPI history API into AKS, keep those paths unchanged behind the ingress.
+
+### Jenkins Credentials
+
+Create these Jenkins credentials before running the pipeline:
+
+| Credential ID | Type | Purpose |
+| --- | --- | --- |
+| `AZURE_CLIENT_ID` | Secret text | Azure service principal client ID |
+| `AZURE_CLIENT_SECRET` | Secret text | Azure service principal secret |
+| `AZURE_TENANT_ID` | Secret text | Azure tenant ID |
+| `AZURE_SUBSCRIPTION_ID` | Secret text | Azure subscription ID |
+| `ACR_NAME` | Secret text | Azure Container Registry name |
+| `CLOUDFLARE_API_TOKEN` | Secret text | Cloudflare API token with DNS edit access |
+| `CLOUDFLARE_ZONE_ID` | Secret text | Cloudflare zone ID for the target domain |
+| `KUBECONFIG` | Secret file | kubeconfig for the AKS cluster |
+
+`APP_DOMAIN` is exposed as a Jenkins pipeline parameter. For `example.com`, the pipeline creates and validates `coin-ops.example.com`.
+
+If you want Jenkins bootstrapped automatically from the already provisioned AKS/Jenkins stack, use:
+
+```bash
+./scripts/bootstrap-jenkins-job.sh
+```
+
+The script:
+
+- sources the root `.env`
+- reads Azure, ACR, Jenkins admin, and AKS values from `azure-aks-jenkins` Terraform outputs
+- reads the Terraform service principal from `azure-aks-jenkins/.generated/terraform-sp.env`
+- resolves `APP_DOMAIN` from `TF_VAR_cloudflare_zone_name` in `.env` by default
+- resolves `CLOUDFLARE_API_TOKEN` through the same `.env` / secret-manager flow used by `deploy.sh`
+- resolves `CLOUDFLARE_ZONE_ID` from Cloudflare API automatically when the zone name is known
+- pulls a fresh AKS kubeconfig with `az aks get-credentials`
+- resolves the Jenkins LoadBalancer endpoint from Kubernetes
+- creates or updates the required Jenkins credentials through the Jenkins API
+- creates or updates the Pipeline job pointing at the root `Jenkinsfile`
+- optionally triggers the first build
+
+Optional environment variables:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `JOB_NAME` | `coin-ops-aks-cd` | Jenkins job name |
+| `TRIGGER_INITIAL_BUILD` | `true` | Set to `false` to skip the first build |
+| `JENKINS_GIT_CREDENTIALS_ID` | empty | Use when the Git repository is private |
+| `APP_DOMAIN` | from `.env` / `TF_VAR_cloudflare_zone_name` | Override the base domain explicitly |
+| `CLOUDFLARE_API_TOKEN` | from `.env` / secret manager | Override the Cloudflare token explicitly |
+| `CLOUDFLARE_ZONE_ID` | auto-resolved | Override the zone ID explicitly |
+
+### Pipeline Flow
+
+The root `Jenkinsfile` implements these stages:
+
+1. Checkout source code from GitHub.
+2. Build the root Docker image.
+3. Run frontend validation with `npm ci`, `npm run lint`, and `npm run test:run`.
+4. Log in to Azure, resolve the ACR login server, and push three tags:
+   - `${BUILD_NUMBER}-${short_sha}`
+   - `${short_sha}`
+   - `build-${BUILD_NUMBER}`
+5. Deploy the Helm release with `helm upgrade --install --create-namespace`.
+6. Wait for the Kubernetes rollout to complete.
+7. Resolve the ingress external IP.
+8. Create or update the Cloudflare proxied `A` record.
+9. Verify `https://coin-ops.YOUR_DOMAIN` with `curl`.
+
+If a deployment fails after a previous successful Helm release exists, the pipeline automatically rolls back to the last deployed revision.
+
+### Helm Deployment
+
+The chart lives in [helm/coin-ops](helm/coin-ops) and creates:
+
+- `Deployment`
+- `Service`
+- `Ingress`
+- `ConfigMap`
+- `Secret`
+
+Default Kubernetes characteristics:
+
+- namespace: `coin-ops`
+- service type: `ClusterIP`
+- ingress class: `traefik`
+- TLS enabled
+- rolling updates with `maxUnavailable=0` and `maxSurge=1`
+- readiness and liveness probes on `/health`
+- configurable replica count, resources, and runtime paths
+
+Use:
+
+- [helm/coin-ops/values-dev.yaml](helm/coin-ops/values-dev.yaml) for lower-footprint dev defaults
+- [helm/coin-ops/values-prod.yaml](helm/coin-ops/values-prod.yaml) for production-like defaults
+
+### Manual Deployment Equivalent
+
+The Jenkins deployment stage is equivalent to:
+
+```bash
+helm upgrade --install coin-ops ./helm/coin-ops \
+  --namespace coin-ops \
+  --create-namespace \
+  -f ./helm/coin-ops/values.yaml \
+  -f ./helm/coin-ops/values-prod.yaml \
+  --set-string image.repository="<acr-login-server>/coin-ops" \
+  --set-string image.tag="<build-tag>" \
+  --set-string ingress.host="coin-ops.example.com" \
+  --set-string ingress.tls.secretName="coin-ops-tls" \
+  --wait \
+  --timeout 10m
+```
+
+### Rollback Procedure
+
+Automatic rollback is built into the pipeline. Manual rollback is:
+
+```bash
+helm history coin-ops -n coin-ops
+helm rollback coin-ops <REVISION> -n coin-ops --wait --timeout 10m
+kubectl rollout status deployment/coin-ops -n coin-ops --timeout=300s
+```
+
+### Architecture Diagram
+
+```mermaid
+flowchart LR
+  GitHub[GitHub Repository] --> Jenkins[Jenkins on AKS]
+  Jenkins --> Build[Docker Build + Frontend Validation]
+  Build --> ACR[Azure Container Registry]
+  Jenkins --> Helm[Helm Upgrade Install]
+  Helm --> AKS[AKS Namespace coin-ops]
+  AKS --> Ingress[Traefik Ingress]
+  Ingress --> Service[ClusterIP Service]
+  Service --> Pods[coin-ops Pods]
+  Jenkins --> CF[Cloudflare DNS API]
+  CF --> DNS[coin-ops.YOUR_DOMAIN]
+  DNS --> Ingress
+  User[Browser] --> DNS
+```
+
+### Notes
+
+- The root `Dockerfile` builds from `ui-react/` and packages the result in `nginx:alpine`.
+- The Cloudflare script intentionally performs `GET -> PUT/POST` so the pipeline remains idempotent.
+- The pipeline assumes Jenkins agents already have `docker`, `az`, `kubectl`, `helm`, `curl`, and `python3`.
+- TLS in the ingress assumes a compatible certificate flow exists in the cluster, typically via `cert-manager` and a `ClusterIssuer` referenced in ingress annotations.
+
 For the Kubespray-based Kubernetes lab, the repo also contains a simple
 `gethomepage/homepage` deployment under `k8s/homepage/`. After ingress-nginx is
 installed in the cluster, deploy it with:

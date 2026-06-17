@@ -1,0 +1,7 @@
+apiVersion: v2
+name: sample-app
+description: Production-like sample application chart for AKS deployments
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+

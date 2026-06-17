@@ -1,0 +1,55 @@
+replicaCount: 2
+
+image:
+  repository: ""
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  host: coin-ops.example.com
+  path: /
+  pathType: Prefix
+  tls:
+    enabled: true
+    secretName: coin-ops-tls
+
+config:
+  PROXY_URL: /api
+  HISTORY_URL: /history-api
+
+secret:
+  SESSION_SECRET: change-me
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+readinessProbe:
+  path: /health
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+livenessProbe:
+  path: /health
+  initialDelaySeconds: 15
+  periodSeconds: 20
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+updateStrategy:
+  maxUnavailable: 0
+  maxSurge: 1

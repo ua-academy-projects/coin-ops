@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sample-app.fullname" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "sample-app.fullname" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "sample-app.fullname" . }}
+    spec:
+      containers:
+        - name: app
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: {{ include "sample-app.fullname" . }}-config
+            - secretRef:
+                name: {{ include "sample-app.fullname" . }}-secret
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+

@@ -1,0 +1,19 @@
+environment            = "dev"
+location               = "westeurope"
+project_name           = "azure-aks-jenkins"
+name_prefix            = "azplat"
+resource_group_name    = "azplat-dev-rg"
+aks_name               = "azplat-dev-aks"
+acr_name               = "azplatdevacr12345"
+dns_prefix             = "azplat-dev-aks"
+kubernetes_version     = "1.34.8"
+node_count             = 1
+node_vm_size           = "Standard_D2s_v4"
+jenkins_namespace      = "jenkins"
+app_namespace          = "apps"
+jenkins_admin_username = "admin"
+tags = {
+  environment = "dev"
+  managed-by  = "terraform"
+  project     = "azure-aks-jenkins"
+}

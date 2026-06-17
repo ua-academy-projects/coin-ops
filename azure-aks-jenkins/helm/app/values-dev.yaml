@@ -1,0 +1,6 @@
+replicaCount: 1
+ingress:
+  enabled: false
+secret:
+  APP_ENV: dev
+

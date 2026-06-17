@@ -1,0 +1,11 @@
+replicaCount: 3
+ingress:
+  enabled: true
+  hosts:
+    - host: app.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+secret:
+  APP_ENV: prod
+

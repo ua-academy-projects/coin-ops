@@ -1,0 +1,79 @@
+pipeline {
+  agent any
+
+  environment {
+    APP_NAME = 'sample-app'
+    CHART_DIR = 'helm/app'
+    APP_NAMESPACE = "${env.APP_NAMESPACE ?: 'apps'}"
+    IMAGE_TAG = "${env.BUILD_NUMBER}"
+  }
+
+  stages {
+    stage('Checkout code') {
+      steps {
+        checkout scm
+      }
+    }
+
+    stage('Build Docker image') {
+      steps {
+        sh '''
+          docker build -t "${ACR_LOGIN_SERVER}/${APP_NAME}:${IMAGE_TAG}" app
+        '''
+      }
+    }
+
+    stage('Run basic tests') {
+      steps {
+        sh '''
+          chmod +x app/test.sh
+          ./app/test.sh
+        '''
+      }
+    }
+
+    stage('Push image to ACR') {
+      steps {
+        withCredentials([usernamePassword(credentialsId: 'acr-push', usernameVariable: 'ACR_USER', passwordVariable: 'ACR_PASS')]) {
+          sh '''
+            echo "${ACR_PASS}" | docker login "${ACR_LOGIN_SERVER}" -u "${ACR_USER}" --password-stdin
+            docker push "${ACR_LOGIN_SERVER}/${APP_NAME}:${IMAGE_TAG}"
+          '''
+        }
+      }
+    }
+
+    stage('Deploy to AKS using Helm') {
+      steps {
+        sh '''
+          helm upgrade --install "${APP_NAME}" "${CHART_DIR}" \
+            --namespace "${APP_NAMESPACE}" \
+            --create-namespace \
+            -f "${CHART_DIR}/values-dev.yaml" \
+            --set image.repository="${ACR_LOGIN_SERVER}/${APP_NAME}" \
+            --set image.tag="${IMAGE_TAG}"
+        '''
+      }
+    }
+
+    stage('Verify rollout status') {
+      steps {
+        sh '''
+          kubectl rollout status deployment/${APP_NAME} -n "${APP_NAMESPACE}" --timeout=180s
+        '''
+      }
+    }
+  }
+
+  post {
+    failure {
+      sh '''
+        REVISION="$(helm history "${APP_NAME}" -n "${APP_NAMESPACE}" --max 2 -o json | python3 -c "import json,sys; h=json.load(sys.stdin); print(h[-2]['revision'] if len(h) > 1 else '')")"
+        if [ -n "${REVISION}" ]; then
+          helm rollback "${APP_NAME}" "${REVISION}" -n "${APP_NAMESPACE}"
+        fi
+      '''
+    }
+  }
+}
+
