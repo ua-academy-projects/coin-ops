@@ -3,7 +3,7 @@
 
 global:
   env: "production"
-  imageRegistry: "public.ecr.aws"
+  # imageRegistry: "public.ecr.aws"
   security:
     allowInsecureImages: true
 
