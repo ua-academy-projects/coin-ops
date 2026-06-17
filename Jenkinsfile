@@ -130,65 +130,65 @@ spec:
           }
         }
       }
-      stage('Terraform Plan') {
-        steps {
-          container('terraform') {
-            withCredentials([
-              file(credentialsId: 'gcp-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS'),
-							file(credentialsId: 'sshkey', variable: 'SSH_PUBLIC_KEY_PATH'),
-              string(credentialsId: 'azure-client-id', variable: 'ARM_CLIENT_ID'),
-              string(credentialsId: 'azure-client-secret', variable: 'ARM_CLIENT_SECRET'),
-              string(credentialsId: 'azure-tenant-id', variable: 'ARM_TENANT_ID'),
-              string(credentialsId: 'azure-subscription-id', variable: 'ARM_SUBSCRIPTION_ID'),
-              string(credentialsId: 'cloudflare-api-token', variable: 'TF_VAR_cloudflare_api_token'),
-              string(credentialsId: 'cloudflare-zone-id', variable: 'TF_VAR_cloudflare_zone_id'),
-							string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
-							string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
-            ]) {
-							sh '''
-								cat > /tmp/id_ed25519.pub <<EOF
-							ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMCAv5M0/tJCzjIM2iTjeJDc4UivC7hOUH/M8RBL/iOp rkurdupel@Romans-MacBook-Pro.local
-							EOF	'''
-              dir('terraform') {
-                sh 'terraform init'
-                sh 'terraform plan -out=tfplan'
-              }
-            }
-          }
-        }
-      }
+      // stage('Terraform Plan') {
+      //   steps {
+      //     container('terraform') {
+      //       withCredentials([
+      //         file(credentialsId: 'gcp-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS'),
+			// 				file(credentialsId: 'sshkey', variable: 'SSH_PUBLIC_KEY_PATH'),
+      //         string(credentialsId: 'azure-client-id', variable: 'ARM_CLIENT_ID'),
+      //         string(credentialsId: 'azure-client-secret', variable: 'ARM_CLIENT_SECRET'),
+      //         string(credentialsId: 'azure-tenant-id', variable: 'ARM_TENANT_ID'),
+      //         string(credentialsId: 'azure-subscription-id', variable: 'ARM_SUBSCRIPTION_ID'),
+      //         string(credentialsId: 'cloudflare-api-token', variable: 'TF_VAR_cloudflare_api_token'),
+      //         string(credentialsId: 'cloudflare-zone-id', variable: 'TF_VAR_cloudflare_zone_id'),
+			// 				string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
+			// 				string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+      //       ]) {
+			// 				sh '''
+			// 					cat > /tmp/id_ed25519.pub <<EOF
+			// 				ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMCAv5M0/tJCzjIM2iTjeJDc4UivC7hOUH/M8RBL/iOp rkurdupel@Romans-MacBook-Pro.local
+			// 				EOF	'''
+      //         dir('terraform') {
+      //           sh 'terraform init'
+      //           sh 'terraform plan -out=tfplan'
+      //         }
+      //       }
+      //     }
+      //   }
+      // }
 
-      stage('Approval') {
-        steps {
-          input message: 'Terraform plan completed. Proceed with apply?',
-            ok: 'Proceed'
-        }
-      }
+      // stage('Approval') {
+      //   steps {
+      //     input message: 'Terraform plan completed. Proceed with apply?',
+      //       ok: 'Proceed'
+      //   }
+      // }
 
-      stage('Terraform Apply') {
-        steps {
-          container('terraform') {
-            withCredentials([
-              file(credentialsId: 'gcp-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS'),
-              string(credentialsId: 'azure-client-id', variable: 'ARM_CLIENT_ID'),
-              string(credentialsId: 'azure-client-secret', variable: 'ARM_CLIENT_SECRET'),
-              string(credentialsId: 'azure-tenant-id', variable: 'ARM_TENANT_ID'),
-              string(credentialsId: 'azure-subscription-id', variable: 'ARM_SUBSCRIPTION_ID'),
-              string(credentialsId: 'cloudflare-api-token', variable: 'TF_VAR_cloudflare_api_token'),
-              string(credentialsId: 'cloudflare-zone-id', variable: 'TF_VAR_cloudflare_zone_id'),
-							string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
-							string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
-            ]) {
-							sh '''
-								cat > /tmp/id_ed25519.pub <<EOF
-							ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMCAv5M0/tJCzjIM2iTjeJDc4UivC7hOUH/M8RBL/iOp rkurdupel@Romans-MacBook-Pro.local
-							EOF	'''
-              dir('terraform') {
-                sh 'terraform apply -auto-approve tfplan'
-              }
-            }
-          }
-        }
-      }
+      // stage('Terraform Apply') {
+      //   steps {
+      //     container('terraform') {
+      //       withCredentials([
+      //         file(credentialsId: 'gcp-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS'),
+      //         string(credentialsId: 'azure-client-id', variable: 'ARM_CLIENT_ID'),
+      //         string(credentialsId: 'azure-client-secret', variable: 'ARM_CLIENT_SECRET'),
+      //         string(credentialsId: 'azure-tenant-id', variable: 'ARM_TENANT_ID'),
+      //         string(credentialsId: 'azure-subscription-id', variable: 'ARM_SUBSCRIPTION_ID'),
+      //         string(credentialsId: 'cloudflare-api-token', variable: 'TF_VAR_cloudflare_api_token'),
+      //         string(credentialsId: 'cloudflare-zone-id', variable: 'TF_VAR_cloudflare_zone_id'),
+			// 				string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
+			// 				string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+      //       ]) {
+			// 				sh '''
+			// 					cat > /tmp/id_ed25519.pub <<EOF
+			// 				ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMCAv5M0/tJCzjIM2iTjeJDc4UivC7hOUH/M8RBL/iOp rkurdupel@Romans-MacBook-Pro.local
+			// 				EOF	'''
+      //         dir('terraform') {
+      //           sh 'terraform apply -auto-approve tfplan'
+      //         }
+      //       }
+      //     }
+       // }
+     // }
     }
 }
