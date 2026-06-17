@@ -1,0 +1,63 @@
+pipeline {
+    agent {
+        kubernetes {
+            yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  serviceAccountName: jenkins-agent
+  containers:
+  - name: deploy-tools
+    image: alpine/k8s:1.30.0
+    command:
+    - cat
+    tty: true
+'''
+        }
+    }
+    
+    environment {
+        AWS_REGION     = 'us-east-1'
+        ECR_REGISTRY   = '682251233396.dkr.ecr.us-east-1.amazonaws.com'
+        CLUSTER_NAME   = 'dev-eks-cluster'
+        HELM_RELEASE   = 'coin-ops'
+        NAMESPACE      = 'production'
+    }
+
+    stages {
+        stage('Authenticate to AWS ECR & EKS') {
+            steps {
+                container('deploy-tools') {
+                    script {
+                        // The pod already assumes the IAM role via IRSA. No AWS keys needed.
+                        sh "aws ecr get-login-password --region ${AWS_REGION} | helm registry login --username AWS --password-stdin ${ECR_REGISTRY}"
+                        sh "aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}"
+                    }
+                }
+            }
+        }
+
+        stage('Update Helm Dependencies') {
+            steps {
+                container('deploy-tools') {
+                    sh "helm dependency update deploy/helm/coin-ops"
+                }
+            }
+        }
+
+        stage('Deploy Application via Helm') {
+            steps {
+                container('deploy-tools') {
+                    sh """
+                        helm upgrade --install ${HELM_RELEASE} deploy/helm/coin-ops \
+                            --namespace ${NAMESPACE} \
+                            --create-namespace \
+                            --values eks-migration/helm-chart/values-aws.yaml \
+                            --set image.tag=\${GIT_COMMIT} \
+                            --wait --timeout 5m
+                    """
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,110 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","kind":"Pod","metadata":{"annotations":{},"name":"test-net","namespace":"default"},"spec":{"containers":[{"command":["sleep","3600"],"image":"curlimages/curl","name":"test"}],"nodeSelector":{"kubernetes.io/hostname":"ip-10-0-1-160.ec2.internal"}}}
+  creationTimestamp: "2026-06-17T08:56:44Z"
+  name: test-net
+  namespace: default
+  resourceVersion: "39576"
+  uid: 8c79798f-68f5-4a19-892c-46e9f7d96ad6
+spec:
+  containers:
+  - command:
+    - sleep
+    - "3600"
+    image: curlimages/curl
+    imagePullPolicy: Always
+    name: test
+    resources: {}
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+    volumeMounts:
+    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      name: kube-api-access-hlbwh
+      readOnly: true
+  dnsPolicy: ClusterFirst
+  enableServiceLinks: true
+  nodeName: ip-10-0-1-160.ec2.internal
+  nodeSelector:
+    kubernetes.io/hostname: ip-10-0-1-160.ec2.internal
+  preemptionPolicy: PreemptLowerPriority
+  priority: 0
+  restartPolicy: Always
+  schedulerName: default-scheduler
+  securityContext: {}
+  serviceAccount: default
+  serviceAccountName: default
+  terminationGracePeriodSeconds: 30
+  tolerations:
+  - effect: NoExecute
+    key: node.kubernetes.io/not-ready
+    operator: Exists
+    tolerationSeconds: 300
+  - effect: NoExecute
+    key: node.kubernetes.io/unreachable
+    operator: Exists
+    tolerationSeconds: 300
+  volumes:
+  - name: kube-api-access-hlbwh
+    projected:
+      defaultMode: 420
+      sources:
+      - serviceAccountToken:
+          expirationSeconds: 3607
+          path: token
+      - configMap:
+          items:
+          - key: ca.crt
+            path: ca.crt
+          name: kube-root-ca.crt
+      - downwardAPI:
+          items:
+          - fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+            path: namespace
+status:
+  conditions:
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-17T08:56:46Z"
+    status: "True"
+    type: PodReadyToStartContainers
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-17T08:56:44Z"
+    status: "True"
+    type: Initialized
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-17T08:56:46Z"
+    status: "True"
+    type: Ready
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-17T08:56:46Z"
+    status: "True"
+    type: ContainersReady
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-17T08:56:44Z"
+    status: "True"
+    type: PodScheduled
+  containerStatuses:
+  - containerID: containerd://71ef1442b7d95bba0447df8f0179fdfcbed4a99963771d2ce31bbb0f879dfa17
+    image: docker.io/curlimages/curl:latest
+    imageID: docker.io/curlimages/curl@sha256:b3f1fb2a51d923260350d21b8654bbc607164a987e2f7c84a0ac199a67df812a
+    lastState: {}
+    name: test
+    ready: true
+    restartCount: 0
+    started: true
+    state:
+      running:
+        startedAt: "2026-06-17T08:56:45Z"
+  hostIP: 10.0.1.160
+  hostIPs:
+  - ip: 10.0.1.160
+  phase: Running
+  podIP: 10.0.1.228
+  podIPs:
+  - ip: 10.0.1.228
+  qosClass: BestEffort
+  startTime: "2026-06-17T08:56:44Z"

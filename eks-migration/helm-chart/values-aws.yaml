@@ -1,0 +1,25 @@
+# ==============================================================================
+# AWS-specific Helm Values Overrides
+# ==============================================================================
+
+# 1. AWS IAM Roles for Service Accounts (IRSA) for the APPLICATION
+# (Replace ARN with your actual AWS account ID if different)
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::682251233396:role/dev-CoinOpsAppRole"
+
+# 2. AWS EBS Persistence for Redis
+redis:
+  master:
+    persistence:
+      storageClass: "ebs-sc"
+
+# 3. AWS EBS Persistence for RabbitMQ
+rabbitmq:
+  persistence:
+    storageClass: "ebs-sc"
+
+# NOTE: Ingress is omitted here because we are keeping the existing NGINX Ingress rules
+# defined in your Chart to support rewrite-target. NGINX Ingress Controller will be 
+# deployed by Terraform in the cluster.

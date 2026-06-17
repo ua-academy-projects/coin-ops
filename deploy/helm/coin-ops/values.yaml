@@ -18,8 +18,6 @@ image:
   pullSecret:
     enabled: true
     name: ghcr-secret
-    username: ""
-    password: ""
 
 routing:
   domain: "wrangler.pp.ua"
@@ -37,8 +35,6 @@ serviceAccount:
   create: true
   name: "coin-ops-sa"
   annotations: {}
-    # Example for GCP Workload Identity:
-    # iam.gke.io/gcp-service-account: "coin-ops-sa@YOUR_PROJECT.iam.gserviceaccount.com"
     # Example for AWS IRSA:
     # eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/coin-ops-secrets-role"
 
