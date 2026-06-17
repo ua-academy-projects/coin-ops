@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Coin-Ops K3s Config",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "cloud": true,
+    "ssh": true,
+    "deploy": true,
+    "networks": true,
+    "provider": true,
+    "workloads": true,
+    "security_rules": true,
+    "nat_route": true,
+    "secrets": true,
+    "sql": true
+  },
+  "allOf": [
+    {
+      "$ref": "./base.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "workloads": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "./defs.json#/$defs/workload"
+          }
+        },
+        "security_rules": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "./defs.json#/$defs/securityRule"
+          }
+        },
+        "nat_route": {
+          "$ref": "./defs.json#/$defs/natRoute"
+        },
+        "secrets": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "./defs.json#/$defs/secretRef"
+          }
+        },
+        "sql": {
+          "$ref": "./defs.json#/$defs/sql"
+        }
+      }
+    }
+  ]
+}

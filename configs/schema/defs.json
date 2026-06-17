@@ -1,0 +1,421 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "cloud": {
+      "type": "string",
+      "enum": ["gcp", "aws", "azure"]
+    },
+    "ssh": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["user", "public_key_path", "private_key_path"],
+      "properties": {
+        "user": {
+          "type": "string",
+          "minLength": 1
+        },
+        "public_key_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "private_key_path": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "deploy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "runtime_backend": {
+          "type": "string",
+          "enum": ["external", "postgres"]
+        },
+        "image_registry": {
+          "type": "string",
+          "minLength": 1
+        },
+        "image_tag": {
+          "type": "string",
+          "minLength": 1
+        },
+        "app_domain": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tls_mode": {
+          "type": "string",
+          "enum": ["off", "selfsigned", "letsencrypt"]
+        },
+        "letsencrypt_email": {
+          "type": "string",
+          "minLength": 1
+        },
+        "external_db_host": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "subnet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cidr", "placement", "exposure"],
+      "properties": {
+        "cidr": {
+          "type": "string",
+          "minLength": 1
+        },
+        "placement": {
+          "type": "string",
+          "minLength": 1
+        },
+        "exposure": {
+          "type": "string",
+          "enum": ["public", "private"]
+        }
+      }
+    },
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "cidr", "subnets"],
+      "properties": {
+        "cloud": {
+          "$ref": "#/$defs/cloud"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cidr": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subnets": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "$ref": "#/$defs/subnet"
+          }
+        }
+      }
+    },
+    "providerAzure": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "resource_group_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "key_vault_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "location": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "workload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "roles",
+        "instance_type",
+        "image_family",
+        "placement",
+        "subnet",
+        "tags",
+        "disk_size_gb",
+        "public_ip",
+        "can_ip_forward",
+        "allowed_ports"
+      ],
+      "properties": {
+        "cloud": {
+          "$ref": "#/$defs/cloud"
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "instance_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "image_family": {
+          "type": "string",
+          "minLength": 1
+        },
+        "placement": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subnet": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "disk_size_gb": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "public_ip": {
+          "type": "boolean"
+        },
+        "can_ip_forward": {
+          "type": "boolean"
+        },
+        "allowed_ports": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          }
+        },
+        "identity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "secrets": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "securityRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "description",
+        "direction",
+        "priority",
+        "protocol",
+        "ports",
+        "cidr_blocks",
+        "source_workloads",
+        "target_workloads"
+      ],
+      "properties": {
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "direction": {
+          "type": "string",
+          "minLength": 1
+        },
+        "priority": {
+          "type": "integer"
+        },
+        "protocol": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ports": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "cidr_blocks": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "source_workloads": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "target_workloads": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "natRoute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "destination_range",
+        "instance_workload",
+        "target_tags",
+        "private_cidr"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "destination_range": {
+          "type": "string",
+          "minLength": 1
+        },
+        "instance_workload": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "private_cidr": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "secretRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["secret_id"],
+      "properties": {
+        "secret_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "sqlInstance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "edition",
+        "database_version",
+        "instance_type",
+        "availability_type",
+        "disk_type",
+        "disk_size",
+        "disk_autoresize",
+        "deletion_protection",
+        "backup_enabled",
+        "pitr_enabled",
+        "private_range_name",
+        "private_range_cidr"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "edition": {
+          "type": "string",
+          "minLength": 1
+        },
+        "database_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "instance_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "availability_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "disk_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "disk_size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "disk_autoresize": {
+          "type": "boolean"
+        },
+        "deletion_protection": {
+          "type": "boolean"
+        },
+        "backup_enabled": {
+          "type": "boolean"
+        },
+        "pitr_enabled": {
+          "type": "boolean"
+        },
+        "private_range_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "private_range_cidr": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "sqlDatabase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "sqlUser": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "sql": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["placement", "instance", "database", "user"],
+      "properties": {
+        "placement": {
+          "type": "string",
+          "minLength": 1
+        },
+        "instance": {
+          "$ref": "#/$defs/sqlInstance"
+        },
+        "database": {
+          "$ref": "#/$defs/sqlDatabase"
+        },
+        "user": {
+          "$ref": "#/$defs/sqlUser"
+        }
+      }
+    }
+  }
+}
