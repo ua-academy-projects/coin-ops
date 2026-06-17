@@ -59,6 +59,11 @@ spec:
       AKS_CLUSTER = "coinops-aks"
       RESOURCE_GROUP = "coinops-aks-rg"
       NAMESPACE = "coinops"
+
+      TF_VAR_db_name = "currency_rates_tracker"
+      TF_VAR_db_user = "postgres"
+      TF_VAR_db_password = "postgres"
+      TF_VAR_domain_name = "coin-ops.pp.ua"
     }
 
     stages {
