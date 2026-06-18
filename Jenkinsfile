@@ -163,7 +163,7 @@ EOF
               --destination "${ACR_LOGIN_SERVER}/coin-ops-history-consumer:${IMAGE_TAG}" \
               --destination "${ACR_LOGIN_SERVER}/coin-ops-history-consumer:${IMAGE_TAG_SHA}" \
               --destination "${ACR_LOGIN_SERVER}/coin-ops-history-consumer:${IMAGE_TAG_BUILD}" \
-              --cache=true
+              --cache=false
             '''
           }
         }
