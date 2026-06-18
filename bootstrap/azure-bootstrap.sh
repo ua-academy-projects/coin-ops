@@ -11,7 +11,6 @@
 #   7) Create backend storage for Terraform state
 #   8) Assign storage blob access to the service principal
 #   9) Create backend config and credentials files
-#  10) Optionally create Azure DevOps service connection and pipeline
 #
 # Usage:
 #   1. Optionally override variables with environment values
@@ -49,21 +48,6 @@ REQUIRED_SECRETS=(
   "db-password"
 )
 
-AZDO_CONFIGURE="${AZDO_CONFIGURE:-false}"
-AZDO_CREATE_PIPELINE="${AZDO_CREATE_PIPELINE:-false}"
-AZDO_ORG_URL="${AZDO_ORG_URL:-}"
-AZDO_PROJECT="${AZDO_PROJECT:-}"
-AZDO_PAT="${AZDO_PAT:-}"
-AZDO_SERVICE_CONNECTION_NAME="${AZDO_SERVICE_CONNECTION_NAME:-coin-ops-terraform}"
-AZDO_AUTHORIZE_SERVICE_CONNECTION="${AZDO_AUTHORIZE_SERVICE_CONNECTION:-true}"
-AZDO_PIPELINE_NAME="${AZDO_PIPELINE_NAME:-coin-ops-terraform}"
-AZDO_PIPELINE_YAML_PATH="${AZDO_PIPELINE_YAML_PATH:-azure-pipelines/terraform.yml}"
-AZDO_REPOSITORY="${AZDO_REPOSITORY:-}"
-AZDO_REPOSITORY_TYPE="${AZDO_REPOSITORY_TYPE:-tfsgit}"
-AZDO_REPOSITORY_SERVICE_CONNECTION_ID="${AZDO_REPOSITORY_SERVICE_CONNECTION_ID:-}"
-AZDO_BRANCH="${AZDO_BRANCH:-volynets-infra-dev}"
-AZ_SP_CLIENT_SECRET="${AZ_SP_CLIENT_SECRET:-}"
-
 # ------------------------------------------------------------
 # Validate required variables
 # ------------------------------------------------------------
@@ -89,39 +73,9 @@ if [[ "$CREATE_BACKEND" != "true" && "$CREATE_BACKEND" != "false" ]]; then
   exit 1
 fi
 
-for bool_var in AZDO_CONFIGURE AZDO_CREATE_PIPELINE AZDO_AUTHORIZE_SERVICE_CONNECTION; do
-  if [[ "${!bool_var}" != "true" && "${!bool_var}" != "false" ]]; then
-    echo "ERROR: $bool_var must be either 'true' or 'false'."
-    exit 1
-  fi
-done
-
 if [[ ${#REQUIRED_SECRETS[@]} -eq 0 ]]; then
   echo "ERROR: REQUIRED_SECRETS is empty. Add at least one secret name."
   exit 1
-fi
-
-if [[ "$AZDO_CONFIGURE" == "true" ]]; then
-  for var in AZDO_ORG_URL AZDO_PROJECT AZDO_PAT AZDO_SERVICE_CONNECTION_NAME; do
-    if [[ -z "${!var}" ]]; then
-      echo "ERROR: $var is required when AZDO_CONFIGURE=true."
-      exit 1
-    fi
-  done
-
-  if [[ "$AZDO_CREATE_PIPELINE" == "true" ]]; then
-    for var in AZDO_PIPELINE_NAME AZDO_PIPELINE_YAML_PATH AZDO_REPOSITORY AZDO_REPOSITORY_TYPE AZDO_BRANCH; do
-      if [[ -z "${!var}" ]]; then
-        echo "ERROR: $var is required when AZDO_CREATE_PIPELINE=true."
-        exit 1
-      fi
-    done
-
-    if [[ "$AZDO_REPOSITORY_TYPE" == "github" && -z "$AZDO_REPOSITORY_SERVICE_CONNECTION_ID" ]]; then
-      echo "ERROR: AZDO_REPOSITORY_SERVICE_CONNECTION_ID is required when AZDO_REPOSITORY_TYPE=github."
-      exit 1
-    fi
-  fi
 fi
 
 # ------------------------------------------------------------
@@ -136,13 +90,6 @@ for tool in az jq terraform; do
   fi
 done
 
-if [[ "$AZDO_CONFIGURE" == "true" ]]; then
-  if ! az extension show --name azure-devops &>/dev/null; then
-    echo "Azure DevOps CLI extension is not installed. Installing..."
-    az extension add --name azure-devops
-  fi
-fi
-
 # ------------------------------------------------------------
 # Validate Azure authentication
 # ------------------------------------------------------------
@@ -153,9 +100,7 @@ fi
 
 AZ_SUBSCRIPTION_ID=$(az account show --query id --output tsv)
 AZ_TENANT_ID=$(az account show --query tenantId --output tsv)
-AZ_SUBSCRIPTION_NAME=$(az account show --query name --output tsv)
 echo "Using subscription: $AZ_SUBSCRIPTION_ID"
-echo "Using subscription name: $AZ_SUBSCRIPTION_NAME"
 echo "Using tenant: $AZ_TENANT_ID"
 
 # ------------------------------------------------------------
@@ -211,12 +156,10 @@ if [[ -z "$SP_APP_ID" ]]; then
   echo "Service Principal created: $AZ_SP_NAME"
 else
   echo "WARNING: Service Principal already exists: $AZ_SP_NAME"
-  echo "WARNING: Existing client secret cannot be retrieved from Azure."
+  echo "WARNING: Client secret cannot be retrieved. Credentials file will be incomplete."
   echo "WARNING: Run 'az ad sp credential reset --name $AZ_SP_NAME' to generate a new secret."
-  echo "WARNING: Or provide AZ_SP_CLIENT_SECRET when AZDO_CONFIGURE=true."
 
   AZ_CLIENT_ID=$SP_APP_ID
-  AZ_CLIENT_SECRET="$AZ_SP_CLIENT_SECRET"
 fi
 
 # ------------------------------------------------------------
@@ -363,124 +306,6 @@ EOF
 chmod 600 "$CREDENTIALS_FILE"
 
 echo "Credentials file created: $CREDENTIALS_FILE"
-
-# ------------------------------------------------------------
-# 10) Configure Azure DevOps bridge
-# ------------------------------------------------------------
-AZDO_SERVICE_CONNECTION_ID=""
-AZDO_PIPELINE_ID=""
-
-if [[ "$AZDO_CONFIGURE" == "true" ]]; then
-  echo ""
-  echo "==> Step 10: Azure DevOps"
-
-  if [[ -z "$AZ_CLIENT_SECRET" ]]; then
-    echo "ERROR: Azure DevOps service connection needs a service principal secret."
-    echo "ERROR: Re-run after resetting the SP secret or set AZ_SP_CLIENT_SECRET."
-    exit 1
-  fi
-
-  echo "$AZDO_PAT" | az devops login --organization "$AZDO_ORG_URL" --only-show-errors
-
-  az devops configure \
-    --defaults organization="$AZDO_ORG_URL" project="$AZDO_PROJECT" \
-    --only-show-errors
-
-  AZDO_SERVICE_CONNECTION_ID=$(az devops service-endpoint list \
-    --query "[?name=='$AZDO_SERVICE_CONNECTION_NAME'].id | [0]" \
-    --output tsv)
-
-  if [[ -n "$AZDO_SERVICE_CONNECTION_ID" ]]; then
-    echo "Azure DevOps service connection already exists: $AZDO_SERVICE_CONNECTION_NAME"
-  else
-    AZDO_SERVICE_CONNECTION_OUTPUT=$(az devops service-endpoint azurerm create \
-      --azure-rm-service-principal-id "$AZ_CLIENT_ID" \
-      --azure-rm-service-principal-key "$AZ_CLIENT_SECRET" \
-      --azure-rm-subscription-id "$AZ_SUBSCRIPTION_ID" \
-      --azure-rm-subscription-name "$AZ_SUBSCRIPTION_NAME" \
-      --azure-rm-tenant-id "$AZ_TENANT_ID" \
-      --name "$AZDO_SERVICE_CONNECTION_NAME" \
-      --output json)
-
-    AZDO_SERVICE_CONNECTION_ID=$(echo "$AZDO_SERVICE_CONNECTION_OUTPUT" | jq -r '.id')
-    echo "Azure DevOps service connection created: $AZDO_SERVICE_CONNECTION_NAME"
-  fi
-
-  if [[ "$AZDO_AUTHORIZE_SERVICE_CONNECTION" == "true" ]]; then
-    az devops service-endpoint update \
-      --id "$AZDO_SERVICE_CONNECTION_ID" \
-      --enable-for-all true \
-      --only-show-errors
-    echo "Azure DevOps service connection authorized for pipelines"
-  fi
-
-  if [[ "$AZDO_CREATE_PIPELINE" == "true" ]]; then
-    set_azdo_pipeline_variable() {
-      local name="$1"
-      local value="$2"
-
-      if az pipelines variable list \
-        --pipeline-id "$AZDO_PIPELINE_ID" \
-        --query "$name" \
-        --output tsv | grep -q .; then
-        az pipelines variable update \
-          --pipeline-id "$AZDO_PIPELINE_ID" \
-          --name "$name" \
-          --value "$value" \
-          --allow-override true \
-          --only-show-errors
-      else
-        az pipelines variable create \
-          --pipeline-id "$AZDO_PIPELINE_ID" \
-          --name "$name" \
-          --value "$value" \
-          --allow-override true \
-          --only-show-errors
-      fi
-    }
-
-    AZDO_PIPELINE_ID=$(az pipelines list \
-      --name "$AZDO_PIPELINE_NAME" \
-      --query "[0].id" \
-      --output tsv)
-
-    if [[ -n "$AZDO_PIPELINE_ID" ]]; then
-      echo "Azure DevOps pipeline already exists: $AZDO_PIPELINE_NAME"
-    else
-      AZDO_PIPELINE_CREATE_ARGS=(
-        --name "$AZDO_PIPELINE_NAME" \
-        --repository "$AZDO_REPOSITORY" \
-        --repository-type "$AZDO_REPOSITORY_TYPE" \
-        --branch "$AZDO_BRANCH" \
-        --yml-path "$AZDO_PIPELINE_YAML_PATH" \
-        --skip-first-run true \
-        --output json
-      )
-
-      if [[ -n "$AZDO_REPOSITORY_SERVICE_CONNECTION_ID" ]]; then
-        AZDO_PIPELINE_CREATE_ARGS+=(--service-connection "$AZDO_REPOSITORY_SERVICE_CONNECTION_ID")
-      fi
-
-      AZDO_PIPELINE_OUTPUT=$(az pipelines create "${AZDO_PIPELINE_CREATE_ARGS[@]}")
-
-      AZDO_PIPELINE_ID=$(echo "$AZDO_PIPELINE_OUTPUT" | jq -r '.id')
-      echo "Azure DevOps pipeline created: $AZDO_PIPELINE_NAME"
-    fi
-
-    set_azdo_pipeline_variable "AZURE_SERVICE_CONNECTION" "$AZDO_SERVICE_CONNECTION_NAME"
-    set_azdo_pipeline_variable "TF_BACKEND_RESOURCE_GROUP" "$AZ_GROUP_NAME"
-    set_azdo_pipeline_variable "TF_BACKEND_STORAGE_ACCOUNT" "$AZ_STORAGE_ACCOUNT_NAME"
-    set_azdo_pipeline_variable "TF_BACKEND_CONTAINER" "$AZ_CONTAINER_NAME"
-    echo "Azure DevOps pipeline variables configured"
-  else
-    echo "AZDO_CREATE_PIPELINE is false, skipping Azure Pipeline creation"
-  fi
-else
-  echo ""
-  echo "==> Step 10: Azure DevOps"
-  echo "AZDO_CONFIGURE is false, skipping Azure DevOps bridge setup"
-fi
-
 printf "\nDone!\n"
 printf "  %-20s %s\n" "Resource group:" "$AZ_GROUP_NAME"
 printf "  %-20s %s\n" "Key Vault:"      "$AZ_KEYVAULT_NAME"
@@ -488,8 +313,6 @@ printf "  %-20s %s\n" "Service principal:" "$AZ_SP_NAME"
 printf "  %-20s %s\n" "State storage:"  "$([[ "$CREATE_BACKEND" == "true" ]] && echo "$AZ_STORAGE_ACCOUNT_NAME/$AZ_CONTAINER_NAME" || echo "skipped")"
 printf "  %-20s %s\n" "Backend config:" "$([[ "$CREATE_BACKEND" == "true" ]] && echo "$BACKEND_CONFIG_FILE" || echo "skipped")"
 printf "  %-20s %s\n" "Env file:"       "$CREDENTIALS_FILE"
-printf "  %-20s %s\n" "AzDO connection:" "$([[ -n "$AZDO_SERVICE_CONNECTION_ID" ]] && echo "$AZDO_SERVICE_CONNECTION_NAME ($AZDO_SERVICE_CONNECTION_ID)" || echo "skipped")"
-printf "  %-20s %s\n" "AzDO pipeline:" "$([[ -n "$AZDO_PIPELINE_ID" ]] && echo "$AZDO_PIPELINE_NAME ($AZDO_PIPELINE_ID)" || echo "skipped")"
 printf "\nNext steps:\n"
 printf "  update placeholder secrets in Azure Key Vault\n"
 printf "  source %s\n" "$CREDENTIALS_FILE"
