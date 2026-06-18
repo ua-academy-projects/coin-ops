@@ -14,7 +14,7 @@ variable "cluster" {
   type = object({
     name               = string
     dns_prefix         = string
-    kubernetes_version = string
+    kubernetes_version = optional(string)
     subnet             = string
     sku_tier           = optional(string, "Free")
     node_pool = object({

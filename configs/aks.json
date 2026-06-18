@@ -22,7 +22,6 @@
   "aks": {
     "name": "coinops-aks",
     "dns_prefix": "coinops",
-    "kubernetes_version": "1.30",
     "subnet": "nodes",
     "sku_tier": "Free",
     "node_pool": {

@@ -436,7 +436,6 @@
       "required": [
         "name",
         "dns_prefix",
-        "kubernetes_version",
         "subnet",
         "node_pool"
       ],

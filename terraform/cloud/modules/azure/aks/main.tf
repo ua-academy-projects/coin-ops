@@ -3,7 +3,7 @@ resource "azurerm_kubernetes_cluster" "this" {
   location            = var.location
   resource_group_name = var.resource_group_name
   dns_prefix          = var.cluster.dns_prefix
-  kubernetes_version  = var.cluster.kubernetes_version
+  kubernetes_version  = try(var.cluster.kubernetes_version, null)
   sku_tier            = try(var.cluster.sku_tier, "Free")
 
   default_node_pool {
