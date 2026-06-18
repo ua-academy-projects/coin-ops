@@ -1,4 +1,4 @@
-cloud: gcp
+cloud: azure
 # cloud: aws / gcp / azure
 
 name_prefix: coinops
@@ -19,7 +19,7 @@ defaults:
 
 ssh:
   user: rkurdupel
-  public_key_path: /tmp/id_ed25519.pub
+  public_key_path: ~/.ssh/id_ed25519.pub
   port: 22
   protocol: tcp
 
@@ -95,37 +95,7 @@ network:
 
 
 
-instances:
-  bastion:
-    size: large
-    image: ubuntu_2404
-    public: true
-    private_ip: 10.10.0.10
-    tags:
-      - bastion
-
-  k3s-node-1:
-    size: large
-    image: ubuntu_2404
-    public: true
-    private_ip: 10.10.1.11
-    tags:
-      - k3s-node
-  k3s-node-2:
-    size: large
-    image: ubuntu_2404
-    public: false
-    private_ip: 10.10.1.12
-    tags:
-      - k3s-node
-  k3s-node-3:
-    size: large
-    image: ubuntu_2404
-    public: false
-    private_ip: 10.10.1.13
-    tags:
-      - k3s-node
-
+instances: {}
 
 firewall:
   ssh_source_ranges:

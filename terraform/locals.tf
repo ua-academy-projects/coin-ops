@@ -1,7 +1,7 @@
 locals {
   config         = yamldecode(trimspace(file("${path.root}/../config/config.yml")))
   cloud          = local.config.cloud
-  ssh_public_key = trimspace(file(local.config.ssh.public_key_path))
+  ssh_public_key = fileexists(pathexpand(local.config.ssh_public_key_path)) ? trimspace(file(local.config.ssh.public_key_path)) : ""
 
   # HANDLING SET IN INSTANCES MANUALLY CLOUD PARAMETER
   # name - name of the vm, instance - all parameters ( size, image, cloud ... )
