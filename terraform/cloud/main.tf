@@ -24,7 +24,8 @@ module "jenkins" {
   source = "./modules/kubernetes/jenkins"
   count  = local.enable_jenkins ? 1 : 0
 
-  jenkins = local.config_jenkins
+  jenkins              = local.config_jenkins
+  azure_key_vault_name = local.config_azure_key_vault_name
 
   depends_on = [module.azure_aks]
 }

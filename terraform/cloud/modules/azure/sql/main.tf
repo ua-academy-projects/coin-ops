@@ -3,6 +3,7 @@ resource "azurerm_subnet" "postgres" {
   resource_group_name  = data.azurerm_resource_group.this.name
   virtual_network_name = var.network_name
   address_prefixes     = [local.delegated_subnet_cidr]
+  service_endpoints    = ["Microsoft.Storage"]
 
   delegation {
     name = "postgres-flexible-server"

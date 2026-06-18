@@ -18,6 +18,31 @@ resource "kubernetes_secret" "admin" {
   type = "Opaque"
 }
 
+resource "kubernetes_service_account" "deployer" {
+  metadata {
+    name      = var.jenkins.jcasc.agent_service_account
+    namespace = kubernetes_namespace.this.metadata[0].name
+  }
+}
+
+resource "kubernetes_cluster_role_binding" "deployer" {
+  metadata {
+    name = "${var.jenkins.release_name}-deployer"
+  }
+
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "ClusterRole"
+    name      = "cluster-admin"
+  }
+
+  subject {
+    kind      = "ServiceAccount"
+    name      = kubernetes_service_account.deployer.metadata[0].name
+    namespace = kubernetes_namespace.this.metadata[0].name
+  }
+}
+
 resource "helm_release" "jenkins" {
   name       = var.jenkins.release_name
   repository = var.jenkins.chart_repository
@@ -28,6 +53,11 @@ resource "helm_release" "jenkins" {
     yamlencode({
       controller = {
         serviceType = var.jenkins.service_type
+        additionalPlugins = [
+          "git:latest",
+          "job-dsl:latest",
+          "pipeline-utility-steps:latest"
+        ]
         admin = {
           createSecret   = false
           existingSecret = kubernetes_secret.admin.metadata[0].name
@@ -42,6 +72,18 @@ resource "helm_release" "jenkins" {
             "coin-ops" = yamlencode({
               jenkins = {
                 systemMessage = var.jenkins.jcasc.system_message
+                globalNodeProperties = [
+                  {
+                    envVars = {
+                      env = [
+                        {
+                          key   = "AZ_KEYVAULT_NAME"
+                          value = var.azure_key_vault_name
+                        }
+                      ]
+                    }
+                  }
+                ]
                 clouds = [
                   {
                     kubernetes = {
@@ -77,6 +119,31 @@ resource "helm_release" "jenkins" {
                   url = var.jenkins.jcasc.jenkins_url
                 }
               }
+              jobs = [
+                {
+                  script = <<-EOT
+                    pipelineJob('${var.jenkins.deploy_job.name}') {
+                      description('Deploys Coin-Ops to AKS with Helm. Requires Jenkins string credentials: azure-client-id, azure-client-secret, azure-tenant-id.')
+                      parameters {
+                        stringParam('IMAGE_TAG', '', 'Optional image tag override. Empty uses configs/aks.json deploy.image_tag.')
+                      }
+                      definition {
+                        cpsScm {
+                          scm {
+                            git {
+                              remote {
+                                url('${var.jenkins.deploy_job.repo_url}')
+                              }
+                              branches('${var.jenkins.deploy_job.branch}')
+                            }
+                          }
+                          scriptPath('${var.jenkins.deploy_job.script_path}')
+                        }
+                      }
+                    }
+                  EOT
+                }
+              ]
             })
           }
         }
@@ -84,5 +151,8 @@ resource "helm_release" "jenkins" {
     })
   ]
 
-  depends_on = [kubernetes_secret.admin]
+  depends_on = [
+    kubernetes_cluster_role_binding.deployer,
+    kubernetes_secret.admin
+  ]
 }

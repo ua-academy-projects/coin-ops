@@ -89,8 +89,14 @@
       "system_message": "Coin-Ops Jenkins is configured by Terraform and JCasC.",
       "jenkins_url": "http://jenkins.jenkins.svc.cluster.local:8080",
       "agent_namespace": "jenkins",
-      "agent_service_account": "default",
+      "agent_service_account": "jenkins-deployer",
       "agent_label": "aks"
+    },
+    "deploy_job": {
+      "name": "deploy-coin-ops",
+      "repo_url": "https://github.com/ua-academy-projects/coin-ops.git",
+      "branch": "*/volynets-infra-dev",
+      "script_path": "jenkins/pipelines/deploy-coin-ops.Jenkinsfile"
     }
   }
 }

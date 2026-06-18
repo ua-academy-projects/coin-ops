@@ -503,7 +503,8 @@
         "service_type",
         "admin_secret_name",
         "admin_username",
-        "admin_password_placeholder"
+        "admin_password_placeholder",
+        "deploy_job"
       ],
       "properties": {
         "namespace": {
@@ -566,6 +567,34 @@
               "minLength": 1
             },
             "agent_label": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "deploy_job": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "repo_url",
+            "branch",
+            "script_path"
+          ],
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "repo_url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "branch": {
+              "type": "string",
+              "minLength": 1
+            },
+            "script_path": {
               "type": "string",
               "minLength": 1
             }

@@ -15,5 +15,16 @@ variable "jenkins" {
       agent_service_account = string
       agent_label           = string
     })
+    deploy_job = object({
+      name        = string
+      repo_url    = string
+      branch      = string
+      script_path = string
+    })
   })
+}
+
+variable "azure_key_vault_name" {
+  type        = string
+  description = "Azure Key Vault name exposed to Jenkins jobs as a non-secret environment variable."
 }
