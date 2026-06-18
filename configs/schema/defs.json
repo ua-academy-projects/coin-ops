@@ -491,6 +491,54 @@
           }
         }
       }
+    },
+    "jenkins": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "namespace",
+        "release_name",
+        "chart_repository",
+        "chart_name",
+        "service_type",
+        "admin_secret_name",
+        "admin_username",
+        "admin_password_placeholder"
+      ],
+      "properties": {
+        "namespace": {
+          "type": "string",
+          "minLength": 1
+        },
+        "release_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "chart_repository": {
+          "type": "string",
+          "format": "uri"
+        },
+        "chart_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "service_type": {
+          "type": "string",
+          "enum": ["ClusterIP", "LoadBalancer"]
+        },
+        "admin_secret_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "admin_username": {
+          "type": "string",
+          "minLength": 1
+        },
+        "admin_password_placeholder": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
     }
   }
 }

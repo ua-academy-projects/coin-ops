@@ -14,7 +14,8 @@
     "nat_route": true,
     "secrets": true,
     "sql": true,
-    "aks": true
+    "aks": true,
+    "jenkins": true
   },
   "allOf": [
     {
@@ -49,6 +50,9 @@
         },
         "aks": {
           "$ref": "./defs.json#/$defs/aks"
+        },
+        "jenkins": {
+          "$ref": "./defs.json#/$defs/jenkins"
         }
       }
     }

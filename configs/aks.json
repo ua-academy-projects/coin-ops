@@ -30,5 +30,15 @@
       "node_count": 1,
       "os_disk_size_gb": 30
     }
+  },
+  "jenkins": {
+    "namespace": "jenkins",
+    "release_name": "jenkins",
+    "chart_repository": "https://charts.jenkins.io",
+    "chart_name": "jenkins",
+    "service_type": "ClusterIP",
+    "admin_secret_name": "jenkins-admin",
+    "admin_username": "admin",
+    "admin_password_placeholder": "CHANGE_ME_IN_JENKINS_SECRET"
   }
 }

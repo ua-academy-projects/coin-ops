@@ -20,6 +20,15 @@ module "azure_aks" {
   cluster             = local.config_aks
 }
 
+module "jenkins" {
+  source = "./modules/kubernetes/jenkins"
+  count  = local.enable_jenkins ? 1 : 0
+
+  jenkins = local.config_jenkins
+
+  depends_on = [module.azure_aks]
+}
+
 module "azure_security" {
   source = "./modules/azure/security"
   count  = local.enable_azure_security ? 1 : 0

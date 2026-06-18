@@ -41,6 +41,18 @@ output "aks_kube_config_raw" {
   sensitive = true
 }
 
+output "jenkins_namespace" {
+  value = try(module.jenkins[0].namespace, null)
+}
+
+output "jenkins_release_name" {
+  value = try(module.jenkins[0].release_name, null)
+}
+
+output "jenkins_status" {
+  value = try(module.jenkins[0].status, null)
+}
+
 output "cloud_sql_instance_name" {
   value = local.default_cloud == "gcp" ? try(module.gcp_sql[0].instance_name, null) : (
     local.default_cloud == "azure" ? try(module.azure_sql[0].instance_name, null) : (

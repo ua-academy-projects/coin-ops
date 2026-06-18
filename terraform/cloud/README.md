@@ -28,6 +28,18 @@ terraform -chdir=terraform/cloud init -backend-config=../../bootstrap/backend.az
 terraform -chdir=terraform/cloud plan -lock-timeout=30s
 ```
 
+After apply, Jenkins is installed into AKS by Helm:
+
+```bash
+terraform -chdir=terraform/cloud apply -lock-timeout=30s
+kubectl -n jenkins get pods
+kubectl -n jenkins port-forward svc/jenkins 8080:8080
+```
+
+The initial admin username is `admin`. The initial password is the placeholder
+from `configs/aks.json` and must be replaced by a secure secret flow before this
+is treated as production-ready.
+
 `azure.auto.tfvars.json` is loaded automatically by Terraform, so the Azure
 resource group, Key Vault, location, and config name do not need to be repeated
 as `-var` arguments.

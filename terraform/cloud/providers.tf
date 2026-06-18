@@ -15,6 +15,14 @@ terraform {
       version = "4.76.0"
 
     }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = "2.38.0"
+    }
+    helm = {
+      source  = "hashicorp/helm"
+      version = "2.17.0"
+    }
     local = {
       source  = "hashicorp/local"
       version = "2.5.3"
@@ -39,5 +47,21 @@ provider "google" {
 provider "azurerm" {
   features {
 
+  }
+}
+
+provider "kubernetes" {
+  host                   = try(module.azure_aks[0].host, null)
+  client_certificate     = base64decode(try(module.azure_aks[0].client_certificate, ""))
+  client_key             = base64decode(try(module.azure_aks[0].client_key, ""))
+  cluster_ca_certificate = base64decode(try(module.azure_aks[0].cluster_ca_certificate, ""))
+}
+
+provider "helm" {
+  kubernetes {
+    host                   = try(module.azure_aks[0].host, null)
+    client_certificate     = base64decode(try(module.azure_aks[0].client_certificate, ""))
+    client_key             = base64decode(try(module.azure_aks[0].client_key, ""))
+    cluster_ca_certificate = base64decode(try(module.azure_aks[0].cluster_ca_certificate, ""))
   }
 }

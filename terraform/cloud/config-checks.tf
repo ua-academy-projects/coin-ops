@@ -38,3 +38,10 @@ check "azure_provider_inputs" {
     error_message = "Azure configs require azure_resource_group_name, azure_key_vault_name, and azure_location. Run bootstrap/azure-bootstrap.sh to generate terraform/cloud/azure.auto.tfvars.json, or define provider.azure in the selected config JSON."
   }
 }
+
+check "jenkins_requires_aks" {
+  assert {
+    condition     = local.config_jenkins == null || local.config_aks != null
+    error_message = "Jenkins config requires an aks config block because Jenkins is installed into AKS by the Kubernetes and Helm providers."
+  }
+}
