@@ -35,11 +35,29 @@ resource "helm_release" "jenkins" {
           passwordKey    = "chart-admin-password"
         }
         JCasC = {
-          defaultConfig = false
+          defaultConfig         = false
+          securityRealm         = ""
+          authorizationStrategy = ""
           configScripts = {
             "coin-ops" = yamlencode({
               jenkins = {
                 systemMessage = var.jenkins.jcasc.system_message
+                securityRealm = {
+                  local = {
+                    allowsSignup = false
+                    users = [
+                      {
+                        id       = var.jenkins.admin_username
+                        password = var.jenkins.admin_password_placeholder
+                      }
+                    ]
+                  }
+                }
+                authorizationStrategy = {
+                  loggedInUsersCanDoAnything = {
+                    allowAnonymousRead = false
+                  }
+                }
                 clouds = [
                   {
                     kubernetes = {
