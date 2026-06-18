@@ -18,3 +18,23 @@ variable "azure_location" {
   default     = null
   description = "Azure region used by terraform/cloud. Generated into azure.auto.tfvars.json by bootstrap/azure-bootstrap.sh."
 }
+
+variable "aws_region" {
+  type        = string
+  default     = "us-east-1"
+  description = "AWS region for AWS runs. Azure runs use the default dummy value so the AWS provider does not block Azure planning."
+}
+
+variable "aws_access_key" {
+  type        = string
+  default     = "unused"
+  sensitive   = true
+  description = "AWS access key for AWS runs. Azure runs use the default dummy value."
+}
+
+variable "aws_secret_key" {
+  type        = string
+  default     = "unused"
+  sensitive   = true
+  description = "AWS secret key for AWS runs. Azure runs use the default dummy value."
+}
