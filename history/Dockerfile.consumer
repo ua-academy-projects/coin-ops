@@ -5,11 +5,12 @@ WORKDIR /app
 RUN useradd -m -r user
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt \
- && python -c "import pika, psycopg2"
+RUN python -m venv /app/.venv \
+ && /app/.venv/bin/pip install --no-cache-dir -r requirements.txt \
+ && /app/.venv/bin/python -c "import pika, psycopg2"
 
 COPY . .
 
 USER user
 
-CMD ["python", "consumer.py"]
+CMD ["/app/.venv/bin/python", "consumer.py"]
