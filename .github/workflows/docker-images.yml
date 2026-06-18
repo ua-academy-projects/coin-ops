@@ -146,3 +146,5 @@ jobs:
           curl -X POST \
             --user "${{ secrets.JENKINS_USER }}:${{ secrets.JENKINS_API_TOKEN }}" \
             "https://jenkins.coin-ops.pp.ua/job/coinops-pipeline/build"
+          echo "Jenkins build triggered: https://jenkins.coin-ops.pp.ua/job/coinops-pipeline/"
+          echo "::notice::Jenkins deploy pipeline started — check Jenkins UI for status"
