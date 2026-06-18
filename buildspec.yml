@@ -16,6 +16,7 @@ phases:
       - cd terraform
       - echo "$SSH_PUBLIC_KEY_CONTENT" > /tmp/devops_key.pub
       - terraform init
+      - aws eks update-kubeconfig --name coinops-eks --region eu-central-1
       - terraform apply -auto-approve -var="ssh_public_key_path=/tmp/devops_key.pub" -target=module.aws_network -target=module.aws_security -target=module.aws_vm -target=module.aws_lb -target=module.aws_rds -target=module.aws_monitoring_alerting -target=module.aws_monitoring_logs -target=module.aws_monitoring_iam -target=module.aws_monitoring_ec2_alarms -target=module.aws_monitoring_alb_alarms -target=module.aws_monitoring_log_metrics -target=module.aws_monitoring_dashboard -target=module.aws_monitoring_agent -target=module.aws_eks -target=module.aws_codebuild -target=module.aws_irsa -target=helm_release.jenkins -target=cloudflare_record.jenkins -target=cloudflare_zero_trust_tunnel_cloudflared.jenkins -target=cloudflare_zero_trust_tunnel_cloudflared_config.jenkins -target=kubernetes_cluster_role_binding.jenkins_cluster_admin
 
 artifacts:
