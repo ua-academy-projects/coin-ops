@@ -38,6 +38,7 @@ spec:
           apt-get install -y --no-install-recommends curl ca-certificates git make gcc python3-dev libffi-dev libssl-dev
           curl -L -o /usr/local/bin/kubectl "https://dl.k8s.io/release/v1.31.0/bin/linux/amd64/kubectl"
           chmod +x /usr/local/bin/kubectl
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
           python -m venv .venv
           . .venv/bin/activate
           pip install --upgrade pip
