@@ -34,7 +34,7 @@ AZ_GROUP_LOCATION="${AZ_GROUP_LOCATION:-austriaeast}"
 AZ_SP_NAME="${AZ_SP_NAME:-coin-ops-sp}"
 
 CREATE_BACKEND="${CREATE_BACKEND:-true}"
-AZ_STORAGE_ACCOUNT_NAME="${AZ_STORAGE_ACCOUNT_NAME:-coinopstfstate}"
+AZ_STORAGE_ACCOUNT_NAME="${AZ_STORAGE_ACCOUNT_NAME:-}"
 AZ_CONTAINER_NAME="${AZ_CONTAINER_NAME:-tfstate}"
 BACKEND_CONFIG_FILE="${BACKEND_CONFIG_FILE:-./backend.azure.hcl}"
 
@@ -64,7 +64,6 @@ for var in \
   AZ_GROUP_LOCATION \
   AZ_SP_NAME \
   CREATE_BACKEND \
-  AZ_STORAGE_ACCOUNT_NAME \
   AZ_CONTAINER_NAME \
   BACKEND_CONFIG_FILE \
   CREDENTIALS_FILE \
@@ -130,12 +129,23 @@ if [[ -z "$AZ_KEYVAULT_NAME" ]]; then
   AZ_KEYVAULT_NAME="coinopskv${AZ_KEYVAULT_SUFFIX}"
 fi
 
+if [[ -z "$AZ_STORAGE_ACCOUNT_NAME" ]]; then
+  AZ_STORAGE_SUFFIX=$(echo "$AZ_SUBSCRIPTION_ID" | tr -d '-' | cut -c1-10)
+  AZ_STORAGE_ACCOUNT_NAME="coinopstf${AZ_STORAGE_SUFFIX}"
+fi
+
 if ! [[ "$AZ_KEYVAULT_NAME" =~ ^[a-zA-Z][a-zA-Z0-9-]{1,22}[a-zA-Z0-9]$ ]]; then
   echo "ERROR: AZ_KEYVAULT_NAME must be 3-24 characters, start with a letter, end with a letter or number, and contain only letters, numbers, and hyphens."
   exit 1
 fi
 
+if ! [[ "$AZ_STORAGE_ACCOUNT_NAME" =~ ^[a-z0-9]{3,24}$ ]]; then
+  echo "ERROR: AZ_STORAGE_ACCOUNT_NAME must be 3-24 characters and contain only lowercase letters and numbers."
+  exit 1
+fi
+
 echo "Using Key Vault name: $AZ_KEYVAULT_NAME"
+echo "Using storage account name: $AZ_STORAGE_ACCOUNT_NAME"
 
 # ------------------------------------------------------------
 # Register required resource providers
