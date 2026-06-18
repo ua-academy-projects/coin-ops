@@ -51,6 +51,20 @@ terraform_bootstrap_targets=(
   "module.monitoring_identity"
 )
 
+terraform_state_moves=(
+  "module.resource_group.azurerm_resource_group.this|module.resource_group.azurerm_resource_group.dev"
+  "module.acr.azurerm_container_registry.this|module.acr.azurerm_container_registry.dev"
+  "module.aks.azurerm_kubernetes_cluster.this|module.aks.azurerm_kubernetes_cluster.dev"
+  "module.network.azurerm_virtual_network.this|module.network.azurerm_virtual_network.dev"
+  "module.monitoring.azurerm_log_analytics_workspace.this|module.monitoring.azurerm_log_analytics_workspace.dev"
+  "module.monitoring.azurerm_monitor_action_group.this[0]|module.monitoring.azurerm_monitor_action_group.dev[0]"
+  "module.monitoring_identity.azurerm_user_assigned_identity.this|module.monitoring_identity.azurerm_user_assigned_identity.dev"
+  "module.traefik.kubernetes_namespace.this|module.traefik.kubernetes_namespace.dev"
+  "module.traefik.helm_release.this|module.traefik.helm_release.dev"
+  "module.cert_manager.kubernetes_namespace.this|module.cert_manager.kubernetes_namespace.dev"
+  "module.cert_manager.helm_release.this|module.cert_manager.helm_release.dev"
+)
+
 log() {
   printf '[bootstrap] %s\n' "$*"
 }
@@ -329,9 +343,29 @@ terraform_apply() {
     "${apply_args[@]}"
 }
 
+state_address_exists() {
+  local address="$1"
+  terraform -chdir="${TF_DIR}" state show "${address}" >/dev/null 2>&1
+}
+
+reconcile_renamed_state() {
+  local mapping old_address new_address
+
+  for mapping in "${terraform_state_moves[@]}"; do
+    old_address="${mapping%%|*}"
+    new_address="${mapping##*|}"
+
+    if state_address_exists "${old_address}" && ! state_address_exists "${new_address}"; then
+      log "Moving Terraform state ${old_address} -> ${new_address}."
+      terraform -chdir="${TF_DIR}" state mv "${old_address}" "${new_address}" >/dev/null
+    fi
+  done
+}
+
 run_terraform() {
   log "Running terraform init."
   terraform -chdir="${TF_DIR}" init -reconfigure -backend-config="${BACKEND_CONFIG_PATH}"
+  reconcile_renamed_state
 
   local apply_args=()
   if [[ "${TF_AUTO_APPROVE}" == "true" ]]; then
