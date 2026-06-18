@@ -2,7 +2,7 @@
 # Runtime app config and secrets come from configs/aks.json plus Azure Key Vault.
 
 namespaces:
-  create: true
+  create: false
 
 secret:
   create: false
