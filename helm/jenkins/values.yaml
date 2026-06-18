@@ -1,0 +1,29 @@
+controller:
+  # standard LTS image, no custom plugins yet
+  image:
+    repository: "jenkins/jenkins"
+    tag: "lts"
+ 
+  # ClusterIP for now, access via port-forward
+  serviceType: ClusterIP
+ 
+  admin:
+    username: "admin"
+    # password is NOT set here — passed at deploy time via
+    # `helm upgrade --set controller.admin.password=...` using a CodeBuild
+    # environment variable (JENKINS_ADMIN_PASSWORD), same pattern as
+    # db_password and the SSH key. Never hardcoded or committed to git.
+ 
+resources:
+  requests:
+    cpu: "500m"
+    memory: "512Mi"
+  limits:
+    cpu: "1"
+    memory: "1Gi"
+ 
+# TODO: re-enable once EBS CSI Driver + StorageClass exist on the cluster.
+# No driver yet -> PVC stays Pending forever. Without persistence, Jenkins
+# config/jobs are lost on pod restart — ok for now, this is a demo pipeline.
+persistence:
+  enabled: false
