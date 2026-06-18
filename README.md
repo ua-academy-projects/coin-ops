@@ -1,405 +1,360 @@
-# Coin-Ops
+# Coin-Ops on AKS
 
-Multi-cloud infrastructure and application stack for tracking prediction-market and currency data.
+Coin-Ops application (proxy + history API + history consumer + React UI) deployed to Azure Kubernetes Service (AKS) with full CI/CD automation through GitHub Actions and Jenkins.
 
-## Kubernetes Commands
+Live app: `https://app.coin-ops.pp.ua`
+Jenkins: `https://jenkins.coin-ops.pp.ua`
 
-Useful `kubectl` commands for day-to-day cluster work:
-
-```bash
-# Basic inspection
-kubectl get nodes
-kubectl get pods -A
-kubectl get svc -A
-kubectl get deployments -A
-
-# Focus on one namespace
-kubectl get pods -n <namespace>
-kubectl describe pod <pod-name> -n <namespace>
-kubectl logs <pod-name> -n <namespace>
-kubectl logs -f <pod-name> -n <namespace>
-
-# Exec into a running container
-kubectl exec -it <pod-name> -n <namespace> -- /bin/sh
-
-# Apply and verify resources
-kubectl apply -f <manifest>.yaml
-kubectl delete -f <manifest>.yaml
-kubectl rollout status deployment/<deployment-name> -n <namespace>
-kubectl rollout restart deployment/<deployment-name> -n <namespace>
-
-# Cluster context and access
-kubectl config get-contexts
-kubectl config use-context <context-name>
-kubectl config current-context
-```
-
-The repo contains:
-
-- Terraform modules for AWS, GCP, and Azure VM networking and compute
-- Ansible playbooks for node provisioning, k3s, CloudNativePG, cert-manager, Headlamp, Homepage, and the Coin-Ops app
-- A Kubernetes deployment layer built on a multi-node k3s cluster
-- A React/Vite frontend served by nginx
-- A Go proxy API that fetches Polymarket, CoinGecko, and NBU data
-- A Python FastAPI history API and consumer for persisted market and price snapshots
-- Local Docker Compose wiring for development
+---
 
 ## Architecture
 
-Local development runs all application services with Docker Compose:
-
-```text
-browser
-  -> ui nginx (:5000)
-      -> proxy API (:8080)
-      -> history API (:8000)
-          -> PostgreSQL
-proxy API -> Redis
-proxy API -> RabbitMQ -> history consumer -> PostgreSQL
+```
+Developer
+    │ git push
+    ▼
+GitHub repository
+    │
+    ├── GitHub Actions: Build Docker images (path-filtered)
+    │       │
+    │       ▼
+    │   ghcr.io/ua-academy-projects/coin-ops-*
+    │
+    └── GitHub Actions: Trigger Jenkins Deploy
+            │ curl
+            ▼
+Jenkins (running inside AKS, namespace cicd)
+    │
+    ├── Deploy data services (postgres, redis, rabbitmq)
+    ├── Deploy coinops app via Helm
+    └── Verify rollout (kubectl rollout status)
+            │
+            ▼
+AKS coinops-app namespace:
+    proxy, history-api, history-consumer, ui, gateway
+            │
+            ▼
+Cloudflare Tunnel (cloudflared in cicd namespace)
+            │
+            ▼
+Internet:
+    https://app.coin-ops.pp.ua
+    https://jenkins.coin-ops.pp.ua
 ```
 
-Cloud infrastructure is driven by `config/config.yml`.
+---
 
-```text
-operator
-  -> bastion VM
-      -> k3s nodes
-          -> Coin-Ops workloads
-          -> RabbitMQ / Redis
-          -> CloudNativePG PostgreSQL
+## Infrastructure components
+
+### AKS cluster (Azure managed Kubernetes)
+
+| Item | Value |
+|------|-------|
+| Cluster name | `coinops-aks` |
+| Resource group | `coinops-aks-rg` |
+| Region | `denmarkeast` |
+| Node pool | 2x `Standard_B2s_v2` (2 vCPU, 8 GB RAM each) |
+
+Provisioned via Terraform module `terraform/modules/azure/aks`.
+
+### Namespaces
+
+| Namespace | Workloads |
+|-----------|-----------|
+| `cicd` | Jenkins controller, cloudflared (Cloudflare Tunnel) |
+| `coinops-data` | Postgres, Redis, RabbitMQ (deployed by Jenkins via kubectl) |
+| `coinops-app` | proxy, history-api, history-consumer, ui, gateway (Helm chart) |
+
+### Domain access
+
+- Jenkins and the app are exposed through **Cloudflare Tunnel**, not a public IP / LoadBalancer
+- A single tunnel routes `jenkins.coin-ops.pp.ua` and `app.coin-ops.pp.ua` to in-cluster Services
+- An nginx **gateway** Deployment inside `coinops-app` does path-based routing:
+  - `/api/*` → proxy
+  - `/history-api/*` → history-api
+  - `/*` → ui
+
+---
+
+## CI/CD pipelines
+
+### 1. GitHub Actions — `Build Docker images`
+
+File: `.github/workflows/docker-images.yml`
+
+Builds four Docker images and pushes them to GitHub Container Registry.
+
+**Triggers:**
+- `push` on `kurdupel` branch when files change under `proxy/**`, `history/**`, `ui-react/**`
+- Manual trigger via `workflow_dispatch`
+
+**Jobs (run in parallel):**
+- `changes` — detects which folders changed (uses `dorny/paths-filter@v3`)
+- `build-proxy` — runs only when `proxy/**` changed
+- `build-history-api` — runs when `history/**` changed
+- `build-history-consumer` — runs when `history/**` changed
+- `build-ui` — runs when `ui-react/**` changed
+
+**Output tags:**
+- `ghcr.io/ua-academy-projects/coin-ops-<service>:<git-sha>`
+- `ghcr.io/ua-academy-projects/coin-ops-<service>:latest`
+
+### 2. GitHub Actions — `Trigger Jenkins Deploy`
+
+File: `.github/workflows/trigger-jenkins.yml`
+
+Calls Jenkins to start the deploy pipeline.
+
+**Triggers:**
+- `workflow_run` after `Build Docker images` finishes successfully on `kurdupel` (i.e. new images pushed)
+- `push` on `kurdupel` when `charts/**`, `Jenkinsfile`, or this workflow change (chart-only updates)
+- Manual trigger via `workflow_dispatch`
+
+Uses two repository secrets to authenticate:
+- `JENKINS_USER`
+- `JENKINS_TOKEN`
+
+### 3. GitHub Actions — `CI Validation`
+
+File: `.github/workflows/ci-validation.yml`
+
+Static checks on every push and PR.
+
+- `terraform fmt -check -recursive`
+- `terraform init -backend=false && terraform validate`
+- `helm lint charts/coinops`
+
+### 4. Jenkins — `coinops-pipeline`
+
+Defined in `Jenkinsfile` at the repository root. Created automatically by JCasC when Jenkins starts (see "Jenkins setup" below). Runs inside a Kubernetes pod with one container (`tools`, image `alpine/k8s:1.30.4`) and ServiceAccount `jenkins-deployer`.
+
+**Stages:**
+1. `Checkout` — clones the repo at the current commit
+2. `Deploy data services` — creates Postgres, Redis, RabbitMQ Deployments and Services in `coinops-data` using `kubectl create deployment` / `expose`, then upserts the `coinops-secrets` Secret in `coinops-app`
+3. `Deploy coinops app` — `helm upgrade --install coinops ./charts/coinops --namespace coinops-app --set global.imageTag=<SHA>`
+4. `Verify rollout` — `kubectl rollout status` for proxy, history-api, history-consumer, ui
+
+---
+
+## Jenkins setup (Configuration as Code)
+
+Jenkins is installed via the official `jenkins` Helm chart from `terraform/modules/azure/aks/main.tf`. All configuration lives in two template files in the same module:
+
+- `jenkins-values.yaml.tftpl` — controller settings, plugin list, `JCasC` block
+- `jenkins-casc.yaml.tftpl` — Job DSL script that creates `coinops-pipeline`
+
+The Terraform variables `github_repo_url` and `git_branch` are interpolated into the CasC template, so the same module works for any branch without code changes.
+
+**Plugins installed:**
+- `kubernetes` — run build agents as pods
+- `workflow-aggregator` — Declarative Pipeline support
+- `git` — Git SCM
+- `configuration-as-code` — JCasC
+- `job-dsl` — programmatic job creation
+
+Result: on `terraform apply`, Jenkins starts with the `coinops-pipeline` job already created — no UI clicks required.
+
+---
+
+## RBAC
+
+File: `manifests/jenkins-deployer-rbac.yaml`
+
+Applied separately with `kubectl apply -f` after the AKS cluster is up.
+
+- ServiceAccount `jenkins-deployer` in `cicd`
+- Role `coinops-deployer` in `coinops-data` with full permissions on resources Bitnami / standard charts touch (deployments, services, secrets, configmaps, pods, pvc, etc.)
+- Role `coinops-deployer` in `coinops-app` (same, plus ingresses)
+- RoleBindings linking the SA to each Role
+
+Jenkins build pods run as `jenkins-deployer`, so the SA only has access to the two app namespaces — not `cicd`, `kube-system`, or anything else. This is the **principle of least privilege**: a compromised build agent cannot touch Jenkins itself or the rest of the cluster.
+
+---
+
+## Helm chart
+
+Path: `charts/coinops/`
+
+| Template | Purpose |
+|----------|---------|
+| `proxy/deployment.yaml`, `proxy/service.yaml` | Go proxy service |
+| `history/api-deployment.yaml`, `history/api-service.yaml` | Python FastAPI history service |
+| `history/consumer-deployment.yaml` | Python RabbitMQ consumer (init container waits for Postgres) |
+| `ui/deployment.yaml`, `ui/service.yaml` | React UI (nginx) |
+| `gateway.yaml` | nginx pod + ConfigMap that does path-based routing |
+
+All four app pods reference `coinops-secrets` via `envFrom`. The secret is created/updated by Jenkins in the `Deploy data services` stage with `DATABASE_URL`, `REDIS_URL`, `RABBITMQ_URL`, `RUNTIME_BACKEND`, etc., pointing at services in `coinops-data`.
+
+Image pull is authenticated through the `ghcr-pull` Secret (added manually once).
+
+---
+
+## Repository layout
+
 ```
-
-AWS also includes optional managed resources in the Terraform module, including an ALB, ACM, Cloudflare DNS integration, and RDS outputs. GCP and Azure currently focus on VM/network provisioning.
-
-## Kubernetes Stack
-
-Cloud deployments run on k3s, a lightweight Kubernetes distribution installed by Ansible on the `k3s-node-*` VMs. The stack includes:
-
-- k3s cluster nodes managed by `ansible/cloud-k3s.yml`
-- CloudNativePG (CNPG) operator and PostgreSQL cluster managed by `ansible/cloud-cnpg.yml`
-- cert-manager and Cloudflare DNS challenge issuers for TLS certificates
-- Coin-Ops application workloads in Kubernetes: UI, Go proxy, history API, history consumer, RabbitMQ, Redis, and PostgreSQL bootstrap job
-- Traefik ingress routing for the public app domain
-- Optional Headlamp and Homepage add-ons for cluster UI and dashboard access
-
-The Kubernetes manifests are rendered from Ansible role templates under `ansible/roles/k3s_coinops/templates/`.
-
-## Repository Layout
-
-```text
 .
-+-- ansible/                 # cloud provisioning and k3s application deployment
-+-- config/config.yml        # cloud, region, SSH, network, and instance configuration
-+-- deploy/                  # deploy-time Docker/Kubernetes support assets
-+-- history/                 # FastAPI history API and RabbitMQ/Postgres consumer
-+-- proxy/                   # Go HTTP API and data-fetching service
-+-- runtime/                 # PostgreSQL runtime schema, wrappers, cron, tests
-+-- scripts/                 # terraform apply helper, inventory generation, verification
-+-- terraform/               # root Terraform stack and cloud modules
-+-- ui-react/                # React/Vite frontend
-+-- docker-compose.yml       # local development stack
+├── .github/workflows/
+│   ├── ci-validation.yml
+│   ├── docker-images.yml
+│   └── trigger-jenkins.yml
+├── Jenkinsfile
+├── charts/coinops/
+│   ├── Chart.yaml
+│   ├── values.yaml
+│   └── templates/
+├── config/config.yml
+├── history/
+├── manifests/
+│   └── jenkins-deployer-rbac.yaml
+├── proxy/
+├── terraform/
+│   ├── locals.tf
+│   ├── main.tf
+│   ├── outputs.tf
+│   ├── provider.tf
+│   └── modules/azure/aks/
+│       ├── main.tf
+│       ├── jenkins-values.yaml.tftpl
+│       └── jenkins-casc.yaml.tftpl
+└── ui-react/
 ```
 
-## Prerequisites
+---
 
-For local development:
+## Useful commands
 
-- Docker and Docker Compose
-- Node.js and npm, if working on `ui-react` directly
-- Go, if working on `proxy` directly
-- Python 3.10+, if working on `history` directly
-
-For cloud deployment:
-
-- Terraform 1.5+
-- Ansible 2.14+
-- AWS CLI, Google Cloud CLI, and/or Azure CLI for the clouds you use
-- `jq`
-- An SSH key matching `config/config.yml`
-- Cloud provider credentials exported in your shell
-
-## Configuration
-
-Copy the example environment file and edit the values:
-
-```bash
-cp .env.example .env
-source .env
-```
-
-Important variables:
-
-```bash
-# Cloud credentials
-export AWS_ACCESS_KEY_ID=...
-export AWS_SECRET_ACCESS_KEY=...
-export AWS_DEFAULT_REGION=eu-central-1
-export SUBSCRIPTION_ID=...
-export AZURE_AUTH_LOCATION=/path/to/sp-key.json
-
-# Terraform variables
-export TF_VAR_cloudflare_api_token=...
-export TF_VAR_cloudflare_zone_id=...
-export TF_VAR_domain_name=coin-ops.pp.ua
-export TF_VAR_db_name=currency_rates_tracker
-export TF_VAR_db_user=currency_app_user
-export TF_VAR_db_password=...
-
-# Application secrets
-export POSTGRES_USER=currency_app_user
-export POSTGRES_PASS=...
-export POSTGRES_DB=currency_rates_tracker
-export RABBITMQ_USER=currency_app_user
-export RABBITMQ_PASS=...
-export REDIS_PASSWORD=...
-
-# SSH
-export SSH_KEY_PATH=~/.ssh/id_ed25519
-```
-
-The active cloud and VM layout are controlled in `config/config.yml`:
-
-```yaml
-cloud: gcp # aws | gcp | azure
-
-instances:
-  bastion:
-    public: true
-    private_ip: 10.10.0.10
-    tags:
-      - bastion
-  k3s-node-1:
-    public: true
-    private_ip: 10.10.1.11
-    tags:
-      - k3s-node
-```
-
-An instance can override the top-level cloud by adding `cloud: aws`, `cloud: gcp`, or `cloud: azure`.
-
-## Local Development
-
-Start the full local stack:
-
-```bash
-docker compose up --build
-```
-
-Open the UI:
-
-```text
-http://localhost:5000
-```
-
-Useful local endpoints:
-
-```text
-http://localhost:5000/api/health
-http://localhost:5000/api/current
-http://localhost:5000/api/prices
-http://localhost:5000/history-api/health
-```
-
-Stop the stack:
-
-```bash
-docker compose down
-```
-
-Remove local database state:
-
-```bash
-docker compose down -v
-```
-
-## Frontend Development
-
-```bash
-cd ui-react
-npm install
-npm run dev
-```
-
-The frontend defaults to:
-
-```text
-PROXY_URL=/api
-HISTORY_URL=/history-api
-```
-
-For standalone Vite development, set `VITE_PROXY_URL` and `VITE_HISTORY_URL` or use the runtime config in `ui-react/public/config.js`.
-
-## Cloud Bootstrap
-
-Run the bootstrap script only for the clouds you plan to use. These scripts create or prepare state storage and cloud identities.
-
-```bash
-# AWS
-bash bootstrap-aws.sh
-
-# GCP
-export BILLING_ACCOUNT_ID=...
-bash bootstrap-gcp.sh
-
-# Azure
-export SUBSCRIPTION_ID=...
-bash bootstrap-azure.sh
-```
-
-After bootstrap, reload your environment:
-
-```bash
-source .env
-```
-
-## Cloud Deployment
-
-1. Choose the target cloud and instance layout in `config/config.yml`.
-
-2. Create or update infrastructure:
+### Terraform
 
 ```bash
 cd terraform
-terraform init
+
+# Format all files recursively
+terraform fmt -recursive
+
+# Validate
+terraform init -backend=false
+terraform validate
+
+# Plan / apply / destroy
 terraform plan
 terraform apply
-cd ..
-```
-
-3. Generate Ansible inventory and SSH config:
-
-```bash
-./scripts/post-apply.sh
-```
-
-This writes:
-
-- `ansible/inventory.cloud`
-- `~/.ssh/coinops-aws.generated`
-
-4. Provision and deploy the Kubernetes stack:
-
-```bash
-source .env
-ansible-playbook -i ansible/inventory.cloud ansible/cloud-provision.yml
-ansible-playbook -i ansible/inventory.cloud ansible/cloud-k3s.yml
-ansible-playbook -i ansible/inventory.cloud ansible/cloud-cnpg.yml
-ansible-playbook -i ansible/inventory.cloud ansible/cloud-cert-manager.yml
-ansible-playbook -i ansible/inventory.cloud ansible/cloud-coinops.yml
-```
-
-Optional add-ons:
-
-```bash
-ansible-playbook -i ansible/inventory.cloud ansible/cloud-headlamp.yml
-ansible-playbook -i ansible/inventory.cloud ansible/cloud-homepage.yml
-ansible-playbook -i ansible/inventory.cloud ansible/cloud-tailscale.yml
-```
-
-5. Verify SSH access:
-
-```bash
-ssh coinops-bastion
-ssh coinops-k3s-node-1
-ssh coinops-k3s-node-2
-ssh coinops-k3s-node-3
-```
-
-6. Destroy lab infrastructure when finished:
-
-```bash
-cd terraform
 terraform destroy
 ```
 
-## Helper Scripts
-
-`scripts/post-apply.sh` reads Terraform outputs, writes Ansible inventory, writes an SSH include file, clears old known-host entries, and records the RDS endpoint in `.env` when present.
-
-`scripts/lab.sh apply` runs Terraform apply and then `post-apply.sh`.
-
-`scripts/lab.sh verify` runs `scripts/verify_failover.sh`.
-
-The `deploy` and `full` subcommands in `scripts/lab.sh` still reference an older Ansible deployment playbook name. Prefer the explicit Ansible commands above until that helper is updated.
-
-## Tests
-
-Frontend:
+### AKS / kubectl
 
 ```bash
-cd ui-react
-npm run lint
-npm run test:run
-npm run build
+# Pull the AKS kubeconfig
+az aks get-credentials --name coinops-aks --resource-group coinops-aks-rg --overwrite-existing
+
+# Cluster sanity
+kubectl get nodes
+kubectl top nodes
+kubectl get pods -A
+
+# Per-namespace
+kubectl get pods -n cicd
+kubectl get pods -n coinops-data
+kubectl get pods -n coinops-app
 ```
 
-Go proxy:
+### Jenkins (after the cluster is up)
 
 ```bash
-cd proxy
-go test ./...
+# Get the initial admin password
+kubectl get secret jenkins -n cicd \
+  -o jsonpath='{.data.jenkins-admin-password}' | base64 -d
+echo
+
+# Check JCasC actually created the job
+kubectl exec -n cicd jenkins-0 -c jenkins -- ls /var/jenkins_home/jobs/
 ```
 
-Python history service dependencies:
+### RBAC
 
 ```bash
-cd history
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements-dev.txt
+# Apply jenkins-deployer ServiceAccount + Roles
+kubectl create namespace coinops-data
+kubectl create namespace coinops-app
+kubectl apply -f manifests/jenkins-deployer-rbac.yaml
 ```
 
-No Python test files are currently checked in. `history/pytest.ini` is ready for tests under `tests/python/unit`.
-
-PostgreSQL runtime SQL:
+### Helm
 
 ```bash
-psql "$DATABASE_URL" -f runtime/runtime_all.sql
-psql "$DATABASE_URL" -f runtime/tests/test_runtime.sql
+# What's currently installed in coinops-app
+helm list -A
+
+# Manually deploy the chart
+helm upgrade --install coinops ./charts/coinops \
+  --namespace coinops-app \
+  --set global.imageTag=<SHA> \
+  --wait --timeout 5m
+
+# Tear it down
+helm uninstall coinops -n coinops-app
 ```
 
-## Operational Notes
-
-- `config/config.yml` is the source of truth for cloud selection, regions, instance sizes, images, network ranges, and SSH settings.
-- Cross-cloud private networking is not automatic. Instances in different clouds need an overlay or VPN such as Tailscale.
-- Private k3s nodes are reached through the bastion using the generated SSH config.
-- The k3s app role uses Docker images defined in `ansible/roles/k3s_coinops/defaults/main.yml`.
-- Cloud costs continue until resources are destroyed. Run `terraform destroy` when the lab is no longer needed.
-
-## Troubleshooting
-
-Regenerate inventory after every Terraform apply:
+### Cloudflare Tunnel
 
 ```bash
-./scripts/post-apply.sh
+# Pods
+kubectl get pods -n cicd -l app.kubernetes.io/name=cloudflare-tunnel
+kubectl logs -n cicd -l app.kubernetes.io/name=cloudflare-tunnel --tail=30
+
+# Re-route DNS for a hostname (one-off, requires cloudflared CLI logged in)
+cloudflared tunnel route dns <tunnel-id> jenkins.coin-ops.pp.ua
 ```
 
-If SSH host keys changed after recreating VMs:
+### Image pull secret for GHCR
+
+If images are private (default for new packages):
 
 ```bash
-ssh-keygen -R 10.10.0.10
-ssh-keygen -R 10.10.1.11
-ssh-keygen -R 10.10.1.12
-ssh-keygen -R 10.10.1.13
-./scripts/post-apply.sh
+kubectl create secret docker-registry ghcr-pull \
+  --docker-server=ghcr.io \
+  --docker-username=<github-user> \
+  --docker-password=<github-pat-with-read-packages> \
+  -n coinops-app
 ```
 
-Check Terraform outputs:
+### Debugging the app
 
 ```bash
-cd terraform
-terraform output vm_ips
-terraform output ansible_inventory
-terraform output ssh_config
-terraform output alb_dns_name
-terraform output rds_endpoint
+# Pods
+kubectl get pods -n coinops-app
+kubectl describe pod -n coinops-app -l app=proxy
+
+# Live logs
+kubectl logs -n coinops-app -l app=proxy --tail=50
+kubectl logs -n coinops-app -l app=history-consumer -c history-consumer --tail=50
+
+# Hit the API through the tunnel
+curl -sS https://app.coin-ops.pp.ua/api/prices
+curl -sS https://app.coin-ops.pp.ua/api/current
+curl -sS https://app.coin-ops.pp.ua/history-api/history
 ```
 
-Check local containers:
+---
 
-```bash
-docker compose ps
-docker compose logs -f proxy
-docker compose logs -f history-api
-docker compose logs -f history-consumer
-```
+## End-to-end flow
+
+1. Developer pushes code (for example, edits `proxy/main.go`) and runs `git push`.
+2. GitHub Actions `Build Docker images` workflow detects `proxy/**` changed and runs the `build-proxy` job, pushing `ghcr.io/ua-academy-projects/coin-ops-proxy:<sha>` and `:latest`.
+3. When that workflow finishes successfully, `Trigger Jenkins Deploy` workflow starts and POSTs to `https://jenkins.coin-ops.pp.ua/job/coinops-pipeline/build` using `JENKINS_USER` and `JENKINS_TOKEN`.
+4. Jenkins runs `coinops-pipeline`: it ensures Postgres / Redis / RabbitMQ are present in `coinops-data`, updates `coinops-secrets`, runs `helm upgrade` with the new image tag, and waits for the rollout to succeed.
+5. Cloudflare Tunnel keeps `app.coin-ops.pp.ua` and `jenkins.coin-ops.pp.ua` reachable from the internet without exposing any public LoadBalancer IP.
+
+A `git push` of only `charts/**` skips the image build entirely and triggers Jenkins directly through the second workflow.
+
+---
+
+## Design choices
+
+- **AKS instead of self-managed k3s** — Microsoft runs the control plane, no etcd backups or kubelet upgrades to manage. Free control plane on AKS.
+- **Cloudflare Tunnel instead of LoadBalancer + Ingress** — works around Azure LoadBalancer / NSG issues on the small SKU we use, gives free HTTPS, and exposes nothing public.
+- **GitHub Actions for image builds, Jenkins for deploys** — Actions is free and parallel; Jenkins is in-cluster and has the kubeconfig already. Each does one job well.
+- **JCasC instead of clicking the UI** — every Jenkins detail (plugins, the pipeline job) lives in Terraform-versioned YAML. Recreating the cluster recreates the same Jenkins.
+- **Path-based filtering in GitHub Actions** — only the services that actually changed get rebuilt; a README edit doesn't waste a build.
+- **`fileexists` guard on the SSH public key** — the path resolves locally but doesn't exist on Actions runners; the guard lets validation pass without changing local behaviour.
+- **Wildcard Role inside `coinops-app` / `coinops-data` only** — Bitnami and similar charts create a long list of resource kinds and a granular allowlist was a moving target; the SA still cannot touch other namespaces.
