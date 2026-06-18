@@ -143,6 +143,36 @@ variable "letsencrypt_email" {
   description = "Email used for Let's Encrypt ACME registration."
 }
 
+variable "alert_email" {
+  type        = string
+  description = "Email receiver used by Azure Monitor action group alerts."
+  default     = null
+}
+
+variable "monitoring_workspace_name" {
+  type        = string
+  description = "Log Analytics workspace name for AKS monitoring."
+  default     = "azplat-dev-law"
+}
+
+variable "monitoring_action_group_name" {
+  type        = string
+  description = "Azure Monitor action group name."
+  default     = "azplat-dev-ag"
+}
+
+variable "monitoring_action_group_short_name" {
+  type        = string
+  description = "Short name for the Azure Monitor action group."
+  default     = "azpdevag"
+}
+
+variable "monitoring_identity_name" {
+  type        = string
+  description = "User-assigned managed identity for monitoring access."
+  default     = "azplat-dev-monitoring-uami"
+}
+
 variable "aks_subnet_cidr" {
   type        = string
   description = "CIDR for AKS subnet."

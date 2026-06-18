@@ -26,17 +26,32 @@ module "acr" {
   tags                = var.tags
 }
 
+module "monitoring" {
+  source                  = "../modules/monitoring"
+  resource_group_name     = module.resource_group.name
+  resource_group_id       = module.resource_group.id
+  location                = module.resource_group.location
+  cluster_name            = var.aks_name
+  app_namespace           = var.app_namespace
+  workspace_name          = var.monitoring_workspace_name
+  action_group_name       = var.monitoring_action_group_name
+  action_group_short_name = var.monitoring_action_group_short_name
+  alert_email             = var.alert_email
+  tags                    = var.tags
+}
+
 module "aks" {
-  source              = "../modules/aks"
-  resource_group_name = module.resource_group.name
-  location            = module.resource_group.location
-  cluster_name        = var.aks_name
-  dns_prefix          = var.dns_prefix
-  kubernetes_version  = var.kubernetes_version
-  node_count          = var.node_count
-  node_vm_size        = var.node_vm_size
-  subnet_id           = module.network.aks_subnet_id
-  tags                = var.tags
+  source                     = "../modules/aks"
+  resource_group_name        = module.resource_group.name
+  location                   = module.resource_group.location
+  cluster_name               = var.aks_name
+  dns_prefix                 = var.dns_prefix
+  kubernetes_version         = var.kubernetes_version
+  node_count                 = var.node_count
+  node_vm_size               = var.node_vm_size
+  subnet_id                  = module.network.aks_subnet_id
+  log_analytics_workspace_id = module.monitoring.log_analytics_workspace_id
+  tags                       = var.tags
 }
 
 module "rbac" {
@@ -83,4 +98,14 @@ module "jenkins" {
   jenkins_values_template_path   = "${path.root}/../helm/jenkins/values.yaml.tpl"
   depends_on_aks_ready_indicator = module.aks.id
   depends_on                     = [module.traefik, module.cert_manager]
+}
+
+module "monitoring_identity" {
+  source                     = "../modules/monitoring-identity"
+  resource_group_name        = module.resource_group.name
+  location                   = module.resource_group.location
+  identity_name              = var.monitoring_identity_name
+  resource_group_scope       = module.resource_group.id
+  log_analytics_workspace_id = module.monitoring.log_analytics_workspace_id
+  tags                       = var.tags
 }

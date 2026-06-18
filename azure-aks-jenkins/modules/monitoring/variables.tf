@@ -2,6 +2,10 @@ variable "resource_group_name" {
   type = string
 }
 
+variable "resource_group_id" {
+  type = string
+}
+
 variable "location" {
   type = string
 }
@@ -10,27 +14,23 @@ variable "cluster_name" {
   type = string
 }
 
-variable "dns_prefix" {
+variable "app_namespace" {
   type = string
 }
 
-variable "kubernetes_version" {
+variable "workspace_name" {
   type = string
 }
 
-variable "node_count" {
-  type = number
-}
-
-variable "node_vm_size" {
+variable "action_group_name" {
   type = string
 }
 
-variable "subnet_id" {
+variable "action_group_short_name" {
   type = string
 }
 
-variable "log_analytics_workspace_id" {
+variable "alert_email" {
   type    = string
   default = null
 }

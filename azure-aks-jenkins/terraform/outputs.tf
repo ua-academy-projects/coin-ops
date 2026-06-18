@@ -33,3 +33,27 @@ output "jenkins_admin_password" {
 output "jenkins_service_name" {
   value = module.jenkins.service_name
 }
+
+output "log_analytics_workspace_name" {
+  value = module.monitoring.log_analytics_workspace_name
+}
+
+output "log_analytics_workspace_id" {
+  value = module.monitoring.log_analytics_workspace_id
+}
+
+output "monitoring_action_group_id" {
+  value = module.monitoring.action_group_id
+}
+
+output "monitoring_identity_name" {
+  value = module.monitoring_identity.name
+}
+
+output "monitoring_identity_client_id" {
+  value = module.monitoring_identity.client_id
+}
+
+output "monitoring_identity_principal_id" {
+  value = module.monitoring_identity.principal_id
+}

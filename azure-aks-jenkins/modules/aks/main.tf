@@ -31,8 +31,14 @@ resource "azurerm_kubernetes_cluster" "this" {
     outbound_type       = "loadBalancer"
   }
 
+  dynamic "oms_agent" {
+    for_each = var.log_analytics_workspace_id == null ? [] : [var.log_analytics_workspace_id]
+    content {
+      log_analytics_workspace_id = oms_agent.value
+    }
+  }
+
   role_based_access_control_enabled = true
 
   tags = var.tags
 }
-

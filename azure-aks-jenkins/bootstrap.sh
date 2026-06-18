@@ -26,6 +26,7 @@ AKS_KUBERNETES_VERSION="${AKS_KUBERNETES_VERSION:-1.34.8}"
 AKS_NODE_COUNT="${AKS_NODE_COUNT:-1}"
 AKS_NODE_VM_SIZE="${AKS_NODE_VM_SIZE:-Standard_D2s_v4}"
 LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-$(git -C "${REPO_ROOT}" config user.email || true)}"
+ALERT_EMAIL="${ALERT_EMAIL:-$(git -C "${REPO_ROOT}" config user.email || true)}"
 JENKINS_ADMIN_USERNAME="${JENKINS_ADMIN_USERNAME:-admin}"
 APP_NAMESPACE="${APP_NAMESPACE:-apps}"
 JENKINS_NAMESPACE="${JENKINS_NAMESPACE:-jenkins}"
@@ -268,6 +269,7 @@ export_arm_env() {
   export ARM_TENANT_ID="${AZURE_TENANT_ID}"
   export ARM_USE_AZUREAD=true
   export TF_VAR_letsencrypt_email="${LETSENCRYPT_EMAIL}"
+  export TF_VAR_alert_email="${ALERT_EMAIL}"
 }
 
 apply_cluster_issuer() {
