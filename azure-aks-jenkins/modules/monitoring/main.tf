@@ -11,6 +11,13 @@ resource "azurerm_log_analytics_workspace" "dev" {
   tags                = var.tags
 }
 
+# Azure can acknowledge the workspace resource before it is queryable by
+# scheduled query rules. A short wait avoids intermittent 400s during bootstrap.
+resource "time_sleep" "workspace_ready" {
+  depends_on      = [azurerm_log_analytics_workspace.dev]
+  create_duration = "30s"
+}
+
 resource "azurerm_monitor_action_group" "dev" {
   count               = local.alerts_enabled ? 1 : 0
   name                = var.action_group_name
@@ -40,6 +47,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "node_cpu_high" {
   auto_mitigation_enabled          = true
   workspace_alerts_storage_enabled = false
   tags                             = var.tags
+  depends_on                       = [time_sleep.workspace_ready]
 
   criteria {
     query                   = <<-KQL
@@ -80,6 +88,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "node_not_ready" {
   auto_mitigation_enabled          = true
   workspace_alerts_storage_enabled = false
   tags                             = var.tags
+  depends_on                       = [time_sleep.workspace_ready]
 
   criteria {
     query                   = <<-KQL
@@ -119,6 +128,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "pods_not_running" {
   auto_mitigation_enabled          = true
   workspace_alerts_storage_enabled = false
   tags                             = var.tags
+  depends_on                       = [time_sleep.workspace_ready]
 
   criteria {
     query                   = <<-KQL
@@ -159,6 +169,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "pod_restarts_high" {
   auto_mitigation_enabled          = true
   workspace_alerts_storage_enabled = false
   tags                             = var.tags
+  depends_on                       = [time_sleep.workspace_ready]
 
   criteria {
     query                   = <<-KQL
