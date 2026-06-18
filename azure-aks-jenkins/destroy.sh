@@ -13,6 +13,7 @@ SP_ENV_PATH="${GENERATED_DIR}/terraform-sp.env"
 REPO_ROOT="$(cd "${ROOT_DIR}/.." && pwd)"
 JENKINS_DESTROY_SCRIPT="${REPO_ROOT}/scripts/destroy-jenkins-job.sh"
 LEGACY_CONFIG_PATH="${REPO_ROOT}/terraform.gcp.aws/config.yml"
+MONITORING_WORKBOOK_DELETE_SCRIPT="${ROOT_DIR}/scripts/delete-monitoring-workbook.sh"
 
 CONFIG_AZURE_SUBSCRIPTION_ID=""
 CONFIG_AZURE_LOCATION=""
@@ -252,6 +253,22 @@ run_jenkins_cleanup() {
   "${JENKINS_DESTROY_SCRIPT}"
 }
 
+run_monitoring_workbook_cleanup() {
+  if [[ ! -x "${MONITORING_WORKBOOK_DELETE_SCRIPT}" ]]; then
+    if [[ -f "${MONITORING_WORKBOOK_DELETE_SCRIPT}" ]]; then
+      chmod +x "${MONITORING_WORKBOOK_DELETE_SCRIPT}"
+    else
+      fail "Missing monitoring workbook cleanup script: ${MONITORING_WORKBOOK_DELETE_SCRIPT}"
+    fi
+  fi
+
+  log "Cleaning up monitoring workbook."
+  "${MONITORING_WORKBOOK_DELETE_SCRIPT}" \
+    "${TF_RESOURCE_GROUP_NAME}" \
+    "${PROJECT_NAME}" \
+    "${ENVIRONMENT}"
+}
+
 terraform_destroy() {
   local destroy_args=("$@")
 
@@ -321,6 +338,7 @@ main() {
   write_backend_config
   generate_tfvars_if_missing
   run_jenkins_cleanup
+  run_monitoring_workbook_cleanup
   run_terraform_destroy
   destroy_backend_resources
   delete_terraform_service_principal

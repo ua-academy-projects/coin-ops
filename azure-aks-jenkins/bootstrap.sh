@@ -15,6 +15,7 @@ REPO_ROOT="$(cd "${ROOT_DIR}/.." && pwd)"
 JENKINS_BOOTSTRAP_SCRIPT="${REPO_ROOT}/scripts/bootstrap-jenkins-job.sh"
 LEGACY_CONFIG_PATH="${REPO_ROOT}/terraform.gcp.aws/config.yml"
 CLUSTER_ISSUER_TEMPLATE_PATH="${ROOT_DIR}/k8s/cluster-issuer.yaml.tpl"
+MONITORING_WORKBOOK_SCRIPT="${ROOT_DIR}/scripts/bootstrap-monitoring-workbook.sh"
 
 CONFIG_AZURE_SUBSCRIPTION_ID=""
 CONFIG_AZURE_TENANT_ID=""
@@ -505,6 +506,31 @@ run_jenkins_job_bootstrap() {
   "${JENKINS_BOOTSTRAP_SCRIPT}"
 }
 
+run_monitoring_workbook_bootstrap() {
+  if [[ ! -x "${MONITORING_WORKBOOK_SCRIPT}" ]]; then
+    if [[ -f "${MONITORING_WORKBOOK_SCRIPT}" ]]; then
+      chmod +x "${MONITORING_WORKBOOK_SCRIPT}"
+    else
+      fail "Missing monitoring workbook bootstrap script: ${MONITORING_WORKBOOK_SCRIPT}"
+    fi
+  fi
+
+  local workspace_id
+  workspace_id="$(
+    terraform -chdir="${TF_DIR}" output -raw log_analytics_workspace_id
+  )"
+
+  log "Creating monitoring workbook with 3 AKS charts."
+  "${MONITORING_WORKBOOK_SCRIPT}" \
+    "${TF_RESOURCE_GROUP_NAME}" \
+    "${LOCATION}" \
+    "${workspace_id}" \
+    "${TF_AKS_NAME}" \
+    "${APP_NAMESPACE}" \
+    "${PROJECT_NAME}" \
+    "${ENVIRONMENT}"
+}
+
 main() {
   require_commands
   load_legacy_config
@@ -519,6 +545,7 @@ main() {
   write_backend_config
   generate_tfvars_if_missing
   run_terraform
+  run_monitoring_workbook_bootstrap
   apply_cluster_issuer
   run_jenkins_job_bootstrap
 
