@@ -1,0 +1,24 @@
+---
+- name: Deploy CoinOps on EKS
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    kubeconfig_path: "{{ lookup('env', 'K8S_KUBECONFIG_PATH') | default(ansible_env.HOME + '/.kube/config', true) }}"
+
+  pre_tasks:
+    - name: Confirm EKS Kubernetes API is reachable
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        api_version: v1
+        kind: Namespace
+        name: kube-system
+      register: eks_kube_system
+      retries: 30
+      delay: 5
+      until: (eks_kube_system.resources | default([]) | length) > 0
+
+  roles:
+    - role: k3s_coinops
+      vars:
+        k3s_effective_kubeconfig_path: "{{ kubeconfig_path }}"

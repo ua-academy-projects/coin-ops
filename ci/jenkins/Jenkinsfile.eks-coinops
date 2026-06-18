@@ -74,7 +74,7 @@ spec:
           sh '''
             set -eu
             . .venv/bin/activate
-            ansible-playbook -i ansible/inventory ansible/deploy.yml
+            ansible-playbook ansible/eks-coinops.yml
           '''
         }
       }
