@@ -22,7 +22,7 @@ spec:
         - cat
       tty: true
     - name: kubectl
-      image: registry.k8s.io/kubectl:v1.34.0
+      image: dtzar/helm-kubectl:3.15.4
       command:
         - cat
       tty: true
