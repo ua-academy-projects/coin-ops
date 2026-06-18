@@ -4,31 +4,38 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - dev
-      - main
-      - "feature/**"
-    paths:
-      - ".github/workflows/infra-validation.yml"
-      - "ansible/**"
-      - "bootstrap/**"
-      - "charts/**"
-      - "configs/**"
-      - "k8s/**"
-      - "scripts/**"
-      - "terraform/**"
-  pull_request:
-    branches:
-      - dev
-      - main
-    paths:
-      - ".github/workflows/infra-validation.yml"
-      - "ansible/**"
-      - "bootstrap/**"
-      - "charts/**"
-      - "configs/**"
-      - "k8s/**"
-      - "scripts/**"
-      - "terraform/**"
+      - feature/github-validation
+
+# -> restore this trigger block when the workflow is ready for shared branches
+# on:
+#   workflow_dispatch:
+#   push:
+#     branches:
+#       - dev
+#       - main
+#       - "feature/**"
+#     paths:
+#       - ".github/workflows/infra-validation.yml"
+#       - "ansible/**"
+#       - "bootstrap/**"
+#       - "charts/**"
+#       - "configs/**"
+#       - "k8s/**"
+#       - "scripts/**"
+#       - "terraform/**"
+#   pull_request:
+#     branches:
+#       - dev
+#       - main
+#     paths:
+#       - ".github/workflows/infra-validation.yml"
+#       - "ansible/**"
+#       - "bootstrap/**"
+#       - "charts/**"
+#       - "configs/**"
+#       - "k8s/**"
+#       - "scripts/**"
+#       - "terraform/**"
 
 permissions:
   contents: read
