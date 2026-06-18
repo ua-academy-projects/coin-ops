@@ -13,6 +13,8 @@ JOB_NAME="${JOB_NAME:-coin-ops-aks-cd}"
 APP_DOMAIN="${APP_DOMAIN:-}"
 JENKINS_GIT_CREDENTIALS_ID="${JENKINS_GIT_CREDENTIALS_ID:-}"
 TRIGGER_INITIAL_BUILD="${TRIGGER_INITIAL_BUILD:-true}"
+WAIT_FOR_INITIAL_BUILD="${WAIT_FOR_INITIAL_BUILD:-true}"
+INITIAL_BUILD_TIMEOUT_SECONDS="${INITIAL_BUILD_TIMEOUT_SECONDS:-1800}"
 AWS_REGION_FROM_CONFIG=""
 GCP_PROJECT_ID_FROM_CONFIG=""
 AZURE_KEY_VAULT_NAME_FROM_CONFIG=""
@@ -500,6 +502,79 @@ job_exists() {
     "${JENKINS_URL}/job/${JOB_NAME}/api/json" | grep -q '^200$'
 }
 
+trigger_initial_build() {
+  local headers_file="${TMP_DIR}/build.headers"
+
+  curl "${curl_auth_args[@]}" \
+    -D "${headers_file}" \
+    -X POST \
+    "${JENKINS_URL}/job/${JOB_NAME}/buildWithParameters?APP_DOMAIN=${APP_DOMAIN}" \
+    >/dev/null
+
+  awk 'BEGIN { IGNORECASE=1 } /^Location:/ { sub(/\r$/, "", $2); print $2; exit }' "${headers_file}"
+}
+
+wait_for_queue_item_to_start() {
+  local queue_url="$1"
+  local deadline=$(( $(date +%s) + INITIAL_BUILD_TIMEOUT_SECONDS ))
+
+  while (( $(date +%s) < deadline )); do
+    local queue_json executable_url executable_number cancelled why
+
+    queue_json="$(curl "${curl_auth_args[@]}" "${queue_url}api/json")"
+    executable_url="$(python3 -c 'import json,sys; data=json.load(sys.stdin); exe=data.get("executable") or {}; print(exe.get("url",""))' <<<"${queue_json}")"
+    executable_number="$(python3 -c 'import json,sys; data=json.load(sys.stdin); exe=data.get("executable") or {}; print(exe.get("number",""))' <<<"${queue_json}")"
+    cancelled="$(python3 -c 'import json,sys; data=json.load(sys.stdin); print("true" if data.get("cancelled") else "false")' <<<"${queue_json}")"
+    why="$(python3 -c 'import json,sys; data=json.load(sys.stdin); print(data.get("why",""))' <<<"${queue_json}")"
+
+    if [[ -n "${executable_url}" && -n "${executable_number}" ]]; then
+      printf '%s\t%s\n' "${executable_number}" "${executable_url}"
+      return 0
+    fi
+
+    if [[ "${cancelled}" == "true" ]]; then
+      echo "Initial Jenkins build was cancelled while in queue: ${why}" >&2
+      return 1
+    fi
+
+    sleep 5
+  done
+
+  echo "Timed out waiting for Jenkins queue item to start." >&2
+  return 1
+}
+
+wait_for_build_completion() {
+  local build_number="$1"
+  local build_url="$2"
+  local deadline=$(( $(date +%s) + INITIAL_BUILD_TIMEOUT_SECONDS ))
+
+  while (( $(date +%s) < deadline )); do
+    local build_json is_building result
+
+    build_json="$(curl "${curl_auth_args[@]}" "${build_url}api/json")"
+    is_building="$(python3 -c 'import json,sys; data=json.load(sys.stdin); print("true" if data.get("building") else "false")' <<<"${build_json}")"
+    result="$(python3 -c 'import json,sys; data=json.load(sys.stdin); print(data.get("result",""))' <<<"${build_json}")"
+
+    if [[ "${is_building}" != "true" ]]; then
+      if [[ "${result}" == "SUCCESS" ]]; then
+        echo "[bootstrap-jenkins] Initial Jenkins build #${build_number} finished successfully."
+        return 0
+      fi
+
+      echo "Initial Jenkins build #${build_number} failed with result: ${result}" >&2
+      echo "Build URL: ${build_url}" >&2
+      return 1
+    fi
+
+    sleep 10
+  done
+
+  echo "Timed out waiting for Jenkins build #${build_number} to complete." >&2
+  echo "Build URL: ${build_url}" >&2
+  return 1
+}
+
 repo_url="$(git -C "${REPO_ROOT}" remote get-url origin)"
 if [[ "${repo_url}" =~ ^git@github\.com:(.+)\.git$ ]]; then
   repo_url="https://github.com/${BASH_REMATCH[1]}.git"
@@ -620,10 +695,19 @@ fi
 
 if [[ "${TRIGGER_INITIAL_BUILD}" == "true" ]]; then
   echo "[bootstrap-jenkins] Triggering initial Jenkins build."
-  curl "${curl_auth_args[@]}" \
-    -X POST \
-    "${JENKINS_URL}/job/${JOB_NAME}/buildWithParameters?APP_DOMAIN=${APP_DOMAIN}" \
-    >/dev/null
+  BUILD_QUEUE_URL="$(trigger_initial_build)"
+
+  if [[ -z "${BUILD_QUEUE_URL}" ]]; then
+    echo "Failed to determine Jenkins queue URL for initial build." >&2
+    exit 1
+  fi
+
+  if [[ "${WAIT_FOR_INITIAL_BUILD}" == "true" ]]; then
+    echo "[bootstrap-jenkins] Waiting for initial Jenkins build to start."
+    IFS=$'\t' read -r BUILD_NUMBER BUILD_URL < <(wait_for_queue_item_to_start "${BUILD_QUEUE_URL}")
+    echo "[bootstrap-jenkins] Waiting for initial Jenkins build #${BUILD_NUMBER} to complete."
+    wait_for_build_completion "${BUILD_NUMBER}" "${BUILD_URL}"
+  fi
 fi
 
 cat <<EOF
