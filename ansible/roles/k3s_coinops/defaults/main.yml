@@ -1,50 +1,43 @@
 ---
 # ── k3s_coinops role defaults ──────────────────────────────────────────────
-# All variables for deploying CoinOps application stack into k3s.
-# Sensitive values (passwords, tokens) come from environment via lookup('env')
-# and are defined in ansible/group_vars/all/main.yml — not here.
 
-# Namespace names — one per logical layer (separate namespaces)
-coinops_ns_queue:    "coinops-queue"     # rabbitmq + redis
-coinops_ns_app:      "coinops-app"       # proxy, history-api, history-consumer
-coinops_ns_frontend: "coinops-frontend"  # ui + ingress
+# Namespace names
+coinops_ns_queue:    "coinops-queue"
+coinops_ns_app:      "coinops-app"
+coinops_ns_frontend: "coinops-frontend"
 
-# Application domain — used in Ingress rule
-# Points to k3s public IP: 34.158.238.181
+# Application domain
 coinops_domain: "coinops-softserve-penina.pp.ua"
 
-# Image registry — same pattern as group_vars/all/main.yml
+# Image registry
 coinops_image_registry: "ghcr.io/ua-academy-projects"
 coinops_image_tag: "{{ lookup('env', 'IMAGE_TAG') | default('shabat-latest', true) }}"
 
-# Full image references for each service
+# Full image references
 coinops_proxy_image:            "{{ coinops_image_registry }}/coin-ops-proxy:{{ coinops_image_tag }}"
 coinops_history_api_image:      "{{ coinops_image_registry }}/coin-ops-history-api:{{ coinops_image_tag }}"
 coinops_history_consumer_image: "{{ coinops_image_registry }}/coin-ops-history-consumer:{{ coinops_image_tag }}"
 coinops_ui_image:               "{{ coinops_image_registry }}/coin-ops-ui:{{ coinops_image_tag }}"
 
-# Service ports — matches docker-compose and group_vars
+# Service ports
 coinops_proxy_port:   "8080"
 coinops_history_port: "8000"
 
-# RabbitMQ settings — external runtime mode
+# RabbitMQ settings
 coinops_rabbitmq_user: "cognitor"
 coinops_redis_port:    "6379"
 coinops_rabbitmq_port: "5672"
 
-# CloudSQL private IP — read from environment, set via: export CLOUDSQL_IP=$(terraform output -raw gcp_db_endpoint)
+# Database host — CNPG inside EKS
 cnpg_db_host: "coinops-db-rw.coinops-app.svc.cluster.local"
 
-# Database credentials — values come from env vars set in Jenkins credentials
+# Database credentials
 db_user: "cognitor"
 db_name: "cognitor"
 rabbitmq_user: "cognitor"
 
-# Variables moved from group_vars/all/main.yml
-db_user: "cognitor"
-db_name: "cognitor"
-rabbitmq_user: "cognitor"
-runtime_backend: "external"
+# Runtime mode
+runtime_backend: "{{ lookup('env', 'RUNTIME_BACKEND') | default('external', true) }}"
 use_rds: true
 proxy_port: "8080"
 history_port: "8000"
