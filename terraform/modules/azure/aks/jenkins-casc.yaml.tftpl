@@ -1,0 +1,16 @@
+jobs:
+  - script: >
+      pipelineJob('coinops-pipeline') {
+        description('CoinOps CI/CD - deploy to AKS')
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote { url('${github_repo_url}') }
+                branches('${git_branch}')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }

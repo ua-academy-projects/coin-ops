@@ -1,0 +1,12 @@
+controller:
+  serviceType: ClusterIP
+  installPlugins:
+    - kubernetes:latest
+    - workflow-aggregator:latest
+    - git:latest
+    - configuration-as-code:latest
+    - job-dsl:latest
+  JCasC:
+    configScripts:
+      coinops-pipeline: |
+${indent(8, casc_config)}
