@@ -35,6 +35,12 @@ DELETE_TERRAFORM_SP="${DELETE_TERRAFORM_SP:-false}"
 
 required_commands=(az terraform python3 git)
 
+terraform_destroy_targets=(
+  "module.jenkins"
+  "module.cert_manager"
+  "module.traefik"
+)
+
 log() {
   printf '[destroy] %s\n' "$*"
 }
@@ -160,6 +166,14 @@ run_jenkins_cleanup() {
   "${JENKINS_DESTROY_SCRIPT}"
 }
 
+terraform_destroy() {
+  local destroy_args=("$@")
+
+  terraform -chdir="${TF_DIR}" destroy \
+    -var-file="${TFVARS_PATH}" \
+    "${destroy_args[@]}"
+}
+
 run_terraform_destroy() {
   log "Running terraform init."
   terraform -chdir="${TF_DIR}" init -reconfigure -backend-config="${BACKEND_CONFIG_PATH}"
@@ -169,10 +183,16 @@ run_terraform_destroy() {
     destroy_args+=("-auto-approve")
   fi
 
-  log "Running terraform destroy."
-  terraform -chdir="${TF_DIR}" destroy \
-    -var-file="${TFVARS_PATH}" \
-    "${destroy_args[@]}"
+  log "Running targeted terraform destroy for in-cluster resources."
+  local targeted_destroy_args=("${destroy_args[@]}")
+  local target
+  for target in "${terraform_destroy_targets[@]}"; do
+    targeted_destroy_args+=("-target=${target}")
+  done
+  terraform_destroy "${targeted_destroy_args[@]}"
+
+  log "Running full terraform destroy."
+  terraform_destroy "${destroy_args[@]}"
 }
 
 destroy_backend_resources() {

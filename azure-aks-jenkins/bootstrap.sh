@@ -41,6 +41,16 @@ LEGACY_AZURE_RESOURCE_GROUP_NAME=""
 
 required_commands=(az terraform kubectl helm docker git python3)
 
+terraform_bootstrap_targets=(
+  "module.resource_group"
+  "module.network"
+  "module.acr"
+  "module.monitoring"
+  "module.aks"
+  "module.rbac"
+  "module.monitoring_identity"
+)
+
 log() {
   printf '[bootstrap] %s\n' "$*"
 }
@@ -311,6 +321,14 @@ sys.stdout.write(content)
 PY
 }
 
+terraform_apply() {
+  local apply_args=("$@")
+
+  terraform -chdir="${TF_DIR}" apply \
+    -var-file="${TFVARS_PATH}" \
+    "${apply_args[@]}"
+}
+
 run_terraform() {
   log "Running terraform init."
   terraform -chdir="${TF_DIR}" init -reconfigure -backend-config="${BACKEND_CONFIG_PATH}"
@@ -320,10 +338,16 @@ run_terraform() {
     apply_args+=("-auto-approve")
   fi
 
-  log "Running terraform apply."
-  terraform -chdir="${TF_DIR}" apply \
-    -var-file="${TFVARS_PATH}" \
-    "${apply_args[@]}"
+  log "Running bootstrap terraform apply for Azure infrastructure."
+  local bootstrap_args=("${apply_args[@]}")
+  local target
+  for target in "${terraform_bootstrap_targets[@]}"; do
+    bootstrap_args+=("-target=${target}")
+  done
+  terraform_apply "${bootstrap_args[@]}"
+
+  log "Running full terraform apply for in-cluster resources."
+  terraform_apply "${apply_args[@]}"
 }
 
 run_jenkins_job_bootstrap() {
