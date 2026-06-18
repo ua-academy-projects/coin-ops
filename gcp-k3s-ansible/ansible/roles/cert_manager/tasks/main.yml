@@ -44,3 +44,51 @@
       - "cert-manager installed"
       - "Namespace: {{ cert_manager_namespace }}"
       - "Version: {{ cert_manager_version }}"
+
+- name: Validate ClusterIssuer email
+  ansible.builtin.assert:
+    that:
+      - cluster_issuer_email | length > 0
+    fail_msg: "Set LETSENCRYPT_EMAIL before running cert-manager.yml"
+
+- name: Check cert-manager CRDs
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ cluster_issuer_kubeconfig }}"
+      - get
+      - crd
+      - clusterissuers.cert-manager.io
+  changed_when: false
+
+- name: Create temporary manifest directory
+  ansible.builtin.tempfile:
+    state: directory
+    prefix: cluster-issuer-
+  register: cluster_issuer_tmpdir
+
+- name: Render ClusterIssuer manifest
+  ansible.builtin.template:
+    src: cluster-issuer.yaml.j2
+    dest: "{{ cluster_issuer_tmpdir.path }}/cluster-issuer.yaml"
+    mode: "0644"
+
+- name: Apply ClusterIssuer manifest
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig
+      - "{{ cluster_issuer_kubeconfig }}"
+      - apply
+      - -f
+      - "{{ cluster_issuer_tmpdir.path }}/cluster-issuer.yaml"
+  changed_when: false
+
+- name: Print ClusterIssuer summary
+  ansible.builtin.debug:
+    msg:
+      - "ClusterIssuer applied"
+      - "Name: {{ cluster_issuer_name }}"
+      - "ACME server: {{ cluster_issuer_server }}"
+      - "Ingress class: {{ cluster_issuer_ingress_class_name }}"

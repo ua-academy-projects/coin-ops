@@ -223,13 +223,13 @@ ANSIBLE_REMOTE_TEMP=/tmp/ansible-remote \
 ansible-playbook -i inventory.gcp.generated cert-manager.yml
 ```
 
-### 10. Apply ClusterIssuer
+### 10. Install cert-manager and apply ClusterIssuer
 
 ```bash
 cd /home/valentyn/Test/coin-ops/gcp-k3s-ansible/ansible
 ANSIBLE_LOCAL_TEMP=/tmp/ansible-local \
 ANSIBLE_REMOTE_TEMP=/tmp/ansible-remote \
-ansible-playbook -i inventory.gcp.generated cluster-issuer.yml
+ansible-playbook -i inventory.gcp.generated cert-manager.yml
 ```
 
 Check:

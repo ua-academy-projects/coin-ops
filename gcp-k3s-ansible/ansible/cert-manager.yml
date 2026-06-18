@@ -1,5 +1,5 @@
 ---
-- name: Install cert-manager into K3s
+- name: Install cert-manager and configure ClusterIssuer in K3s
   hosts: localhost
   connection: local
   gather_facts: false
