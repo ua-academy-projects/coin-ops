@@ -1,7 +1,0 @@
-- name: install headlamp ingress on k3s
-  hosts: k3s_node
-  become: true
-  environment:
-    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-  roles:
-    - headlamp
