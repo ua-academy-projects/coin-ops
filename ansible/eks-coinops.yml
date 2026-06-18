@@ -18,7 +18,74 @@
       delay: 5
       until: (eks_kube_system.resources | default([]) | length) > 0
 
+    - name: Create coinops-app namespace for CNPG cluster
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: coinops-app
+
+    - name: Create CNPG PostgreSQL cluster
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: postgresql.cnpg.io/v1
+          kind: Cluster
+          metadata:
+            name: coinops-db
+            namespace: coinops-app
+          spec:
+            instances: 1
+            storage:
+              size: 5Gi
+              storageClass: gp2
+            bootstrap:
+              initdb:
+                database: cognitor
+                owner: cognitor
+                secret:
+                  name: coinops-db-credentials
+            postgresql:
+              pg_hba:
+                - host all all 0.0.0.0/0 md5
+
+    - name: Create CNPG credentials secret
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: coinops-db-credentials
+            namespace: coinops-app
+          type: kubernetes.io/basic-auth
+          stringData:
+            username: cognitor
+            password: "{{ lookup('env', 'DB_PASSWORD') }}"
+
+    - name: Wait for CNPG cluster to be ready
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        api_version: postgresql.cnpg.io/v1
+        kind: Cluster
+        namespace: coinops-app
+        name: coinops-db
+      register: cnpg_cluster
+      retries: 30
+      delay: 10
+      until: >
+        cnpg_cluster.resources | length > 0 and
+        (cnpg_cluster.resources[0].status.readyInstances | default(0)) >= 1
+
   roles:
+    - role: k3s_cnpg
+      vars:
+        k3s_effective_kubeconfig_path: "{{ kubeconfig_path }}"
     - role: k3s_coinops
       vars:
         k3s_effective_kubeconfig_path: "{{ kubeconfig_path }}"
