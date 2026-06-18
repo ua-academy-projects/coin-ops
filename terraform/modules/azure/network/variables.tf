@@ -1,13 +1,13 @@
 variable "network_name" {
-    type = string
+  type = string
 }
 
 variable "resource_group" {
-    type = string
+  type = string
 }
 
 variable "location" {
-    type = string
+  type = string
 }
 
 variable "network_cidr" {

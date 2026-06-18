@@ -5,7 +5,7 @@ resource "aws_instance" "this" {
   associate_public_ip_address = var.public_ip # give public ip if public_ip = true
   vpc_security_group_ids      = var.security_group_id
   # launch ec2 vm with registered key pair
-  key_name = var.key_name
+  key_name                    = var.key_name
   user_data_replace_on_change = true
 
 

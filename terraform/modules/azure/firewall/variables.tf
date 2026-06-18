@@ -1,28 +1,28 @@
 variable "name" {
-    type = string
+  type = string
 }
 
 variable "resource_group" {
-    type = string
+  type = string
 }
 
 variable "location" {
-    type = string
+  type = string
 }
 
 variable "subnet_id" {
-    type = string
+  type = string
 }
 
 variable "rules" {
-    type = list(object({
-        name = string
-        priority = number
-        direction = string
-        access    = string
-        protocol  = string
-        port      = string
-        source    = string
+  type = list(object({
+    name      = string
+    priority  = number
+    direction = string
+    access    = string
+    protocol  = string
+    port      = string
+    source    = string
 
-    }))
+  }))
 }

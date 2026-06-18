@@ -92,10 +92,10 @@ resource "aws_security_group" "private" {
 
   # app vm only accept http from alb , not directly from internet
   ingress {
-    description =  "HTTP to app vm only through ALB"
-    from_port = 80
-    to_port = 80
-    protocol = "tcp"
+    description     = "HTTP to app vm only through ALB"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
     security_groups = [aws_security_group.lb.id]
   }
 
@@ -112,13 +112,13 @@ resource "aws_security_group" "private" {
 }
 
 resource "aws_security_group" "lb" {
-  name = "${var.network_name}-lb-sg"
+  name   = "${var.network_name}-lb-sg"
   vpc_id = var.network_id
 
   ingress {
-    from_port = 80
-    to_port = 80
-    protocol = var.protocol
+    from_port   = 80
+    to_port     = 80
+    protocol    = var.protocol
     cidr_blocks = ["0.0.0.0/0"]
   }
 
@@ -131,9 +131,9 @@ resource "aws_security_group" "lb" {
 
   # allow traffic out from all ports and all protocols
   egress {
-    from_port = 0
-    to_port = 0
-    protocol = "-1"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 

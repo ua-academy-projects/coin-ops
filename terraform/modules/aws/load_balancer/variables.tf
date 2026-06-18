@@ -1,25 +1,25 @@
 variable "network_name" {
-    type = string
+  type = string
 }
 
 variable "vpc_id" {
-    type = string
+  type = string
 }
 
 variable "public_subnet_ids" {
-    type = list(string)
+  type = list(string)
 }
 
 variable "security_group_id" {
-    type = string
+  type = string
 }
 
 variable "health_check_path" {
-    type = string
+  type = string
 }
 
 variable "app_port" {
-    type =  number
+  type = number
 }
 
 variable "certificate_arn" {

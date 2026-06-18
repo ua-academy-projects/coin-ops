@@ -4,8 +4,8 @@ locals {
 
 # Register the public SSH key in AWS EC2 (VM) as a key pair named after the VM
 resource "aws_key_pair" "this" {
-    key_name = "${lookup(var.config, "name_prefix", "coinops")}-ssh-key"
-    public_key = var.ssh_public_key
+  key_name   = "${lookup(var.config, "name_prefix", "coinops")}-ssh-key"
+  public_key = var.ssh_public_key
 }
 
 # find real aws image for each vm
@@ -34,19 +34,19 @@ data "aws_ami" "selected" {
 }
 
 module "network" {
-  source            = "./network"
-  network_cidr      = lookup(var.config.network, "cidr", "10.10.0.0/16")
-  subnetwork_cidr   = lookup(var.config.network, "subnet_cidr", "10.10.0.0/24")
-  dns_support       = lookup(var.config.network, "aws_dns_support", true)
-  dns_hostnames     = lookup(var.config.network, "aws_dns_hostnames", true)
-  network_name      = lookup(var.config.network, "name", "coinops-network")
-  subnetwork_name   = lookup(var.config.network, "subnet_name", "coinops-subnet")
-  availability_zone = lookup(var.config.zone_map.aws, "first", "eu-central-1a")
+  source                  = "./network"
+  network_cidr            = lookup(var.config.network, "cidr", "10.10.0.0/16")
+  subnetwork_cidr         = lookup(var.config.network, "subnet_cidr", "10.10.0.0/24")
+  dns_support             = lookup(var.config.network, "aws_dns_support", true)
+  dns_hostnames           = lookup(var.config.network, "aws_dns_hostnames", true)
+  network_name            = lookup(var.config.network, "name", "coinops-network")
+  subnetwork_name         = lookup(var.config.network, "subnet_name", "coinops-subnet")
+  availability_zone       = lookup(var.config.zone_map.aws, "first", "eu-central-1a")
   private_subnetwork_cidr = lookup(var.config.network, "private_subnetwork_cidr", "10.10.1.0/24")
 
-   # ALB requires at least two public subnets in different Availability Zones
+  # ALB requires at least two public subnets in different Availability Zones
   second_public_subnet_cidr = lookup(var.config.network, "second_public_subnet_cidr", "10.10.2.0/24")
-  second_availability_zone = lookup(var.config.zone_map.aws, "second", "eu-central-1b")
+  second_availability_zone  = lookup(var.config.zone_map.aws, "second", "eu-central-1b")
   private_subnetwork_2_cidr = lookup(var.config.network, "private_subnetwork_2_cidr", "10.10.3.0/24")
 }
 
@@ -57,13 +57,13 @@ module "firewall" {
   network_name = lookup(var.config.network, "name", "coinops-network")
   network_id   = module.network.network_id
   ports        = tonumber(lookup(var.config.ssh, "port", 22))
-  protocol     =  lookup(var.config.ssh, "protocol", "tcp")
+  protocol     = lookup(var.config.ssh, "protocol", "tcp")
   cidr         = lookup(var.config.firewall, "ssh_source_ranges", ["0.0.0.0/0"])[0]
 }
 
 
 module "vm" {
-  source   = "./vm"
+  source = "./vm"
 
   # if instances if empty - no vm to this cloud is created
   for_each = var.instances
@@ -79,17 +79,17 @@ module "vm" {
     "t3.micro"
   )
 
-  tags       = lookup(each.value, "tags", [])
+  tags      = lookup(each.value, "tags", [])
   subnet_id = contains(lookup(each.value, "tags", []), "bastion") ? module.network.subnet_id : module.network.private_subnet_id
 
   public_ip  = lookup(each.value, "public", false)
   private_ip = lookup(each.value, "private_ip", null)
   # if bastion - bastion , if db - db group else private group
   security_group_id = contains(lookup(each.value, "tags", []), "bastion") ? [
-  module.firewall.bastion_security_group_id
-  ] : contains(lookup(each.value, "tags", []), "db") ? [
+    module.firewall.bastion_security_group_id
+    ] : contains(lookup(each.value, "tags", []), "db") ? [
     module.firewall.db_security_group_id
-  ] : [
+    ] : [
     module.firewall.private_security_group_id
   ]
   ssh_public_key = var.ssh_public_key
@@ -98,7 +98,7 @@ module "vm" {
 }
 
 module "acm" {
-  source = "./acm"
+  source             = "./acm"
   domain_name        = var.domain_name
   cloudflare_zone_id = var.cloudflare_zone_id
 }
@@ -106,25 +106,25 @@ module "acm" {
 module "load_balancer" {
   source = "./load_balancer"
 
-  network_name = lookup(var.config.network, "name", "coinops-network")
-  vpc_id = module.network.network_id
+  network_name      = lookup(var.config.network, "name", "coinops-network")
+  vpc_id            = module.network.network_id
   public_subnet_ids = module.network.public_subnet_ids
   security_group_id = module.firewall.lb_security_group_id
   health_check_path = "/health"
-  app_port = 80
+  app_port          = 80
 
   certificate_arn = module.acm.certificate_arn
 }
 
 module "rds" {
-  source = "./rds"
-  network_name = lookup(var.config.network, "name", "coinops-network")
-  vpc_id = module.network.network_id
-  private_subnet_ids = module.network.private_subnet_ids
+  source                = "./rds"
+  network_name          = lookup(var.config.network, "name", "coinops-network")
+  vpc_id                = module.network.network_id
+  private_subnet_ids    = module.network.private_subnet_ids
   app_security_group_id = module.firewall.private_security_group_id
 
-  db_name = var.db_name
-  db_user = var.db_user
+  db_name     = var.db_name
+  db_user     = var.db_user
   db_password = var.db_password
 }
 
@@ -136,7 +136,7 @@ resource "aws_lb_target_group_attachment" "app" {
     # keep only vms whose. tags contain app
   }
 
-  target_group_arn = module.load_balancer.target_group_arn  # arn - amazon resource name 
+  target_group_arn = module.load_balancer.target_group_arn # arn - amazon resource name 
   target_id        = each.value.instance_id
   port             = 80
 }
@@ -145,9 +145,9 @@ resource "aws_lb_target_group_attachment" "app" {
 # create a dns record in cloudflare (coin-ops.pp.ua => coinops-network-812317851.eu-central-1.elb.amazonaws.com)
 resource "cloudflare_record" "app" {
   zone_id = var.cloudflare_zone_id
-  name = "@"  # app.coin-ops.pp.ua
-  type = "CNAME"  # if target is another domain / name - cname
+  name    = "@"                               # app.coin-ops.pp.ua
+  type    = "CNAME"                           # if target is another domain / name - cname
   content = module.load_balancer.alb_dns_name # coin-ops.pp.ua => coinops-network-812317851.eu-central-1.elb.amazonaws.com
-  ttl = 60  # dns cache time 60 seconds (user opens app.coin-ops.pp.ua => dns resolver asks cloudflare where to go it redirects to alb and saves that answer for 60 sec)
+  ttl     = 60                                # dns cache time 60 seconds (user opens app.coin-ops.pp.ua => dns resolver asks cloudflare where to go it redirects to alb and saves that answer for 60 sec)
   proxied = false
 }

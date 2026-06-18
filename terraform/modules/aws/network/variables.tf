@@ -30,11 +30,11 @@ variable "private_subnetwork_cidr" {
   type = string
 }
 
-variable "second_public_subnet_cidr" { 
-  type = string 
+variable "second_public_subnet_cidr" {
+  type = string
 }
-variable "second_availability_zone"  { 
-  type = string 
+variable "second_availability_zone" {
+  type = string
 }
 
 variable "private_subnetwork_2_cidr" {

@@ -1,7 +1,7 @@
 variable "domain_name" {
-    type = string
+  type = string
 }
 
 variable "cloudflare_zone_id" {
-    type = string
+  type = string
 }

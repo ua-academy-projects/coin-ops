@@ -1,9 +1,9 @@
 variable "name" {
-    type = string
+  type = string
 }
 
 variable "location" {
-    type = string
+  type = string
 }
 
 variable "resource_group" {
@@ -27,7 +27,7 @@ variable "subnet_id" {
 }
 
 variable "public_ip" {
-  type = bool
+  type    = bool
   default = false
 }
 

@@ -9,13 +9,13 @@ module "network" {
   subnetwork_name         = lookup(var.config.network, "subnet_name", "coinops-subnet")
   subnetwork_cidr         = lookup(var.config.network, "cidr", "10.10.0.0/16")
   auto_create_subnetworks = lookup(var.config.network, "gcp_auto_create_subnetworks", false)
-  region = lookup(var.config.region_map, "gcp", "europe-central2")
+  region                  = lookup(var.config.region_map, "gcp", "europe-central2")
 }
 
 
 
 module "firewall" {
-  source   = "./firewall"
+  source = "./firewall"
 
   name          = "${lookup(var.config, "name_prefix", "coinops")}-allow-ssh"
   network_id    = module.network.network_id
@@ -29,7 +29,7 @@ module "firewall" {
 }
 
 module "private_ssh" {
-  source = "./firewall"
+  source        = "./firewall"
   name          = "${lookup(var.config, "name_prefix", "coinops")}-private-ssh"
   network_id    = module.network.network_id
   direction     = "INGRESS"
@@ -43,14 +43,14 @@ module "private_ssh" {
 
 # to control cluster management traffic
 module "k3s_internal" {
-  source = "./firewall"
-  name = "${lookup(var.config, "name_prefix", "coinops")}-k3s-internal"
-  network_id = module.network.network_id
-  direction = "INGRESS"
+  source        = "./firewall"
+  name          = "${lookup(var.config, "name_prefix", "coinops")}-k3s-internal"
+  network_id    = module.network.network_id
+  direction     = "INGRESS"
   source_ranges = [lookup(var.config.network, "private_subnetwork_cidr", "10.10.1.0/24")]
-  source_tags = []
-  target_tags = ["k3s-node"]
-  protocol = "tcp"
+  source_tags   = []
+  target_tags   = ["k3s-node"]
+  protocol      = "tcp"
   # 6443 - k3s API Server
   # 10250 - Kubelet API - server node talks to it for live operations with worker node
   # 2379, 2380 - etc - database that stores all cluster state
@@ -100,10 +100,10 @@ module "k3s_from_bastion" {
 
 resource "cloudflare_record" "homepage" {
   zone_id = var.cloudflare_zone_id
-  name = "home" # home.coin-ops.pp.ua
-  type = "A"  # A - IPv4 (k3s-node-1 public ip)
+  name    = "home"                            # home.coin-ops.pp.ua
+  type    = "A"                               # A - IPv4 (k3s-node-1 public ip)
   content = module.vm["k3s-node-1"].public_ip # its what the DNS record points to when browser asks for ip (provides ip of node-1)
-  ttl = 60
+  ttl     = 60
   proxied = false
 }
 
@@ -119,20 +119,20 @@ resource "cloudflare_record" "headlamp" {
 
 resource "cloudflare_record" "coinops_app" {
   zone_id = var.cloudflare_zone_id
-  name = "app"
-  type = "A"
+  name    = "app"
+  type    = "A"
   content = module.vm["k3s-node-1"].public_ip
-  ttl = 60
+  ttl     = 60
   proxied = false
 }
 
 module "vm" {
-  source   = "./vm"
+  source = "./vm"
   # if instances if empty - no vm to this cloud is created
   for_each = var.instances
-  
-  name     = each.key                      #  name of the vm from so config (bastion, private-1)
-  zone     = lookup(var.config.zone_map, local.cloud, "europe-central2-a")
+
+  name = each.key #  name of the vm from so config (bastion, private-1)
+  zone = lookup(var.config.zone_map, local.cloud, "europe-central2-a")
   machine_type = lookup(
     lookup(var.config.instance_type_map, lookup(each.value, "size", var.config.defaults.size), {}),
     local.cloud,
