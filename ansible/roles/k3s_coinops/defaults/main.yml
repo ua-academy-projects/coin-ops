@@ -34,3 +34,8 @@ coinops_rabbitmq_port: "5672"
 
 # CloudSQL private IP — read from environment, set via: export CLOUDSQL_IP=$(terraform output -raw gcp_db_endpoint)
 cnpg_db_host: "coinops-db-rw.coinops-app.svc.cluster.local"
+
+# Database credentials — values come from env vars set in Jenkins credentials
+db_user: "cognitor"
+db_name: "cognitor"
+rabbitmq_user: "cognitor"
