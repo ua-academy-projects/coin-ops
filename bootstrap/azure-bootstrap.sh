@@ -242,11 +242,19 @@ if [[ -z "$SP_APP_ID" ]]; then
 
   echo "Service Principal created: $AZ_SP_NAME"
 else
-  echo "WARNING: Service Principal already exists: $AZ_SP_NAME"
-  echo "WARNING: Client secret cannot be retrieved. Credentials file will be incomplete."
-  echo "WARNING: Run 'az ad sp credential reset --name $AZ_SP_NAME' to generate a new secret."
+  echo "Service Principal already exists: $AZ_SP_NAME"
+  echo "Resetting service principal credential so Terraform env file is complete."
 
-  AZ_CLIENT_ID=$SP_APP_ID
+  SP_OUTPUT=$(az ad sp credential reset \
+    --id "$SP_APP_ID" \
+    --query "{appId:appId,password:password,tenant:tenant}" \
+    --output json)
+
+  AZ_CLIENT_ID=$(echo "$SP_OUTPUT" | jq -r '.appId')
+  AZ_CLIENT_SECRET=$(echo "$SP_OUTPUT" | jq -r '.password')
+  AZ_TENANT_ID=$(echo "$SP_OUTPUT" | jq -r '.tenant')
+
+  echo "Service Principal credential reset: $AZ_SP_NAME"
 fi
 
 # ------------------------------------------------------------
