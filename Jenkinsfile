@@ -17,6 +17,8 @@ spec:
 
     environment {
       SHA = "${env.GIT_COMMIT}"
+      DB_CREDS = credentials('postgres-creds')
+      MQ_CREDS = credentials('rabbitmq-creds')
     }
 
     stages {
@@ -34,56 +36,56 @@ spec:
               kubectl -n coinops-data create deployment postgres \
                 --image=postgres:16-alpine \
                 --dry-run=client -o yaml | kubectl apply -f -
-              
+
               kubectl -n coinops-data set env deployment/postgres \
-                POSTGRES_USER=postgres \
-                POSTGRES_PASSWORD=postgres \
+                POSTGRES_USER="$DB_CREDS_USR" \
+                POSTGRES_PASSWORD="$DB_CREDS_PSW" \
                 POSTGRES_DB=currency_rates_tracker
-              
+
               kubectl -n coinops-data expose deployment postgres \
                 --port=5432 --target-port=5432 \
                 --dry-run=client -o yaml | kubectl apply -f -
-              
+
               # Redis
               kubectl -n coinops-data create deployment redis \
                 --image=redis:7-alpine \
                 --dry-run=client -o yaml | kubectl apply -f -
-              
+
               kubectl -n coinops-data expose deployment redis \
                 --port=6379 --target-port=6379 \
                 --dry-run=client -o yaml | kubectl apply -f -
-              
+
               # RabbitMQ
               kubectl -n coinops-data create deployment rabbitmq \
                 --image=rabbitmq:3-management-alpine \
                 --dry-run=client -o yaml | kubectl apply -f -
-              
+
               kubectl -n coinops-data set env deployment/rabbitmq \
-                RABBITMQ_DEFAULT_USER=admin \
-                RABBITMQ_DEFAULT_PASS=admin
-              
+                RABBITMQ_DEFAULT_USER="$MQ_CREDS_USR" \
+                RABBITMQ_DEFAULT_PASS="$MQ_CREDS_PSW"
+
               kubectl -n coinops-data expose deployment rabbitmq \
                 --port=5672 --target-port=5672 \
                 --dry-run=client -o yaml | kubectl apply -f -
-              
+
               kubectl -n coinops-data rollout status deploy/postgres --timeout=120s
               kubectl -n coinops-data rollout status deploy/redis --timeout=120s
               kubectl -n coinops-data rollout status deploy/rabbitmq --timeout=120s
 
               kubectl create secret generic coinops-secrets \
                 --namespace coinops-app \
-                --from-literal=DATABASE_URL='postgres://postgres:postgres@postgres.coinops-data.svc.cluster.local:5432/currency_rates_tracker?sslmode=disable' \
-                --from-literal=REDIS_URL='redis://redis.coinops-data.svc.cluster.local:6379' \
-                --from-literal=RABBITMQ_URL='amqp://admin:admin@rabbitmq.coinops-data.svc.cluster.local:5672/' \
+                --from-literal=DATABASE_URL="postgres://${DB_CREDS_USR}:${DB_CREDS_PSW}@postgres.coinops-data.svc.cluster.local:5432/currency_rates_tracker?sslmode=disable" \
+                --from-literal=REDIS_URL="redis://redis.coinops-data.svc.cluster.local:6379" \
+                --from-literal=RABBITMQ_URL="amqp://${MQ_CREDS_USR}:${MQ_CREDS_PSW}@rabbitmq.coinops-data.svc.cluster.local:5672/" \
                 --from-literal=RUNTIME_BACKEND=external \
                 --from-literal=POSTGRES_HOST=postgres.coinops-data.svc.cluster.local \
-                --from-literal=POSTGRES_USER=postgres \
-                --from-literal=POSTGRES_PASSWORD=postgres \
+                --from-literal=POSTGRES_USER="$DB_CREDS_USR" \
+                --from-literal=POSTGRES_PASSWORD="$DB_CREDS_PSW" \
                 --dry-run=client -o yaml | kubectl apply -f -
             '''
           }
         }
-     }
+      }
 
       stage('Deploy coinops app') {
         steps {
