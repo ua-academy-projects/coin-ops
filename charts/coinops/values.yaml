@@ -30,4 +30,4 @@ ui:
   replicas: 1
 
 gateway:
-  enabled
+  enabled: true
