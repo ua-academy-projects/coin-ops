@@ -5,6 +5,9 @@ pipeline {
       yaml '''
 apiVersion: v1
 kind: Pod
+metadata:
+  labels:
+    azure.workload.identity/use: "true"
 spec:
   serviceAccountName: jenkins-deployer
   containers:
@@ -77,38 +80,32 @@ spec:
     stage('Fetch Secrets') {
       steps {
         container('azure') {
-          withCredentials([
-            string(credentialsId: 'azure-client-id', variable: 'AZURE_CLIENT_ID'),
-            string(credentialsId: 'azure-client-secret', variable: 'AZURE_CLIENT_SECRET'),
-            string(credentialsId: 'azure-tenant-id', variable: 'AZURE_TENANT_ID')
-          ]) {
-            sh '''
-              set -eu
-              az login \
-                --service-principal \
-                --username "$AZURE_CLIENT_ID" \
-                --password "$AZURE_CLIENT_SECRET" \
-                --tenant "$AZURE_TENANT_ID" \
-                --output none
-            '''
-            script {
-              env.DB_PASSWORD = sh(
-                script: "az keyvault secret show --vault-name \"$AZ_KEYVAULT_NAME\" --name \"$DB_PASSWORD_SECRET\" --query value -o tsv",
-                returnStdout: true
-              ).trim()
-              env.RABBITMQ_PASSWORD = sh(
-                script: "az keyvault secret show --vault-name \"$AZ_KEYVAULT_NAME\" --name \"$RABBITMQ_PASSWORD_SECRET\" --query value -o tsv",
-                returnStdout: true
-              ).trim()
-              env.GHCR_USERNAME = sh(
-                script: "az keyvault secret show --vault-name \"$AZ_KEYVAULT_NAME\" --name \"$GHCR_USERNAME_SECRET\" --query value -o tsv",
-                returnStdout: true
-              ).trim()
-              env.GHCR_TOKEN = sh(
-                script: "az keyvault secret show --vault-name \"$AZ_KEYVAULT_NAME\" --name \"$GHCR_TOKEN_SECRET\" --query value -o tsv",
-                returnStdout: true
-              ).trim()
-            }
+          sh '''
+            set -eu
+            az login \
+              --service-principal \
+              --username "$AZURE_CLIENT_ID" \
+              --tenant "$AZURE_TENANT_ID" \
+              --federated-token "$(cat "$AZURE_FEDERATED_TOKEN_FILE")" \
+              --output none
+          '''
+          script {
+            env.DB_PASSWORD = sh(
+              script: "az keyvault secret show --vault-name \"$AZ_KEYVAULT_NAME\" --name \"$DB_PASSWORD_SECRET\" --query value -o tsv",
+              returnStdout: true
+            ).trim()
+            env.RABBITMQ_PASSWORD = sh(
+              script: "az keyvault secret show --vault-name \"$AZ_KEYVAULT_NAME\" --name \"$RABBITMQ_PASSWORD_SECRET\" --query value -o tsv",
+              returnStdout: true
+            ).trim()
+            env.GHCR_USERNAME = sh(
+              script: "az keyvault secret show --vault-name \"$AZ_KEYVAULT_NAME\" --name \"$GHCR_USERNAME_SECRET\" --query value -o tsv",
+              returnStdout: true
+            ).trim()
+            env.GHCR_TOKEN = sh(
+              script: "az keyvault secret show --vault-name \"$AZ_KEYVAULT_NAME\" --name \"$GHCR_TOKEN_SECRET\" --query value -o tsv",
+              returnStdout: true
+            ).trim()
           }
         }
       }

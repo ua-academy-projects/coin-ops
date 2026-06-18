@@ -22,6 +22,10 @@ resource "kubernetes_service_account" "deployer" {
   metadata {
     name      = var.jenkins.jcasc.agent_service_account
     namespace = kubernetes_namespace.this.metadata[0].name
+    annotations = {
+      "azure.workload.identity/client-id" = var.workload_identity_client_id
+      "azure.workload.identity/tenant-id" = var.workload_identity_tenant_id
+    }
   }
 }
 
@@ -79,6 +83,22 @@ resource "helm_release" "jenkins" {
                         {
                           key   = "AZ_KEYVAULT_NAME"
                           value = var.azure_key_vault_name
+                        },
+                        {
+                          key   = "AZURE_CLIENT_ID"
+                          value = var.workload_identity_client_id
+                        },
+                        {
+                          key   = "AZURE_TENANT_ID"
+                          value = var.workload_identity_tenant_id
+                        },
+                        {
+                          key   = "AZURE_FEDERATED_TOKEN_FILE"
+                          value = var.workload_identity_token_file
+                        },
+                        {
+                          key   = "AZURE_AUTHORITY_HOST"
+                          value = var.workload_identity_authority_host
                         }
                       ]
                     }
@@ -99,6 +119,7 @@ resource "helm_release" "jenkins" {
                           label          = var.jenkins.jcasc.agent_label
                           serviceAccount = var.jenkins.jcasc.agent_service_account
                           namespace      = var.jenkins.jcasc.agent_namespace
+                          yaml           = "metadata:\n  labels:\n    azure.workload.identity/use: \"true\"\n"
                           idleMinutes    = 10
                           instanceCap    = 5
                           containers = [
@@ -123,7 +144,7 @@ resource "helm_release" "jenkins" {
                 {
                   script = <<-EOT
                     pipelineJob('${var.jenkins.deploy_job.name}') {
-                      description('Deploys Coin-Ops to AKS with Helm. Requires Jenkins string credentials: azure-client-id, azure-client-secret, azure-tenant-id.')
+                      description('Deploys Coin-Ops to AKS with Helm using Azure Workload Identity.')
                       parameters {
                         stringParam('IMAGE_TAG', '', 'Optional image tag override. Empty uses configs/aks.json deploy.image_tag.')
                       }

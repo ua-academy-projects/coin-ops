@@ -5,6 +5,7 @@ resource "azurerm_kubernetes_cluster" "this" {
   dns_prefix          = var.cluster.dns_prefix
   kubernetes_version  = try(var.cluster.kubernetes_version, null)
   sku_tier            = try(var.cluster.sku_tier, "Free")
+  oidc_issuer_enabled = true
 
   default_node_pool {
     name            = var.cluster.node_pool.name
@@ -23,6 +24,8 @@ resource "azurerm_kubernetes_cluster" "this" {
   identity {
     type = "SystemAssigned"
   }
+
+  workload_identity_enabled = true
 
   network_profile {
     network_plugin = "azure"

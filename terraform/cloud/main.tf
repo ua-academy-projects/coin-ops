@@ -20,14 +20,33 @@ module "azure_aks" {
   cluster             = local.config_aks
 }
 
+module "azure_workload_identity" {
+  source = "./modules/azure/workload_identity"
+  count  = local.enable_jenkins ? 1 : 0
+
+  name                 = "${local.config_jenkins.release_name}-deployer"
+  resource_group_name  = local.config_azure_resource_group
+  location             = local.config_azure_location
+  key_vault_name       = local.config_azure_key_vault_name
+  oidc_issuer_url      = module.azure_aks[0].oidc_issuer_url
+  service_account_name = local.config_jenkins.jcasc.agent_service_account
+  service_account_ns   = local.config_jenkins.jcasc.agent_namespace
+}
+
 module "jenkins" {
   source = "./modules/kubernetes/jenkins"
   count  = local.enable_jenkins ? 1 : 0
 
-  jenkins              = local.config_jenkins
-  azure_key_vault_name = local.config_azure_key_vault_name
+  jenkins                          = local.config_jenkins
+  azure_key_vault_name             = local.config_azure_key_vault_name
+  workload_identity_client_id      = module.azure_workload_identity[0].client_id
+  workload_identity_tenant_id      = module.azure_workload_identity[0].tenant_id
+  workload_identity_token_file     = "/var/run/secrets/azure/tokens/azure-identity-token"
+  workload_identity_authority_host = "https://login.microsoftonline.com/"
 
-  depends_on = [module.azure_aks]
+  depends_on = [
+    module.azure_workload_identity
+  ]
 }
 
 module "azure_security" {
