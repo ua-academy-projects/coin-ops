@@ -12,6 +12,12 @@ resource "azurerm_kubernetes_cluster" "this" {
     node_count      = var.cluster.node_pool.node_count
     os_disk_size_gb = var.cluster.node_pool.os_disk_size_gb
     vnet_subnet_id  = var.subnet_ids[var.cluster.subnet]
+
+    upgrade_settings {
+      drain_timeout_in_minutes      = 0
+      max_surge                     = "10%"
+      node_soak_duration_in_minutes = 0
+    }
   }
 
   identity {
