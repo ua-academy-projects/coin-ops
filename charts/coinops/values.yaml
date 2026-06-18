@@ -29,7 +29,5 @@ ui:
   port: 80
   replicas: 1
 
-ingress:
-  enabled: true
-  className: traefik
-  domain: app.coin-ops.pp.ua
+gateway:
+  enabled
