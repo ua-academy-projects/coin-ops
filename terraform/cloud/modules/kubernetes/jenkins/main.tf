@@ -11,8 +11,8 @@ resource "kubernetes_secret" "admin" {
   }
 
   data = {
-    jenkins-admin-user     = var.jenkins.admin_username
-    jenkins-admin-password = var.jenkins.admin_password_placeholder
+    chart-admin-username = var.jenkins.admin_username
+    chart-admin-password = var.jenkins.admin_password_placeholder
   }
 
   type = "Opaque"
@@ -31,8 +31,8 @@ resource "helm_release" "jenkins" {
         admin = {
           createSecret   = false
           existingSecret = kubernetes_secret.admin.metadata[0].name
-          userKey        = "jenkins-admin-user"
-          passwordKey    = "jenkins-admin-password"
+          userKey        = "chart-admin-username"
+          passwordKey    = "chart-admin-password"
         }
         JCasC = {
           defaultConfig = false
