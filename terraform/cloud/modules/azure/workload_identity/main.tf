@@ -5,11 +5,11 @@ resource "azurerm_user_assigned_identity" "this" {
 }
 
 resource "azurerm_federated_identity_credential" "this" {
-  name      = var.name
-  parent_id = azurerm_user_assigned_identity.this.id
-  audience  = ["api://AzureADTokenExchange"]
-  issuer    = var.oidc_issuer_url
-  subject   = "system:serviceaccount:${var.service_account_ns}:${var.service_account_name}"
+  name                      = var.name
+  user_assigned_identity_id = azurerm_user_assigned_identity.this.id
+  audience                  = ["api://AzureADTokenExchange"]
+  issuer                    = var.oidc_issuer_url
+  subject                   = "system:serviceaccount:${var.service_account_ns}:${var.service_account_name}"
 }
 
 resource "azurerm_role_assignment" "key_vault_secrets_user" {

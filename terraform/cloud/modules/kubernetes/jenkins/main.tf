@@ -58,7 +58,6 @@ resource "helm_release" "jenkins" {
       controller = {
         serviceType = var.jenkins.service_type
         additionalPlugins = [
-          "git:latest",
           "job-dsl:latest",
           "pipeline-utility-steps:latest"
         ]
