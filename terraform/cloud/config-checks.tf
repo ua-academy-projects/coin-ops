@@ -27,3 +27,14 @@ check "config_workload_clouds" {
     error_message = "Each workload cloud must be omitted or one of: gcp, aws, azure."
   }
 }
+
+check "azure_provider_inputs" {
+  assert {
+    condition = local.default_cloud != "azure" || alltrue([
+      try(length(trimspace(local.config_azure_resource_group)) > 0, false),
+      try(length(trimspace(local.config_azure_key_vault_name)) > 0, false),
+      try(length(trimspace(local.config_azure_location)) > 0, false)
+    ])
+    error_message = "Azure configs require azure_resource_group_name, azure_key_vault_name, and azure_location. Run bootstrap/azure-bootstrap.sh to generate terraform/cloud/azure.auto.tfvars.json, or define provider.azure in the selected config JSON."
+  }
+}

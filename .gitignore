@@ -69,3 +69,4 @@ ansible/inventory*
 # Local Azure bootstrap outputs
 bootstrap/azure.env
 bootstrap/backend.azure.hcl
+terraform/cloud/azure.auto.tfvars.json

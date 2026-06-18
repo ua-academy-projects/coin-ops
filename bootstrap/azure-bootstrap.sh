@@ -28,6 +28,9 @@ set -euo pipefail
 # ------------------------------------------------------------
 # Defaults
 # ------------------------------------------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 AZ_GROUP_NAME="${AZ_GROUP_NAME:-coin-ops-rg}"
 AZ_GROUP_LOCATION="${AZ_GROUP_LOCATION:-austriaeast}"
 
@@ -36,10 +39,12 @@ AZ_SP_NAME="${AZ_SP_NAME:-coin-ops-sp}"
 CREATE_BACKEND="${CREATE_BACKEND:-true}"
 AZ_STORAGE_ACCOUNT_NAME="${AZ_STORAGE_ACCOUNT_NAME:-}"
 AZ_CONTAINER_NAME="${AZ_CONTAINER_NAME:-tfstate}"
-BACKEND_CONFIG_FILE="${BACKEND_CONFIG_FILE:-./backend.azure.hcl}"
+BACKEND_CONFIG_FILE="${BACKEND_CONFIG_FILE:-$SCRIPT_DIR/backend.azure.hcl}"
 
 AZ_KEYVAULT_NAME="${AZ_KEYVAULT_NAME:-}"
-CREDENTIALS_FILE="${CREDENTIALS_FILE:-./terraform.env}"
+CREDENTIALS_FILE="${CREDENTIALS_FILE:-$SCRIPT_DIR/azure.env}"
+TERRAFORM_VARS_FILE="${TERRAFORM_VARS_FILE:-$REPO_ROOT/terraform/cloud/azure.auto.tfvars.json}"
+TF_CONFIG_NAME="${TF_CONFIG_NAME:-test}"
 SECRET_PLACEHOLDER_VALUE="${SECRET_PLACEHOLDER_VALUE:-CHANGE_ME_IN_AZURE_PORTAL}"
 REQUIRED_SECRETS=(
   "ghcr-username"
@@ -67,6 +72,8 @@ for var in \
   AZ_CONTAINER_NAME \
   BACKEND_CONFIG_FILE \
   CREDENTIALS_FILE \
+  TERRAFORM_VARS_FILE \
+  TF_CONFIG_NAME \
   SECRET_PLACEHOLDER_VALUE; do
   if [[ -z "${!var}" ]]; then
     echo "ERROR: $var is not set. Fill in the variables block before running."
@@ -378,6 +385,26 @@ EOF
 chmod 600 "$CREDENTIALS_FILE"
 
 echo "Credentials file created: $CREDENTIALS_FILE"
+
+# ------------------------------------------------------------
+# 10) Create Terraform variables file
+# ------------------------------------------------------------
+echo ""
+echo "==> Step 10: Terraform Variables File"
+
+mkdir -p "$(dirname "$TERRAFORM_VARS_FILE")"
+cat > "$TERRAFORM_VARS_FILE" <<EOF
+{
+  "config_name": "$TF_CONFIG_NAME",
+  "azure_resource_group_name": "$AZ_GROUP_NAME",
+  "azure_key_vault_name": "$AZ_KEYVAULT_NAME",
+  "azure_location": "$AZ_GROUP_LOCATION"
+}
+EOF
+chmod 600 "$TERRAFORM_VARS_FILE"
+
+echo "Terraform variables file created: $TERRAFORM_VARS_FILE"
+
 printf "\nDone!\n"
 printf "  %-20s %s\n" "Resource group:" "$AZ_GROUP_NAME"
 printf "  %-20s %s\n" "Key Vault:"      "$AZ_KEYVAULT_NAME"
@@ -385,8 +412,10 @@ printf "  %-20s %s\n" "Service principal:" "$AZ_SP_NAME"
 printf "  %-20s %s\n" "State storage:"  "$([[ "$CREATE_BACKEND" == "true" ]] && echo "$AZ_STORAGE_ACCOUNT_NAME/$AZ_CONTAINER_NAME" || echo "skipped")"
 printf "  %-20s %s\n" "Backend config:" "$([[ "$CREATE_BACKEND" == "true" ]] && echo "$BACKEND_CONFIG_FILE" || echo "skipped")"
 printf "  %-20s %s\n" "Env file:"       "$CREDENTIALS_FILE"
+printf "  %-20s %s\n" "Terraform vars:" "$TERRAFORM_VARS_FILE"
 printf "\nNext steps:\n"
 printf "  update placeholder secrets in Azure Key Vault\n"
 printf "  source %s\n" "$CREDENTIALS_FILE"
-printf "  terraform init\n"
-printf "\nIMPORTANT: Add %s to your .gitignore because it contains secrets.\n" "$CREDENTIALS_FILE"
+printf "  terraform -chdir=terraform/cloud init -backend-config=%s -reconfigure\n" "$BACKEND_CONFIG_FILE"
+printf "  terraform -chdir=terraform/cloud plan -lock-timeout=30s\n"
+printf "\nIMPORTANT: Keep %s and %s ignored because they contain local environment values.\n" "$CREDENTIALS_FILE" "$TERRAFORM_VARS_FILE"
