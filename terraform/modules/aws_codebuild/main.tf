@@ -57,14 +57,14 @@ resource "aws_codebuild_project" "terraform_apply" {
 
     environment_variable {
       name  = "TF_VAR_cloudflare_api_token"
-      value = var.cloudflare_api_token
-      type  = "PLAINTEXT"
+      value = "/coinops/cloudflare/api-token"
+      type  = "PARAMETER_STORE"
     }
     environment_variable {
       name  = "TF_VAR_github_token"
-      value = var.github_token
-      type  = "PLAINTEXT"
-    }
+      value = "/coinops/github/token"
+      type  = "PARAMETER_STORE"
+    } 
   }
 
   source {
