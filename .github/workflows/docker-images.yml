@@ -63,7 +63,6 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.OWNER }}/coin-ops-proxy:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.OWNER }}/coin-ops-proxy:latest
-
   build-history-api:
     needs: changes
     if: needs.changes.outputs.history == 'true' || github.event_name == 'workflow_dispatch'

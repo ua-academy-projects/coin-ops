@@ -25,5 +25,5 @@ jobs:
       - name: Trigger Jenkins build
         run: |
           curl -X POST \
-            --user "${{ secrets.JENKINS_USER }}:${{ secrets.JENKINS__API_TOKEN }}" \
+            --user "${{ secrets.JENKINS_USER }}:${{ secrets.JENKINS_API_TOKEN }}" \
             "https://jenkins.coin-ops.pp.ua/job/coinops-pipeline/build"
