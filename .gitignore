@@ -18,7 +18,6 @@ docs/superpowers/
 proxy/proxy
 
 # Local/scratch analysis and helper artifacts excluded from dev
-scripts/
 tournament/
 
 # Terraform

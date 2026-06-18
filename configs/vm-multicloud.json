@@ -119,7 +119,7 @@
     },
     "coinops-test": {
       "cloud": "gcp",
-      "roles": [],
+      "roles": ["test"],
       "instance_type": "micro",
       "image_family": "ubuntu_24",
       "placement": "primary",
