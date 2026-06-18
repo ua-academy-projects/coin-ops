@@ -135,8 +135,8 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.OWNER }}/coin-ops-ui:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.OWNER }}/coin-ops-ui:latest
-            
-    notify-jenkins:
+
+  notify-jenkins:
     needs: [build-proxy, build-history-api, build-history-consumer, build-ui]
     if: always() && !failure() && !cancelled()
     runs-on: ubuntu-latest
