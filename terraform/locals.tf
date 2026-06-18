@@ -1,6 +1,7 @@
 locals {
   config         = yamldecode(trimspace(file("${path.root}/../config/config.yml")))
   cloud          = local.config.cloud
+  # if file exists - read and remove whitespaces otherwise "" (make row optional)
   ssh_public_key = fileexists(pathexpand(local.config.ssh.public_key_path)) ? trimspace(file(local.config.ssh.public_key_path)) : ""
 
   # HANDLING SET IN INSTANCES MANUALLY CLOUD PARAMETER
