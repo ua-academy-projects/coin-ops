@@ -114,6 +114,7 @@ rabbitmq:
     runAsNonRoot: true
     runAsUser: 999
     runAsGroup: 999
+    fsGroup: 999
   securityContext:
     allowPrivilegeEscalation: false
   terminationGracePeriodSeconds: 60
