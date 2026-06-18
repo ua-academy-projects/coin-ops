@@ -12,6 +12,7 @@ root = Path(__file__).resolve().parents[1]
 configs = root / "configs"
 schemas = configs / "schema"
 schema_map = {
+    "aks.json": "vm.schema.json",
     "vm.json": "vm.schema.json",
     "vm-multicloud.json": "vm.schema.json",
     "test.json": "vm.schema.json",

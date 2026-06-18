@@ -28,6 +28,19 @@ output "ansible_inventory_path" {
   value = local_file.ansible_inventory.filename
 }
 
+output "aks_cluster_name" {
+  value = try(module.azure_aks[0].name, null)
+}
+
+output "aks_resource_group_name" {
+  value = try(module.azure_aks[0].resource_group_name, null)
+}
+
+output "aks_kube_config_raw" {
+  value     = try(module.azure_aks[0].kube_config_raw, null)
+  sensitive = true
+}
+
 output "cloud_sql_instance_name" {
   value = local.default_cloud == "gcp" ? try(module.gcp_sql[0].instance_name, null) : (
     local.default_cloud == "azure" ? try(module.azure_sql[0].instance_name, null) : (

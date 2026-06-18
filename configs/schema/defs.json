@@ -429,6 +429,69 @@
           "$ref": "#/$defs/sqlUser"
         }
       }
+    },
+    "aks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "dns_prefix",
+        "kubernetes_version",
+        "subnet",
+        "node_pool"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63
+        },
+        "dns_prefix": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 54
+        },
+        "kubernetes_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subnet": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sku_tier": {
+          "type": "string",
+          "enum": ["Free", "Standard", "Premium"]
+        },
+        "node_pool": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "vm_size",
+            "node_count",
+            "os_disk_size_gb"
+          ],
+          "properties": {
+            "name": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]{0,11}$"
+            },
+            "vm_size": {
+              "type": "string",
+              "minLength": 1
+            },
+            "node_count": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "os_disk_size_gb": {
+              "type": "integer",
+              "minimum": 30
+            }
+          }
+        }
+      }
     }
   }
 }

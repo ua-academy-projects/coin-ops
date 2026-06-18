@@ -1,0 +1,35 @@
+{
+  "cloud": "azure",
+  "ssh": {
+    "user": "deployer",
+    "public_key_path": "~/.ssh/coinops_gcp.pub",
+    "private_key_path": "~/.ssh/coinops_gcp"
+  },
+  "networks": {
+    "aks": {
+      "cloud": "azure",
+      "name": "coinops-aks-network",
+      "cidr": "10.50.0.0/16",
+      "subnets": {
+        "nodes": {
+          "cidr": "10.50.1.0/24",
+          "placement": "primary",
+          "exposure": "private"
+        }
+      }
+    }
+  },
+  "aks": {
+    "name": "coinops-aks",
+    "dns_prefix": "coinops",
+    "kubernetes_version": "1.30",
+    "subnet": "nodes",
+    "sku_tier": "Free",
+    "node_pool": {
+      "name": "system",
+      "vm_size": "Standard_B2s",
+      "node_count": 1,
+      "os_disk_size_gb": 30
+    }
+  }
+}

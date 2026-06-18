@@ -10,6 +10,16 @@ module "azure_network" {
   network             = local.networks_by_cloud.azure
 }
 
+module "azure_aks" {
+  source = "./modules/azure/aks"
+  count  = local.enable_azure_aks ? 1 : 0
+
+  resource_group_name = local.config_azure_resource_group
+  location            = local.config_azure_location
+  subnet_ids          = module.azure_network[0].subnetwork_ids
+  cluster             = local.config_aks
+}
+
 module "azure_security" {
   source = "./modules/azure/security"
   count  = local.enable_azure_security ? 1 : 0

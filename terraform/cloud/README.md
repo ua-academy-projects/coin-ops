@@ -37,3 +37,12 @@ To use another config file, rerun bootstrap with `TF_CONFIG_NAME`:
 ```bash
 TF_CONFIG_NAME=vm ./bootstrap/azure-bootstrap.sh
 ```
+
+For the AKS platform config:
+
+```bash
+TF_CONFIG_NAME=aks ./bootstrap/azure-bootstrap.sh
+source bootstrap/azure.env
+terraform -chdir=terraform/cloud init -backend-config=../../bootstrap/backend.azure.hcl -reconfigure
+terraform -chdir=terraform/cloud plan -lock-timeout=30s
+```

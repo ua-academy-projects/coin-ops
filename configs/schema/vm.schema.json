@@ -13,7 +13,8 @@
     "security_rules": true,
     "nat_route": true,
     "secrets": true,
-    "sql": true
+    "sql": true,
+    "aks": true
   },
   "allOf": [
     {
@@ -45,6 +46,9 @@
         },
         "sql": {
           "$ref": "./defs.json#/$defs/sql"
+        },
+        "aks": {
+          "$ref": "./defs.json#/$defs/aks"
         }
       }
     }
