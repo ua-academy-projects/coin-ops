@@ -1,5 +1,5 @@
 output "namespace" {
-  value       = kubernetes_namespace.this.metadata[0].name
+  value       = kubernetes_namespace.dev.metadata[0].name
   description = "Namespace where cert-manager is installed."
 }
 

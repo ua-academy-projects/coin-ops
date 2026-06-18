@@ -1,8 +1,8 @@
 locals {
-  alerts_enabled = var.alert_email != null && trim(var.alert_email) != ""
+  alerts_enabled = var.alert_email != null && trimspace(var.alert_email) != ""
 }
 
-resource "azurerm_log_analytics_workspace" "this" {
+resource "azurerm_log_analytics_workspace" "dev" {
   name                = var.workspace_name
   location            = var.location
   resource_group_name = var.resource_group_name
@@ -11,7 +11,7 @@ resource "azurerm_log_analytics_workspace" "this" {
   tags                = var.tags
 }
 
-resource "azurerm_monitor_action_group" "this" {
+resource "azurerm_monitor_action_group" "dev" {
   count               = local.alerts_enabled ? 1 : 0
   name                = var.action_group_name
   resource_group_name = var.resource_group_name
@@ -36,7 +36,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "node_not_ready" {
   enabled                          = true
   evaluation_frequency             = "PT5M"
   window_duration                  = "PT10M"
-  scopes                           = [azurerm_log_analytics_workspace.this.id]
+  scopes                           = [azurerm_log_analytics_workspace.dev.id]
   auto_mitigation_enabled          = true
   workspace_alerts_storage_enabled = false
   tags                             = var.tags
@@ -60,7 +60,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "node_not_ready" {
   }
 
   action {
-    action_groups = [azurerm_monitor_action_group.this[0].id]
+    action_groups = [azurerm_monitor_action_group.dev[0].id]
   }
 }
 
@@ -75,7 +75,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "pods_not_running" {
   enabled                          = true
   evaluation_frequency             = "PT5M"
   window_duration                  = "PT10M"
-  scopes                           = [azurerm_log_analytics_workspace.this.id]
+  scopes                           = [azurerm_log_analytics_workspace.dev.id]
   auto_mitigation_enabled          = true
   workspace_alerts_storage_enabled = false
   tags                             = var.tags
@@ -100,7 +100,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "pods_not_running" {
   }
 
   action {
-    action_groups = [azurerm_monitor_action_group.this[0].id]
+    action_groups = [azurerm_monitor_action_group.dev[0].id]
   }
 }
 
@@ -115,7 +115,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "pod_restarts_high" {
   enabled                          = true
   evaluation_frequency             = "PT5M"
   window_duration                  = "PT15M"
-  scopes                           = [azurerm_log_analytics_workspace.this.id]
+  scopes                           = [azurerm_log_analytics_workspace.dev.id]
   auto_mitigation_enabled          = true
   workspace_alerts_storage_enabled = false
   tags                             = var.tags
@@ -140,6 +140,6 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "pod_restarts_high" {
   }
 
   action {
-    action_groups = [azurerm_monitor_action_group.this[0].id]
+    action_groups = [azurerm_monitor_action_group.dev[0].id]
   }
 }

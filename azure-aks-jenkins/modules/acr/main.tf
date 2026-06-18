@@ -1,4 +1,4 @@
-resource "azurerm_container_registry" "this" {
+resource "azurerm_container_registry" "dev" {
   name                          = var.acr_name
   resource_group_name           = var.resource_group_name
   location                      = var.location
@@ -7,4 +7,3 @@ resource "azurerm_container_registry" "this" {
   public_network_access_enabled = true
   tags                          = var.tags
 }
-

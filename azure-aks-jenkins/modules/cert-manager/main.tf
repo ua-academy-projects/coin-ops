@@ -1,15 +1,15 @@
-resource "kubernetes_namespace" "this" {
+resource "kubernetes_namespace" "dev" {
   metadata {
     name = var.namespace
   }
 }
 
-resource "helm_release" "this" {
+resource "helm_release" "dev" {
   name             = var.release_name
   repository       = "https://charts.jetstack.io"
   chart            = "cert-manager"
   version          = var.chart_version
-  namespace        = kubernetes_namespace.this.metadata[0].name
+  namespace        = kubernetes_namespace.dev.metadata[0].name
   create_namespace = false
 
   values = [
