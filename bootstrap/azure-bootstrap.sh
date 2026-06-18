@@ -38,7 +38,7 @@ AZ_STORAGE_ACCOUNT_NAME="${AZ_STORAGE_ACCOUNT_NAME:-coinopstfstate}"
 AZ_CONTAINER_NAME="${AZ_CONTAINER_NAME:-tfstate}"
 BACKEND_CONFIG_FILE="${BACKEND_CONFIG_FILE:-./backend.azure.hcl}"
 
-AZ_KEYVAULT_NAME="${AZ_KEYVAULT_NAME:-coin-ops-keyvault-98123}"
+AZ_KEYVAULT_NAME="${AZ_KEYVAULT_NAME:-}"
 CREDENTIALS_FILE="${CREDENTIALS_FILE:-./terraform.env}"
 SECRET_PLACEHOLDER_VALUE="${SECRET_PLACEHOLDER_VALUE:-CHANGE_ME_IN_AZURE_PORTAL}"
 REQUIRED_SECRETS=(
@@ -67,7 +67,6 @@ for var in \
   AZ_STORAGE_ACCOUNT_NAME \
   AZ_CONTAINER_NAME \
   BACKEND_CONFIG_FILE \
-  AZ_KEYVAULT_NAME \
   CREDENTIALS_FILE \
   SECRET_PLACEHOLDER_VALUE; do
   if [[ -z "${!var}" ]]; then
@@ -125,6 +124,18 @@ AZ_SUBSCRIPTION_ID=$(az account show --query id --output tsv)
 AZ_TENANT_ID=$(az account show --query tenantId --output tsv)
 echo "Using subscription: $AZ_SUBSCRIPTION_ID"
 echo "Using tenant: $AZ_TENANT_ID"
+
+if [[ -z "$AZ_KEYVAULT_NAME" ]]; then
+  AZ_KEYVAULT_SUFFIX=$(echo "$AZ_SUBSCRIPTION_ID" | tr -d '-' | cut -c1-10)
+  AZ_KEYVAULT_NAME="coinopskv${AZ_KEYVAULT_SUFFIX}"
+fi
+
+if ! [[ "$AZ_KEYVAULT_NAME" =~ ^[a-zA-Z][a-zA-Z0-9-]{1,22}[a-zA-Z0-9]$ ]]; then
+  echo "ERROR: AZ_KEYVAULT_NAME must be 3-24 characters, start with a letter, end with a letter or number, and contain only letters, numbers, and hyphens."
+  exit 1
+fi
+
+echo "Using Key Vault name: $AZ_KEYVAULT_NAME"
 
 # ------------------------------------------------------------
 # Register required resource providers
