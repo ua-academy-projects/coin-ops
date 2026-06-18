@@ -19,3 +19,8 @@ resource "azurerm_subnet" "app" {
   virtual_network_name = azurerm_virtual_network.dev.name
   address_prefixes     = [var.app_subnet_cidr]
 }
+
+moved {
+  from = azurerm_virtual_network.this
+  to   = azurerm_virtual_network.dev
+}

@@ -143,3 +143,13 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "pod_restarts_high" {
     action_groups = [azurerm_monitor_action_group.dev[0].id]
   }
 }
+
+moved {
+  from = azurerm_log_analytics_workspace.this
+  to   = azurerm_log_analytics_workspace.dev
+}
+
+moved {
+  from = azurerm_monitor_action_group.this
+  to   = azurerm_monitor_action_group.dev
+}

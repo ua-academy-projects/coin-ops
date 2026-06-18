@@ -37,3 +37,13 @@ resource "helm_release" "dev" {
     })
   ]
 }
+
+moved {
+  from = kubernetes_namespace.this
+  to   = kubernetes_namespace.dev
+}
+
+moved {
+  from = helm_release.this
+  to   = helm_release.dev
+}

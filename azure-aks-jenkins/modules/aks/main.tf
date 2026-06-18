@@ -42,3 +42,8 @@ resource "azurerm_kubernetes_cluster" "dev" {
 
   tags = var.tags
 }
+
+moved {
+  from = azurerm_kubernetes_cluster.this
+  to   = azurerm_kubernetes_cluster.dev
+}

@@ -22,3 +22,8 @@ resource "azurerm_role_assignment" "log_analytics_reader" {
   role_definition_name = "Log Analytics Reader"
   principal_id         = azurerm_user_assigned_identity.dev.principal_id
 }
+
+moved {
+  from = azurerm_user_assigned_identity.this
+  to   = azurerm_user_assigned_identity.dev
+}

@@ -7,3 +7,8 @@ resource "azurerm_container_registry" "dev" {
   public_network_access_enabled = true
   tags                          = var.tags
 }
+
+moved {
+  from = azurerm_container_registry.this
+  to   = azurerm_container_registry.dev
+}
