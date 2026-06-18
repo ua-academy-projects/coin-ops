@@ -67,3 +67,12 @@ variable "aws_account_id" {
 
 variable "cloudflare_api_token" { sensitive = true }
 variable "github_token"         { sensitive = true }
+variable "cloudflare_zone_id" {
+  default = "087616a6f88e4b7225c760b3b159ef2c"
+}
+variable "cloudflare_account_id" {
+  default = "18f44cd11721d482ead86b1b1b61678c"
+}
+variable "ghcr_username" {
+  default = "ua-academy-projects"
+}

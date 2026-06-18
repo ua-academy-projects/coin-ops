@@ -13,12 +13,12 @@ resource "helm_release" "jenkins" {
   timeout          = 900
 
   values = [
-    templatefile("${path.module}/helm/jenkins/values.yaml.tftpl", {
+    templatefile("${path.module}/../helm/jenkins/values.yaml.tftpl", {
       storage_class        = "gp2"
       storage_size         = "8Gi"
       service_account_name = "jenkins"
       public_url           = "https://jenkins.coinops-softserve-penina.pp.ua/"
-      casc_config = templatefile("${path.module}/helm/jenkins/casc.yaml.tftpl", {
+      casc_config = templatefile("${path.module}/../helm/jenkins/casc.yaml.tftpl", {
         namespace      = "jenkins"
         release_name   = "jenkins"
         public_url     = "https://jenkins.coinops-softserve-penina.pp.ua/"
@@ -58,7 +58,7 @@ resource "cloudflare_record" "jenkins" {
   zone_id = var.cloudflare_zone_id
   name    = "jenkins"
   type    = "CNAME"
-  value   = "jenkins-tunnel.coinops-softserve-penina.pp.ua"
+  content = "jenkins-tunnel.coinops-softserve-penina.pp.ua"
   proxied = true
 }
 
