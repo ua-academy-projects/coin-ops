@@ -21,6 +21,11 @@ variable "postgresql_server_id" {
   default = null
 }
 
+variable "postgresql_monitoring_enabled" {
+  type    = bool
+  default = false
+}
+
 
 # alerts
 

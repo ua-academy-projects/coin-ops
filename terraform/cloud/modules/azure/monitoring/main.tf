@@ -68,7 +68,7 @@ resource "azurerm_monitor_data_collection_rule_association" "vm_metrics" {
 }
 
 resource "azurerm_monitor_diagnostic_setting" "postgresql" {
-  count = var.postgresql_server_id != null ? 1 : 0
+  count = var.postgresql_monitoring_enabled ? 1 : 0
 
   name                       = "${var.name}-postgresql-diagnostic"
   target_resource_id         = var.postgresql_server_id
@@ -105,7 +105,7 @@ resource "azurerm_monitor_metric_alert" "vm_cpu_high" {
 }
 
 resource "azurerm_monitor_metric_alert" "postgresql_cpu_high" {
-  count = var.postgresql_cpu_alert_enabled && var.postgresql_server_id != null ? 1 : 0
+  count = var.postgresql_cpu_alert_enabled && var.postgresql_monitoring_enabled ? 1 : 0
 
   name                = "${var.name}-postgresql-cpu-high"
   resource_group_name = var.resource_group_name
@@ -126,7 +126,7 @@ resource "azurerm_monitor_metric_alert" "postgresql_cpu_high" {
 }
 
 resource "azurerm_monitor_metric_alert" "postgresql_storage_high" {
-  count = var.postgresql_storage_alert_enabled && var.postgresql_server_id != null ? 1 : 0
+  count = var.postgresql_storage_alert_enabled && var.postgresql_monitoring_enabled ? 1 : 0
 
   name                = "${var.name}-postgresql-storage-high"
   resource_group_name = var.resource_group_name
@@ -147,7 +147,7 @@ resource "azurerm_monitor_metric_alert" "postgresql_storage_high" {
 }
 
 resource "azurerm_monitor_metric_alert" "postgresql_connections_high" {
-  count = var.postgresql_connections_alert_enabled && var.postgresql_server_id != null ? 1 : 0
+  count = var.postgresql_connections_alert_enabled && var.postgresql_monitoring_enabled ? 1 : 0
 
   name                = "${var.name}-postgresql-connections-high"
   resource_group_name = var.resource_group_name
@@ -168,7 +168,7 @@ resource "azurerm_monitor_metric_alert" "postgresql_connections_high" {
 }
 
 resource "azurerm_monitor_metric_alert" "postgresql_failed_connections" {
-  count = var.postgresql_failed_connections_alert_enabled && var.postgresql_server_id != null ? 1 : 0
+  count = var.postgresql_failed_connections_alert_enabled && var.postgresql_monitoring_enabled ? 1 : 0
 
   name                = "${var.name}-postgresql-failed-connections"
   resource_group_name = var.resource_group_name
