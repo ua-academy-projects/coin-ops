@@ -65,3 +65,7 @@ ansible/group_vars/all/secrets.yml
 runtime/__pycache__
 ansible/inventory*
 .ansible*
+
+# Local Azure bootstrap outputs
+bootstrap/azure.env
+bootstrap/backend.azure.hcl

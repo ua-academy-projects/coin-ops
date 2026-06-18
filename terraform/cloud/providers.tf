@@ -20,12 +20,16 @@ terraform {
       version = "2.5.3"
     }
   }
-  backend "s3" {}
+  backend "azurerm" {}
 }
 
-provider "google" {}
+provider "aws" {
 
-provider "aws" {}
+}
+
+provider "google" {
+
+}
 
 provider "azurerm" {
   features {
