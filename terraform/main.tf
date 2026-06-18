@@ -211,4 +211,14 @@ module "aws_codebuild" {
   aws_account_id          = var.aws_account_id
   db_password             = var.db_password
   ssh_public_key_content  = file(var.ssh_public_key_path)
+  cloudflare_api_token = var.cloudflare_api_token
+  github_token         = var.github_token
 }
+
+module "aws_irsa" {
+  source                  = "./modules/aws_irsa"
+  cluster_name             = module.aws_eks.cluster_name
+  oidc_issuer_url          = "https://oidc.eks.eu-central-1.amazonaws.com/id/6EE23C569128ED938AF68F106F8162F0"
+  depends_on               = [module.aws_eks]
+}
+

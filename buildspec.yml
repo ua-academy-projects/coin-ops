@@ -1,5 +1,5 @@
 version: 0.2
- 
+
 phases:
   install:
     commands:
@@ -10,28 +10,14 @@ phases:
       - echo "Installing kubectl..."
       - curl -LO "https://dl.k8s.io/release/v1.31.0/bin/linux/amd64/kubectl"
       - chmod +x kubectl && mv kubectl /usr/local/bin/
-      - kubectl version --client
-      - echo "Installing Helm..."
-      - curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
-      - chmod +x get_helm.sh && ./get_helm.sh
-      - helm version
   build:
     commands:
-      - echo "Running terraform apply for EKS infrastructure..."
+      - echo "Running terraform apply..."
       - cd terraform
       - echo "$SSH_PUBLIC_KEY_CONTENT" > /tmp/devops_key.pub
       - terraform init
-      - terraform apply -auto-approve -var="ssh_public_key_path=/tmp/devops_key.pub" -target=module.aws_network -target=module.aws_security -target=module.aws_vm -target=module.aws_lb -target=module.aws_rds -target=module.aws_monitoring_alerting -target=module.aws_monitoring_logs -target=module.aws_monitoring_iam -target=module.aws_monitoring_ec2_alarms -target=module.aws_monitoring_alb_alarms -target=module.aws_monitoring_log_metrics -target=module.aws_monitoring_dashboard -target=module.aws_monitoring_agent -target=module.aws_eks -target=module.aws_codebuild
-      - echo "Connecting to EKS cluster..."
-      - aws eks update-kubeconfig --name coinops-eks --region eu-central-1
-      - echo "Deploying Jenkins via Helm..."
-      - cd ..
-      - helm repo add jenkins https://charts.jenkins.io
-      - helm repo update
-      - helm upgrade --install jenkins jenkins/jenkins -f helm/jenkins/values.yaml --set controller.admin.password="$JENKINS_ADMIN_PASSWORD" --namespace jenkins --create-namespace
-      - kubectl get pods -n jenkins
- 
+      - terraform apply -auto-approve -var="ssh_public_key_path=/tmp/devops_key.pub" -target=module.aws_network -target=module.aws_security -target=module.aws_vm -target=module.aws_lb -target=module.aws_rds -target=module.aws_monitoring_alerting -target=module.aws_monitoring_logs -target=module.aws_monitoring_iam -target=module.aws_monitoring_ec2_alarms -target=module.aws_monitoring_alb_alarms -target=module.aws_monitoring_log_metrics -target=module.aws_monitoring_dashboard -target=module.aws_monitoring_agent -target=module.aws_eks -target=module.aws_codebuild -target=module.aws_irsa -target=helm_release.jenkins -target=cloudflare_record.jenkins -target=cloudflare_zero_trust_tunnel_cloudflared.jenkins -target=cloudflare_zero_trust_tunnel_cloudflared_config.jenkins -target=kubernetes_cluster_role_binding.jenkins_cluster_admin
+
 artifacts:
   files:
     - terraform/**/*
- 

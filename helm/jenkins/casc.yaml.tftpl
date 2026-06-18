@@ -1,0 +1,61 @@
+jenkins:
+  systemMessage: "CoinOps EKS — managed by Terraform and Jenkins Configuration as Code."
+  slaveAgentPort: 50000
+  clouds:
+    - kubernetes:
+        name: "eks"
+        serverUrl: "https://kubernetes.default.svc"
+        namespace: "${namespace}"
+        jenkinsUrl: "http://${release_name}.${namespace}.svc.cluster.local:8080"
+        jenkinsTunnel: "${release_name}-agent.${namespace}.svc.cluster.local:50000"
+        containerCapStr: "4"
+        connectTimeout: "5"
+        readTimeout: "15"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          password: ${admin_password}
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - usernamePassword:
+              scope: GLOBAL
+              id: "github-token"
+              username: ${github_username}
+              password: ${github_token}
+              description: "GitHub token for cloning CoinOps repo."
+          - string:
+              scope: GLOBAL
+              id: "coinops-db-password"
+              secret: ${db_password}
+              description: "CoinOps PostgreSQL password for Ansible."
+
+unclassified:
+  location:
+    url: "${public_url}"
+
+jobs:
+  - script: |
+      pipelineJob('${job_name}-coinops') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('${repository_url}')
+                  credentials('github-token')
+                }
+                branch('${branch}')
+              }
+            }
+            scriptPath('ci/jenkins/Jenkinsfile.eks-coinops')
+          }
+        }
+      }

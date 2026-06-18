@@ -63,3 +63,7 @@ variable "aws_account_id" {
   description = "AWS account ID for S3 bucket policy"
   default     = "584856877361"
 }
+
+
+variable "cloudflare_api_token" { sensitive = true }
+variable "github_token"         { sensitive = true }

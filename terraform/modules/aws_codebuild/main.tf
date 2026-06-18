@@ -54,6 +54,17 @@ resource "aws_codebuild_project" "terraform_apply" {
       value = var.ssh_public_key_content
       type  = "PLAINTEXT"
     }
+
+    environment_variable {
+      name  = "TF_VAR_cloudflare_api_token"
+      value = var.cloudflare_api_token
+      type  = "PLAINTEXT"
+    }
+    environment_variable {
+      name  = "TF_VAR_github_token"
+      value = var.github_token
+      type  = "PLAINTEXT"
+    }
   }
 
   source {

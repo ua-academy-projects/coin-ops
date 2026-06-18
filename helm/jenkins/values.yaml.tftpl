@@ -1,0 +1,42 @@
+controller:
+  image:
+    tag: "2.492-jdk21"
+  serviceType: ClusterIP
+  installPlugins:
+    - kubernetes
+    - workflow-aggregator
+    - git
+    - configuration-as-code
+    - job-dsl
+    - credentials
+    - credentials-binding
+    - plain-credentials
+    - timestamper
+  JCasC:
+    defaultConfig: false
+    configScripts:
+      coinops: |
+        ${indent(8, casc_config)}
+  javaOpts: "-Xms128m -Xmx512m"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 384Mi
+    limits:
+      cpu: 500m
+      memory: 768Mi
+
+agent:
+  enabled: true
+
+persistence:
+  enabled: true
+  storageClass: "${storage_class}"
+  size: "${storage_size}"
+
+rbac:
+  create: true
+
+serviceAccount:
+  create: true
+  name: "${service_account_name}"

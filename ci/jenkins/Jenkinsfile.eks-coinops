@@ -1,0 +1,83 @@
+pipeline {
+  agent {
+    kubernetes {
+      cloud 'eks'
+      defaultContainer 'tools'
+      yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  serviceAccountName: jenkins
+  containers:
+    - name: tools
+      image: python:3.12-bookworm
+      command: [cat]
+      tty: true
+    - name: jnlp
+      image: jenkins/inbound-agent:3355.v388858a_47b_33-3-jdk21
+      env:
+        - name: JENKINS_TUNNEL
+          value: jenkins-agent.jenkins.svc.cluster.local:50000
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+'''
+    }
+  }
+  environment {
+    K8S_KUBECONFIG_PATH = "${WORKSPACE}/.kube/eks-incluster.yaml"
+    COINOPS_SECRET_BACKEND = 'env'
+  }
+  stages {
+    stage('Tools') {
+      steps {
+        sh '''
+          set -eu
+          apt-get update -q
+          apt-get install -y --no-install-recommends curl ca-certificates git make gcc python3-dev libffi-dev libssl-dev
+          curl -L -o /usr/local/bin/kubectl "https://dl.k8s.io/release/v1.31.0/bin/linux/amd64/kubectl"
+          chmod +x /usr/local/bin/kubectl
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install ansible kubernetes boto3 botocore jmespath passlib
+          ansible-galaxy collection install -r ansible/requirements.yml
+        '''
+      }
+    }
+    stage('Kubeconfig') {
+      steps {
+        sh '''
+          set -eu
+          mkdir -p .kube
+          TOKEN="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"
+          CA_CERT="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+          kubectl config set-cluster in-cluster \
+            --server=https://kubernetes.default.svc \
+            --certificate-authority="${CA_CERT}" \
+            --embed-certs=true \
+            --kubeconfig="${K8S_KUBECONFIG_PATH}"
+          kubectl config set-credentials jenkins --token="${TOKEN}" --kubeconfig="${K8S_KUBECONFIG_PATH}"
+          kubectl config set-context in-cluster --cluster=in-cluster --user=jenkins --kubeconfig="${K8S_KUBECONFIG_PATH}"
+          kubectl config use-context in-cluster --kubeconfig="${K8S_KUBECONFIG_PATH}"
+          KUBECONFIG="${K8S_KUBECONFIG_PATH}" kubectl get namespace kube-system
+        '''
+      }
+    }
+    stage('Deploy CoinOps') {
+      steps {
+        withCredentials([
+          string(credentialsId: 'coinops-db-password', variable: 'DB_PASSWORD'),
+          usernamePassword(credentialsId: 'github-token', usernameVariable: 'GHCR_USERNAME', passwordVariable: 'GHCR_TOKEN')
+        ]) {
+          sh '''
+            set -eu
+            . .venv/bin/activate
+            ansible-playbook -i ansible/inventory ansible/deploy.yml
+          '''
+        }
+      }
+    }
+  }
+}
