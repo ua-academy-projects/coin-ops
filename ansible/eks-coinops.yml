@@ -4,7 +4,7 @@
   connection: local
   gather_facts: false
   vars:
-    kubeconfig_path: "{{ lookup('env', 'K8S_KUBECONFIG_PATH') | default(ansible_env.HOME + '/.kube/config', true) }}"
+    kubeconfig_path: "{{ lookup('env', 'K8S_KUBECONFIG_PATH') | default('/root/.kube/config', true) }}"
 
   pre_tasks:
     - name: Confirm EKS Kubernetes API is reachable
