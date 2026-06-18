@@ -135,3 +135,14 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.OWNER }}/coin-ops-ui:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.OWNER }}/coin-ops-ui:latest
+            
+    notify-jenkins:
+    needs: [build-proxy, build-history-api, build-history-consumer, build-ui]
+    if: always() && !failure() && !cancelled()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Jenkins build
+        run: |
+          curl -X POST \
+            --user "${{ secrets.JENKINS_USER }}:${{ secrets.JENKINS_API_TOKEN }}" \
+            "https://jenkins.coin-ops.pp.ua/job/coinops-pipeline/build"
