@@ -76,6 +76,9 @@ spec:
                 --from-literal=REDIS_URL='redis://redis.coinops-data.svc.cluster.local:6379' \
                 --from-literal=RABBITMQ_URL='amqp://admin:admin@rabbitmq.coinops-data.svc.cluster.local:5672/' \
                 --from-literal=RUNTIME_BACKEND=external \
+                --from-literal=POSTGRES_HOST=postgres.coinops-data.svc.cluster.local \
+                --from-literal=POSTGRES_USER=postgres \
+                --from-literal=POSTGRES_PASSWORD=postgres \
                 --dry-run=client -o yaml | kubectl apply -f -
             '''
           }
