@@ -1,0 +1,13 @@
+# AKS deployment overlay for non-secret chart behavior.
+# Runtime app config and secrets come from configs/aks.json plus Azure Key Vault.
+
+namespaces:
+  create: true
+
+secret:
+  create: false
+
+ingress:
+  enabled: false
+  middlewares:
+    enabled: false
