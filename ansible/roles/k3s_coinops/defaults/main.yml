@@ -39,3 +39,12 @@ cnpg_db_host: "coinops-db-rw.coinops-app.svc.cluster.local"
 db_user: "cognitor"
 db_name: "cognitor"
 rabbitmq_user: "cognitor"
+
+# Variables moved from group_vars/all/main.yml
+db_user: "cognitor"
+db_name: "cognitor"
+rabbitmq_user: "cognitor"
+runtime_backend: "external"
+use_rds: true
+proxy_port: "8080"
+history_port: "8000"
