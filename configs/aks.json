@@ -76,6 +76,17 @@
       "os_disk_size_gb": 30
     }
   },
+  "ingress_controller": {
+    "type": "traefik",
+    "namespace": "traefik",
+    "release_name": "traefik",
+    "chart_repository": "https://traefik.github.io/charts",
+    "chart_name": "traefik",
+    "chart_version": "36.3.0",
+    "service_type": "LoadBalancer",
+    "ingress_class_name": "traefik",
+    "default_class": true
+  },
   "jenkins": {
     "namespace": "jenkins",
     "release_name": "jenkins",

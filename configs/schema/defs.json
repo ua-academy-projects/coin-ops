@@ -492,6 +492,57 @@
         }
       }
     },
+    "ingressController": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "namespace",
+        "release_name",
+        "chart_repository",
+        "chart_name",
+        "service_type",
+        "ingress_class_name",
+        "default_class"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["traefik"]
+        },
+        "namespace": {
+          "type": "string",
+          "minLength": 1
+        },
+        "release_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "chart_repository": {
+          "type": "string",
+          "format": "uri"
+        },
+        "chart_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "chart_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "service_type": {
+          "type": "string",
+          "enum": ["ClusterIP", "LoadBalancer"]
+        },
+        "ingress_class_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "default_class": {
+          "type": "boolean"
+        }
+      }
+    },
     "jenkins": {
       "type": "object",
       "additionalProperties": false,

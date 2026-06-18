@@ -66,6 +66,7 @@ spec:
           env.IMAGE_PULL_SERVER = config.deploy.image_registry.tokenize('/')[0]
           env.IMAGE_TAG = params.IMAGE_TAG ?: config.deploy.image_tag
           env.RUNTIME_BACKEND = config.deploy.runtime_backend
+          env.APP_DOMAIN = config.deploy.app_domain
           env.POSTGRES_HOST = "${config.sql.instance.name}.postgres.database.azure.com"
           env.POSTGRES_DB = config.sql.database.name
           env.POSTGRES_USER = config.sql.user.name
@@ -154,6 +155,7 @@ spec:
               --namespace "$APP_NAMESPACE" \
               --values "$VALUES_FILE" \
               --set-string config.data.RUNTIME_BACKEND="$RUNTIME_BACKEND" \
+              --set-string ingress.host="$APP_DOMAIN" \
               --set-string proxy.image.repository="$IMAGE_REGISTRY/coin-ops-proxy" \
               --set-string proxy.image.tag="$IMAGE_TAG" \
               --set-string historyApi.image.repository="$IMAGE_REGISTRY/coin-ops-history-api" \

@@ -15,6 +15,7 @@
     "secrets": true,
     "sql": true,
     "aks": true,
+    "ingress_controller": true,
     "jenkins": true
   },
   "allOf": [
@@ -50,6 +51,9 @@
         },
         "aks": {
           "$ref": "./defs.json#/$defs/aks"
+        },
+        "ingress_controller": {
+          "$ref": "./defs.json#/$defs/ingressController"
         },
         "jenkins": {
           "$ref": "./defs.json#/$defs/jenkins"

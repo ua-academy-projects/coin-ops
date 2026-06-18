@@ -8,9 +8,10 @@ secret:
   create: false
 
 ingress:
-  enabled: false
+  enabled: true
+  className: traefik
   middlewares:
-    enabled: false
+    enabled: true
 
 ui:
   proxyConfig:

@@ -20,6 +20,15 @@ module "azure_aks" {
   cluster             = local.config_aks
 }
 
+module "traefik" {
+  source = "./modules/kubernetes/traefik"
+  count  = local.enable_traefik ? 1 : 0
+
+  ingress_controller = local.config_ingress_controller
+
+  depends_on = [module.azure_aks]
+}
+
 module "azure_workload_identity" {
   source = "./modules/azure/workload_identity"
   count  = local.enable_jenkins ? 1 : 0
