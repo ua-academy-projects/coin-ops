@@ -13,7 +13,7 @@
 #   9) Create backend config and credentials files
 #
 # Usage:
-#   1. Fill in the variables block below
+#   1. Optionally override variables with environment values
 #   2. chmod +x azure-bootstrap.sh
 #   3. az login
 #   4. ./azure-bootstrap.sh
@@ -26,21 +26,21 @@ set -euo pipefail
 # -o pipefail -> exit on pipe failure
 
 # ------------------------------------------------------------
-# Variables
+# Defaults
 # ------------------------------------------------------------
-AZ_GROUP_NAME="coin-ops-rg"
-AZ_GROUP_LOCATION="austriaeast"
+AZ_GROUP_NAME="${AZ_GROUP_NAME:-coin-ops-rg}"
+AZ_GROUP_LOCATION="${AZ_GROUP_LOCATION:-austriaeast}"
 
-AZ_SP_NAME="coin-ops-sp"
+AZ_SP_NAME="${AZ_SP_NAME:-coin-ops-sp}"
 
 CREATE_BACKEND="${CREATE_BACKEND:-true}"
-AZ_STORAGE_ACCOUNT_NAME="coinopstfstate"
-AZ_CONTAINER_NAME="tfstate"
+AZ_STORAGE_ACCOUNT_NAME="${AZ_STORAGE_ACCOUNT_NAME:-coinopstfstate}"
+AZ_CONTAINER_NAME="${AZ_CONTAINER_NAME:-tfstate}"
 BACKEND_CONFIG_FILE="${BACKEND_CONFIG_FILE:-./backend.azure.hcl}"
 
-AZ_KEYVAULT_NAME="coin-ops-keyvault-98123"
+AZ_KEYVAULT_NAME="${AZ_KEYVAULT_NAME:-coin-ops-keyvault-98123}"
 CREDENTIALS_FILE="${CREDENTIALS_FILE:-./terraform.env}"
-SECRET_PLACEHOLDER_VALUE="CHANGE_ME_IN_AZURE_PORTAL"
+SECRET_PLACEHOLDER_VALUE="${SECRET_PLACEHOLDER_VALUE:-CHANGE_ME_IN_AZURE_PORTAL}"
 REQUIRED_SECRETS=(
   "ghcr-username"
   "ghcr-token"
@@ -68,6 +68,11 @@ for var in \
   fi
 done
 
+if [[ "$CREATE_BACKEND" != "true" && "$CREATE_BACKEND" != "false" ]]; then
+  echo "ERROR: CREATE_BACKEND must be either 'true' or 'false'."
+  exit 1
+fi
+
 if [[ ${#REQUIRED_SECRETS[@]} -eq 0 ]]; then
   echo "ERROR: REQUIRED_SECRETS is empty. Add at least one secret name."
   exit 1
@@ -76,24 +81,37 @@ fi
 # ------------------------------------------------------------
 # Check required tools
 # ------------------------------------------------------------
-command -v az &>/dev/null && echo "Azure CLI is installed!" || { echo "Azure CLI is NOT installed!"; exit 1; }
-command -v jq &>/dev/null && echo "jq is installed!"        || { echo "jq is NOT installed!";        exit 1; }
+for tool in az jq terraform; do
+  if command -v "$tool" &>/dev/null; then
+    echo "$tool is installed."
+  else
+    echo "ERROR: $tool is not installed or not available on PATH."
+    exit 1
+  fi
+done
 
 # ------------------------------------------------------------
-# Get subscription ID
+# Validate Azure authentication
 # ------------------------------------------------------------
+if ! az account show &>/dev/null; then
+  echo "ERROR: Azure CLI is not authenticated. Run 'az login' first."
+  exit 1
+fi
+
 AZ_SUBSCRIPTION_ID=$(az account show --query id --output tsv)
+AZ_TENANT_ID=$(az account show --query tenantId --output tsv)
 echo "Using subscription: $AZ_SUBSCRIPTION_ID"
+echo "Using tenant: $AZ_TENANT_ID"
 
 # ------------------------------------------------------------
 # 1) Create a resource group
 # ------------------------------------------------------------
 echo ""
 echo "==> Step 1: Resource Group"
-if [[ $(az group exists --name ${AZ_GROUP_NAME}) == "true" ]]; then
+if [[ $(az group exists --name "$AZ_GROUP_NAME") == "true" ]]; then
   echo "Resource Group already exists: $AZ_GROUP_NAME"
 else
-  az group create --name ${AZ_GROUP_NAME} --location ${AZ_GROUP_LOCATION}
+  az group create --name "$AZ_GROUP_NAME" --location "$AZ_GROUP_LOCATION"
   echo "Resource Group created: $AZ_GROUP_NAME"
 fi
 
@@ -122,19 +140,18 @@ echo "==> Step 3: Service Principal"
 
 AZ_CLIENT_ID=""
 AZ_CLIENT_SECRET=""
-AZ_TENANT_ID=""
 
-SP_APP_ID=$(az ad sp list --display-name ${AZ_SP_NAME} --query "[0].appId" --output tsv)
+SP_APP_ID=$(az ad sp list --display-name "$AZ_SP_NAME" --query "[0].appId" --output tsv)
 
 if [[ -z "$SP_APP_ID" ]]; then
   SP_OUTPUT=$(az ad sp create-for-rbac \
-    --name $AZ_SP_NAME \
+    --name "$AZ_SP_NAME" \
     --role Contributor \
-    --scopes /subscriptions/$AZ_SUBSCRIPTION_ID/resourceGroups/$AZ_GROUP_NAME)
+    --scopes "/subscriptions/$AZ_SUBSCRIPTION_ID/resourceGroups/$AZ_GROUP_NAME")
 
-  AZ_CLIENT_ID=$(echo $SP_OUTPUT | jq -r '.appId')
-  AZ_CLIENT_SECRET=$(echo $SP_OUTPUT | jq -r '.password')
-  AZ_TENANT_ID=$(echo $SP_OUTPUT | jq -r '.tenant')
+  AZ_CLIENT_ID=$(echo "$SP_OUTPUT" | jq -r '.appId')
+  AZ_CLIENT_SECRET=$(echo "$SP_OUTPUT" | jq -r '.password')
+  AZ_TENANT_ID=$(echo "$SP_OUTPUT" | jq -r '.tenant')
 
   echo "Service Principal created: $AZ_SP_NAME"
 else
@@ -143,7 +160,6 @@ else
   echo "WARNING: Run 'az ad sp credential reset --name $AZ_SP_NAME' to generate a new secret."
 
   AZ_CLIENT_ID=$SP_APP_ID
-  AZ_TENANT_ID=$(az account show --query tenantId --output tsv)
 fi
 
 # ------------------------------------------------------------
@@ -215,26 +231,26 @@ echo ""
 echo "==> Step 7: Storage Account & Blob Container"
 
 if [[ "$CREATE_BACKEND" == "true" ]]; then
-  if az storage account show --name $AZ_STORAGE_ACCOUNT_NAME --resource-group $AZ_GROUP_NAME &>/dev/null; then
+  if az storage account show --name "$AZ_STORAGE_ACCOUNT_NAME" --resource-group "$AZ_GROUP_NAME" &>/dev/null; then
     echo "Storage Account already exists: $AZ_STORAGE_ACCOUNT_NAME"
   else
     az storage account create \
-      --name $AZ_STORAGE_ACCOUNT_NAME \
-      --resource-group $AZ_GROUP_NAME \
-      --location $AZ_GROUP_LOCATION \
+      --name "$AZ_STORAGE_ACCOUNT_NAME" \
+      --resource-group "$AZ_GROUP_NAME" \
+      --location "$AZ_GROUP_LOCATION" \
       --sku Standard_LRS
     echo "Storage Account created: $AZ_STORAGE_ACCOUNT_NAME"
   fi
 
   if az storage container show \
-    --name $AZ_CONTAINER_NAME \
-    --account-name $AZ_STORAGE_ACCOUNT_NAME \
+    --name "$AZ_CONTAINER_NAME" \
+    --account-name "$AZ_STORAGE_ACCOUNT_NAME" \
     --auth-mode login &>/dev/null; then
     echo "Blob Container already exists: $AZ_CONTAINER_NAME"
   else
     az storage container create \
-      --name $AZ_CONTAINER_NAME \
-      --account-name $AZ_STORAGE_ACCOUNT_NAME \
+      --name "$AZ_CONTAINER_NAME" \
+      --account-name "$AZ_STORAGE_ACCOUNT_NAME" \
       --auth-mode login
     echo "Blob Container created: $AZ_CONTAINER_NAME"
   fi
@@ -257,14 +273,14 @@ echo ""
 echo "==> Step 8: Storage Blob Role"
 if [[ "$CREATE_BACKEND" == "true" ]]; then
   AZ_STORAGE_ID=$(az storage account show \
-    --name $AZ_STORAGE_ACCOUNT_NAME \
-    --resource-group $AZ_GROUP_NAME \
+    --name "$AZ_STORAGE_ACCOUNT_NAME" \
+    --resource-group "$AZ_GROUP_NAME" \
     --query id --output tsv)
 
   az role assignment create \
-    --assignee $AZ_CLIENT_ID \
+    --assignee "$AZ_CLIENT_ID" \
     --role "Storage Blob Data Contributor" \
-    --scope $AZ_STORAGE_ID
+    --scope "$AZ_STORAGE_ID"
   echo "Role assigned: Storage Blob Data Contributor"
 else
   echo "CREATE_BACKEND is false, skipping storage role assignment"
@@ -276,7 +292,7 @@ fi
 echo ""
 echo "==> Step 9: Credentials File"
 
-cat > $CREDENTIALS_FILE <<EOF
+cat > "$CREDENTIALS_FILE" <<EOF
 ARM_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
 ARM_TENANT_ID=$AZ_TENANT_ID
 ARM_CLIENT_ID=$AZ_CLIENT_ID
@@ -287,6 +303,7 @@ TF_BACKEND_CONTAINER=$AZ_CONTAINER_NAME
 TF_CREATE_BACKEND=$CREATE_BACKEND
 AZ_KEYVAULT_NAME=$AZ_KEYVAULT_NAME
 EOF
+chmod 600 "$CREDENTIALS_FILE"
 
 echo "Credentials file created: $CREDENTIALS_FILE"
 printf "\nDone!\n"
