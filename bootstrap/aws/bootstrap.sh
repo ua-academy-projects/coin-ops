@@ -249,6 +249,20 @@ cat > "$POLICY_FILE" <<'POLICY'
       "Resource": "*"
     },
     {
+      "Sid": "IRSA",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateOpenIDConnectProvider",
+        "iam:DeleteOpenIDConnectProvider",
+        "iam:GetOpenIDConnectProvider",
+        "iam:ListOpenIDConnectProviders",
+        "iam:TagOpenIDConnectProvider",
+        "iam:UntagOpenIDConnectProvider",
+        "iam:UpdateOpenIDConnectProviderThumbprint"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "CodeBuild",
       "Effect": "Allow",
       "Action": [
