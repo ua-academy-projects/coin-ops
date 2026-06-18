@@ -149,6 +149,42 @@ variable "alert_email" {
   default     = null
 }
 
+variable "log_retention_days" {
+  type        = number
+  description = "Log Analytics retention period in days."
+  default     = 30
+}
+
+variable "cpu_alert_threshold" {
+  type        = number
+  description = "Average AKS node CPU percentage threshold for alerts."
+  default     = 80
+}
+
+variable "cpu_alert_severity" {
+  type        = number
+  description = "Severity used by high CPU and restart-related alerts."
+  default     = 3
+}
+
+variable "heartbeat_alert_severity" {
+  type        = number
+  description = "Severity used by node/pod availability alerts."
+  default     = 2
+}
+
+variable "heartbeat_window_minutes" {
+  type        = number
+  description = "Window size in minutes used by heartbeat-style alerts."
+  default     = 10
+}
+
+variable "heartbeat_evaluation_frequency" {
+  type        = string
+  description = "Evaluation frequency used by heartbeat-style alerts."
+  default     = "PT5M"
+}
+
 variable "monitoring_workspace_name" {
   type        = string
   description = "Log Analytics workspace name for AKS monitoring."

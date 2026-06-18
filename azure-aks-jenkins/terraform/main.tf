@@ -27,17 +27,23 @@ module "acr" {
 }
 
 module "monitoring" {
-  source                  = "../modules/monitoring"
-  resource_group_name     = module.resource_group.name
-  resource_group_id       = module.resource_group.id
-  location                = module.resource_group.location
-  cluster_name            = var.aks_name
-  app_namespace           = var.app_namespace
-  workspace_name          = var.monitoring_workspace_name
-  action_group_name       = var.monitoring_action_group_name
-  action_group_short_name = var.monitoring_action_group_short_name
-  alert_email             = var.alert_email
-  tags                    = var.tags
+  source                         = "../modules/monitoring"
+  resource_group_name            = module.resource_group.name
+  resource_group_id              = module.resource_group.id
+  location                       = module.resource_group.location
+  cluster_name                   = var.aks_name
+  app_namespace                  = var.app_namespace
+  workspace_name                 = var.monitoring_workspace_name
+  action_group_name              = var.monitoring_action_group_name
+  action_group_short_name        = var.monitoring_action_group_short_name
+  alert_email                    = var.alert_email
+  log_retention_days             = var.log_retention_days
+  cpu_alert_threshold            = var.cpu_alert_threshold
+  cpu_alert_severity             = var.cpu_alert_severity
+  heartbeat_alert_severity       = var.heartbeat_alert_severity
+  heartbeat_window_minutes       = var.heartbeat_window_minutes
+  heartbeat_evaluation_frequency = var.heartbeat_evaluation_frequency
+  tags                           = var.tags
 }
 
 module "aks" {
