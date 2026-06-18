@@ -17,13 +17,21 @@ spec:
       initContainers:
         - name: wait-for-postgres
           image: postgres:16-alpine
+          env:
+            - name: PGHOST
+              valueFrom:
+                secretKeyRef:
+                  name: coinops-secrets
+                  key: POSTGRES_HOST
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: coinops-secrets
+                  key: POSTGRES_USER
           command:
             - sh
             - -c
-            - until pg_isready -h postgres.coinops-data.svc.cluster.local -U postgres; do sleep 2; done
-          envFrom:
-            - secretRef:
-                name: coinops-secrets
+            - until pg_isready; do sleep 2; done
       containers:
         - name: history-consumer
           image: {{ .Values.global.imageRegistry }}/{{ .Values.historyConsumer.image }}:{{ .Values.global.imageTag }}

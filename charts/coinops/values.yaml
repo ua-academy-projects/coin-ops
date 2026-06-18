@@ -1,6 +1,6 @@
 global:
-  imageRegistry: rkurdupel
-  imageTag: v1
+  imageRegistry: ghcr.io/ua-academy-projects
+  imageTag: latest
 
 proxy:
   enabled: true
@@ -33,6 +33,3 @@ ingress:
   enabled: true
   className: traefik
   domain: app.coin-ops.pp.ua
-
-gateway:
-  enabled: true
