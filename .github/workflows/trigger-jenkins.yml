@@ -1,0 +1,29 @@
+name: Trigger Jenkins Deploy
+
+on:
+  workflow_run:
+    workflows: ["Build Docker images"]
+    types: [completed]
+    branches: [kurdupel]
+
+  push:
+    branches: [kurdupel]
+    paths:
+      - 'charts/**'
+      - 'Jenkinsfile'
+      - '.github/workflows/trigger-jenkins.yml'
+
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    if: |
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Jenkins build
+        run: |
+          curl -X POST \
+            --user "${{ secrets.JENKINS_USER }}:${{ secrets.JENKINS__API_TOKEN }}" \
+            "https://jenkins.coin-ops.pp.ua/job/coinops-pipeline/build"
