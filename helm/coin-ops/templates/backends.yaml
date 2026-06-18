@@ -269,6 +269,39 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 20
 ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "coin-ops.fullname" . }}-history-consumer
+  labels:
+{{ include "coin-ops.labels" . | indent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "coin-ops.name" . }}-history-consumer
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "coin-ops.name" . }}-history-consumer
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: history-consumer
+          image: "{{ .Values.historyConsumer.image.repository }}:{{ .Values.historyConsumer.image.tag }}"
+          imagePullPolicy: {{ .Values.historyConsumer.image.pullPolicy }}
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "coin-ops.fullname" . }}-backend-secret
+                  key: DATABASE_URL
+            - name: RABBITMQ_URL
+              value: "amqp://guest:guest@{{ include "coin-ops.fullname" . }}-rabbitmq:{{ .Values.rabbitmq.service.port }}/"
+            - name: RUNTIME_BACKEND
+              value: "external"
+---
 apiVersion: v1
 kind: Service
 metadata:

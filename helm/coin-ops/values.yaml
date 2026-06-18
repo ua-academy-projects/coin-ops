@@ -21,6 +21,12 @@ historyApi:
   service:
     port: 8000
 
+historyConsumer:
+  image:
+    repository: ""
+    tag: latest
+    pullPolicy: IfNotPresent
+
 postgres:
   image: postgres:16-alpine
   service:

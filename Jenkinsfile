@@ -156,6 +156,14 @@ EOF
               --destination "${ACR_LOGIN_SERVER}/coin-ops-history-api:${IMAGE_TAG_SHA}" \
               --destination "${ACR_LOGIN_SERVER}/coin-ops-history-api:${IMAGE_TAG_BUILD}" \
               --cache=true
+
+            /kaniko/executor \
+              --context "${WORKSPACE}/history" \
+              --dockerfile "${WORKSPACE}/history/Dockerfile.consumer" \
+              --destination "${ACR_LOGIN_SERVER}/coin-ops-history-consumer:${IMAGE_TAG}" \
+              --destination "${ACR_LOGIN_SERVER}/coin-ops-history-consumer:${IMAGE_TAG_SHA}" \
+              --destination "${ACR_LOGIN_SERVER}/coin-ops-history-consumer:${IMAGE_TAG_BUILD}" \
+              --cache=true
             '''
           }
         }
@@ -211,6 +219,8 @@ EOF
               --set-string proxy.image.tag="${IMAGE_TAG}" \
               --set-string historyApi.image.repository="${ACR_LOGIN_SERVER}/coin-ops-history-api" \
               --set-string historyApi.image.tag="${IMAGE_TAG}" \
+              --set-string historyConsumer.image.repository="${ACR_LOGIN_SERVER}/coin-ops-history-consumer" \
+              --set-string historyConsumer.image.tag="${IMAGE_TAG}" \
               --set-string ingress.host="${APP_HOST}" \
               --set-string ingress.tls.secretName="${INGRESS_TLS_SECRET_NAME}" \
               --atomic \
