@@ -60,6 +60,9 @@ AZDO_PIPELINE_NAME="${AZDO_PIPELINE_NAME:-coin-ops-terraform}"
 AZDO_PIPELINE_YAML_PATH="${AZDO_PIPELINE_YAML_PATH:-azure-pipelines/terraform.yml}"
 AZDO_REPOSITORY="${AZDO_REPOSITORY:-}"
 AZDO_REPOSITORY_TYPE="${AZDO_REPOSITORY_TYPE:-tfsgit}"
+AZDO_GITHUB_URL="${AZDO_GITHUB_URL:-https://github.com}"
+AZDO_GITHUB_PAT="${AZDO_GITHUB_PAT:-}"
+AZDO_GITHUB_SERVICE_CONNECTION_NAME="${AZDO_GITHUB_SERVICE_CONNECTION_NAME:-coin-ops-github}"
 AZDO_REPOSITORY_SERVICE_CONNECTION_ID="${AZDO_REPOSITORY_SERVICE_CONNECTION_ID:-}"
 AZDO_BRANCH="${AZDO_BRANCH:-volynets-infra-dev}"
 AZ_SP_CLIENT_SECRET="${AZ_SP_CLIENT_SECRET:-}"
@@ -117,8 +120,8 @@ if [[ "$AZDO_CONFIGURE" == "true" ]]; then
       fi
     done
 
-    if [[ "$AZDO_REPOSITORY_TYPE" == "github" && -z "$AZDO_REPOSITORY_SERVICE_CONNECTION_ID" ]]; then
-      echo "ERROR: AZDO_REPOSITORY_SERVICE_CONNECTION_ID is required when AZDO_REPOSITORY_TYPE=github."
+    if [[ "$AZDO_REPOSITORY_TYPE" == "github" && -z "$AZDO_REPOSITORY_SERVICE_CONNECTION_ID" && -z "$AZDO_GITHUB_PAT" ]]; then
+      echo "ERROR: AZDO_GITHUB_PAT or AZDO_REPOSITORY_SERVICE_CONNECTION_ID is required when AZDO_REPOSITORY_TYPE=github."
       exit 1
     fi
   fi
@@ -369,6 +372,7 @@ echo "Credentials file created: $CREDENTIALS_FILE"
 # ------------------------------------------------------------
 AZDO_SERVICE_CONNECTION_ID=""
 AZDO_PIPELINE_ID=""
+AZDO_GITHUB_SERVICE_CONNECTION_ID="$AZDO_REPOSITORY_SERVICE_CONNECTION_ID"
 
 if [[ "$AZDO_CONFIGURE" == "true" ]]; then
   echo ""
@@ -415,6 +419,33 @@ if [[ "$AZDO_CONFIGURE" == "true" ]]; then
   fi
 
   if [[ "$AZDO_CREATE_PIPELINE" == "true" ]]; then
+    if [[ "$AZDO_REPOSITORY_TYPE" == "github" && -z "$AZDO_GITHUB_SERVICE_CONNECTION_ID" ]]; then
+      AZDO_GITHUB_SERVICE_CONNECTION_ID=$(az devops service-endpoint list \
+        --query "[?name=='$AZDO_GITHUB_SERVICE_CONNECTION_NAME'].id | [0]" \
+        --output tsv)
+
+      if [[ -n "$AZDO_GITHUB_SERVICE_CONNECTION_ID" ]]; then
+        echo "Azure DevOps GitHub service connection already exists: $AZDO_GITHUB_SERVICE_CONNECTION_NAME"
+      else
+        AZDO_GITHUB_OUTPUT=$(AZURE_DEVOPS_EXT_GITHUB_PAT="$AZDO_GITHUB_PAT" \
+          az devops service-endpoint github create \
+            --github-url "$AZDO_GITHUB_URL" \
+            --name "$AZDO_GITHUB_SERVICE_CONNECTION_NAME" \
+            --output json)
+
+        AZDO_GITHUB_SERVICE_CONNECTION_ID=$(echo "$AZDO_GITHUB_OUTPUT" | jq -r '.id')
+        echo "Azure DevOps GitHub service connection created: $AZDO_GITHUB_SERVICE_CONNECTION_NAME"
+      fi
+
+      if [[ "$AZDO_AUTHORIZE_SERVICE_CONNECTION" == "true" ]]; then
+        az devops service-endpoint update \
+          --id "$AZDO_GITHUB_SERVICE_CONNECTION_ID" \
+          --enable-for-all true \
+          --only-show-errors
+        echo "Azure DevOps GitHub service connection authorized for pipelines"
+      fi
+    fi
+
     set_azdo_pipeline_variable() {
       local name="$1"
       local value="$2"
@@ -457,8 +488,8 @@ if [[ "$AZDO_CONFIGURE" == "true" ]]; then
         --output json
       )
 
-      if [[ -n "$AZDO_REPOSITORY_SERVICE_CONNECTION_ID" ]]; then
-        AZDO_PIPELINE_CREATE_ARGS+=(--service-connection "$AZDO_REPOSITORY_SERVICE_CONNECTION_ID")
+      if [[ -n "$AZDO_GITHUB_SERVICE_CONNECTION_ID" ]]; then
+        AZDO_PIPELINE_CREATE_ARGS+=(--service-connection "$AZDO_GITHUB_SERVICE_CONNECTION_ID")
       fi
 
       AZDO_PIPELINE_OUTPUT=$(az pipelines create "${AZDO_PIPELINE_CREATE_ARGS[@]}")
