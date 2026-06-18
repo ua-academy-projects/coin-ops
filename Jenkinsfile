@@ -16,7 +16,7 @@ spec:
     }
 
     environment {
-      SHA = "${env.GIT_COMMIT[0..6]}"
+      SHA = "${env.GIT_COMMIT}"
     }
 
     stages {
