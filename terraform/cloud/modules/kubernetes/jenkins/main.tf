@@ -34,6 +34,66 @@ resource "helm_release" "jenkins" {
           userKey        = "jenkins-admin-user"
           passwordKey    = "jenkins-admin-password"
         }
+        JCasC = {
+          defaultConfig = false
+          configScripts = {
+            "coin-ops" = yamlencode({
+              jenkins = {
+                systemMessage = var.jenkins.jcasc.system_message
+                securityRealm = {
+                  local = {
+                    allowsSignup = false
+                    users = [
+                      {
+                        id       = var.jenkins.admin_username
+                        password = var.jenkins.admin_password_placeholder
+                      }
+                    ]
+                  }
+                }
+                authorizationStrategy = {
+                  loggedInUsersCanDoAnything = {
+                    allowAnonymousRead = false
+                  }
+                }
+                clouds = [
+                  {
+                    kubernetes = {
+                      name                  = "aks"
+                      namespace             = var.jenkins.jcasc.agent_namespace
+                      serverUrl             = "https://kubernetes.default"
+                      jenkinsUrl            = var.jenkins.jcasc.jenkins_url
+                      jenkinsTunnel         = "${var.jenkins.release_name}-agent.${var.jenkins.namespace}.svc.cluster.local:50000"
+                      maxRequestsPerHostStr = "32"
+                      templates = [
+                        {
+                          name           = "aks-agent"
+                          label          = var.jenkins.jcasc.agent_label
+                          serviceAccount = var.jenkins.jcasc.agent_service_account
+                          namespace      = var.jenkins.jcasc.agent_namespace
+                          idleMinutes    = 10
+                          instanceCap    = 5
+                          containers = [
+                            {
+                              name       = "jnlp"
+                              image      = "jenkins/inbound-agent:latest"
+                              workingDir = "/home/jenkins/agent"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+              unclassified = {
+                location = {
+                  url = var.jenkins.jcasc.jenkins_url
+                }
+              }
+            })
+          }
+        }
       }
     })
   ]

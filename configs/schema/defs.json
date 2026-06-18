@@ -537,6 +537,39 @@
         "admin_password_placeholder": {
           "type": "string",
           "minLength": 1
+        },
+        "jcasc": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "system_message",
+            "jenkins_url",
+            "agent_namespace",
+            "agent_service_account",
+            "agent_label"
+          ],
+          "properties": {
+            "system_message": {
+              "type": "string",
+              "minLength": 1
+            },
+            "jenkins_url": {
+              "type": "string",
+              "minLength": 1
+            },
+            "agent_namespace": {
+              "type": "string",
+              "minLength": 1
+            },
+            "agent_service_account": {
+              "type": "string",
+              "minLength": 1
+            },
+            "agent_label": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
         }
       }
     }

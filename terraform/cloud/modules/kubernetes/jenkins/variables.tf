@@ -8,5 +8,12 @@ variable "jenkins" {
     admin_secret_name          = string
     admin_username             = string
     admin_password_placeholder = string
+    jcasc = object({
+      system_message        = string
+      jenkins_url           = string
+      agent_namespace       = string
+      agent_service_account = string
+      agent_label           = string
+    })
   })
 }

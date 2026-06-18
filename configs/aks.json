@@ -39,6 +39,13 @@
     "service_type": "ClusterIP",
     "admin_secret_name": "jenkins-admin",
     "admin_username": "admin",
-    "admin_password_placeholder": "CHANGE_ME_IN_JENKINS_SECRET"
+    "admin_password_placeholder": "CHANGE_ME_IN_JENKINS_SECRET",
+    "jcasc": {
+      "system_message": "Coin-Ops Jenkins is configured by Terraform and JCasC.",
+      "jenkins_url": "http://jenkins.jenkins.svc.cluster.local:8080",
+      "agent_namespace": "jenkins",
+      "agent_service_account": "default",
+      "agent_label": "aks"
+    }
   }
 }
