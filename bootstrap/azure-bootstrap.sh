@@ -48,6 +48,14 @@ REQUIRED_SECRETS=(
   "db-password"
 )
 
+REQUIRED_RESOURCE_PROVIDERS=(
+  "Microsoft.KeyVault"
+  "Microsoft.Storage"
+)
+
+PROVIDER_REGISTRATION_MAX_ATTEMPTS="${PROVIDER_REGISTRATION_MAX_ATTEMPTS:-12}"
+PROVIDER_REGISTRATION_SLEEP_SECONDS="${PROVIDER_REGISTRATION_SLEEP_SECONDS:-10}"
+
 # ------------------------------------------------------------
 # Validate required variables
 # ------------------------------------------------------------
@@ -73,8 +81,23 @@ if [[ "$CREATE_BACKEND" != "true" && "$CREATE_BACKEND" != "false" ]]; then
   exit 1
 fi
 
+if ! [[ "$PROVIDER_REGISTRATION_MAX_ATTEMPTS" =~ ^[1-9][0-9]*$ ]]; then
+  echo "ERROR: PROVIDER_REGISTRATION_MAX_ATTEMPTS must be a positive integer."
+  exit 1
+fi
+
+if ! [[ "$PROVIDER_REGISTRATION_SLEEP_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+  echo "ERROR: PROVIDER_REGISTRATION_SLEEP_SECONDS must be a positive integer."
+  exit 1
+fi
+
 if [[ ${#REQUIRED_SECRETS[@]} -eq 0 ]]; then
   echo "ERROR: REQUIRED_SECRETS is empty. Add at least one secret name."
+  exit 1
+fi
+
+if [[ ${#REQUIRED_RESOURCE_PROVIDERS[@]} -eq 0 ]]; then
+  echo "ERROR: REQUIRED_RESOURCE_PROVIDERS is empty. Add at least one provider namespace."
   exit 1
 fi
 
@@ -102,6 +125,42 @@ AZ_SUBSCRIPTION_ID=$(az account show --query id --output tsv)
 AZ_TENANT_ID=$(az account show --query tenantId --output tsv)
 echo "Using subscription: $AZ_SUBSCRIPTION_ID"
 echo "Using tenant: $AZ_TENANT_ID"
+
+# ------------------------------------------------------------
+# Register required resource providers
+# ------------------------------------------------------------
+wait_for_provider_registration() {
+  local namespace="$1"
+  local state=""
+
+  echo "Registering resource provider: $namespace"
+  az provider register --namespace "$namespace" --output none
+
+  for ((attempt = 1; attempt <= PROVIDER_REGISTRATION_MAX_ATTEMPTS; attempt++)); do
+    state=$(az provider show \
+      --namespace "$namespace" \
+      --query registrationState \
+      --output tsv)
+
+    if [[ "$state" == "Registered" ]]; then
+      echo "Resource provider registered: $namespace"
+      return 0
+    fi
+
+    echo "Resource provider $namespace is $state; waiting ${PROVIDER_REGISTRATION_SLEEP_SECONDS}s (${attempt}/${PROVIDER_REGISTRATION_MAX_ATTEMPTS})"
+    sleep "$PROVIDER_REGISTRATION_SLEEP_SECONDS"
+  done
+
+  echo "ERROR: Resource provider $namespace did not become Registered."
+  echo "ERROR: Last state: $state"
+  exit 1
+}
+
+echo ""
+echo "==> Resource Providers"
+for namespace in "${REQUIRED_RESOURCE_PROVIDERS[@]}"; do
+  wait_for_provider_registration "$namespace"
+done
 
 # ------------------------------------------------------------
 # 1) Create a resource group
@@ -215,14 +274,6 @@ echo "WARNING: Open Azure Portal and replace placeholder values for:"
 for secret_name in "${REQUIRED_SECRETS[@]}"; do
   echo " - $secret_name"
 done
-
-# ------------------------------------------------------------
-# 6) Register storage provider 
-# ------------------------------------------------------------
-echo ""
-echo "==> Step 6: Register Storage Resource Provider"
-az provider register --namespace Microsoft.Storage
-echo "Microsoft.Storage provider registered"
 
 # ------------------------------------------------------------
 # 7) Create backend storage
