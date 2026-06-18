@@ -22,7 +22,7 @@ spec:
         - cat
       tty: true
     - name: kubectl
-      image: bitnami/kubectl:1.34
+      image: bitnami/kubectl:1.34.0
       command:
         - cat
       tty: true
