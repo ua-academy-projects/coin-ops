@@ -4,7 +4,6 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_NAME="${PROJECT_NAME:-azure-aks-jenkins}"
 ENVIRONMENT="${ENVIRONMENT:-dev}"
-LOCATION="${AZURE_LOCATION:-westeurope}"
 TF_DIR="${ROOT_DIR}/terraform"
 ENV_DIR="${ROOT_DIR}/environments/${ENVIRONMENT}"
 GENERATED_DIR="${ROOT_DIR}/.generated"
@@ -13,7 +12,13 @@ BACKEND_CONFIG_PATH="${GENERATED_DIR}/backend.hcl"
 SP_ENV_PATH="${GENERATED_DIR}/terraform-sp.env"
 REPO_ROOT="$(cd "${ROOT_DIR}/.." && pwd)"
 JENKINS_DESTROY_SCRIPT="${REPO_ROOT}/scripts/destroy-jenkins-job.sh"
+LEGACY_CONFIG_PATH="${REPO_ROOT}/terraform.gcp.aws/config.yml"
 
+CONFIG_AZURE_SUBSCRIPTION_ID=""
+CONFIG_AZURE_LOCATION=""
+CONFIG_AZURE_MONITORING_ALERT_EMAIL=""
+
+LOCATION="${AZURE_LOCATION:-}"
 TARGET_SUBSCRIPTION_ID="${AZURE_SUBSCRIPTION_ID:-}"
 BACKEND_RG_NAME="${TF_BACKEND_RESOURCE_GROUP:-${PROJECT_NAME}-${ENVIRONMENT}-tfstate-rg}"
 BACKEND_CONTAINER_NAME="${TF_BACKEND_CONTAINER:-tfstate}"
@@ -23,7 +28,7 @@ AKS_KUBERNETES_VERSION="${AKS_KUBERNETES_VERSION:-1.34.8}"
 AKS_NODE_COUNT="${AKS_NODE_COUNT:-2}"
 AKS_NODE_VM_SIZE="${AKS_NODE_VM_SIZE:-Standard_D2s_v4}"
 LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-$(git -C "${REPO_ROOT}" config user.email || true)}"
-ALERT_EMAIL="${ALERT_EMAIL:-$(git -C "${REPO_ROOT}" config user.email || true)}"
+ALERT_EMAIL="${ALERT_EMAIL:-}"
 JENKINS_ADMIN_USERNAME="${JENKINS_ADMIN_USERNAME:-admin}"
 APP_NAMESPACE="${APP_NAMESPACE:-apps}"
 JENKINS_NAMESPACE="${JENKINS_NAMESPACE:-jenkins}"
@@ -50,6 +55,49 @@ fail() {
   exit 1
 }
 
+extract_config_value() {
+  local scope="$1"
+  local section="$2"
+  local key="$3"
+
+  awk -v scope="${scope}" -v section="${section}" -v key="${key}" '
+    $1 == scope ":" { in_scope=1; next }
+    in_scope && $1 == section ":" { in_section=1; next }
+    in_scope && in_section && $1 == key ":" {
+      value=$0
+      sub(/^[^:]+:[[:space:]]*/, "", value)
+      gsub(/"/, "", value)
+      print value
+      exit
+    }
+    in_scope && in_section && /^[^[:space:]]/ { exit }
+    in_scope && !in_section && /^[^[:space:]]/ && $1 != section ":" { exit }
+  ' "${LEGACY_CONFIG_PATH}"
+}
+
+extract_nested_config_value() {
+  local scope="$1"
+  local section="$2"
+  local subsection="$3"
+  local key="$4"
+
+  awk -v scope="${scope}" -v section="${section}" -v subsection="${subsection}" -v key="${key}" '
+    $1 == scope ":" { in_scope=1; next }
+    in_scope && $1 == section ":" { in_section=1; next }
+    in_scope && in_section && $1 == subsection ":" { in_subsection=1; next }
+    in_scope && in_section && in_subsection && $1 == key ":" {
+      value=$0
+      sub(/^[^:]+:[[:space:]]*/, "", value)
+      gsub(/"/, "", value)
+      print value
+      exit
+    }
+    in_scope && in_section && in_subsection && /^[^[:space:]]/ { exit }
+    in_scope && in_section && !in_subsection && /^[^[:space:]]/ && $1 != subsection ":" { exit }
+    in_scope && !in_section && /^[^[:space:]]/ && $1 != section ":" { exit }
+  ' "${LEGACY_CONFIG_PATH}"
+}
+
 require_commands() {
   local missing=()
   for cmd in "${required_commands[@]}"; do
@@ -61,6 +109,20 @@ require_commands() {
   if ((${#missing[@]} > 0)); then
     fail "Missing prerequisites: ${missing[*]}"
   fi
+}
+
+load_legacy_config() {
+  if [[ ! -f "${LEGACY_CONFIG_PATH}" ]]; then
+    return
+  fi
+
+  CONFIG_AZURE_SUBSCRIPTION_ID="$(extract_config_value "project" "azure" "subscription_id")"
+  CONFIG_AZURE_LOCATION="$(extract_config_value "project" "azure" "location")"
+  CONFIG_AZURE_MONITORING_ALERT_EMAIL="$(extract_nested_config_value "project" "azure" "monitoring" "alert_email")"
+
+  TARGET_SUBSCRIPTION_ID="${TARGET_SUBSCRIPTION_ID:-${CONFIG_AZURE_SUBSCRIPTION_ID}}"
+  LOCATION="${LOCATION:-${CONFIG_AZURE_LOCATION}}"
+  ALERT_EMAIL="${ALERT_EMAIL:-${CONFIG_AZURE_MONITORING_ALERT_EMAIL}}"
 }
 
 ensure_azure_login() {
@@ -219,6 +281,7 @@ delete_terraform_service_principal() {
 
 main() {
   require_commands
+  load_legacy_config
   ensure_azure_login
   select_subscription
   load_subscription_context
