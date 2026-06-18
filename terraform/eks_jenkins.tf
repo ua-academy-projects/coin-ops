@@ -1,3 +1,4 @@
+
 resource "random_password" "jenkins_admin" {
   length  = 24
   special = false

@@ -58,27 +58,22 @@ provider "azurerm" {
   resource_provider_registrations = "none"
 }
 
+data "aws_eks_cluster_auth" "main" {
+  name = module.aws_eks.cluster_name
+}
 
 provider "helm" {
   kubernetes {
     host                   = module.aws_eks.cluster_endpoint
     cluster_ca_certificate = base64decode(module.aws_eks.cluster_ca)
-    exec {
-      api_version = "client.authentication.k8s.io/v1beta1"
-      args        = ["eks", "get-token", "--cluster-name", module.aws_eks.cluster_name]
-      command     = "aws"
-    }
+    token                  = data.aws_eks_cluster_auth.main.token
   }
 }
 
 provider "kubernetes" {
   host                   = module.aws_eks.cluster_endpoint
   cluster_ca_certificate = base64decode(module.aws_eks.cluster_ca)
-  exec {
-    api_version = "client.authentication.k8s.io/v1beta1"
-    args        = ["eks", "get-token", "--cluster-name", module.aws_eks.cluster_name]
-    command     = "aws"
-  }
+  token                  = data.aws_eks_cluster_auth.main.token
 }
 
 provider "cloudflare" {
