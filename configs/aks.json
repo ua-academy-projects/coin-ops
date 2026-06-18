@@ -19,6 +19,35 @@
       }
     }
   },
+  "secrets": {
+    "db_password": {
+      "secret_id": "db-password"
+    }
+  },
+  "sql": {
+    "placement": "primary",
+    "instance": {
+      "name": "coinops-postgres",
+      "edition": "enterprise",
+      "database_version": "postgres_16",
+      "instance_type": "economical",
+      "availability_type": "single_zone",
+      "disk_type": "hdd",
+      "disk_size": 32,
+      "disk_autoresize": true,
+      "deletion_protection": false,
+      "backup_enabled": true,
+      "pitr_enabled": false,
+      "private_range_name": "coinops-postgres-private-range",
+      "private_range_cidr": 24
+    },
+    "database": {
+      "name": "cognitor"
+    },
+    "user": {
+      "name": "cognitor"
+    }
+  },
   "aks": {
     "name": "coinops-aks",
     "dns_prefix": "coinops",
