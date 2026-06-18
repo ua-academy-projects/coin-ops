@@ -11,3 +11,7 @@ ingress:
   enabled: false
   middlewares:
     enabled: false
+
+ui:
+  proxyConfig:
+    enabled: true

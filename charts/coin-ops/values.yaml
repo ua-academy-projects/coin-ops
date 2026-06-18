@@ -216,6 +216,9 @@ ui:
   enabled: true
   name: ui
   replicas: 1
+  proxyConfig:
+    enabled: false
+    configMapName: ui-nginx-config
   image:
     repository: ghcr.io/ua-academy-projects/coin-ops-ui
     tag: shabat-latest
