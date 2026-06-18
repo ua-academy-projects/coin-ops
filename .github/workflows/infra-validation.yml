@@ -2,9 +2,9 @@ name: Infrastructure Validation
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - volynets-infra-dev
+# push:
+#   branches:
+#     - volynets-infra-dev
 
 # -> restore this trigger block when the workflow is ready for shared branches
 # on:
