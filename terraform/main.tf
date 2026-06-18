@@ -211,8 +211,6 @@ module "aws_codebuild" {
   aws_account_id          = var.aws_account_id
   db_password             = var.db_password
   ssh_public_key_content  = file(var.ssh_public_key_path)
-  cloudflare_api_token = var.cloudflare_api_token
-  github_token         = var.github_token
 }
 
 module "aws_irsa" {
