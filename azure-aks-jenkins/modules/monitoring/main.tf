@@ -49,6 +49,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "node_cpu_high" {
       | where TimeGenerated > ago(${var.heartbeat_window_minutes}m)
       | summarize AvgCpu = avg(CounterValue)
     KQL
+    metric_measure_column   = "AvgCpu"
     operator                = "GreaterThan"
     threshold               = var.cpu_alert_threshold
     time_aggregation_method = "Average"
