@@ -33,6 +33,11 @@ spec:
                 name: {{ include "coin-ops.fullname" . }}-config
             - secretRef:
                 name: {{ include "coin-ops.fullname" . }}-secret
+          env:
+            - name: PROXY_UPSTREAM
+              value: "http://{{ include "coin-ops.fullname" . }}-proxy:{{ .Values.proxy.service.port }}/"
+            - name: HISTORY_UPSTREAM
+              value: "http://{{ include "coin-ops.fullname" . }}-history-api:{{ .Values.historyApi.service.port }}/"
           readinessProbe:
             httpGet:
               path: {{ .Values.readinessProbe.path }}

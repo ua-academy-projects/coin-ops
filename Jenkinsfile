@@ -140,6 +140,22 @@ EOF
               --destination "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG_SHA}" \
               --destination "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG_BUILD}" \
               --cache=true
+
+            /kaniko/executor \
+              --context "${WORKSPACE}/proxy" \
+              --dockerfile "${WORKSPACE}/proxy/Dockerfile" \
+              --destination "${ACR_LOGIN_SERVER}/coin-ops-proxy:${IMAGE_TAG}" \
+              --destination "${ACR_LOGIN_SERVER}/coin-ops-proxy:${IMAGE_TAG_SHA}" \
+              --destination "${ACR_LOGIN_SERVER}/coin-ops-proxy:${IMAGE_TAG_BUILD}" \
+              --cache=true
+
+            /kaniko/executor \
+              --context "${WORKSPACE}/history" \
+              --dockerfile "${WORKSPACE}/history/Dockerfile.api" \
+              --destination "${ACR_LOGIN_SERVER}/coin-ops-history-api:${IMAGE_TAG}" \
+              --destination "${ACR_LOGIN_SERVER}/coin-ops-history-api:${IMAGE_TAG_SHA}" \
+              --destination "${ACR_LOGIN_SERVER}/coin-ops-history-api:${IMAGE_TAG_BUILD}" \
+              --cache=true
             '''
           }
         }
@@ -191,6 +207,10 @@ EOF
               -f "${CHART_DIR}/values-prod.yaml" \
               --set-string image.repository="${ACR_LOGIN_SERVER}/${IMAGE_NAME}" \
               --set-string image.tag="${IMAGE_TAG}" \
+              --set-string proxy.image.repository="${ACR_LOGIN_SERVER}/coin-ops-proxy" \
+              --set-string proxy.image.tag="${IMAGE_TAG}" \
+              --set-string historyApi.image.repository="${ACR_LOGIN_SERVER}/coin-ops-history-api" \
+              --set-string historyApi.image.tag="${IMAGE_TAG}" \
               --set-string ingress.host="${APP_HOST}" \
               --set-string ingress.tls.secretName="${INGRESS_TLS_SECRET_NAME}" \
               --atomic \
@@ -279,6 +299,19 @@ EOF
             --retry-delay 10 \
             --retry-all-errors \
             "https://${APP_HOST}"
+
+          echo "Verifying proxied API routes."
+          curl --fail --silent --show-error \
+            --retry 30 \
+            --retry-delay 10 \
+            --retry-all-errors \
+            "https://${APP_HOST}/api/health"
+
+          curl --fail --silent --show-error \
+            --retry 30 \
+            --retry-delay 10 \
+            --retry-all-errors \
+            "https://${APP_HOST}/history-api/health"
           '''
         }
       }

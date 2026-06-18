@@ -5,6 +5,41 @@ image:
   tag: latest
   pullPolicy: IfNotPresent
 
+proxy:
+  image:
+    repository: ""
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    port: 8080
+
+historyApi:
+  image:
+    repository: ""
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    port: 8000
+
+postgres:
+  image: postgres:16-alpine
+  service:
+    port: 5432
+  auth:
+    database: coinops
+    username: coinops
+    password: change-me-postgres
+
+redis:
+  image: redis:7-alpine
+  service:
+    port: 6379
+
+rabbitmq:
+  image: rabbitmq:3-alpine
+  service:
+    port: 5672
+
 service:
   type: ClusterIP
   port: 80
