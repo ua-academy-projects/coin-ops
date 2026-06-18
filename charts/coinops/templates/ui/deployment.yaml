@@ -15,7 +15,7 @@ spec:
         app: {{ .Values.ui.name }}
     spec:
       imagePullSecrets:
-        - name: gchr-pull
+        - name: ghcr-pull
       containers:
         - name: ui
           image: {{ .Values.global.imageRegistry }}/{{ .Values.ui.image }}:{{ .Values.global.imageTag }}

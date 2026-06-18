@@ -15,7 +15,7 @@ spec:
         app: {{ .Values.historyConsumer.name }}
     spec:
       imagePullSecrets:
-        - name: gchr-pull
+        - name: ghcr-pull
       initContainers:
         - name: wait-for-postgres
           image: postgres:16-alpine

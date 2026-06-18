@@ -15,7 +15,7 @@ spec:
         app: {{ .Values.historyApi.name }}
     spec:
       imagePullSecrets:
-        - name: gchr-pull
+        - name: ghcr-pull
       containers:
         - name: history-api
           image: {{ .Values.global.imageRegistry }}/{{ .Values.historyApi.image }}:{{ .Values.global.imageTag }}

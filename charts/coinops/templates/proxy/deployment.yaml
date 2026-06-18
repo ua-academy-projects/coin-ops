@@ -17,7 +17,7 @@ spec:
         app: {{.Values.proxy.name}}  # put the label on the pod when created
     spec:
       imagePullSecrets:
-        - name: gchr-pull
+        - name: ghcr-pull
       containers:
         - name: proxy
           image: {{.Values.global.imageRegistry}}/{{.Values.proxy.image}}:{{.Values.global.imageTag}}
