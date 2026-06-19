@@ -20,32 +20,19 @@ resource "helm_release" "this" {
   ]
 }
 
-resource "kubernetes_manifest" "cluster_issuer" {
-  manifest = {
-    apiVersion = "cert-manager.io/v1"
-    kind       = "ClusterIssuer"
-    metadata = {
-      name = var.cert_manager.cluster_issuer_name
-    }
-    spec = {
-      acme = {
-        server = var.cert_manager.acme_server
-        email  = var.acme_email
-        privateKeySecretRef = {
-          name = "${var.cert_manager.cluster_issuer_name}-account-key"
-        }
-        solvers = [
-          {
-            http01 = {
-              ingress = {
-                class = var.cert_manager.ingress_class_name
-              }
-            }
-          }
-        ]
-      }
-    }
-  }
+resource "helm_release" "cluster_issuer" {
+  name      = var.cert_manager.cluster_issuer_name
+  chart     = "${path.module}/cluster_issuer"
+  namespace = kubernetes_namespace.this.metadata[0].name
+
+  values = [
+    yamlencode({
+      name         = var.cert_manager.cluster_issuer_name
+      acmeServer   = var.cert_manager.acme_server
+      acmeEmail    = var.acme_email
+      ingressClass = var.cert_manager.ingress_class_name
+    })
+  ]
 
   depends_on = [helm_release.this]
 }
