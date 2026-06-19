@@ -9,7 +9,7 @@
     "runtime_backend": "external",
     "image_registry": "ghcr.io/ua-academy-projects",
     "image_tag": "shabat-latest",
-    "app_domain": "coinops.local",
+    "app_domain": "coinops.arturvolynets.pp.ua",
     "tls_mode": "off"
   },
   "networks": {
