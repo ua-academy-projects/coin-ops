@@ -9,6 +9,20 @@ resource "azurerm_log_analytics_workspace" "this" {
   retention_in_days   = 30
 }
 
+resource "azurerm_monitor_action_group" "this" {
+  count = var.alert_email != null && var.alert_email != "" ? 1 : 0
+
+  name                = "${var.name}-alerts"
+  resource_group_name = var.resource_group_name
+  short_name          = "coinopsmon"
+
+  email_receiver {
+    name                    = "primary"
+    email_address           = var.alert_email
+    use_common_alert_schema = true
+  }
+}
+
 resource "azurerm_virtual_machine_extension" "azure_monitor_agent" {
   for_each = var.vm_ids
 
@@ -122,6 +136,43 @@ resource "azurerm_monitor_metric_alert" "vm_cpu_high" {
     operator         = "GreaterThan"
     threshold        = 80
   }
+
+  dynamic "action" {
+    for_each = local.action_group_ids
+
+    content {
+      action_group_id = action.value
+    }
+  }
+}
+
+resource "azurerm_monitor_metric_alert" "aks" {
+  for_each = local.aks_metric_alerts
+
+  name                = each.value.name
+  resource_group_name = var.resource_group_name
+  scopes              = [var.aks_cluster_id]
+  description         = each.value.description
+  severity            = each.value.severity
+  frequency           = each.value.frequency
+  window_size         = each.value.window_size
+  enabled             = true
+
+  criteria {
+    metric_namespace = "Microsoft.ContainerService/managedClusters"
+    metric_name      = each.value.metric_name
+    aggregation      = each.value.aggregation
+    operator         = each.value.operator
+    threshold        = each.value.threshold
+  }
+
+  dynamic "action" {
+    for_each = local.action_group_ids
+
+    content {
+      action_group_id = action.value
+    }
+  }
 }
 
 resource "azurerm_monitor_metric_alert" "postgresql_cpu_high" {
@@ -142,6 +193,14 @@ resource "azurerm_monitor_metric_alert" "postgresql_cpu_high" {
     aggregation      = "Average"
     operator         = "GreaterThan"
     threshold        = 80
+  }
+
+  dynamic "action" {
+    for_each = local.action_group_ids
+
+    content {
+      action_group_id = action.value
+    }
   }
 }
 
@@ -164,6 +223,14 @@ resource "azurerm_monitor_metric_alert" "postgresql_storage_high" {
     operator         = "GreaterThan"
     threshold        = 80
   }
+
+  dynamic "action" {
+    for_each = local.action_group_ids
+
+    content {
+      action_group_id = action.value
+    }
+  }
 }
 
 resource "azurerm_monitor_metric_alert" "postgresql_connections_high" {
@@ -184,6 +251,14 @@ resource "azurerm_monitor_metric_alert" "postgresql_connections_high" {
     aggregation      = "Average"
     operator         = "GreaterThan"
     threshold        = 80
+  }
+
+  dynamic "action" {
+    for_each = local.action_group_ids
+
+    content {
+      action_group_id = action.value
+    }
   }
 }
 
@@ -206,6 +281,27 @@ resource "azurerm_monitor_metric_alert" "postgresql_failed_connections" {
     operator         = "GreaterThan"
     threshold        = 0
   }
+
+  dynamic "action" {
+    for_each = local.action_group_ids
+
+    content {
+      action_group_id = action.value
+    }
+  }
+}
+
+resource "azurerm_application_insights_workbook" "this" {
+  count = var.workbook_enabled && var.aks_monitoring_enabled ? 1 : 0
+
+  name                = var.workbook_name
+  resource_group_name = var.resource_group_name
+  location            = var.location
+  display_name        = "Coin-Ops AKS Monitoring"
+  description         = "Azure-native dashboard for Coin-Ops AKS, PostgreSQL, and control-plane logs."
+  category            = "workbook"
+  source_id           = lower(azurerm_log_analytics_workspace.this.id)
+  data_json           = jsonencode(local.workbook_data)
 }
 
 # -> commented because consumes a lot

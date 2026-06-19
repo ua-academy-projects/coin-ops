@@ -12,6 +12,11 @@ variable "name" {
   type = string
 }
 
+variable "alert_email" {
+  type    = string
+  default = null
+}
+
 variable "vm_ids" {
   type = map(string)
 }
@@ -24,6 +29,21 @@ variable "aks_cluster_id" {
 variable "aks_monitoring_enabled" {
   type    = bool
   default = false
+}
+
+variable "aks_alerts_enabled" {
+  type    = bool
+  default = true
+}
+
+variable "workbook_enabled" {
+  type    = bool
+  default = true
+}
+
+variable "workbook_name" {
+  type    = string
+  default = "9f9f5105-242b-4fc4-bfdf-3b5ddf2cf6ec"
 }
 
 variable "aks_log_categories" {

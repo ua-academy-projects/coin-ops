@@ -14,6 +14,7 @@ locals {
   config_cert_manager         = try(local.config.cert_manager, null)
   config_ingress_controller   = try(local.config.ingress_controller, null)
   config_jenkins              = try(local.config.jenkins, null)
+  config_monitoring           = try(local.config.monitoring, {})
   config_sql                  = try(local.config.sql, null)
   config_nat_route            = try(local.config.nat_route, null)
   config_ssh_user             = local.config.ssh.user

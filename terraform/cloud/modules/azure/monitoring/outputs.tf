@@ -15,6 +15,20 @@ output "workspace_customer_id" {
 output "aks_diagnostic_setting_name" {
   value = try(azurerm_monitor_diagnostic_setting.aks[0].name, null)
 }
+
+output "action_group_name" {
+  value = try(azurerm_monitor_action_group.this[0].name, null)
+}
+
+output "aks_alert_names" {
+  value = {
+    for key, alert in azurerm_monitor_metric_alert.aks : key => alert.name
+  }
+}
+
+output "workbook_display_name" {
+  value = try(azurerm_application_insights_workbook.this[0].display_name, null)
+}
 #
 # output "application_insights_id" {
 #   value = try(azurerm_application_insights.this[0].id, null)

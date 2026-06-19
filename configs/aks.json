@@ -98,6 +98,9 @@
     "acme_server": "https://acme-v02.api.letsencrypt.org/directory",
     "ingress_class_name": "traefik"
   },
+  "monitoring": {
+    "alert_email": "amorgenstern572@gmail.com"
+  },
   "jenkins": {
     "namespace": "jenkins",
     "release_name": "jenkins",

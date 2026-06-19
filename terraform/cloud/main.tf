@@ -139,6 +139,7 @@ module "azure_monitoring" {
   vm_ids                                      = try(module.azure_instances[0].vm_ids, {})
   aks_cluster_id                              = try(module.azure_aks[0].id, null)
   aks_monitoring_enabled                      = local.enable_azure_aks
+  alert_email                                 = try(local.config_monitoring.alert_email, null)
   postgresql_server_id                        = try(module.azure_sql[0].server_id, null)
   postgresql_monitoring_enabled               = local.enable_azure_sql
   frontend_public_ip                          = local.monitoring_frontend_public_ip

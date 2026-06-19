@@ -125,6 +125,18 @@ output "monitoring_aks_diagnostic_setting_name" {
   value = try(module.azure_monitoring[0].aks_diagnostic_setting_name, null)
 }
 
+output "monitoring_action_group_name" {
+  value = try(module.azure_monitoring[0].action_group_name, null)
+}
+
+output "monitoring_aks_alert_names" {
+  value = try(module.azure_monitoring[0].aks_alert_names, {})
+}
+
+output "monitoring_workbook_display_name" {
+  value = try(module.azure_monitoring[0].workbook_display_name, null)
+}
+
 output "monitoring_application_insights_id" {
   value = try(module.azure_monitoring[0].application_insights_id, null)
 }
