@@ -60,6 +60,15 @@ module "cert_manager" {
   depends_on = [module.traefik]
 }
 
+module "headlamp" {
+  source = "./modules/kubernetes/headlamp"
+  count  = local.enable_headlamp ? 1 : 0
+
+  headlamp = local.config_headlamp
+
+  depends_on = [module.azure_aks]
+}
+
 module "azure_workload_identity" {
   source = "./modules/azure/workload_identity"
   count  = local.enable_jenkins ? 1 : 0

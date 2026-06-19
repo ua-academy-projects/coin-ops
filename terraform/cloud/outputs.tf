@@ -77,6 +77,22 @@ output "cert_manager_status" {
   value = try(module.cert_manager[0].status, null)
 }
 
+output "headlamp_namespace" {
+  value = try(module.headlamp[0].namespace, null)
+}
+
+output "headlamp_release_name" {
+  value = try(module.headlamp[0].release_name, null)
+}
+
+output "headlamp_status" {
+  value = try(module.headlamp[0].status, null)
+}
+
+output "headlamp_service_account_name" {
+  value = try(module.headlamp[0].service_account_name, null)
+}
+
 output "cloud_sql_instance_name" {
   value = local.default_cloud == "gcp" ? try(module.gcp_sql[0].instance_name, null) : (
     local.default_cloud == "azure" ? try(module.azure_sql[0].instance_name, null) : (

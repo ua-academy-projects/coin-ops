@@ -101,6 +101,16 @@
   "monitoring": {
     "alert_email": "amorgenstern572@gmail.com"
   },
+  "headlamp": {
+    "namespace": "headlamp",
+    "release_name": "headlamp",
+    "chart_repository": "https://kubernetes-sigs.github.io/headlamp/",
+    "chart_name": "headlamp",
+    "chart_version": "0.43.0",
+    "service_type": "ClusterIP",
+    "service_account_name": "headlamp-viewer",
+    "cluster_role_name": "view"
+  },
   "jenkins": {
     "namespace": "jenkins",
     "release_name": "jenkins",
