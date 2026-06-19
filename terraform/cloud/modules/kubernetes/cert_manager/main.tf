@@ -16,33 +16,36 @@ resource "helm_release" "this" {
       crds = {
         enabled = true
       }
-      extraObjects = [
-        yamlencode({
-          apiVersion = "cert-manager.io/v1"
-          kind       = "ClusterIssuer"
-          metadata = {
-            name = var.cert_manager.cluster_issuer_name
-          }
-          spec = {
-            acme = {
-              server = var.cert_manager.acme_server
-              email  = var.acme_email
-              privateKeySecretRef = {
-                name = "${var.cert_manager.cluster_issuer_name}-account-key"
-              }
-              solvers = [
-                {
-                  http01 = {
-                    ingress = {
-                      class = var.cert_manager.ingress_class_name
-                    }
-                  }
-                }
-              ]
-            }
-          }
-        })
-      ]
     })
   ]
+}
+
+resource "kubernetes_manifest" "cluster_issuer" {
+  manifest = {
+    apiVersion = "cert-manager.io/v1"
+    kind       = "ClusterIssuer"
+    metadata = {
+      name = var.cert_manager.cluster_issuer_name
+    }
+    spec = {
+      acme = {
+        server = var.cert_manager.acme_server
+        email  = var.acme_email
+        privateKeySecretRef = {
+          name = "${var.cert_manager.cluster_issuer_name}-account-key"
+        }
+        solvers = [
+          {
+            http01 = {
+              ingress = {
+                class = var.cert_manager.ingress_class_name
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+
+  depends_on = [helm_release.this]
 }
