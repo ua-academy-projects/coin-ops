@@ -2,6 +2,8 @@
 # Azure
 # ------------------------------------------------------------
 
+# Azure foundation
+
 module "azure_network" {
   source = "./modules/azure/network"
   count  = local.enable_azure_network ? 1 : 0
@@ -19,6 +21,25 @@ module "azure_aks" {
   subnet_ids          = module.azure_network[0].subnetwork_ids
   cluster             = local.config_aks
 }
+
+module "azure_sql" {
+  source = "./modules/azure/sql"
+  count  = local.enable_azure_sql ? 1 : 0
+
+  resource_group_name   = local.config_azure_resource_group
+  location              = local.config_azure_location
+  network_name          = module.azure_network[0].network_name
+  network_id            = module.azure_network[0].network_id
+  network_cidr          = local.networks_by_cloud.azure.cidr
+  key_vault_name        = local.config_azure_key_vault_name
+  db_password_secret_id = local.config_secrets["db_password"].secret_id
+  placement             = local.config_sql.placement
+  instance              = local.config_sql.instance
+  database              = local.config_sql.database
+  user                  = local.config_sql.user
+}
+
+# Kubernetes platform on AKS
 
 module "traefik" {
   source = "./modules/kubernetes/traefik"
@@ -68,6 +89,8 @@ module "jenkins" {
   ]
 }
 
+# Azure VM deployment path
+
 module "azure_security" {
   source = "./modules/azure/security"
   count  = local.enable_azure_security ? 1 : 0
@@ -94,23 +117,6 @@ module "azure_instances" {
   workloads                      = local.workloads_by_cloud.azure
 }
 
-module "azure_sql" {
-  source = "./modules/azure/sql"
-  count  = local.enable_azure_sql ? 1 : 0
-
-  resource_group_name   = local.config_azure_resource_group
-  location              = local.config_azure_location
-  network_name          = module.azure_network[0].network_name
-  network_id            = module.azure_network[0].network_id
-  network_cidr          = local.networks_by_cloud.azure.cidr
-  key_vault_name        = local.config_azure_key_vault_name
-  db_password_secret_id = local.config_secrets["db_password"].secret_id
-  placement             = local.config_sql.placement
-  instance              = local.config_sql.instance
-  database              = local.config_sql.database
-  user                  = local.config_sql.user
-}
-
 module "azure_routing" {
   source = "./modules/azure/routing"
   count  = local.enable_azure_routing ? 1 : 0
@@ -120,6 +126,8 @@ module "azure_routing" {
   next_hop_private_ips = module.azure_instances[0].private_ips
   private_subnet_ids   = module.azure_network[0].private_subnet_ids
 }
+
+# Azure observability
 
 module "azure_monitoring" {
   source = "./modules/azure/monitoring"
