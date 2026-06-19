@@ -52,7 +52,6 @@ spec:
                             --namespace ${NAMESPACE} \
                             --create-namespace \
                             --values eks-migration/helm-chart/values-aws.yaml \
-                            --set image.tag=\${GIT_COMMIT} \
                             --wait --timeout 5m
                     """
                 }
