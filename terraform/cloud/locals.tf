@@ -4,10 +4,7 @@
 #    renders ansible inventory
 
 locals {
-
-
   # shared defaults
-
   config_path = "${path.module}/../../configs/${var.config_name}.json"
   config      = jsondecode(file(local.config_path))
 
@@ -29,9 +26,7 @@ locals {
   supported_clouds = ["gcp", "azure", "aws"]
   default_cloud    = local.config.cloud
 
-
   # cloud-specific resource selection
-
   networks = {
     for name, network in local.config.networks : name => merge(network, {
       cloud = coalesce(try(network.cloud, null), local.config.cloud)
@@ -63,9 +58,7 @@ locals {
     }
   }
 
-
   # module enablement
-
   enable_azure_network   = local.networks_by_cloud.azure != null
   enable_azure_workloads = local.enable_azure_network && length(local.workloads_by_cloud.azure) > 0
   enable_azure_aks       = local.enable_azure_network && local.config_aks != null && local.default_cloud == "azure"
@@ -89,9 +82,7 @@ locals {
   enable_aws_sql       = local.enable_aws_network && local.config_sql != null && local.default_cloud == "aws"
   enable_aws_routing   = local.enable_aws_workloads && local.config_nat_route != null && local.default_cloud == "aws"
 
-
   # shared instance outputs
-
   private_ips = merge(
     try(module.gcp_instances[0].private_ips, {}),
     try(module.azure_instances[0].private_ips, {}),
@@ -103,9 +94,7 @@ locals {
     try(module.aws_instances[0].public_ips, {})
   )
 
-
   # inventory model
-
   inventory_role_names = sort(distinct(flatten([
     for _, workload in local.workloads : workload.roles
   ])))
@@ -166,9 +155,7 @@ locals {
     }
   }
 
-
   # ansible inventory
-
   inventory = {
     all = {
       vars     = local.inventory_vars

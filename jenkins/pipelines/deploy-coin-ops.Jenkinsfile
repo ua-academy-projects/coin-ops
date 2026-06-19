@@ -92,22 +92,17 @@ spec:
               --output none
           '''
           script {
-            env.DB_PASSWORD = sh(
-              script: "az keyvault secret show --vault-name \"$AZ_KEYVAULT_NAME\" --name \"$DB_PASSWORD_SECRET\" --query value -o tsv",
-              returnStdout: true
-            ).trim()
-            env.RABBITMQ_PASSWORD = sh(
-              script: "az keyvault secret show --vault-name \"$AZ_KEYVAULT_NAME\" --name \"$RABBITMQ_PASSWORD_SECRET\" --query value -o tsv",
-              returnStdout: true
-            ).trim()
-            env.GHCR_USERNAME = sh(
-              script: "az keyvault secret show --vault-name \"$AZ_KEYVAULT_NAME\" --name \"$GHCR_USERNAME_SECRET\" --query value -o tsv",
-              returnStdout: true
-            ).trim()
-            env.GHCR_TOKEN = sh(
-              script: "az keyvault secret show --vault-name \"$AZ_KEYVAULT_NAME\" --name \"$GHCR_TOKEN_SECRET\" --query value -o tsv",
-              returnStdout: true
-            ).trim()
+            def keyVaultSecret = { secretName ->
+              sh(
+                script: "az keyvault secret show --vault-name \"$AZ_KEYVAULT_NAME\" --name \"${secretName}\" --query value -o tsv",
+                returnStdout: true
+              ).trim()
+            }
+
+            env.DB_PASSWORD = keyVaultSecret(env.DB_PASSWORD_SECRET)
+            env.RABBITMQ_PASSWORD = keyVaultSecret(env.RABBITMQ_PASSWORD_SECRET)
+            env.GHCR_USERNAME = keyVaultSecret(env.GHCR_USERNAME_SECRET)
+            env.GHCR_TOKEN = keyVaultSecret(env.GHCR_TOKEN_SECRET)
           }
         }
       }
@@ -151,13 +146,8 @@ spec:
         container('helm') {
           sh '''
             set -eu
-            TLS_ARGS=""
 
-            if [ "$TLS_MODE" = "letsencrypt" ]; then
-              TLS_ARGS="--set-string ingress.annotations.cert-manager\\.io/cluster-issuer=letsencrypt --set-string ingress.tls[0].secretName=coin-ops-tls --set-string ingress.tls[0].hosts[0]=$APP_DOMAIN"
-            fi
-
-            helm upgrade --install "$RELEASE_NAME" "$CHART_DIR" \
+            set -- \
               --namespace "$APP_NAMESPACE" \
               --values "$VALUES_FILE" \
               --set-string config.data.RUNTIME_BACKEND="$RUNTIME_BACKEND" \
@@ -169,8 +159,16 @@ spec:
               --set-string historyConsumer.image.repository="$IMAGE_REGISTRY/coin-ops-history-consumer" \
               --set-string historyConsumer.image.tag="$IMAGE_TAG" \
               --set-string ui.image.repository="$IMAGE_REGISTRY/coin-ops-ui" \
-              --set-string ui.image.tag="$IMAGE_TAG" \
-              $TLS_ARGS \
+              --set-string ui.image.tag="$IMAGE_TAG"
+
+            if [ "$TLS_MODE" = "letsencrypt" ]; then
+              set -- "$@" \
+                --set-string ingress.annotations.cert-manager\\.io/cluster-issuer=letsencrypt \
+                --set-string ingress.tls[0].secretName=coin-ops-tls \
+                --set-string ingress.tls[0].hosts[0]="$APP_DOMAIN"
+            fi
+
+            helm upgrade --install "$RELEASE_NAME" "$CHART_DIR" "$@" \
               --wait \
               --timeout 10m
           '''

@@ -25,6 +25,8 @@ resource "helm_release" "cluster_issuer" {
   chart     = "${path.module}/cluster_issuer"
   namespace = kubernetes_namespace.this.metadata[0].name
 
+  # The issuer is installed with a small local chart so Helm waits until
+  # cert-manager CRDs from the main release are available.
   values = [
     yamlencode({
       name         = var.cert_manager.cluster_issuer_name
