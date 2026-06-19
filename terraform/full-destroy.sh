@@ -582,6 +582,209 @@ PY
   done < <(sort -u "${bucket_candidates_file}")
 }
 
+aws_eks_cluster_name() {
+  python3 - <<'PY' "${TMP_TERRAFORM_DIR}/config"
+import json
+import pathlib
+import sys
+
+config_dir = pathlib.Path(sys.argv[1])
+general = json.loads((config_dir / "general.json").read_text(encoding="utf-8")).get("general", {})
+deploy = json.loads((config_dir / "deploy.json").read_text(encoding="utf-8")).get("deploy", {})
+print(deploy.get("eks", {}).get("cluster_name", f"{general.get('project_name', 'coin-ops')}-eks"))
+PY
+}
+
+list_aws_eks_public_ingress_allocation_ids() {
+  local addresses=()
+  mapfile -t addresses < <(terraform state list | grep 'aws_eip\.aws_eks_public_ingress' || true)
+
+  local address allocation_id
+  for address in "${addresses[@]}"; do
+    allocation_id="$(
+      terraform state show -no-color "${address}" \
+        | awk -F'= ' '
+            /^[[:space:]]*allocation_id[[:space:]]*=/ { gsub(/"/, "", $2); print $2; found=1; exit }
+            /^[[:space:]]*id[[:space:]]*=/ { fallback=$2 }
+            END {
+              if (!found && fallback != "") {
+                gsub(/"/, "", fallback)
+                print fallback
+              }
+            }
+          '
+    )"
+
+    [[ -n "${allocation_id}" ]] && printf '%s\n' "${allocation_id}"
+  done
+}
+
+wait_for_aws_eip_disassociated() {
+  local allocation_id="$1"
+  local attempts=60
+  local describe_output
+
+  for ((i = 1; i <= attempts; i++)); do
+    if ! describe_output="$(
+      aws ec2 describe-addresses \
+        --allocation-ids "${allocation_id}" \
+        --output json 2>/dev/null
+    )"; then
+      return 0
+    fi
+
+    if python3 - <<'PY' "${describe_output}"
+import json
+import sys
+
+addresses = json.loads(sys.argv[1]).get("Addresses", [])
+raise SystemExit(0 if not addresses or not addresses[0].get("AssociationId") else 1)
+PY
+    then
+      return 0
+    fi
+
+    sleep 10
+  done
+
+  echo "Timed out waiting for EIP ${allocation_id} to become disassociated." >&2
+  return 1
+}
+
+delete_aws_eks_load_balancers() {
+  if ! command -v aws >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local cluster_name
+  cluster_name="$(aws_eks_cluster_name)"
+  if [[ -z "${cluster_name}" ]]; then
+    return 0
+  fi
+
+  local load_balancers_file matching_lbs_file
+  load_balancers_file="$(mktemp "${TMP_ROOT}/aws-elbv2-load-balancers.XXXXXX.json")"
+  matching_lbs_file="$(mktemp "${TMP_ROOT}/aws-elbv2-matching-load-balancers.XXXXXX.txt")"
+
+  if ! aws elbv2 describe-load-balancers --output json >"${load_balancers_file}" 2>/dev/null; then
+    return 0
+  fi
+
+  python3 - <<'PY' "${load_balancers_file}" "${matching_lbs_file}" "${cluster_name}"
+import json
+import subprocess
+import sys
+
+load_balancers_path, output_path, cluster_name = sys.argv[1:]
+cluster_tag_key = f"kubernetes.io/cluster/{cluster_name}"
+
+with open(load_balancers_path, encoding="utf-8") as handle:
+    load_balancers = json.load(handle).get("LoadBalancers", [])
+
+arns = [lb.get("LoadBalancerArn", "") for lb in load_balancers if lb.get("LoadBalancerArn")]
+matches = []
+for i in range(0, len(arns), 20):
+    chunk = arns[i:i + 20]
+    if not chunk:
+        continue
+    result = subprocess.run(
+        ["aws", "elbv2", "describe-tags", "--resource-arns", *chunk, "--output", "json"],
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        continue
+    for description in json.loads(result.stdout).get("TagDescriptions", []):
+        tags = {tag.get("Key"): tag.get("Value") for tag in description.get("Tags", [])}
+        if tags.get(cluster_tag_key) == "owned":
+            matches.append(description.get("ResourceArn"))
+
+with open(output_path, "w", encoding="utf-8") as handle:
+    for arn in matches:
+        if arn:
+            handle.write(f"{arn}\n")
+PY
+
+  local lb_arn
+  if [[ -s "${matching_lbs_file}" ]]; then
+    echo "Deleting Kubernetes-managed AWS load balancers for EKS cluster ${cluster_name}..."
+    while IFS= read -r lb_arn; do
+      [[ -n "${lb_arn}" ]] || continue
+      echo "Deleting AWS load balancer ${lb_arn}..."
+      aws elbv2 delete-load-balancer --load-balancer-arn "${lb_arn}" >/dev/null || true
+    done <"${matching_lbs_file}"
+
+    while IFS= read -r lb_arn; do
+      [[ -n "${lb_arn}" ]] || continue
+      aws elbv2 wait load-balancers-deleted --load-balancer-arns "${lb_arn}" || true
+    done <"${matching_lbs_file}"
+  fi
+
+  local allocation_ids=()
+  mapfile -t allocation_ids < <(list_aws_eks_public_ingress_allocation_ids | sort -u)
+  local allocation_id
+  for allocation_id in "${allocation_ids[@]}"; do
+    [[ -n "${allocation_id}" ]] || continue
+    echo "Waiting for Kubernetes-managed load balancer to release EIP ${allocation_id}..."
+    wait_for_aws_eip_disassociated "${allocation_id}"
+  done
+
+  local target_groups_file matching_target_groups_file
+  target_groups_file="$(mktemp "${TMP_ROOT}/aws-elbv2-target-groups.XXXXXX.json")"
+  matching_target_groups_file="$(mktemp "${TMP_ROOT}/aws-elbv2-matching-target-groups.XXXXXX.txt")"
+
+  if ! aws elbv2 describe-target-groups --output json >"${target_groups_file}" 2>/dev/null; then
+    return 0
+  fi
+
+  python3 - <<'PY' "${target_groups_file}" "${matching_target_groups_file}" "${cluster_name}"
+import json
+import subprocess
+import sys
+
+target_groups_path, output_path, cluster_name = sys.argv[1:]
+cluster_tag_key = f"kubernetes.io/cluster/{cluster_name}"
+
+with open(target_groups_path, encoding="utf-8") as handle:
+    target_groups = json.load(handle).get("TargetGroups", [])
+
+arns = [group.get("TargetGroupArn", "") for group in target_groups if group.get("TargetGroupArn")]
+matches = []
+for i in range(0, len(arns), 20):
+    chunk = arns[i:i + 20]
+    if not chunk:
+        continue
+    result = subprocess.run(
+        ["aws", "elbv2", "describe-tags", "--resource-arns", *chunk, "--output", "json"],
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        continue
+    for description in json.loads(result.stdout).get("TagDescriptions", []):
+        tags = {tag.get("Key"): tag.get("Value") for tag in description.get("Tags", [])}
+        if tags.get(cluster_tag_key) == "owned":
+            matches.append(description.get("ResourceArn"))
+
+with open(output_path, "w", encoding="utf-8") as handle:
+    for arn in matches:
+        if arn:
+            handle.write(f"{arn}\n")
+PY
+
+  if [[ -s "${matching_target_groups_file}" ]]; then
+    echo "Deleting Kubernetes-managed AWS target groups for EKS cluster ${cluster_name}..."
+    local target_group_arn
+    while IFS= read -r target_group_arn; do
+      [[ -n "${target_group_arn}" ]] || continue
+      echo "Deleting AWS target group ${target_group_arn}..."
+      aws elbv2 delete-target-group --target-group-arn "${target_group_arn}" >/dev/null || true
+    done <"${matching_target_groups_file}"
+  fi
+}
+
 disable_gcp_sql_deletion_protection() {
   if ! command -v gcloud >/dev/null 2>&1; then
     return 0
@@ -984,6 +1187,7 @@ build_destroy_command() {
 }
 
 if [[ "${TARGET_CLOUD}" == "all" || "${TARGET_CLOUD}" == "aws" ]]; then
+  delete_aws_eks_load_balancers
   disable_aws_rds_deletion_protection
   force_delete_aws_secrets
   empty_aws_s3_buckets

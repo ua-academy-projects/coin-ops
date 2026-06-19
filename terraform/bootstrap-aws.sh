@@ -38,7 +38,7 @@ MAPPING_PATH="${SCRIPT_DIR}/config/cloud_mappings.json"
 CONFIG_DIR="${SCRIPT_DIR}/config"
 BACKEND_TEMPLATE_PATH="${SCRIPT_DIR}/backends/backend.aws.tf.tmpl"
 BACKEND_ACTIVE_PATH="${SCRIPT_DIR}/backend.active.tf"
-CONFIG_FILES=(clouds.json general.json deploy.json database.json dns.json secrets.json instances.json)
+CONFIG_FILES=(clouds.json general.json deploy.json database.json dns.json secrets.json instances.json observability.json)
 
 if [ ! -f "${MAPPING_PATH}" ]; then
   echo "Missing cloud mappings file: ${MAPPING_PATH}"
@@ -66,7 +66,7 @@ import sys
 config_dir = pathlib.Path(sys.argv[1])
 expression = sys.argv[2]
 data = {}
-for name in ("clouds.json", "general.json", "deploy.json", "database.json", "dns.json", "secrets.json", "instances.json"):
+for name in ("clouds.json", "general.json", "deploy.json", "database.json", "dns.json", "secrets.json", "instances.json", "observability.json"):
     with (config_dir / name).open(encoding="utf-8") as handle:
         data.update(json.load(handle))
 
@@ -87,6 +87,7 @@ STATE_BUCKET_PREFIX="$(read_config 'data["clouds"]["backends"]["aws"].get("bucke
 STATE_KEY="$(read_config 'data["clouds"]["backends"]["aws"].get("key", "infra/state/terraform.tfstate")')"
 EKS_CLUSTER_NAME="$(read_config 'data["deploy"].get("eks", {}).get("cluster_name", data["general"].get("project_name", "coin-ops") + "-eks")')"
 EKS_NODE_GROUP_NAME="$(read_config 'data["deploy"].get("eks", {}).get("node_group", {}).get("name", "system")')"
+CONTAINER_LOG_GROUP_NAME="$(read_config 'data.get("observability", {}).get("logs", {}).get("container_log_group_name", "/" + data["general"].get("project_name", "coin-ops") + "/kubernetes/containers")')"
 
 CALLER_IDENTITY="$(aws sts get-caller-identity --output json)"
 ACCOUNT_ID="$(python3 - <<'PY' "$CALLER_IDENTITY"
@@ -122,9 +123,19 @@ EKS_NODE_ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${EKS_CLUSTER_NAME}-${EKS_NOD
 EKS_EBS_CSI_ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${EKS_CLUSTER_NAME}-ebs-csi"
 EKS_OIDC_PROVIDER_ARN="arn:aws:iam::${ACCOUNT_ID}:oidc-provider/oidc.eks.${REGION}.amazonaws.com/id/*"
 EKS_CLUSTER_ARN="arn:aws:eks:${REGION}:${ACCOUNT_ID}:cluster/${EKS_CLUSTER_NAME}"
-K3S_CONTAINER_LOG_GROUP_NAME="/${PROJECT_NAME}/k3s/containers"
-K3S_CONTAINER_LOG_GROUP_BASE_ARN="arn:aws:logs:${REGION}:${ACCOUNT_ID}:log-group:${K3S_CONTAINER_LOG_GROUP_NAME}"
-K3S_CONTAINER_LOG_GROUP_ARN="arn:aws:logs:${REGION}:${ACCOUNT_ID}:log-group:${K3S_CONTAINER_LOG_GROUP_NAME}:*"
+CONTAINER_LOG_GROUP_RESOURCE_ARNS="$(python3 - <<'PY' "${REGION}" "${ACCOUNT_ID}" "${CONTAINER_LOG_GROUP_NAME}" "/${PROJECT_NAME}/k3s/containers"
+import json
+import sys
+
+region, account_id = sys.argv[1], sys.argv[2]
+log_group_names = sys.argv[3:]
+arns = []
+for name in log_group_names:
+    base_arn = f"arn:aws:logs:{region}:{account_id}:log-group:{name}"
+    arns.extend([base_arn, f"{base_arn}:*"])
+print(json.dumps(list(dict.fromkeys(arns))))
+PY
+)"
 OBSERVABILITY_ALERTS_TOPIC_ARN="arn:aws:sns:${REGION}:${ACCOUNT_ID}:${PROJECT_NAME}-observability-alerts"
 OBSERVABILITY_ALARM_ARN="arn:aws:cloudwatch:${REGION}:${ACCOUNT_ID}:alarm:${PROJECT_NAME}-*"
 CLOUDWATCH_AGENT_PARAMETER_NAME="/${PROJECT_NAME}/cloudwatch-agent/linux"
@@ -146,7 +157,7 @@ echo "Starting AWS bootstrap process in account ${ACCOUNT_ID}, region ${REGION}"
 echo "Active AWS identity: ${CALLER_ARN}"
 
 build_scoped_management_policy_document() {
-  python3 - <<'PY' "${CNPG_BACKUP_USER_ARN}" "${TARGET_USER_ARN}" "${EC2_OBSERVABILITY_ROLE_ARN}" "${EC2_OBSERVABILITY_INSTANCE_PROFILE_ARN}" "${K3S_CONTAINER_LOG_GROUP_BASE_ARN}" "${K3S_CONTAINER_LOG_GROUP_ARN}" "${OBSERVABILITY_ALERTS_TOPIC_ARN}" "${OBSERVABILITY_ALARM_ARN}" "${CLOUDWATCH_AGENT_PARAMETER_ARN}" "${EKS_CLUSTER_ROLE_ARN}" "${EKS_NODE_ROLE_ARN}" "${EKS_EBS_CSI_ROLE_ARN}" "${EKS_OIDC_PROVIDER_ARN}" "${EKS_CLUSTER_ARN}"
+  python3 - <<'PY' "${CNPG_BACKUP_USER_ARN}" "${TARGET_USER_ARN}" "${EC2_OBSERVABILITY_ROLE_ARN}" "${EC2_OBSERVABILITY_INSTANCE_PROFILE_ARN}" "${CONTAINER_LOG_GROUP_RESOURCE_ARNS}" "${OBSERVABILITY_ALERTS_TOPIC_ARN}" "${OBSERVABILITY_ALARM_ARN}" "${CLOUDWATCH_AGENT_PARAMETER_ARN}" "${EKS_CLUSTER_ROLE_ARN}" "${EKS_NODE_ROLE_ARN}" "${EKS_EBS_CSI_ROLE_ARN}" "${EKS_OIDC_PROVIDER_ARN}" "${EKS_CLUSTER_ARN}"
 import json
 import sys
 
@@ -154,14 +165,13 @@ cnpg_backup_user_arn = sys.argv[1]
 target_user_arn = sys.argv[2]
 ec2_observability_role_arn = sys.argv[3]
 ec2_observability_instance_profile_arn = sys.argv[4]
-k3s_container_log_group_base_arn = sys.argv[5]
-k3s_container_log_group_arn = sys.argv[6]
-observability_alerts_topic_arn = sys.argv[7]
-observability_alarm_arn = sys.argv[8]
-cloudwatch_agent_parameter_arn = sys.argv[9]
-eks_role_arns = sys.argv[10:13]
-eks_oidc_provider_arn = sys.argv[13]
-eks_cluster_arn = sys.argv[14]
+container_log_group_resource_arns = json.loads(sys.argv[5])
+observability_alerts_topic_arn = sys.argv[6]
+observability_alarm_arn = sys.argv[7]
+cloudwatch_agent_parameter_arn = sys.argv[8]
+eks_role_arns = sys.argv[9:12]
+eks_oidc_provider_arn = sys.argv[12]
+eks_cluster_arn = sys.argv[13]
 print(json.dumps({
     "Version": "2012-10-17",
     "Statement": [
@@ -223,6 +233,7 @@ print(json.dumps({
                 "iam:DetachRolePolicy",
                 "iam:ListAttachedRolePolicies",
                 "iam:ListRolePolicies",
+                "iam:ListInstanceProfilesForRole",
                 "iam:GetRolePolicy",
                 "iam:PutRolePolicy",
                 "iam:DeleteRolePolicy",
@@ -310,10 +321,7 @@ print(json.dumps({
                 "logs:TagResource",
                 "logs:UntagResource"
             ],
-            "Resource": [
-                k3s_container_log_group_base_arn,
-                k3s_container_log_group_arn
-            ]
+            "Resource": container_log_group_resource_arns
         },
         {
             "Sid": "ManageObservabilityAlarms",
