@@ -11,6 +11,10 @@ output "workspace_name" {
 output "workspace_customer_id" {
   value = azurerm_log_analytics_workspace.this.workspace_id
 }
+
+output "aks_diagnostic_setting_name" {
+  value = try(azurerm_monitor_diagnostic_setting.aks[0].name, null)
+}
 #
 # output "application_insights_id" {
 #   value = try(azurerm_application_insights.this[0].id, null)

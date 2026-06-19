@@ -83,6 +83,26 @@ resource "azurerm_monitor_diagnostic_setting" "postgresql" {
   }
 }
 
+resource "azurerm_monitor_diagnostic_setting" "aks" {
+  count = var.aks_monitoring_enabled ? 1 : 0
+
+  name                       = "${var.name}-aks-diagnostic"
+  target_resource_id         = var.aks_cluster_id
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.this.id
+
+  dynamic "enabled_log" {
+    for_each = toset(var.aks_log_categories)
+
+    content {
+      category = enabled_log.value
+    }
+  }
+
+  enabled_metric {
+    category = "AllMetrics"
+  }
+}
+
 resource "azurerm_monitor_metric_alert" "vm_cpu_high" {
   for_each = var.vm_cpu_alert_enabled ? var.vm_ids : {}
 

@@ -121,6 +121,10 @@ output "monitoring_workspace_name" {
   value = try(module.azure_monitoring[0].workspace_name, null)
 }
 
+output "monitoring_aks_diagnostic_setting_name" {
+  value = try(module.azure_monitoring[0].aks_diagnostic_setting_name, null)
+}
+
 output "monitoring_application_insights_id" {
   value = try(module.azure_monitoring[0].application_insights_id, null)
 }

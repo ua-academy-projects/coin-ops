@@ -16,6 +16,27 @@ variable "vm_ids" {
   type = map(string)
 }
 
+variable "aks_cluster_id" {
+  type    = string
+  default = null
+}
+
+variable "aks_monitoring_enabled" {
+  type    = bool
+  default = false
+}
+
+variable "aks_log_categories" {
+  type = list(string)
+  default = [
+    "kube-apiserver",
+    "kube-audit-admin",
+    "kube-controller-manager",
+    "kube-scheduler",
+    "cluster-autoscaler"
+  ]
+}
+
 variable "postgresql_server_id" {
   type    = string
   default = null
