@@ -70,6 +70,7 @@ spec:
       steps {
         withCredentials([
           string(credentialsId: 'coinops-db-password', variable: 'DB_PASSWORD'),
+          string(credentialsId: 'coinops-rabbitmq-password', variable: 'RABBITMQ_PASSWORD'),
           usernamePassword(credentialsId: 'github-token', usernameVariable: 'GHCR_USERNAME', passwordVariable: 'GHCR_TOKEN')
         ]) {
           sh '''
