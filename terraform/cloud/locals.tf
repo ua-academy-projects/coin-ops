@@ -14,6 +14,7 @@ locals {
   config_security_rules       = try(local.config.security_rules, {})
   config_secrets              = try(local.config.secrets, {})
   config_aks                  = try(local.config.aks, null)
+  config_cert_manager         = try(local.config.cert_manager, null)
   config_ingress_controller   = try(local.config.ingress_controller, null)
   config_jenkins              = try(local.config.jenkins, null)
   config_sql                  = try(local.config.sql, null)
@@ -69,6 +70,7 @@ locals {
   enable_azure_workloads = local.enable_azure_network && length(local.workloads_by_cloud.azure) > 0
   enable_azure_aks       = local.enable_azure_network && local.config_aks != null && local.default_cloud == "azure"
   enable_traefik         = local.enable_azure_aks && local.config_ingress_controller != null && try(local.config_ingress_controller.type, null) == "traefik"
+  enable_cert_manager    = local.enable_traefik && local.config_cert_manager != null && try(local.config.deploy.tls_mode, "off") == "letsencrypt"
   enable_jenkins         = local.enable_azure_aks && local.config_jenkins != null
   enable_azure_security  = local.enable_azure_workloads && length(local.config_security_rules) > 0 && local.default_cloud == "azure"
   enable_azure_sql       = local.enable_azure_network && local.config_sql != null && local.default_cloud == "azure"

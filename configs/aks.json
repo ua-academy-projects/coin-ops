@@ -10,7 +10,8 @@
     "image_registry": "ghcr.io/ua-academy-projects",
     "image_tag": "shabat-latest",
     "app_domain": "coinops.arturvolynets.pp.ua",
-    "tls_mode": "off"
+    "tls_mode": "letsencrypt",
+    "letsencrypt_email": "admin@arturvolynets.pp.ua"
   },
   "networks": {
     "aks": {
@@ -86,6 +87,16 @@
     "service_type": "LoadBalancer",
     "ingress_class_name": "traefik",
     "default_class": true
+  },
+  "cert_manager": {
+    "namespace": "cert-manager",
+    "release_name": "cert-manager",
+    "chart_repository": "https://charts.jetstack.io",
+    "chart_name": "cert-manager",
+    "chart_version": "v1.17.0",
+    "cluster_issuer_name": "letsencrypt",
+    "acme_server": "https://acme-staging-v02.api.letsencrypt.org/directory",
+    "ingress_class_name": "traefik"
   },
   "jenkins": {
     "namespace": "jenkins",

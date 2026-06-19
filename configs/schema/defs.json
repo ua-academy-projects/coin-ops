@@ -543,6 +543,54 @@
         }
       }
     },
+    "certManager": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "namespace",
+        "release_name",
+        "chart_repository",
+        "chart_name",
+        "chart_version",
+        "cluster_issuer_name",
+        "acme_server",
+        "ingress_class_name"
+      ],
+      "properties": {
+        "namespace": {
+          "type": "string",
+          "minLength": 1
+        },
+        "release_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "chart_repository": {
+          "type": "string",
+          "format": "uri"
+        },
+        "chart_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "chart_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cluster_issuer_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "acme_server": {
+          "type": "string",
+          "format": "uri"
+        },
+        "ingress_class_name": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
     "jenkins": {
       "type": "object",
       "additionalProperties": false,

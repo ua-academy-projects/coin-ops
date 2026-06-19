@@ -67,6 +67,7 @@ spec:
           env.IMAGE_TAG = params.IMAGE_TAG ?: config.deploy.image_tag
           env.RUNTIME_BACKEND = config.deploy.runtime_backend
           env.APP_DOMAIN = config.deploy.app_domain
+          env.TLS_MODE = config.deploy.tls_mode
           env.POSTGRES_HOST = "${config.sql.instance.name}.postgres.database.azure.com"
           env.POSTGRES_DB = config.sql.database.name
           env.POSTGRES_USER = config.sql.user.name
@@ -150,6 +151,11 @@ spec:
         container('helm') {
           sh '''
             set -eu
+            TLS_ARGS=""
+
+            if [ "$TLS_MODE" = "letsencrypt" ]; then
+              TLS_ARGS="--set-string ingress.annotations.cert-manager\\.io/cluster-issuer=letsencrypt --set-string ingress.tls[0].secretName=coin-ops-tls --set-string ingress.tls[0].hosts[0]=$APP_DOMAIN"
+            fi
 
             helm upgrade --install "$RELEASE_NAME" "$CHART_DIR" \
               --namespace "$APP_NAMESPACE" \
@@ -164,6 +170,7 @@ spec:
               --set-string historyConsumer.image.tag="$IMAGE_TAG" \
               --set-string ui.image.repository="$IMAGE_REGISTRY/coin-ops-ui" \
               --set-string ui.image.tag="$IMAGE_TAG" \
+              $TLS_ARGS \
               --wait \
               --timeout 10m
           '''

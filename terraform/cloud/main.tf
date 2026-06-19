@@ -29,6 +29,16 @@ module "traefik" {
   depends_on = [module.azure_aks]
 }
 
+module "cert_manager" {
+  source = "./modules/kubernetes/cert_manager"
+  count  = local.enable_cert_manager ? 1 : 0
+
+  cert_manager = local.config_cert_manager
+  acme_email   = local.config.deploy.letsencrypt_email
+
+  depends_on = [module.traefik]
+}
+
 module "azure_workload_identity" {
   source = "./modules/azure/workload_identity"
   count  = local.enable_jenkins ? 1 : 0

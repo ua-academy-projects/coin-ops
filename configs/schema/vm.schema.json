@@ -16,6 +16,7 @@
     "sql": true,
     "aks": true,
     "ingress_controller": true,
+    "cert_manager": true,
     "jenkins": true
   },
   "allOf": [
@@ -54,6 +55,9 @@
         },
         "ingress_controller": {
           "$ref": "./defs.json#/$defs/ingressController"
+        },
+        "cert_manager": {
+          "$ref": "./defs.json#/$defs/certManager"
         },
         "jenkins": {
           "$ref": "./defs.json#/$defs/jenkins"

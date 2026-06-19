@@ -65,6 +65,18 @@ output "traefik_status" {
   value = try(module.traefik[0].status, null)
 }
 
+output "cert_manager_namespace" {
+  value = try(module.cert_manager[0].namespace, null)
+}
+
+output "cert_manager_release_name" {
+  value = try(module.cert_manager[0].release_name, null)
+}
+
+output "cert_manager_status" {
+  value = try(module.cert_manager[0].status, null)
+}
+
 output "cloud_sql_instance_name" {
   value = local.default_cloud == "gcp" ? try(module.gcp_sql[0].instance_name, null) : (
     local.default_cloud == "azure" ? try(module.azure_sql[0].instance_name, null) : (
