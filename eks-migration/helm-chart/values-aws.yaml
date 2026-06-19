@@ -23,3 +23,9 @@ rabbitmq:
 # NOTE: Ingress is omitted here because we are keeping the existing NGINX Ingress rules
 # defined in your Chart to support rewrite-target. NGINX Ingress Controller will be 
 # deployed by Terraform in the cluster.
+
+routing:
+  nodeCidr: "10.0.0.0/16"
+
+cloudflare:
+  enabled: false

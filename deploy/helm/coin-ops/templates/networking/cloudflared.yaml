@@ -1,4 +1,4 @@
-{{- if .Values.features.deployInfra }}
+{{- if and .Values.features.deployInfra (default true .Values.cloudflare.enabled) }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
