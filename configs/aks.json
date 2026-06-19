@@ -11,7 +11,7 @@
     "image_tag": "shabat-latest",
     "app_domain": "coinops.arturvolynets.pp.ua",
     "tls_mode": "letsencrypt",
-    "letsencrypt_email": "admin@arturvolynets.pp.ua"
+    "letsencrypt_email": "volunetsartur@gmail.com"
   },
   "networks": {
     "aks": {
@@ -95,7 +95,7 @@
     "chart_name": "cert-manager",
     "chart_version": "v1.17.0",
     "cluster_issuer_name": "letsencrypt",
-    "acme_server": "https://acme-staging-v02.api.letsencrypt.org/directory",
+    "acme_server": "https://acme-v02.api.letsencrypt.org/directory",
     "ingress_class_name": "traefik"
   },
   "jenkins": {
