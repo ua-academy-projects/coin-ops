@@ -6,20 +6,23 @@ This repository is the infrastructure control plane for Coin-Ops. Application so
 
 | Path | Purpose |
 | --- | --- |
-| `terraform/` | Cloud resources, multicloud networking, secret-manager seeding, Cloudflare, generated local files |
-| `ansible/` | Host provisioning, VM Compose deploy, k3s platform/app install, runtime config materialization |
+| `terraform/` | Cloud resources, EKS/Jenkins, multicloud networking, secret-manager seeding, Cloudflare, observability, generated local files |
+| `ansible/` | EKS workloads, legacy host/VM/k3s provisioning, runtime config materialization |
 | `deploy/compose/` | Jinja Docker Compose templates rendered by Ansible for VM deploys |
 | `deploy/sql/` | PostgreSQL history/runtime bootstrap SQL |
 | `deploy/postgres-runtime/` | PostgreSQL runtime image with `pg_cron` and `pgmq` |
 | `packer/` | Optional golden-image build definitions for pre-baked app hosts |
 | `docs/` | Operator runbooks and architecture notes |
 
-## Supported Deployment Paths
+## Active and Legacy Deployment Paths
 
-- VM Compose: `ansible/provision.yml` then `ansible/deploy.yml` for the app-1/app-2 style deployment.
-- k3s: `ansible/k3s-platform.yml`, `ansible/k3s-homepage.yml`, and `ansible/k3s-coinops.yml` for the cluster path.
+- Active AWS: Terraform creates EKS and Jenkins; Jenkins dynamic agents run
+  `ansible/eks-headlamp.yml` and `ansible/eks-coinops.yml`.
+- Legacy VM Compose: `ansible/provision.yml` then `ansible/deploy.yml`.
+- Legacy self-managed k3s: `ansible/k3s-platform.yml`,
+  `ansible/k3s-homepage.yml`, and `ansible/k3s-coinops.yml`.
 
-Both paths consume GHCR application images. Neither path builds app code locally.
+All paths consume GHCR application images. None builds app code locally.
 
 ## Runtime Modes
 
@@ -28,6 +31,8 @@ Both paths consume GHCR application images. Neither path builds app code locally
 
 ## Networking
 
+- The active AWS path uses private EKS nodes, managed NAT, public Traefik with
+  fixed EIPs, and Cloudflare Tunnel/Access for Headlamp and Jenkins.
 - Multicloud support remains part of the design.
 - Tailscale subnet routing remains supported for gateway-based inter-cloud reachability.
 - Cloudflare DNS, Tunnel, and Access remain supported for public and admin entrypoints.
@@ -38,8 +43,11 @@ Both paths consume GHCR application images. Neither path builds app code locally
 1. Terraform reads split JSON config from `terraform/config/*.json`.
 2. Terraform writes local files such as `terraform/config/ansible-runtime.json` and SSH config.
 3. Ansible `runtime_config` merges JSON config, generated metadata, optional local overrides, environment overrides, and cloud secret payloads.
-4. Roles consume the flattened variables and render Compose, nginx, Kubernetes, and SQL bootstrap resources.
+4. Jenkins injects the active runtime metadata/secrets into disposable EKS agents.
+5. Roles consume the flattened variables and render Compose, nginx, Kubernetes, and SQL bootstrap resources.
 
 ## Safety Notes
 
 Generated files such as `terraform/backend.active.tf`, `terraform/local.generated.auto.tfvars.json`, `terraform/config/hosts.json`, `terraform/config/ansible-runtime.json`, `ansible/vars/local.generated.json`, and `ansible/artifacts/` must stay out of commits.
+
+Use `runbook.md` as the canonical full-recovery and operations entry point.

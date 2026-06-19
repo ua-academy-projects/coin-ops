@@ -2,6 +2,10 @@
 
 Homepage is an optional platform workload installed into the existing k3s ingress path.
 
+This is a legacy self-managed k3s runbook. The active EKS playbooks do not
+deploy Homepage, even though shared config/DNS fields remain. Homepage is not a
+current AWS acceptance requirement.
+
 ## Deploy
 
 ```bash

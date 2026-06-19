@@ -1,11 +1,24 @@
-# k3s CNPG Backups
+# CNPG Backups and Restore Drills
 
-Coin-Ops CNPG backups use the CloudNativePG Barman Cloud Plugin. The custom PostgreSQL runtime image is not modified; Barman runs in plugin-managed sidecars.
+Coin-Ops CNPG backups use the CloudNativePG Barman Cloud Plugin. The custom
+PostgreSQL runtime image is not modified; Barman runs in plugin-managed
+sidecars. The active AWS EKS path stores backups in S3. The GCS and k3s notes
+below remain valid for their legacy configurations.
+
+For all commands in the active AWS environment, either use
+`make eks-kubectl ARGS='...'` or export:
+
+```bash
+export KUBECONFIG="$PWD/ansible/artifacts/kubeconfig-aws-eks.yaml"
+```
 
 ## Provisioning
 
 1. Run Terraform so the provider-specific object-storage bucket, backup identity, credentials, and generated Ansible metadata are created.
-2. Run make k3s-coinops so Ansible installs cert-manager, CNPG, the Barman Cloud Plugin, the credential Secret, the ObjectStore, and the daily ScheduledBackup.
+2. Run the Jenkins `coinops-eks-deploy-coinops` job or `make eks-coinops` so
+   Ansible installs CNPG, the Barman Cloud Plugin, credential Secret,
+   ObjectStore, and daily ScheduledBackup. Use `make k3s-coinops` only for the
+   legacy k3s path.
 3. Confirm the plugin is available:
 
     kubectl rollout status deployment/barman-cloud -n cnpg-system
@@ -49,7 +62,11 @@ Before testing restore, confirm pod networking and CNPG backup status are health
     kubectl rollout status deployment/barman-cloud -n cnpg-system
     kubectl get objectstore,scheduledbackup,backup -n coinops-data
 
-The `coinops-data` NetworkPolicies must allow k3s pod and service CIDRs. The default k3s CIDRs are `10.42.0.0/16` for pods and `10.43.0.0/16` for services. A quick connectivity check is:
+The `coinops-data` NetworkPolicies must allow the active pod and service CIDRs.
+For EKS, these come from generated Terraform runtime metadata; the current
+service CIDR is `10.43.0.0/16` and pod addresses come from the AWS VPC CNI. For
+legacy k3s, defaults are `10.42.0.0/16` and `10.43.0.0/16`. A quick connectivity
+check is:
 
     PRIMARY="$(kubectl get cluster coinops-postgres -n coinops-data -o jsonpath='{.status.currentPrimary}')"
     POD_IP="$(kubectl get pod "$PRIMARY" -n coinops-data -o jsonpath='{.status.podIP}')"
@@ -245,5 +262,9 @@ After validation, delete the test namespace:
 - Terraform stores generated backup credentials in state. GCP uses a bucket-scoped service account key; AWS uses a bucket-scoped IAM user access key.
 - GCP backup buckets have public access prevention and uniform bucket-level access enabled. AWS backup buckets have public access blocked, versioning enabled, and default SSE-S3 encryption.
 - If the CNPG operator is older than 1.26, Ansible fails before applying plugin resources.
-- k3s servers keep UFW disabled because host-level forwarding rules can block CNI traffic before flannel or kube-router accepts it. Use cloud security groups and Kubernetes NetworkPolicies for the k3s boundary.
-- If direct pod-to-pod checks fail but deleting `coinops-data` NetworkPolicies makes them pass, re-apply `make k3s-coinops` so the pod and service CIDR allow policy is restored.
+- Legacy k3s servers keep UFW disabled because host-level forwarding rules can
+  block CNI traffic. EKS uses AWS security groups, VPC CNI, and Kubernetes
+  NetworkPolicies instead.
+- If direct pod-to-pod checks fail but deleting `coinops-data` NetworkPolicies
+  makes them pass, fix the generated pod/service CIDR metadata and re-apply the
+  appropriate CoinOps job. Do not leave default-deny policies deleted.

@@ -1,6 +1,9 @@
 # k3s Cluster Runbook
 
-The k3s path is one of the supported deployment paths in the infra-only repository.
+This is the legacy self-managed Kubernetes path. It remains available for
+multicloud/history, but the current AWS configuration selects EKS and does not
+create the EC2 `k3s-server-*` instances. For the active path, start with
+`runbook.md` and `docs/aws-eks-jenkins.md`.
 
 ## Main Flow
 

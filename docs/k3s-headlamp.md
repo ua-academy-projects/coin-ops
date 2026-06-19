@@ -1,38 +1,45 @@
-# Headlamp
+# Headlamp on Kubernetes
 
-Headlamp runs in k3s. Cloudflare Tunnel and Access are supported for browser access; local port-forward scripts remain available as fallback.
+The Headlamp roles are shared by EKS and legacy k3s. The active AWS path runs
+Headlamp in EKS behind Cloudflare Tunnel and Access. Local port-forward remains
+the fallback.
 
 ## Deploy
 
 ```bash
 cd /home/notebook/projects/coin-ops
 source local/generated-env.sh
-make k3s-cluster
-make k3s-headlamp
+make eks-headlamp
 ```
 
-Terraform manages Cloudflare Tunnel, Access, and DNS inputs. Ansible installs the in-cluster workload and writes notes under `ansible/artifacts/`.
+Terraform manages Cloudflare Tunnel, Access, DNS, and generated runtime inputs.
+Ansible installs Headlamp and the shared cloudflared connector. Jenkins normally
+runs the same target through `coinops-eks-deploy-headlamp` after initial
+bootstrap.
 
 ## Access
 
 Primary path:
 
 ```text
-https://headlamp.<app_domain>/
+https://headlamp.coinops-d.pp.ua/
 ```
 
-Fallback:
+EKS fallback:
 
 ```bash
-ansible/artifacts/headlamp-start.sh
+make eks-kubectl ARGS='-n headlamp port-forward svc/headlamp 4466:80'
 ```
 
 Generate a login token:
 
 ```bash
-make headlamp-token
+make eks-kubectl ARGS='create token headlamp-admin -n headlamp'
 ```
 
 ## Notes
 
-Cloudflare Access is an outer gate. Headlamp still requires Kubernetes authentication. Keep generated kubeconfigs and helper scripts out of commits.
+Cloudflare Access is an outer gate. Headlamp still requires Kubernetes
+authentication. Keep generated kubeconfigs, tunnel tokens, and helper scripts
+out of commits. `make headlamp-token` belongs to the legacy k3s tunneled
+kubeconfig, not EKS.

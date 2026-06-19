@@ -5,11 +5,13 @@ scripts for bootstrapping, repair, and teardown.
 
 ## Normal Lifecycle
 
-Initialize and inspect changes:
+For the active environment, GitHub Actions validates changes and CodePipeline
+runs the reviewed plan/apply lifecycle. Use the following only for deliberate
+local operation or recovery after completing `runbook.md` bootstrap:
 
 ```bash
 cd terraform
-terraform init
+terraform init -reconfigure
 terraform plan
 terraform apply
 ```
@@ -38,74 +40,61 @@ removed as part of the current teardown.
 
 ## Current Active Topology
 
-The repository still keeps the multicloud design and related configuration, but
-its current active access path no longer uses the old Tailscale subnet-router
-gateway.
+The current checked-in deployment is AWS-only and uses managed EKS. Terraform
+creates:
 
-Current layout:
-- `jump-host`: public bastion for operator SSH access into private nodes
-- private workload nodes: reached through `ProxyJump` via `jump-host`
-- cloud-native NAT: outbound internet access for private subnets without public
-  IPs
-- `Cloudflare Tunnel`: in-cluster path for private Headlamp browser access
-- `full-destroy.sh`: pre-cleans Terraform-managed Cloudflare Tunnel, Access,
-  and tunnel DNS resources before the final destroy when the Headlamp path is in scope
+- a VPC with two private EKS subnets and two public subnets across two AZs;
+- an AWS NAT Gateway for private-node egress;
+- an EKS control plane, private managed node group, and managed add-ons;
+- fixed EIPs consumed by the Kubernetes public Traefik Service;
+- AWS Secrets Manager objects and CNPG S3 backup identity/bucket;
+- Cloudflare DNS, Tunnel, Access, and GitHub identity provider;
+- Jenkins through Helm/JCasC, with dynamic Kubernetes agents;
+- CloudWatch logs, Container Insights, alarms, dashboard, and SNS alerts.
 
-Important consequences:
-- Tailscale configuration is still present in code for possible future reuse,
-  but it is currently disabled in `terraform/config/networks.json`
-- the old dedicated `gateway` instance has been removed from the active
-  instance layout
-- private nodes do **not** need public IPs for outbound access when the
-  selected cloud's managed NAT path is enabled
+The current AWS path does not use a jump host, EC2 k3s servers, VM NAT routing,
+or Tailscale. Those shared modules remain for legacy/multicloud configurations.
+Private EKS nodes use the managed NAT Gateway for outbound access.
 
 ## Post-Deploy Acceptance
 
-After `terraform apply`, `ansible/provision.yml`, and the relevant Ansible
-platform playbooks, verify the private-node access path in this order:
+After Terraform apply:
 
-1. Confirm the jump host is reachable:
+```bash
+terraform output aws_eks_cluster_name
+terraform output aws_eks_kubeconfig_file
+terraform output jenkins_public_url
+cd ..
+make eks-kubectl ARGS='get nodes'
+make eks-kubectl ARGS='get pods -A'
+```
 
-   ```bash
-   ssh coinops-gcp-jump-host
-   ```
+Then bootstrap/reconcile Headlamp and the shared tunnel before relying on public
+Jenkins:
 
-2. Confirm a private k3s node is reachable through ProxyJump:
+```bash
+make eks-headlamp
+```
 
-   ```bash
-   ssh coinops-gcp-k3s-server-1
-   ```
-
-3. On a k3s node, confirm outbound internet works through Cloud NAT:
-
-   ```bash
-   curl -I https://github.com
-   ```
-
-4. Confirm the Headlamp tunnel rollout path:
-
-   ```bash
-   terraform apply
-   ansible-playbook -i ansible/inventory/inventory.gcp_compute.yml ansible/k3s-headlamp.yml
-   ```
+Deploy CoinOps through Jenkins or `make eks-coinops`, then complete the
+acceptance checklist in `runbook.md`.
 
 ## Troubleshooting
 
-If the jump host is reachable but a private `k3s-server` is not:
-- verify the firewall rule allowing `jump-host -> k3s-server` on the SSH port
-- verify the private node still has label/tag `k3s-server`
-- confirm Ansible inventory is still using `ProxyJump=coinops-gcp-jump-host`
+If EKS nodes do not join:
 
-If a private `k3s-server` has no internet access:
-- verify `cloud_nat.enabled=true` in `terraform/config/networks.json`
-- verify the `internal` subnet is included in `cloud_nat.subnet_names`
-- verify the GCP router NAT resources exist after `terraform apply`
+- inspect `aws eks describe-nodegroup ... --query 'nodegroup.health.issues'`;
+- verify private subnet routes point to the NAT Gateway;
+- verify the configured instance type is available and permitted;
+- inspect EKS node-role policy attachments and security groups.
 
-If Headlamp tunnel apply fails with Cloudflare authentication errors:
+If Headlamp/Jenkins tunnel apply fails with Cloudflare authentication errors:
 - verify `dns.cloudflare.account_id` matches the Cloudflare account that owns
   Zero Trust
 - verify the Cloudflare API token has Zero Trust Tunnel, Access Apps/Policies,
   Access Identity Providers, and DNS permissions
+
+For complete EKS/Jenkins troubleshooting, use `docs/aws-eks-jenkins.md`.
 
 ## Repairing Drift
 
@@ -114,7 +103,7 @@ instead of immediately hand-editing state:
 
 ```bash
 cd terraform
-bash repair-refresh.sh --enabled gcp apply -var='suppress_secret_manager_reads=true'
+bash repair-refresh.sh --enabled aws apply -var='suppress_secret_manager_reads=true'
 ```
 
 Use `plan` instead of `apply` first if you want to inspect the refresh-only
@@ -143,7 +132,7 @@ You can pass additional Terraform arguments through to the final destroy
 command. The most useful one during recovery is:
 
 ```bash
-bash full-destroy.sh --yes-really-destroy-stateful --cloud gcp -var='suppress_secret_manager_reads=true'
+bash full-destroy.sh --yes-really-destroy-stateful --cloud aws -var='suppress_secret_manager_reads=true'
 ```
 
 `full-destroy.sh` works from an isolated temporary copy of the Terraform root
@@ -153,6 +142,9 @@ and keeps the checked-in files untouched. In that temporary copy it:
 - sets CNPG object-storage backup buckets to force-delete only in the temporary copy
 - keeps CNPG backup resources instantiated in the temporary copy so destroy
   receives the force-delete bucket configuration
+- deletes Kubernetes-managed EKS load balancers and target groups before
+  Terraform releases their fixed EIPs and public subnets
+- waits for EIP disassociation before the main AWS destroy
 - includes AWS observability resources in AWS-only targeted teardown:
   CloudWatch alarms, dashboard, log metric filters, log group, SNS alerts,
   the CloudWatch Agent SSM parameter, and the EC2 observability IAM profile
@@ -173,7 +165,7 @@ If the secret backend or its versions were already removed, pass the recovery
 switch through to the helper:
 
 ```bash
-bash full-destroy.sh --yes-really-destroy-stateful --cloud gcp -var='suppress_secret_manager_reads=true'
+bash full-destroy.sh --yes-really-destroy-stateful --cloud aws -var='suppress_secret_manager_reads=true'
 ```
 
 ## Manual State Surgery

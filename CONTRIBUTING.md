@@ -4,16 +4,16 @@ This repository is infrastructure-only. The application is deployed from existin
 
 ## Before Opening a PR
 
-Run the checks that match your change:
+Run the full local equivalent of GitHub validation:
 
 ```bash
-cd terraform
-terraform fmt -check -recursive
-terraform validate
-
 cd /home/notebook/projects/coin-ops
-make ansible-check
+make ci-validate
 ```
+
+Use `make terraform-fmt` before committing when Terraform formatting fails.
+The validation wrapper initializes without the remote backend and avoids
+depending on live AWS credentials.
 
 If you changed `deploy/postgres-runtime/`, also run:
 
@@ -25,8 +25,8 @@ If you changed Compose templates, render them through the owning Ansible role or
 
 ## Infrastructure Areas
 
-- `terraform/`: cloud resources, remote-state bootstrap scripts, generated local metadata, Cloudflare, and multicloud networking.
-- `ansible/`: host provisioning, VM Compose deploys, k3s platform roles, runtime config, and local access files.
+- `terraform/`: cloud resources, EKS/Jenkins, remote-state bootstrap scripts, generated local metadata, Cloudflare, observability, and multicloud networking.
+- `ansible/`: active EKS workloads plus legacy host, VM Compose, and k3s roles.
 - `deploy/compose/`: Jinja-rendered VM Compose templates. Do not run these raw.
 - `deploy/sql/`: retained PostgreSQL schema/runtime bootstrap SQL used by VM Compose and k3s CNPG deployments.
 - `deploy/postgres-runtime/`: PostgreSQL 16 image with `pg_cron` and `pgmq` support.

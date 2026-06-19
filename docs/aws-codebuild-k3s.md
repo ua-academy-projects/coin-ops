@@ -1,7 +1,10 @@
-# AWS CodeBuild k3s Runtime Runbook
+# AWS CodePipeline and CodeBuild Terraform Runbook
 
-This runbook manages the AWS managed CI path for the k3s-only infrastructure
-flow. VM Compose is intentionally out of scope.
+This runbook manages the active AWS Terraform CI path. The filename, buildspec
+filenames, and default resource names retain `k3s` for compatibility, but the
+Terraform root now creates the EKS/Jenkins architecture described in
+`runbook.md`. VM Compose and Ansible workload deployment are out of scope for
+this pipeline.
 
 ## Ownership Boundary
 
@@ -76,6 +79,11 @@ authenticate even though no Azure resources should be planned.
 
 The main `terraform/` root does not create CodeBuild or CodePipeline. It is the
 workload infrastructure that the pipeline plans and later should apply.
+
+CodeBuild does not deploy Kubernetes workloads. After Terraform apply, Jenkins
+dynamic agents run the EKS Ansible playbooks. A successful Smoke stage means
+the Terraform backend is readable and non-empty; it does not mean EKS pods or
+CoinOps are healthy.
 
 ## Required Local Context
 
@@ -220,6 +228,11 @@ Terraform state bucket:coinops-terraform-state-ACCOUNT-eu-central-1
 The current default pipeline name is `coin-ops-k3s-deploy`. If an older
 `coin-ops-k3s-plan` pipeline exists from previous iterations, treat it as a
 legacy resource and delete it only after the deploy pipeline is verified.
+
+The default name is also referenced by GitHub repository variables and IAM
+policies. Renaming it requires coordinated updates to `bootstrap-local.sh`,
+GitHub Actions variables, the GitHub OIDC trigger role policy, dashboards/
+operator commands, and this runbook.
 
 ## Run Plan And Apply
 
@@ -422,10 +435,12 @@ Terraform plan fails reading AWS Secrets Manager:
 couldn't find resource coinops-db-secrets|AWSCURRENT
 ```
 
-Run one explicit seed with required `TF_VAR_*` values:
+Run one explicit seed bootstrap with the required `TF_VAR_*`, repository,
+branch, and connection values already exported:
 
 ```bash
-COINOPS_CI_SEED_SECRET_MANAGER=true ci/aws/bootstrap-local.sh
+COINOPS_CI_SEED_SECRET_MANAGER=true \
+ci/aws/bootstrap-local.sh --skip-terraform-bootstrap
 ```
 
 After AWS Secrets Manager contains the expected secret payloads, rerun bootstrap
@@ -482,7 +497,7 @@ enough for the next pipeline execution.
 
 ## Current Limitations
 
-- It does not run Ansible or k3s playbooks.
+- It does not run Ansible or EKS workload playbooks. Jenkins owns that layer.
 - CI secret seed is intentionally opt-in. Normal plan/apply reads cloud secrets
   and refuses to run if `TF_VAR_seed_secret_manager=true` appears without
   `COINOPS_ALLOW_CI_SECRET_SEED=true`.

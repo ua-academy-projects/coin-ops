@@ -234,3 +234,52 @@ Example trust policy for the personal repository and branch:
   ]
 }
 ```
+
+### Recreate the GitHub OIDC trigger role
+
+This role is independent of CodePipeline's own IAM role and of the Terraform
+IAM user. Its only purpose is allowing this exact GitHub repository/branch to
+call `StartPipelineExecution` without storing AWS access keys in GitHub.
+
+In AWS IAM:
+
+1. Open **Identity providers** and add an OpenID Connect provider with URL
+   `https://token.actions.githubusercontent.com` and audience
+   `sts.amazonaws.com`, if it does not already exist.
+2. Create a Web identity role using the trust policy above.
+3. Attach only the pipeline-start policy above.
+4. Copy the role ARN.
+
+The issuer URL returning HTTP 404 in a browser is not an error: it is an OIDC
+issuer identifier, not a human-facing site. AWS/GitHub use its discovery and
+token endpoints.
+
+Verify the provider and role:
+
+```bash
+aws iam list-open-id-connect-providers
+aws iam get-role --role-name coin-ops-github-codepipeline-trigger
+aws iam list-attached-role-policies --role-name coin-ops-github-codepipeline-trigger
+aws iam list-role-policies --role-name coin-ops-github-codepipeline-trigger
+```
+
+In the GitHub repository, open **Settings -> Secrets and variables -> Actions ->
+Variables** and set:
+
+```text
+AWS_CODEPIPELINE_TRIGGER_ROLE_ARN = arn:aws:iam::ACCOUNT:role/ROLE_NAME
+AWS_REGION                        = eu-central-1
+AWS_CODEPIPELINE_NAME             = coin-ops-k3s-deploy
+```
+
+Set the optional repository/branch override variables only if the source moved.
+The workflow requests `id-token: write`; without it, GitHub cannot exchange its
+OIDC token for temporary AWS credentials.
+
+Push a harmless documentation change or use `workflow_dispatch`, then inspect
+the `CI validation` workflow. Manual dispatch validates but does not trigger
+CodePipeline; the trigger job intentionally requires a `push` event.
+
+Branch protection is optional for this project. If enabled later, require only
+the stable aggregate check `Validation complete`; path-specific jobs may be
+legitimately skipped.
